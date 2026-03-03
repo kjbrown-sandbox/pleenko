@@ -13,6 +13,7 @@ const PEG_SPACING_X := 1.0
 const ROW_SPACING_Y := 0.8
 const TOP_Y := 3.0
 const BUCKET_OFFSET_Y := 0.6  # how far below last peg row the buckets sit
+const LABEL_OFFSET_Y := 0.35  # how far below bucket center the value label sits
 
 # Shared mesh resources (created once, reused for every peg/bucket)
 var peg_mesh: CylinderMesh
@@ -28,27 +29,38 @@ func _ready() -> void:
 	bucket_mesh = BoxMesh.new()
 	bucket_mesh.size = Vector3(PEG_SPACING_X * 0.9, 0.3, 0.5)
 
+	# Build the initial board with 1 row so there's something to see
+	num_rows = 1
+	_build_board()
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
 		_drop_coin()
+	elif event.is_action_pressed("expand_board"):
+		_expand_board()
 
 
-func _drop_coin() -> void:
+func _expand_board() -> void:
 	num_rows += 1
 	_build_board()
 
+
+func _drop_coin() -> void:
+	if num_rows == 0:
+		return
+
 	# Simulate coin path through the rows
 	var waypoints: Array[Vector3] = []
-	var col_index := 0  # which gap the coin is in (0 = leftmost)
+	var col_index := 0
 
 	for r in range(num_rows):
-		# Random deflection: left keeps same index, right increments
 		if randf() < 0.5:
 			col_index += 1
 		waypoints.append(_peg_position(r, col_index))
 
 	# Final waypoint: the bucket the coin lands in
+	var value := _bucket_value(col_index)
 	waypoints.append(_bucket_position(col_index))
 
 	# Spawn coin above the first peg
@@ -57,7 +69,7 @@ func _drop_coin() -> void:
 	add_child(coin)
 
 	coin.landed.connect(_on_coin_landed)
-	coin.animate(waypoints, 1)
+	coin.animate(waypoints, value)
 
 
 func _build_board() -> void:
@@ -73,12 +85,18 @@ func _build_board() -> void:
 			peg.position = _peg_position(r, i)
 			board.add_child(peg)
 
-	# Create buckets: num_rows + 1 buckets below the last row
+	# Create buckets and value labels: num_rows + 1 buckets below the last row
 	for i in range(num_rows + 1):
 		var bucket := MeshInstance3D.new()
 		bucket.mesh = bucket_mesh
 		bucket.position = _bucket_position(i)
 		board.add_child(bucket)
+
+		var label := Label3D.new()
+		label.text = str(_bucket_value(i))
+		label.font_size = 48
+		label.position = _bucket_position(i) + Vector3(0.0, -LABEL_OFFSET_Y, 0.01)
+		board.add_child(label)
 
 	_adjust_camera()
 
@@ -95,6 +113,12 @@ func _bucket_position(index: int) -> Vector3:
 	var x := (index - num_rows / 2.0) * PEG_SPACING_X
 	var y := TOP_Y - num_rows * ROW_SPACING_Y - BUCKET_OFFSET_Y
 	return Vector3(x, y, 0.0)
+
+
+func _bucket_value(index: int) -> int:
+	# Edge buckets are worth more (harder to reach), center is worth 1
+	var center := num_rows / 2.0
+	return int(absf(index - center)) + 1
 
 
 func _adjust_camera() -> void:
