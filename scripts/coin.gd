@@ -2,18 +2,16 @@ extends Node3D
 
 signal landed(bucket_value: int)
 
+const TIME_PER_SEGMENT := 0.15
 
-func animate(target_x: float, bucket_value: int) -> void:
-	var peg_y := 1.2
-	var bucket_y := -0.85
 
+func animate(waypoints: Array[Vector3], bucket_value: int) -> void:
 	var tween := create_tween()
-	# Fall straight down to just above the peg
-	tween.tween_property(self, "position", Vector3(0.0, peg_y, 0.0), 0.3) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	# Veer left or right into the bucket
-	tween.tween_property(self, "position", Vector3(target_x, bucket_y, 0.0), 0.4) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+	for waypoint in waypoints:
+		tween.tween_property(self, "position", waypoint, TIME_PER_SEGMENT) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
 	tween.tween_callback(_on_landed.bind(bucket_value))
 
 
