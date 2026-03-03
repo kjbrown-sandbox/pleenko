@@ -3,10 +3,13 @@ extends Node3D
 @onready var ui: CanvasLayer = $UI
 @onready var board: Node3D = $Board
 @onready var camera: Camera3D = $Camera3D
+var drop_cooldown: Timer
 
 var coin_scene: PackedScene = preload("res://scenes/coin.tscn")
-var coin_total: int = 0
+var coin_total: int = 1
 var num_rows: int = 0
+var upgrade_cost: int = 10
+const UPGRADE_COST_MULTIPLIER := 1.5
 
 # Board layout constants
 const PEG_SPACING_X := 1.0
@@ -21,6 +24,11 @@ var bucket_mesh: BoxMesh
 
 
 func _ready() -> void:
+	drop_cooldown = Timer.new()
+	drop_cooldown.wait_time = 1.0
+	drop_cooldown.one_shot = true
+	add_child(drop_cooldown)
+
 	peg_mesh = CylinderMesh.new()
 	peg_mesh.top_radius = 0.15
 	peg_mesh.bottom_radius = 0.15
@@ -30,25 +38,30 @@ func _ready() -> void:
 	bucket_mesh.size = Vector3(PEG_SPACING_X * 0.9, 0.3, 0.5)
 
 	# Build the initial board with 1 row so there's something to see
-	num_rows = 1
+	num_rows = 2
 	_build_board()
+
+	ui.update_coins(coin_total)
+	ui.update_upgrade(upgrade_cost)
+	ui.upgrade_pressed.connect(_buy_upgrade)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
 		_drop_coin()
-	elif event.is_action_pressed("expand_board"):
-		_expand_board()
-
-
-func _expand_board() -> void:
-	num_rows += 1
-	_build_board()
 
 
 func _drop_coin() -> void:
 	if num_rows == 0:
 		return
+	if coin_total < 1:
+		return
+	if not drop_cooldown.is_stopped():
+		return
+
+	coin_total -= 1
+	ui.update_coins(coin_total)
+	drop_cooldown.start()
 
 	# Simulate coin path through the rows
 	var waypoints: Array[Vector3] = []
@@ -70,6 +83,19 @@ func _drop_coin() -> void:
 
 	coin.landed.connect(_on_coin_landed)
 	coin.animate(waypoints, value)
+
+
+func _buy_upgrade() -> void:
+	if coin_total < upgrade_cost:
+		return
+
+	coin_total -= upgrade_cost
+	num_rows += 1
+	_build_board()
+
+	upgrade_cost = int(upgrade_cost * UPGRADE_COST_MULTIPLIER)
+	ui.update_coins(coin_total)
+	ui.update_upgrade(upgrade_cost)
 
 
 func _build_board() -> void:

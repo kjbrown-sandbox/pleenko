@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=3 format=3 uid="uid://sftu1s0w7u2g"]
 
 [ext_resource type="Script" path="res://scripts/coin.gd" id="1"]
 
