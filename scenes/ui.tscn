@@ -39,6 +39,7 @@ text = "Upgrades"
 
 [node name="UpgradeButton" type="Button" parent="UpgradePanel/VBoxContainer"]
 layout_mode = 2
+focus_mode = 0
 text = "Add Row"
 
 [node name="CostLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
@@ -67,6 +68,7 @@ text = "Orange Upgrades"
 
 [node name="UpgradeButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
 layout_mode = 2
+focus_mode = 0
 text = "Add Row"
 
 [node name="CostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
