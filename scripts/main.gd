@@ -1,161 +1,170 @@
 extends Node3D
 
 @onready var ui: CanvasLayer = $UI
-@onready var board: Node3D = $Board
 @onready var camera: Camera3D = $Camera3D
-var drop_cooldown: Timer
 
-var coin_scene: PackedScene = preload("res://scenes/coin.tscn")
+var board_scene: PackedScene = preload("res://scenes/plinko_board.tscn")
+
 var coin_total: int = 1
-var num_rows: int = 0
-var upgrade_cost: int = 10
+var orange_coin_total: int = 0
+var orange_board_unlocked: bool = false
+
+var regular_upgrade_cost: int = 10
+var orange_upgrade_cost: int = 10
 const UPGRADE_COST_MULTIPLIER := 1.5
+const BOARD_GAP := 3.0
 
-# Board layout constants
-const PEG_SPACING_X := 1.0
-const ROW_SPACING_Y := 0.8
-const TOP_Y := 3.0
-const BUCKET_OFFSET_Y := 0.6  # how far below last peg row the buckets sit
-const LABEL_OFFSET_Y := 0.35  # how far below bucket center the value label sits
-
-# Shared mesh resources (created once, reused for every peg/bucket)
-var peg_mesh: CylinderMesh
-var bucket_mesh: BoxMesh
+var regular_board: PlinkoBoard
+var orange_board: PlinkoBoard
 
 
 func _ready() -> void:
-	drop_cooldown = Timer.new()
-	drop_cooldown.wait_time = 1.0
-	drop_cooldown.one_shot = true
-	add_child(drop_cooldown)
+	# Create regular board with 2 rows
+	regular_board = board_scene.instantiate() as PlinkoBoard
+	add_child(regular_board)
 
-	peg_mesh = CylinderMesh.new()
-	peg_mesh.top_radius = 0.15
-	peg_mesh.bottom_radius = 0.15
-	peg_mesh.height = 0.3
+	# Connect signals before building so board_rebuilt triggers camera adjustment
+	regular_board.drop_requested.connect(_on_regular_drop_requested)
+	regular_board.coin_landed.connect(_on_regular_coin_landed)
+	regular_board.board_rebuilt.connect(_adjust_camera)
 
-	bucket_mesh = BoxMesh.new()
-	bucket_mesh.size = Vector3(PEG_SPACING_X * 0.9, 0.3, 0.5)
-
-	# Build the initial board with 1 row so there's something to see
-	num_rows = 2
-	_build_board()
+	regular_board.num_rows = 2
+	regular_board._build_board()
 
 	ui.update_coins(coin_total)
-	ui.update_upgrade(upgrade_cost)
-	ui.upgrade_pressed.connect(_buy_upgrade)
+	ui.update_upgrade(regular_upgrade_cost)
+	ui.upgrade_pressed.connect(_buy_regular_upgrade)
+	ui.orange_upgrade_pressed.connect(_buy_orange_upgrade)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
-		_drop_coin()
+		_on_regular_drop_requested()
 
 
-func _drop_coin() -> void:
-	if num_rows == 0:
-		return
+# --- Regular board handlers ---
+
+func _on_regular_drop_requested() -> void:
 	if coin_total < 1:
 		return
-	if not drop_cooldown.is_stopped():
+	if regular_board.drop_coin():
+		coin_total -= 1
+		ui.update_coins(coin_total)
+
+
+func _on_regular_coin_landed(value: int, is_orange: bool) -> void:
+	if is_orange:
+		orange_coin_total += 1
+		ui.update_orange_coins(orange_coin_total)
+		_check_unlock_orange_board()
+	else:
+		coin_total += value
+		ui.update_coins(coin_total)
+
+
+func _buy_regular_upgrade() -> void:
+	if coin_total < regular_upgrade_cost:
 		return
 
-	coin_total -= 1
+	coin_total -= regular_upgrade_cost
+	regular_board.add_row()
+
+	regular_upgrade_cost = int(regular_upgrade_cost * UPGRADE_COST_MULTIPLIER)
 	ui.update_coins(coin_total)
-	drop_cooldown.start()
-
-	# Simulate coin path through the rows
-	var waypoints: Array[Vector3] = []
-	var col_index := 0
-
-	for r in range(num_rows):
-		if randf() < 0.5:
-			col_index += 1
-		waypoints.append(_peg_position(r, col_index))
-
-	# Final waypoint: the bucket the coin lands in
-	var value := _bucket_value(col_index)
-	waypoints.append(_bucket_position(col_index))
-
-	# Spawn coin above the first peg
-	var coin: Node3D = coin_scene.instantiate()
-	coin.position = Vector3(0.0, TOP_Y + 0.8, 0.0)
-	add_child(coin)
-
-	coin.landed.connect(_on_coin_landed)
-	coin.animate(waypoints, value)
+	ui.update_upgrade(regular_upgrade_cost)
 
 
-func _buy_upgrade() -> void:
-	if coin_total < upgrade_cost:
+# --- Orange board lifecycle ---
+
+func _check_unlock_orange_board() -> void:
+	if orange_board_unlocked:
+		return
+	if orange_coin_total < 1:
 		return
 
-	coin_total -= upgrade_cost
-	num_rows += 1
-	_build_board()
+	orange_board_unlocked = true
 
-	upgrade_cost = int(upgrade_cost * UPGRADE_COST_MULTIPLIER)
-	ui.update_coins(coin_total)
-	ui.update_upgrade(upgrade_cost)
+	orange_board = board_scene.instantiate() as PlinkoBoard
+	orange_board.is_orange_board = true
+	add_child(orange_board)
 
+	# Connect signals before building so board_rebuilt triggers camera adjustment
+	orange_board.drop_requested.connect(_on_orange_drop_requested)
+	orange_board.coin_landed.connect(_on_orange_coin_landed)
+	orange_board.board_rebuilt.connect(_adjust_camera)
 
-func _build_board() -> void:
-	# Clear previous board
-	for child in board.get_children():
-		child.queue_free()
-
-	# Create pegs: row r has (r + 1) pegs
-	for r in range(num_rows):
-		for i in range(r + 1):
-			var peg := MeshInstance3D.new()
-			peg.mesh = peg_mesh
-			peg.position = _peg_position(r, i)
-			board.add_child(peg)
-
-	# Create buckets and value labels: num_rows + 1 buckets below the last row
-	for i in range(num_rows + 1):
-		var bucket := MeshInstance3D.new()
-		bucket.mesh = bucket_mesh
-		bucket.position = _bucket_position(i)
-		board.add_child(bucket)
-
-		var label := Label3D.new()
-		label.text = str(_bucket_value(i))
-		label.font_size = 48
-		label.position = _bucket_position(i) + Vector3(0.0, -LABEL_OFFSET_Y, 0.01)
-		board.add_child(label)
-
-	_adjust_camera()
+	orange_board.num_rows = 2
+	orange_board._build_board()
+	ui.show_orange_panel()
+	ui.update_orange_coins(orange_coin_total)
+	ui.update_orange_upgrade(orange_upgrade_cost)
 
 
-func _peg_position(row: int, index: int) -> Vector3:
-	# Row r has (r+1) pegs, centered around x=0
-	var x := (index - row / 2.0) * PEG_SPACING_X
-	var y := TOP_Y - row * ROW_SPACING_Y
-	return Vector3(x, y, 0.0)
+# --- Orange board handlers ---
+
+func _on_orange_drop_requested() -> void:
+	if orange_coin_total < 1:
+		return
+	if orange_board.drop_coin():
+		orange_coin_total -= 1
+		ui.update_orange_coins(orange_coin_total)
 
 
-func _bucket_position(index: int) -> Vector3:
-	# Buckets sit below the last peg row, same spacing logic as a row with num_rows pegs
-	var x := (index - num_rows / 2.0) * PEG_SPACING_X
-	var y := TOP_Y - num_rows * ROW_SPACING_Y - BUCKET_OFFSET_Y
-	return Vector3(x, y, 0.0)
+func _on_orange_coin_landed(value: int, _is_orange: bool) -> void:
+	orange_coin_total += value
+	ui.update_orange_coins(orange_coin_total)
 
 
-func _bucket_value(index: int) -> int:
-	# Edge buckets are worth more (harder to reach), center is worth 1
-	var center := num_rows / 2.0
-	return int(absf(index - center)) + 1
+func _buy_orange_upgrade() -> void:
+	if orange_coin_total < orange_upgrade_cost:
+		return
+
+	orange_coin_total -= orange_upgrade_cost
+	orange_board.add_row()
+
+	orange_upgrade_cost = int(orange_upgrade_cost * UPGRADE_COST_MULTIPLIER)
+	ui.update_orange_coins(orange_coin_total)
+	ui.update_orange_upgrade(orange_upgrade_cost)
+
+
+# --- Board positioning and camera ---
+
+func _position_boards() -> void:
+	if not orange_board_unlocked:
+		regular_board.position = Vector3.ZERO
+		return
+
+	# Get widths of each board to position them side by side
+	var reg_bounds := regular_board.get_bounds()
+	var org_bounds := orange_board.get_bounds()
+
+	var reg_half_width := reg_bounds.size.x / 2.0
+	var org_half_width := org_bounds.size.x / 2.0
+
+	# Center the pair: regular on the left, orange on the right
+	var total_width := reg_bounds.size.x + BOARD_GAP + org_bounds.size.x
+	var left_start := -total_width / 2.0
+
+	regular_board.position.x = left_start + reg_half_width
+	orange_board.position.x = left_start + reg_bounds.size.x + BOARD_GAP + org_half_width
 
 
 func _adjust_camera() -> void:
-	var top := TOP_Y + 0.8
-	var bottom := TOP_Y - num_rows * ROW_SPACING_Y - BUCKET_OFFSET_Y
-	var center_y := (top + bottom) / 2.0
-	var board_height := top - bottom
-	var z_distance := maxf(6.0, board_height * 0.9)
-	camera.position = Vector3(0.0, center_y, z_distance)
+	_position_boards()
 
+	var bounds := regular_board.get_bounds()
+	if orange_board_unlocked and orange_board:
+		var ob := orange_board.get_bounds()
+		bounds = bounds.merge(ob)
 
-func _on_coin_landed(bucket_value: int) -> void:
-	coin_total += bucket_value
-	ui.update_coins(coin_total)
+	var center_x := bounds.position.x + bounds.size.x / 2.0
+	var center_y := bounds.position.y + bounds.size.y / 2.0
+	var board_height := bounds.size.y
+	var board_width := bounds.size.x
+
+	# Distance based on whichever dimension is larger (accounting for aspect ratio)
+	var z_for_height := board_height * 0.9
+	var z_for_width := board_width * 0.7
+	var z_distance := maxf(6.0, maxf(z_for_height, z_for_width))
+
+	camera.position = Vector3(center_x, center_y, z_distance)
