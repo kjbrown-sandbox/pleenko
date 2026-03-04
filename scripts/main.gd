@@ -6,7 +6,7 @@ extends Node3D
 var board_scene: PackedScene = preload("res://scenes/plinko_board.tscn")
 
 # --- Currency ---
-var coin_total: int = 0
+var coin_total: int = 1
 var orange_coin_total: int = 0
 var red_coin_total: int = 0
 
@@ -31,6 +31,11 @@ var bucket_value_cost: int = 40
 var bucket_value_level: int = 0
 var drop_rate_cost: int = 100
 var drop_rate_level: int = 0
+
+# --- Orange panel upgrades ---
+var orange_drop_rate_cost: int = 5
+var orange_drop_rate_delta: int = 5
+var orange_queue_up_cost: int = 10
 
 # --- Other upgrade costs (x1.5 multiplier) ---
 var autodropper_cost: int = 5
@@ -88,7 +93,7 @@ func _ready() -> void:
 	# Gold drop cooldown (1s between manual drops)
 	gold_drop_cooldown = Timer.new()
 	gold_drop_cooldown.one_shot = true
-	gold_drop_cooldown.wait_time = 0.01
+	gold_drop_cooldown.wait_time = 1.0 
 	gold_drop_cooldown.timeout.connect(_on_gold_cooldown_finished)
 	add_child(gold_drop_cooldown)
 
@@ -128,6 +133,8 @@ func _ready() -> void:
 	ui.orange_upgrade_pressed.connect(_buy_orange_upgrade)
 	ui.red_upgrade_pressed.connect(_buy_red_upgrade)
 	ui.autodropper_pressed.connect(_buy_autodropper)
+	ui.orange_drop_rate_pressed.connect(_buy_orange_drop_rate)
+	ui.orange_queue_up_pressed.connect(_buy_orange_queue_up)
 	ui.bucket_value_pressed.connect(_buy_bucket_value)
 	ui.drop_rate_pressed.connect(_buy_drop_rate)
 	ui.gold_row_cap_pressed.connect(_buy_gold_row_cap)
@@ -181,10 +188,14 @@ func _process(_delta: float) -> void:
 func _on_regular_drop_requested() -> void:
 	if gold_drop_cooldown.wait_time > 0.0 and not gold_drop_cooldown.is_stopped():
 		return
-	regular_board.drop_coin()
-	if gold_drop_cooldown.wait_time > 0.0:
-		gold_drop_cooldown.start()
-		gold_drop_label.text = "reloading..."
+	if coin_total < 1:
+		return
+	if regular_board.drop_coin():
+		coin_total -= 1
+		ui.update_coins(coin_total)
+		if gold_drop_cooldown.wait_time > 0.0:
+			gold_drop_cooldown.start()
+			gold_drop_label.text = "reloading..."
 
 
 func _on_gold_cooldown_finished() -> void:
@@ -258,6 +269,8 @@ func _check_unlock_orange_board() -> void:
 	ui.update_orange_queue(orange_queue, orange_queue_max)
 	ui.update_orange_upgrade(orange_upgrade_cost)
 	ui.update_autodropper(autodropper_cost, autodropper_level, autodropper_cap)
+	ui.update_orange_drop_rate(orange_drop_rate_cost, orange_queue_timer.wait_time)
+	ui.update_orange_queue_up(orange_queue_up_cost, orange_queue_max)
 
 
 # === Orange board handlers ===
@@ -301,7 +314,41 @@ func _buy_autodropper() -> void:
 
 func _on_autodropper_timeout() -> void:
 	# Auto-drop a gold coin (independent of manual cooldown)
-	regular_board.drop_coin()
+	if coin_total < 1:
+		return
+	if regular_board.drop_coin():
+		coin_total -= 1
+		ui.update_coins(coin_total)
+
+
+# === Orange Drop Rate (orange currency, reduces queue timer) ===
+
+func _buy_orange_drop_rate() -> void:
+	if orange_coin_total < orange_drop_rate_cost:
+		return
+
+	orange_coin_total -= orange_drop_rate_cost
+	orange_queue_timer.wait_time *= 0.9
+
+	orange_drop_rate_cost += orange_drop_rate_delta
+	orange_drop_rate_delta += 5
+	ui.update_orange_coins(orange_coin_total)
+	ui.update_orange_drop_rate(orange_drop_rate_cost, orange_queue_timer.wait_time)
+
+
+# === Orange Queue +1 (orange currency) ===
+
+func _buy_orange_queue_up() -> void:
+	if orange_coin_total < orange_queue_up_cost:
+		return
+
+	orange_coin_total -= orange_queue_up_cost
+	orange_queue_max += 1
+
+	orange_queue_up_cost += 5
+	ui.update_orange_coins(orange_coin_total)
+	ui.update_orange_queue_up(orange_queue_up_cost, orange_queue_max)
+	ui.update_orange_queue(orange_queue, orange_queue_max)
 
 
 # === Bucket Value +1 (gold currency, gold panel) ===

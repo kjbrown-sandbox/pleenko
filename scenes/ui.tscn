@@ -129,6 +129,24 @@ text = "Autodropper"
 layout_mode = 2
 text = "Cost: 5 | Lvl: 0 | Cap: 10"
 
+[node name="OrangeDropRateButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Drop Rate"
+
+[node name="OrangeDropRateCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 5 | Rate: 10.0s"
+
+[node name="OrangeQueueUpButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Queue +1"
+
+[node name="OrangeQueueUpCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 10 | Queue: 1"
+
 [node name="RedUpgradePanel" type="PanelContainer" parent="."]
 visible = false
 anchors_preset = 3

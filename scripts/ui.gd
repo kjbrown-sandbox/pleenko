@@ -4,6 +4,8 @@ signal upgrade_pressed
 signal orange_upgrade_pressed
 signal red_upgrade_pressed
 signal autodropper_pressed
+signal orange_drop_rate_pressed
+signal orange_queue_up_pressed
 signal bucket_value_pressed
 signal drop_rate_pressed
 signal gold_row_cap_pressed
@@ -33,6 +35,10 @@ signal red_queue_cap_pressed
 @onready var orange_queue_label: Label = $OrangeUpgradePanel/VBoxContainer/OrangeQueueLabel
 @onready var autodropper_button: Button = $OrangeUpgradePanel/VBoxContainer/AutodropperButton
 @onready var autodropper_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/AutodropperCostLabel
+@onready var orange_drop_rate_button: Button = $OrangeUpgradePanel/VBoxContainer/OrangeDropRateButton
+@onready var orange_drop_rate_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/OrangeDropRateCostLabel
+@onready var orange_queue_up_button: Button = $OrangeUpgradePanel/VBoxContainer/OrangeQueueUpButton
+@onready var orange_queue_up_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/OrangeQueueUpCostLabel
 
 @onready var red_upgrade_panel: PanelContainer = $RedUpgradePanel
 @onready var red_countdown_label: Label = $RedUpgradePanel/VBoxContainer/RedCountdownLabel
@@ -56,6 +62,8 @@ func _ready() -> void:
 	orange_upgrade_button.pressed.connect(func(): orange_upgrade_pressed.emit())
 	red_add_row_button.pressed.connect(func(): red_upgrade_pressed.emit())
 	autodropper_button.pressed.connect(func(): autodropper_pressed.emit())
+	orange_drop_rate_button.pressed.connect(func(): orange_drop_rate_pressed.emit())
+	orange_queue_up_button.pressed.connect(func(): orange_queue_up_pressed.emit())
 	bucket_value_button.pressed.connect(func(): bucket_value_pressed.emit())
 	drop_rate_button.pressed.connect(func(): drop_rate_pressed.emit())
 	gold_row_cap_button.pressed.connect(func(): gold_row_cap_pressed.emit())
@@ -107,6 +115,14 @@ func update_red_countdown(text: String) -> void:
 
 func update_autodropper(cost: int, level: int, cap: int) -> void:
 	autodropper_cost_label.text = "Cost: " + str(cost) + " | Lvl: " + str(level) + " | Cap: " + str(cap)
+
+
+func update_orange_drop_rate(cost: int, rate: float) -> void:
+	orange_drop_rate_cost_label.text = "Cost: " + str(cost) + " | Rate: " + str(snapped(rate, 0.01)) + "s"
+
+
+func update_orange_queue_up(cost: int, queue_max: int) -> void:
+	orange_queue_up_cost_label.text = "Cost: " + str(cost) + " | Queue: " + str(queue_max)
 
 
 func update_level(level: int, next_threshold: int) -> void:
