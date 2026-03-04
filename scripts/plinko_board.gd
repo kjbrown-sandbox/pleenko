@@ -23,6 +23,7 @@ const RED_ROW_GATE := 12
 
 var num_rows: int = 0
 var value_bonus: int = 0
+var holding_drop: bool = false
 
 var coin_scene: PackedScene = preload("res://scenes/coin.tscn")
 
@@ -55,9 +56,14 @@ func _ready() -> void:
 	click_area.input_event.connect(_on_click_area_input_event)
 
 
-func _on_click_area_input_event(_camera: Node, event: InputEvent, _pos: Vector3, _normal: Vector3, _shape_idx: int) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+func _process(_delta: float) -> void:
+	if holding_drop:
 		drop_requested.emit()
+
+
+func _on_click_area_input_event(_camera: Node, event: InputEvent, _pos: Vector3, _normal: Vector3, _shape_idx: int) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		holding_drop = event.pressed
 
 
 func drop_coin() -> bool:

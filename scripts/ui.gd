@@ -17,6 +17,7 @@ signal red_queue_cap_pressed
 @onready var red_coin_label: Label = $RedCoinLabel
 
 @onready var level_progress_bar: ProgressBar = $LevelProgressBar
+@onready var level_progress_label: Label = $LevelProgressLabel
 @onready var level_label: Label = $UpgradePanel/VBoxContainer/LevelLabel
 @onready var upgrade_button: Button = $UpgradePanel/VBoxContainer/UpgradeButton
 @onready var cost_label: Label = $UpgradePanel/VBoxContainer/CostLabel
@@ -120,10 +121,12 @@ func update_level_progress(current: int, prev_threshold: int, next_threshold: in
 		# Max level — fill the bar
 		level_progress_bar.max_value = 1.0
 		level_progress_bar.value = 1.0
+		level_progress_label.text = "MAX"
 	else:
 		level_progress_bar.min_value = 0.0
 		level_progress_bar.max_value = next_threshold - prev_threshold
 		level_progress_bar.value = current - prev_threshold
+		level_progress_label.text = str(current) + "/" + str(next_threshold)
 
 
 func show_add_row() -> void:

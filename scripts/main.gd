@@ -6,7 +6,7 @@ extends Node3D
 var board_scene: PackedScene = preload("res://scenes/plinko_board.tscn")
 
 # --- Currency ---
-var coin_total: int = 1
+var coin_total: int = 0
 var orange_coin_total: int = 0
 var red_coin_total: int = 0
 
@@ -88,7 +88,7 @@ func _ready() -> void:
 	# Gold drop cooldown (1s between manual drops)
 	gold_drop_cooldown = Timer.new()
 	gold_drop_cooldown.one_shot = true
-	gold_drop_cooldown.wait_time = 1.0
+	gold_drop_cooldown.wait_time = 0.01
 	gold_drop_cooldown.timeout.connect(_on_gold_cooldown_finished)
 	add_child(gold_drop_cooldown)
 
@@ -143,13 +143,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(_delta: float) -> void:
+	# Gold board: hold-to-drop (mouse only)
+	if regular_board.holding_drop:
+		_on_regular_drop_requested()
+
 	# Orange board auto-drop from queue
 	if orange_board_unlocked:
-		if orange_queue > 0 and coin_total >= 1 and orange_queue_timer.is_stopped():
+		if orange_queue > 0 and orange_queue_timer.is_stopped():
 			if orange_board.drop_coin():
-				coin_total -= 1
 				orange_queue -= 1
-				ui.update_coins(coin_total)
 				ui.update_orange_queue(orange_queue, orange_queue_max)
 				orange_queue_timer.start()
 
@@ -161,11 +163,9 @@ func _process(_delta: float) -> void:
 
 	# Red board auto-drop from queue
 	if red_board_unlocked:
-		if red_queue > 0 and coin_total >= 1 and red_queue_timer.is_stopped():
+		if red_queue > 0 and red_queue_timer.is_stopped():
 			if red_board.drop_coin():
-				coin_total -= 1
 				red_queue -= 1
-				ui.update_coins(coin_total)
 				ui.update_red_queue(red_queue, red_queue_max)
 				red_queue_timer.start()
 
@@ -179,13 +179,10 @@ func _process(_delta: float) -> void:
 # === Gold board handlers ===
 
 func _on_regular_drop_requested() -> void:
-	if not gold_drop_cooldown.is_stopped():
+	if gold_drop_cooldown.wait_time > 0.0 and not gold_drop_cooldown.is_stopped():
 		return
-	if coin_total < 1:
-		return
-	if regular_board.drop_coin():
-		coin_total -= 1
-		ui.update_coins(coin_total)
+	regular_board.drop_coin()
+	if gold_drop_cooldown.wait_time > 0.0:
 		gold_drop_cooldown.start()
 		gold_drop_label.text = "reloading..."
 
@@ -310,11 +307,7 @@ func _buy_autodropper() -> void:
 
 func _on_autodropper_timeout() -> void:
 	# Auto-drop a gold coin (independent of manual cooldown)
-	if coin_total < 1:
-		return
-	if regular_board.drop_coin():
-		coin_total -= 1
-		ui.update_coins(coin_total)
+	regular_board.drop_coin()
 
 
 # === Bucket Value +1 (gold currency, gold panel) ===
