@@ -396,11 +396,11 @@ func _check_level_up() -> void:
 func _on_level_up(level: int) -> void:
 	match level:
 		1:
-			ui.show_add_row()
-			ui.update_upgrade(regular_upgrade_cost)
-		2:
 			ui.show_bucket_value()
 			ui.update_bucket_value(bucket_value_cost, bucket_value_level)
+		2:
+			ui.show_add_row()
+			ui.update_upgrade(regular_upgrade_cost)
 		3:
 			ui.show_drop_rate()
 			ui.update_drop_rate(drop_rate_cost, gold_drop_cooldown.wait_time)

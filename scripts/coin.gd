@@ -2,7 +2,7 @@ extends Node3D
 
 signal landed(bucket_value: int)
 
-const TIME_PER_SEGMENT := 0.15
+const TIME_PER_SEGMENT := 0.3
 
 
 func animate(waypoints: Array[Vector3], bucket_value: int) -> void:
