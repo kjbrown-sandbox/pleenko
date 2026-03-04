@@ -22,7 +22,7 @@ const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100]
 var regular_upgrade_cost: int = 5
 var regular_upgrade_delta: int = 5
 var orange_upgrade_cost: int = 5
-var orange_upgrade_delta: int = 5
+var orange_upgrade_delta: int = 2
 var red_upgrade_cost: int = 5
 var red_upgrade_delta: int = 5
 
@@ -210,8 +210,6 @@ func _on_regular_coin_landed(value: int, bucket_type: PlinkoBoard.BucketType) ->
 func _buy_regular_upgrade() -> void:
 	if coin_total < regular_upgrade_cost:
 		return
-	if regular_board.num_rows >= gold_row_cap:
-		return
 
 	coin_total -= regular_upgrade_cost
 	regular_board.add_row()
@@ -274,14 +272,12 @@ func _on_orange_coin_landed(value: int, _bucket_type: PlinkoBoard.BucketType) ->
 func _buy_orange_upgrade() -> void:
 	if orange_coin_total < orange_upgrade_cost:
 		return
-	if orange_board.num_rows >= orange_row_cap:
-		return
 
 	orange_coin_total -= orange_upgrade_cost
 	orange_board.add_row()
 
 	orange_upgrade_cost += orange_upgrade_delta
-	orange_upgrade_delta += 5
+	orange_upgrade_delta += 2
 	ui.update_orange_coins(orange_coin_total)
 	ui.update_orange_upgrade(orange_upgrade_cost)
 
@@ -289,8 +285,6 @@ func _buy_orange_upgrade() -> void:
 # === Autodropper (orange currency, drops on gold board) ===
 
 func _buy_autodropper() -> void:
-	if autodropper_level >= autodropper_cap:
-		return
 	if orange_coin_total < autodropper_cost:
 		return
 
@@ -419,8 +413,6 @@ func _on_red_coin_landed(value: int, _bucket_type: PlinkoBoard.BucketType) -> vo
 
 func _buy_red_upgrade() -> void:
 	if red_coin_total < red_upgrade_cost:
-		return
-	if red_board.num_rows >= red_row_cap:
 		return
 
 	red_coin_total -= red_upgrade_cost
