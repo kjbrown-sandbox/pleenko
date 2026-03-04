@@ -36,13 +36,33 @@ anchors_preset = 11
 anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -160.0
+offset_left = -200.0
 grow_horizontal = 0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="UpgradePanel"]
 layout_mode = 2
 
-[node name="Header" type="Label" parent="UpgradePanel/VBoxContainer"]
+[node name="BoardTabs" type="HBoxContainer" parent="UpgradePanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="GoldTab" type="Button" parent="UpgradePanel/VBoxContainer/BoardTabs"]
+layout_mode = 2
+focus_mode = 0
+text = "Gold"
+
+[node name="OrangeTab" type="Button" parent="UpgradePanel/VBoxContainer/BoardTabs"]
+visible = false
+layout_mode = 2
+focus_mode = 0
+text = "Orange"
+
+[node name="RedTab" type="Button" parent="UpgradePanel/VBoxContainer/BoardTabs"]
+visible = false
+layout_mode = 2
+focus_mode = 0
+text = "Red"
+
+[node name="HeaderLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
 layout_mode = 2
 text = "Gold Upgrades"
 
@@ -50,177 +70,23 @@ text = "Gold Upgrades"
 layout_mode = 2
 text = "Level: 0 (next: 10)"
 
-[node name="UpgradeButton" type="Button" parent="UpgradePanel/VBoxContainer"]
-visible = false
+[node name="UpgradeList" type="VBoxContainer" parent="UpgradePanel/VBoxContainer"]
 layout_mode = 2
-focus_mode = 0
-text = "Add Row"
 
-[node name="CostLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
-visible = false
-layout_mode = 2
-text = "Cost: 5"
-
-[node name="BucketValueButton" type="Button" parent="UpgradePanel/VBoxContainer"]
-visible = false
-layout_mode = 2
-focus_mode = 0
-text = "Bucket Value +1"
-
-[node name="BucketValueCostLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
-visible = false
-layout_mode = 2
-text = "Cost: 5 | Lvl: 0"
-
-[node name="DropRateButton" type="Button" parent="UpgradePanel/VBoxContainer"]
-visible = false
-layout_mode = 2
-focus_mode = 0
-text = "Drop Rate"
-
-[node name="DropRateCostLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
-visible = false
-layout_mode = 2
-text = "Cost: 100 | Rate: 1.0s"
-
-[node name="AutodropperButton" type="Button" parent="UpgradePanel/VBoxContainer"]
-visible = false
-layout_mode = 2
-focus_mode = 0
-text = "Autodropper"
-
-[node name="AutodropperCostLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
-visible = false
-layout_mode = 2
-text = "Cost: 5 | Lvl: 0/3"
-
-[node name="OrangeUpgradePanel" type="PanelContainer" parent="."]
-visible = false
+[node name="CapCostLabel" type="Label" parent="."]
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -330.0
-offset_top = -200.0
-offset_right = -170.0
+offset_left = -300.0
+offset_top = -30.0
+offset_right = -210.0
+offset_bottom = -10.0
 grow_horizontal = 0
-grow_vertical = 2
-
-[node name="VBoxContainer" type="VBoxContainer" parent="OrangeUpgradePanel"]
-layout_mode = 2
-
-[node name="Header" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Orange Upgrades"
-
-[node name="OrangeCountdownLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
+grow_vertical = 0
+horizontal_alignment = 2
 text = ""
-
-[node name="OrangeQueueLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Queue: 1/1"
-
-[node name="UpgradeButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-focus_mode = 0
-text = "Add Row"
-
-[node name="CostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Cost: 5"
-
-[node name="OrangeDropRateButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-focus_mode = 0
-text = "Drop Rate"
-
-[node name="OrangeDropRateCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Cost: 5 | Rate: 10.0s"
-
-[node name="OrangeQueueUpButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-focus_mode = 0
-text = "Queue +1"
-
-[node name="OrangeQueueUpCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Cost: 10 | Queue: 1"
-
-[node name="RowCapButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-focus_mode = 0
-text = "Row Cap +2"
-
-[node name="RowCapCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Cost: 5 | Cap: 5"
-
-[node name="ValueCapButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-focus_mode = 0
-text = "Value Cap +1"
-
-[node name="ValueCapCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Cost: 5 | Cap: 3"
-
-[node name="RateCapButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-focus_mode = 0
-text = "Rate Cap +1"
-
-[node name="RateCapCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Cost: 5 | Cap: 3"
-
-[node name="AutoCapButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-focus_mode = 0
-text = "Auto Cap +1"
-
-[node name="AutoCapCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Cost: 5 | Cap: 3"
-
-[node name="RedUpgradePanel" type="PanelContainer" parent="."]
-visible = false
-anchors_preset = 3
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -500.0
-offset_top = -200.0
-offset_right = -340.0
-grow_horizontal = 0
-grow_vertical = 2
-
-[node name="VBoxContainer" type="VBoxContainer" parent="RedUpgradePanel"]
-layout_mode = 2
-
-[node name="Header" type="Label" parent="RedUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Red Upgrades"
-
-[node name="RedCountdownLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = ""
-
-[node name="RedQueueLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Queue: 0/1"
-
-[node name="RedAddRowButton" type="Button" parent="RedUpgradePanel/VBoxContainer"]
-layout_mode = 2
-focus_mode = 0
-text = "Add Row"
-
-[node name="RedCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Cost: 5"
 
 [node name="LevelProgressBar" type="ProgressBar" parent="."]
 anchors_preset = 12

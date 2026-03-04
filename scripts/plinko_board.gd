@@ -5,7 +5,7 @@ enum BoardType { GOLD, ORANGE, RED }
 enum BucketType { GOLD, ORANGE, RED }
 
 signal coin_landed(value: int, bucket_type: BucketType)
-signal drop_requested
+signal board_clicked
 signal board_rebuilt
 
 @export var board_type: BoardType = BoardType.GOLD
@@ -23,7 +23,8 @@ const RED_ROW_GATE := 12
 
 var num_rows: int = 0
 var value_bonus: int = 0
-var holding_drop: bool = false
+var orange_buckets_enabled: bool = false
+var selection_indicator: MeshInstance3D
 
 var coin_scene: PackedScene = preload("res://scenes/coin.tscn")
 
@@ -56,14 +57,40 @@ func _ready() -> void:
 	click_area.input_event.connect(_on_click_area_input_event)
 
 
-func _process(_delta: float) -> void:
-	if holding_drop:
-		drop_requested.emit()
-
-
 func _on_click_area_input_event(_camera: Node, event: InputEvent, _pos: Vector3, _normal: Vector3, _shape_idx: int) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		holding_drop = event.pressed
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		board_clicked.emit()
+
+
+func set_selected(is_selected: bool) -> void:
+	if is_selected:
+		if not selection_indicator:
+			selection_indicator = MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(1.0, 1.0, 0.1)  # sized in _update_selection_indicator
+			selection_indicator.mesh = box
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(1.0, 1.0, 1.0, 0.1)
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			selection_indicator.material_override = mat
+			add_child(selection_indicator)
+		_update_selection_indicator()
+	else:
+		if selection_indicator:
+			selection_indicator.queue_free()
+			selection_indicator = null
+
+
+func _update_selection_indicator() -> void:
+	if not selection_indicator:
+		return
+	var top := TOP_Y + 1.0
+	var bottom := TOP_Y - num_rows * ROW_SPACING_Y - BUCKET_OFFSET_Y - 0.5
+	var half_width := (num_rows / 2.0) * PEG_SPACING_X + 0.5
+	var height := top - bottom
+	var box := selection_indicator.mesh as BoxMesh
+	box.size = Vector3(half_width * 2.0 + 0.4, height + 0.4, 0.1)
+	selection_indicator.position = Vector3(0.0, (top + bottom) / 2.0, -0.1)
 
 
 func drop_coin() -> bool:
@@ -73,6 +100,9 @@ func drop_coin() -> bool:
 	# Simulate coin path through the rows
 	var waypoints: Array[Vector3] = []
 	var col_index := 0
+
+	# Start with a center-top waypoint so the coin drops straight down first
+	waypoints.append(Vector3(0.0, TOP_Y, 0.0))
 
 	for r in range(num_rows):
 		if randf() < 0.5:
@@ -209,7 +239,10 @@ func _bucket_type(index: int) -> BucketType:
 		return BucketType.ORANGE
 	if board_type == BoardType.RED:
 		return BucketType.RED
-	# Gold board: check thresholds AND row gates (red first since it's higher)
+	# Gold board: colored buckets gated behind orange_buckets_enabled
+	if not orange_buckets_enabled:
+		return BucketType.GOLD
+	# Check thresholds AND row gates (red first since it's higher)
 	var base := _bucket_value(index)
 	if num_rows >= RED_ROW_GATE and base >= RED_THRESHOLD:
 		return BucketType.RED
@@ -219,8 +252,10 @@ func _bucket_type(index: int) -> BucketType:
 
 
 func _display_value(index: int) -> int:
-	# value_bonus only applies to gold-type buckets on the gold board
+	# value_bonus applies to gold-type buckets on gold board, and all buckets on orange board
 	if board_type == BoardType.GOLD and _bucket_type(index) == BucketType.GOLD:
+		return _bucket_value(index) + value_bonus
+	if board_type == BoardType.ORANGE:
 		return _bucket_value(index) + value_bonus
 	return _bucket_value(index)
 

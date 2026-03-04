@@ -1,17 +1,7 @@
 extends CanvasLayer
 
-signal upgrade_pressed
-signal orange_upgrade_pressed
-signal red_upgrade_pressed
-signal autodropper_pressed
-signal orange_drop_rate_pressed
-signal orange_queue_up_pressed
-signal bucket_value_pressed
-signal drop_rate_pressed
-signal row_cap_pressed
-signal value_cap_pressed
-signal rate_cap_pressed
-signal auto_cap_pressed
+signal upgrade_action(action_name: String)
+signal board_tab_selected(board_type: int)  # PlinkoBoard.BoardType value
 
 @onready var coin_label: Label = $CoinLabel
 @onready var orange_coin_label: Label = $OrangeCoinLabel
@@ -19,106 +9,35 @@ signal auto_cap_pressed
 
 @onready var level_progress_bar: ProgressBar = $LevelProgressBar
 @onready var level_progress_label: Label = $LevelProgressLabel
+@onready var header_label: Label = $UpgradePanel/VBoxContainer/HeaderLabel
 @onready var level_label: Label = $UpgradePanel/VBoxContainer/LevelLabel
-@onready var upgrade_button: Button = $UpgradePanel/VBoxContainer/UpgradeButton
-@onready var cost_label: Label = $UpgradePanel/VBoxContainer/CostLabel
-@onready var bucket_value_button: Button = $UpgradePanel/VBoxContainer/BucketValueButton
-@onready var bucket_value_cost_label: Label = $UpgradePanel/VBoxContainer/BucketValueCostLabel
-@onready var drop_rate_button: Button = $UpgradePanel/VBoxContainer/DropRateButton
-@onready var drop_rate_cost_label: Label = $UpgradePanel/VBoxContainer/DropRateCostLabel
-@onready var autodropper_button: Button = $UpgradePanel/VBoxContainer/AutodropperButton
-@onready var autodropper_cost_label: Label = $UpgradePanel/VBoxContainer/AutodropperCostLabel
+@onready var upgrade_list: VBoxContainer = $UpgradePanel/VBoxContainer/UpgradeList
+@onready var cap_cost_label: Label = $CapCostLabel
+@onready var board_tabs: HBoxContainer = $UpgradePanel/VBoxContainer/BoardTabs
+@onready var gold_tab: Button = $UpgradePanel/VBoxContainer/BoardTabs/GoldTab
+@onready var orange_tab: Button = $UpgradePanel/VBoxContainer/BoardTabs/OrangeTab
+@onready var red_tab: Button = $UpgradePanel/VBoxContainer/BoardTabs/RedTab
 
-@onready var orange_upgrade_panel: PanelContainer = $OrangeUpgradePanel
-@onready var orange_upgrade_button: Button = $OrangeUpgradePanel/VBoxContainer/UpgradeButton
-@onready var orange_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/CostLabel
-@onready var orange_countdown_label: Label = $OrangeUpgradePanel/VBoxContainer/OrangeCountdownLabel
-@onready var orange_queue_label: Label = $OrangeUpgradePanel/VBoxContainer/OrangeQueueLabel
-@onready var orange_drop_rate_button: Button = $OrangeUpgradePanel/VBoxContainer/OrangeDropRateButton
-@onready var orange_drop_rate_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/OrangeDropRateCostLabel
-@onready var orange_queue_up_button: Button = $OrangeUpgradePanel/VBoxContainer/OrangeQueueUpButton
-@onready var orange_queue_up_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/OrangeQueueUpCostLabel
-@onready var row_cap_button: Button = $OrangeUpgradePanel/VBoxContainer/RowCapButton
-@onready var row_cap_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/RowCapCostLabel
-@onready var value_cap_button: Button = $OrangeUpgradePanel/VBoxContainer/ValueCapButton
-@onready var value_cap_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/ValueCapCostLabel
-@onready var rate_cap_button: Button = $OrangeUpgradePanel/VBoxContainer/RateCapButton
-@onready var rate_cap_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/RateCapCostLabel
-@onready var auto_cap_button: Button = $OrangeUpgradePanel/VBoxContainer/AutoCapButton
-@onready var auto_cap_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/AutoCapCostLabel
-
-@onready var red_upgrade_panel: PanelContainer = $RedUpgradePanel
-@onready var red_countdown_label: Label = $RedUpgradePanel/VBoxContainer/RedCountdownLabel
-@onready var red_queue_label: Label = $RedUpgradePanel/VBoxContainer/RedQueueLabel
-@onready var red_add_row_button: Button = $RedUpgradePanel/VBoxContainer/RedAddRowButton
-@onready var red_cost_label: Label = $RedUpgradePanel/VBoxContainer/RedCostLabel
+# Tracks live widgets by action name for targeted updates
+var current_entries: Dictionary = {}
 
 
 func _ready() -> void:
-	upgrade_button.pressed.connect(func(): upgrade_pressed.emit())
-	orange_upgrade_button.pressed.connect(func(): orange_upgrade_pressed.emit())
-	red_add_row_button.pressed.connect(func(): red_upgrade_pressed.emit())
-	autodropper_button.pressed.connect(func(): autodropper_pressed.emit())
-	orange_drop_rate_button.pressed.connect(func(): orange_drop_rate_pressed.emit())
-	orange_queue_up_button.pressed.connect(func(): orange_queue_up_pressed.emit())
-	bucket_value_button.pressed.connect(func(): bucket_value_pressed.emit())
-	drop_rate_button.pressed.connect(func(): drop_rate_pressed.emit())
-	row_cap_button.pressed.connect(func(): row_cap_pressed.emit())
-	value_cap_button.pressed.connect(func(): value_cap_pressed.emit())
-	rate_cap_button.pressed.connect(func(): rate_cap_pressed.emit())
-	auto_cap_button.pressed.connect(func(): auto_cap_pressed.emit())
+	gold_tab.pressed.connect(func(): board_tab_selected.emit(0))    # GOLD
+	orange_tab.pressed.connect(func(): board_tab_selected.emit(1))  # ORANGE
+	red_tab.pressed.connect(func(): board_tab_selected.emit(2))     # RED
 
 
 func update_coins(total: int) -> void:
 	coin_label.text = "Gold: " + str(total)
 
 
-func update_upgrade(cost: int, rows: int, cap: int) -> void:
-	cost_label.text = "Cost: " + str(cost) + " | Rows: " + str(rows) + "/" + str(cap)
-
-
 func update_orange_coins(total: int) -> void:
 	orange_coin_label.text = "Orange: " + str(total)
 
 
-func update_orange_upgrade(cost: int) -> void:
-	orange_cost_label.text = "Cost: " + str(cost)
-
-
-func update_orange_queue(current: int, max_val: int) -> void:
-	orange_queue_label.text = "Queue: " + str(current) + "/" + str(max_val)
-
-
-func update_orange_countdown(text: String) -> void:
-	orange_countdown_label.text = text
-
-
 func update_red_coins(total: int) -> void:
 	red_coin_label.text = "Red: " + str(total)
-
-
-func update_red_upgrade(cost: int) -> void:
-	red_cost_label.text = "Cost: " + str(cost)
-
-
-func update_red_queue(current: int, max_val: int) -> void:
-	red_queue_label.text = "Queue: " + str(current) + "/" + str(max_val)
-
-
-func update_red_countdown(text: String) -> void:
-	red_countdown_label.text = text
-
-
-func update_autodropper(cost: int, level: int, cap: int) -> void:
-	autodropper_cost_label.text = "Cost: " + str(cost) + " | Lvl: " + str(level) + "/" + str(cap)
-
-
-func update_orange_drop_rate(cost: int, rate: float) -> void:
-	orange_drop_rate_cost_label.text = "Cost: " + str(cost) + " | Rate: " + str(snapped(rate, 0.01)) + "s"
-
-
-func update_orange_queue_up(cost: int, queue_max: int) -> void:
-	orange_queue_up_cost_label.text = "Cost: " + str(cost) + " | Queue: " + str(queue_max)
 
 
 func update_level(level: int, next_threshold: int) -> void:
@@ -130,7 +49,6 @@ func update_level(level: int, next_threshold: int) -> void:
 
 func update_level_progress(current: int, next_threshold: int) -> void:
 	if next_threshold <= 0:
-		# Max level — fill the bar
 		level_progress_bar.max_value = 1.0
 		level_progress_bar.value = 1.0
 		level_progress_label.text = "MAX"
@@ -141,55 +59,105 @@ func update_level_progress(current: int, next_threshold: int) -> void:
 		level_progress_label.text = str(current) + "/" + str(next_threshold)
 
 
-func show_add_row() -> void:
-	upgrade_button.visible = true
-	cost_label.visible = true
+func update_header(text: String) -> void:
+	header_label.text = text
 
 
-func show_bucket_value() -> void:
-	bucket_value_button.visible = true
-	bucket_value_cost_label.visible = true
-
-
-func update_bucket_value(cost: int, level: int, cap: int) -> void:
-	bucket_value_cost_label.text = "Cost: " + str(cost) + " | Lvl: " + str(level) + "/" + str(cap)
-
-
-func show_drop_rate() -> void:
-	drop_rate_button.visible = true
-	drop_rate_cost_label.visible = true
-
-
-func update_drop_rate(cost: int, rate: float, level: int, cap: int) -> void:
-	drop_rate_cost_label.text = "Cost: " + str(cost) + " | Rate: " + str(snapped(rate, 0.01)) + "s | Lvl: " + str(level) + "/" + str(cap)
-
-
-func show_autodropper() -> void:
-	autodropper_button.visible = true
-	autodropper_cost_label.visible = true
-
-
-func update_row_cap(cost: int, cap: int) -> void:
-	row_cap_cost_label.text = "Cost: " + str(cost) + " | Cap: " + str(cap)
-
-
-func update_value_cap(cost: int, cap: int) -> void:
-	value_cap_cost_label.text = "Cost: " + str(cost) + " | Cap: " + str(cap)
-
-
-func update_rate_cap(cost: int, cap: int) -> void:
-	rate_cap_cost_label.text = "Cost: " + str(cost) + " | Cap: " + str(cap)
-
-
-func update_auto_cap(cost: int, cap: int) -> void:
-	auto_cap_cost_label.text = "Cost: " + str(cost) + " | Cap: " + str(cap)
-
-
-func show_orange_panel() -> void:
+func show_orange_currency() -> void:
 	orange_coin_label.visible = true
-	orange_upgrade_panel.visible = true
+	orange_tab.visible = true
 
 
-func show_red_panel() -> void:
+func show_red_currency() -> void:
 	red_coin_label.visible = true
-	red_upgrade_panel.visible = true
+	red_tab.visible = true
+
+
+## Clears the upgrade list and rebuilds it from an array of dictionaries.
+## Each dictionary has:
+##   "action": String — action name emitted on press
+##   "label": String — button text
+##   "cost_text": String — cost/info label text
+##   "cap_action": String (optional) — action name for "+" cap-raise button
+##   "cap_hover": String (optional) — hover text for cap cost label
+func show_upgrades_for_board(header: String, upgrades: Array[Dictionary]) -> void:
+	header_label.text = header
+
+	# Clear existing entries
+	for child in upgrade_list.get_children():
+		child.queue_free()
+	current_entries.clear()
+	cap_cost_label.text = ""
+
+	for upgrade in upgrades:
+		var action: String = upgrade["action"]
+		var row := HBoxContainer.new()
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+		# Main upgrade button
+		var btn := Button.new()
+		btn.text = upgrade["label"]
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.pressed.connect(func(): upgrade_action.emit(action))
+		row.add_child(btn)
+
+		# Cost label
+		var cost_lbl := Label.new()
+		cost_lbl.text = upgrade.get("cost_text", "")
+		cost_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(cost_lbl)
+
+		# Optional "+" cap-raise button
+		var cap_btn: Button = null
+		if upgrade.has("cap_action"):
+			cap_btn = Button.new()
+			cap_btn.text = "+"
+			cap_btn.focus_mode = Control.FOCUS_NONE
+			cap_btn.custom_minimum_size = Vector2(30, 0)
+			var cap_action: String = upgrade["cap_action"]
+			var cap_hover: String = upgrade.get("cap_hover", "")
+			cap_btn.pressed.connect(func(): upgrade_action.emit(cap_action))
+			cap_btn.mouse_entered.connect(func(): cap_cost_label.text = cap_hover)
+			cap_btn.mouse_exited.connect(func(): cap_cost_label.text = "")
+			row.add_child(cap_btn)
+
+		upgrade_list.add_child(row)
+
+		# Track widgets for targeted updates
+		current_entries[action] = {
+			"row": row,
+			"button": btn,
+			"cost_label": cost_lbl,
+			"cap_button": cap_btn,
+		}
+		if upgrade.has("cap_action"):
+			current_entries[upgrade["cap_action"]] = {
+				"row": row,
+				"cap_button": cap_btn,
+			}
+
+
+## Update just the cost text of a single entry without rebuilding the whole list.
+func update_entry_cost(action_name: String, cost_text: String) -> void:
+	if current_entries.has(action_name):
+		var entry: Dictionary = current_entries[action_name]
+		if entry.has("cost_label") and entry["cost_label"] != null:
+			(entry["cost_label"] as Label).text = cost_text
+
+
+## Update the hover text for a cap-raise button.
+func update_cap_hover(cap_action: String, hover_text: String) -> void:
+	if current_entries.has(cap_action):
+		var entry: Dictionary = current_entries[cap_action]
+		if entry.has("cap_button") and entry["cap_button"] != null:
+			var cap_btn: Button = entry["cap_button"]
+			# Reconnect hover signals with new text
+			if cap_btn.mouse_entered.get_connections().size() > 0:
+				for conn in cap_btn.mouse_entered.get_connections():
+					cap_btn.mouse_entered.disconnect(conn["callable"])
+			if cap_btn.mouse_exited.get_connections().size() > 0:
+				for conn in cap_btn.mouse_exited.get_connections():
+					cap_btn.mouse_exited.disconnect(conn["callable"])
+			cap_btn.mouse_entered.connect(func(): cap_cost_label.text = hover_text)
+			cap_btn.mouse_exited.connect(func(): cap_cost_label.text = "")

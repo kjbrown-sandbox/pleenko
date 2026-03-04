@@ -16,7 +16,7 @@ var red_board_unlocked: bool = false
 
 # --- Leveling ---
 var player_level: int = 0
-const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100]
+const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 1000, 1500, 2000, 3000, 5000, 8000, 12000, 18000, 25000]
 
 # --- Row upgrade costs (delta formula: cost += delta, delta += 5) ---
 var regular_upgrade_cost: int = 5
@@ -34,8 +34,8 @@ var drop_rate_level: int = 0
 var autodropper_cost: int = 5
 
 # --- Gold upgrade caps (raised by orange) ---
-var gold_row_cap: int = 5
-var bucket_value_cap: int = 3
+var gold_row_cap: int = 6
+var bucket_value_cap: int = 5
 var drop_rate_cap: int = 3
 var autodropper_cap: int = 3
 
@@ -44,12 +44,15 @@ var orange_drop_rate_cost: int = 5
 var orange_drop_rate_delta: int = 5
 var orange_queue_up_cost: int = 10
 
-# --- Orange cap-raise costs (x1.5 scaling) ---
-var row_cap_cost: int = 5
-var value_cap_cost: int = 5
-var rate_cap_cost: int = 5
-var auto_cap_cost: int = 5
-const UPGRADE_COST_MULTIPLIER := 1.5
+# --- Orange cap-raise costs (flat +2 increment: 1, 3, 5, 7...) ---
+var row_cap_cost: int = 1
+var value_cap_cost: int = 1
+var rate_cap_cost: int = 1
+var auto_cap_cost: int = 1
+
+# --- Orange Bucket Value upgrade ---
+var orange_bucket_value_cost: int = 5
+var orange_bucket_value_level: int = 0
 
 # --- Row caps (orange/red boards) ---
 var orange_row_cap: int = 5
@@ -59,20 +62,25 @@ var red_row_cap: int = 5
 var autodropper_level: int = 0
 var autodropper_timer: Timer
 
-# --- Gold drop cooldown ---
-var gold_drop_cooldown: Timer
-var gold_drop_label: Label3D
-
-# --- Orange queue (auto-drop on orange board) ---
+# --- Orange/Red queue credits ---
 var orange_queue: int = 0
 var orange_queue_max: int = 1
-const QUEUE_DROP_INTERVAL := 10.0
-var orange_queue_timer: Timer
-
-# --- Red queue (auto-drop on red board) ---
 var red_queue: int = 0
 var red_queue_max: int = 1
-var red_queue_timer: Timer
+
+# --- Board selection ---
+var selected_board: PlinkoBoard
+var camera_tween: Tween
+
+# --- Per-board drop cooldowns ---
+var board_drop_cooldowns: Dictionary = {}   # PlinkoBoard → Timer
+var board_drop_labels: Dictionary = {}      # PlinkoBoard → Label3D
+var gold_cooldown_time := 1.0
+var orange_cooldown_time := 1.0
+
+# --- Drop costs ---
+var orange_drop_cost := 100   # gold cost to drop on orange
+var red_drop_cost := 1        # orange cost to drop on red
 
 # --- Boards ---
 const BOARD_GAP := 3.0
@@ -86,26 +94,19 @@ func _ready() -> void:
 	regular_board = board_scene.instantiate() as PlinkoBoard
 	add_child(regular_board)
 
-	regular_board.drop_requested.connect(_on_regular_drop_requested)
+	regular_board.board_clicked.connect(func(): select_board(regular_board))
 	regular_board.coin_landed.connect(_on_regular_coin_landed)
 	regular_board.board_rebuilt.connect(_adjust_camera)
+
+	# Select gold board before building so _adjust_camera has a valid target
+	selected_board = regular_board
+	regular_board.set_selected(true)
 
 	regular_board.num_rows = 2
 	regular_board._build_board()
 
-	# Gold drop cooldown (1s between manual drops)
-	gold_drop_cooldown = Timer.new()
-	gold_drop_cooldown.one_shot = true
-	gold_drop_cooldown.wait_time = 1.0
-	gold_drop_cooldown.timeout.connect(_on_gold_cooldown_finished)
-	add_child(gold_drop_cooldown)
-
-	# "ready to drop" / "reloading..." label above gold board
-	gold_drop_label = Label3D.new()
-	gold_drop_label.font_size = 48
-	gold_drop_label.text = "ready to drop"
-	gold_drop_label.position = Vector3(0.0, PlinkoBoard.TOP_Y + 1.8, 0.0)
-	regular_board.add_child(gold_drop_label)
+	# Setup gold board drop cooldown + label
+	_setup_board_drop(regular_board, gold_cooldown_time)
 
 	# Autodropper timer (gold board auto-drops, independent of manual cooldown)
 	autodropper_timer = Timer.new()
@@ -114,95 +115,175 @@ func _ready() -> void:
 	autodropper_timer.timeout.connect(_on_autodropper_timeout)
 	add_child(autodropper_timer)
 
-	# Orange queue timer (cooldown between orange board auto-drops)
-	orange_queue_timer = Timer.new()
-	orange_queue_timer.one_shot = true
-	orange_queue_timer.wait_time = QUEUE_DROP_INTERVAL
-	add_child(orange_queue_timer)
-
-	# Red queue timer (cooldown between red board auto-drops)
-	red_queue_timer = Timer.new()
-	red_queue_timer.one_shot = true
-	red_queue_timer.wait_time = QUEUE_DROP_INTERVAL
-	add_child(red_queue_timer)
-
 	# UI init
 	ui.update_coins(coin_total)
-	ui.update_upgrade(regular_upgrade_cost, regular_board.num_rows, gold_row_cap)
 	_update_level_label()
+	_refresh_upgrade_panel()
 
 	# Connect UI signals
-	ui.upgrade_pressed.connect(_buy_regular_upgrade)
-	ui.orange_upgrade_pressed.connect(_buy_orange_upgrade)
-	ui.red_upgrade_pressed.connect(_buy_red_upgrade)
-	ui.autodropper_pressed.connect(_buy_autodropper)
-	ui.orange_drop_rate_pressed.connect(_buy_orange_drop_rate)
-	ui.orange_queue_up_pressed.connect(_buy_orange_queue_up)
-	ui.bucket_value_pressed.connect(_buy_bucket_value)
-	ui.drop_rate_pressed.connect(_buy_drop_rate)
-	ui.row_cap_pressed.connect(_buy_row_cap)
-	ui.value_cap_pressed.connect(_buy_value_cap)
-	ui.rate_cap_pressed.connect(_buy_rate_cap)
-	ui.auto_cap_pressed.connect(_buy_auto_cap)
+	ui.upgrade_action.connect(_on_upgrade_action)
+	ui.board_tab_selected.connect(_on_board_tab_selected)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
-		_on_regular_drop_requested()
+		_drop_on_selected_board()
 
 
 func _process(_delta: float) -> void:
-	# Gold board: hold-to-drop (mouse only)
-	if regular_board.holding_drop:
-		_on_regular_drop_requested()
-
-	# Orange board auto-drop from queue
-	if orange_board_unlocked:
-		if orange_queue > 0 and orange_queue_timer.is_stopped():
-			if orange_board.drop_coin():
-				orange_queue -= 1
-				ui.update_orange_queue(orange_queue, orange_queue_max)
-				orange_queue_timer.start()
-
-		if not orange_queue_timer.is_stopped():
-			var secs := int(ceil(orange_queue_timer.time_left))
-			ui.update_orange_countdown(str(secs) + "s")
+	# Update drop labels for all boards with cooldowns
+	for board: PlinkoBoard in board_drop_cooldowns:
+		var timer: Timer = board_drop_cooldowns[board]
+		var label: Label3D = board_drop_labels[board]
+		if not timer.is_stopped():
+			label.text = "reloading..."
 		else:
-			ui.update_orange_countdown("")
-
-	# Red board auto-drop from queue
-	if red_board_unlocked:
-		if red_queue > 0 and red_queue_timer.is_stopped():
-			if red_board.drop_coin():
-				red_queue -= 1
-				ui.update_red_queue(red_queue, red_queue_max)
-				red_queue_timer.start()
-
-		if not red_queue_timer.is_stopped():
-			var secs := int(ceil(red_queue_timer.time_left))
-			ui.update_red_countdown(str(secs) + "s")
-		else:
-			ui.update_red_countdown("")
+			label.text = _drop_status_text(board)
 
 
-# === Gold board handlers ===
+# === Board selection ===
 
-func _on_regular_drop_requested() -> void:
-	if gold_drop_cooldown.wait_time > 0.0 and not gold_drop_cooldown.is_stopped():
+func _on_board_tab_selected(board_type: int) -> void:
+	match board_type:
+		PlinkoBoard.BoardType.GOLD:
+			select_board(regular_board)
+		PlinkoBoard.BoardType.ORANGE:
+			if orange_board_unlocked and orange_board:
+				select_board(orange_board)
+		PlinkoBoard.BoardType.RED:
+			if red_board_unlocked and red_board:
+				select_board(red_board)
+
+
+func select_board(board: PlinkoBoard) -> void:
+	if selected_board == board:
 		return
+
+	if selected_board:
+		selected_board.set_selected(false)
+
+	selected_board = board
+	selected_board.set_selected(true)
+
+	_tween_camera_to_board(board)
+	_refresh_upgrade_panel()
+
+
+func _drop_status_text(board: PlinkoBoard) -> String:
+	match board.board_type:
+		PlinkoBoard.BoardType.GOLD:
+			return "ready (1g)"
+		PlinkoBoard.BoardType.ORANGE:
+			if orange_queue <= 0:
+				return "need credits"
+			if coin_total < orange_drop_cost:
+				return "need gold"
+			return "ready (" + str(orange_drop_cost) + "g + 1 credit)"
+		PlinkoBoard.BoardType.RED:
+			if red_queue <= 0:
+				return "need credits"
+			if orange_coin_total < red_drop_cost:
+				return "need orange"
+			return "ready (" + str(red_drop_cost) + "o + 1 credit)"
+	return ""
+
+
+func _tween_camera_to_board(board: PlinkoBoard) -> void:
+	if camera_tween:
+		camera_tween.kill()
+
+	var bounds := board.get_bounds()
+	var center_x := bounds.position.x + bounds.size.x / 2.0
+	var center_y := bounds.position.y + bounds.size.y / 2.0
+	var board_height := bounds.size.y
+	var board_width := bounds.size.x
+
+	var z_for_height := board_height * 0.9
+	var z_for_width := board_width * 0.7
+	var z_distance := maxf(6.0, maxf(z_for_height, z_for_width))
+
+	var target := Vector3(center_x, center_y, z_distance)
+
+	camera_tween = create_tween()
+	camera_tween.tween_property(camera, "position", target, 0.4) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+
+func _setup_board_drop(board: PlinkoBoard, cooldown_time: float) -> void:
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = cooldown_time
+	add_child(timer)
+	board_drop_cooldowns[board] = timer
+
+	var label := Label3D.new()
+	label.font_size = 48
+	label.text = _drop_status_text(board)
+	label.position = Vector3(0.0, PlinkoBoard.TOP_Y + 1.8, 0.0)
+	board.add_child(label)
+	board_drop_labels[board] = label
+
+
+# === Unified drop handler ===
+
+func _drop_on_selected_board() -> void:
+	if not selected_board:
+		return
+
+	var timer: Timer = board_drop_cooldowns.get(selected_board)
+	if timer and not timer.is_stopped():
+		return
+
+	match selected_board.board_type:
+		PlinkoBoard.BoardType.GOLD:
+			if coin_total < 1:
+				return
+			if selected_board.drop_coin():
+				coin_total -= 1
+				ui.update_coins(coin_total)
+				_update_level_label()
+				if timer:
+					timer.start()
+
+		PlinkoBoard.BoardType.ORANGE:
+			if coin_total < orange_drop_cost:
+				return
+			if orange_queue <= 0:
+				return
+			if selected_board.drop_coin():
+				coin_total -= orange_drop_cost
+				orange_queue -= 1
+				ui.update_coins(coin_total)
+				_update_level_label()
+				_refresh_upgrade_header()
+				if timer:
+					timer.start()
+
+		PlinkoBoard.BoardType.RED:
+			if orange_coin_total < red_drop_cost:
+				return
+			if red_queue <= 0:
+				return
+			if selected_board.drop_coin():
+				orange_coin_total -= red_drop_cost
+				red_queue -= 1
+				ui.update_orange_coins(orange_coin_total)
+				_refresh_upgrade_header()
+				if timer:
+					timer.start()
+
+
+# === Autodropper (gold board only) ===
+
+func _on_autodropper_timeout() -> void:
 	if coin_total < 1:
 		return
 	if regular_board.drop_coin():
 		coin_total -= 1
 		ui.update_coins(coin_total)
-		if gold_drop_cooldown.wait_time > 0.0:
-			gold_drop_cooldown.start()
-			gold_drop_label.text = "reloading..."
 
 
-func _on_gold_cooldown_finished() -> void:
-	gold_drop_label.text = "ready to drop"
-
+# === Coin landed handlers ===
 
 func _on_regular_coin_landed(value: int, bucket_type: PlinkoBoard.BucketType) -> void:
 	match bucket_type:
@@ -216,6 +297,244 @@ func _on_regular_coin_landed(value: int, bucket_type: PlinkoBoard.BucketType) ->
 		PlinkoBoard.BucketType.RED:
 			_add_to_red_queue(value)
 			_check_unlock_red_board()
+
+
+func _on_orange_coin_landed(value: int, _bucket_type: PlinkoBoard.BucketType) -> void:
+	orange_coin_total += value
+	ui.update_orange_coins(orange_coin_total)
+
+
+func _on_red_coin_landed(value: int, _bucket_type: PlinkoBoard.BucketType) -> void:
+	red_coin_total += value
+	ui.update_red_coins(red_coin_total)
+
+
+# === Queue credits ===
+
+func _add_to_orange_queue(count: int) -> void:
+	orange_queue = mini(orange_queue + count, orange_queue_max)
+	if selected_board and selected_board.board_type == PlinkoBoard.BoardType.ORANGE:
+		_refresh_upgrade_header()
+
+
+func _add_to_red_queue(count: int) -> void:
+	red_queue = mini(red_queue + count, red_queue_max)
+	if selected_board and selected_board.board_type == PlinkoBoard.BoardType.RED:
+		_refresh_upgrade_header()
+
+
+# === Board unlock ===
+
+func _check_unlock_orange_board() -> void:
+	if orange_board_unlocked:
+		return
+
+	orange_board_unlocked = true
+
+	orange_board = board_scene.instantiate() as PlinkoBoard
+	orange_board.board_type = PlinkoBoard.BoardType.ORANGE
+	add_child(orange_board)
+
+	orange_board.board_clicked.connect(func(): select_board(orange_board))
+	orange_board.coin_landed.connect(_on_orange_coin_landed)
+	orange_board.board_rebuilt.connect(_adjust_camera)
+
+	orange_board.num_rows = 2
+	orange_board._build_board()
+
+	_setup_board_drop(orange_board, orange_cooldown_time)
+
+	ui.show_orange_currency()
+	ui.update_orange_coins(orange_coin_total)
+
+	# Refresh gold panel to show "+" buttons if level is high enough
+	if selected_board == regular_board:
+		_refresh_upgrade_panel()
+
+
+func _check_unlock_red_board() -> void:
+	if red_board_unlocked:
+		return
+
+	red_board_unlocked = true
+
+	red_board = board_scene.instantiate() as PlinkoBoard
+	red_board.board_type = PlinkoBoard.BoardType.RED
+	add_child(red_board)
+
+	red_board.board_clicked.connect(func(): select_board(red_board))
+	red_board.coin_landed.connect(_on_red_coin_landed)
+	red_board.board_rebuilt.connect(_adjust_camera)
+
+	red_board.num_rows = 2
+	red_board._build_board()
+
+	_setup_board_drop(red_board, 1.0)
+
+	ui.show_red_currency()
+	ui.update_red_coins(red_coin_total)
+
+
+# === Upgrade panel ===
+
+func _refresh_upgrade_panel() -> void:
+	if not selected_board:
+		return
+
+	match selected_board.board_type:
+		PlinkoBoard.BoardType.GOLD:
+			var header := "Gold Upgrades"
+			ui.show_upgrades_for_board(header, _gold_upgrades())
+		PlinkoBoard.BoardType.ORANGE:
+			var header := "Orange Upgrades [" + str(orange_queue) + "/" + str(orange_queue_max) + "]"
+			ui.show_upgrades_for_board(header, _orange_upgrades())
+		PlinkoBoard.BoardType.RED:
+			var header := "Red Upgrades [" + str(red_queue) + "/" + str(red_queue_max) + "]"
+			ui.show_upgrades_for_board(header, _red_upgrades())
+
+
+func _refresh_upgrade_header() -> void:
+	if not selected_board:
+		return
+	match selected_board.board_type:
+		PlinkoBoard.BoardType.ORANGE:
+			ui.update_header("Orange Upgrades [" + str(orange_queue) + "/" + str(orange_queue_max) + "]")
+		PlinkoBoard.BoardType.RED:
+			ui.update_header("Red Upgrades [" + str(red_queue) + "/" + str(red_queue_max) + "]")
+
+
+func _gold_upgrades() -> Array[Dictionary]:
+	var upgrades: Array[Dictionary] = []
+
+	# Bucket Value +1 (level 1)
+	if player_level >= 1:
+		var entry: Dictionary = {
+			"action": "bucket_value",
+			"label": "Bucket Value +1",
+			"cost_text": "Cost: " + str(bucket_value_cost) + " | Lvl: " + str(bucket_value_level) + "/" + str(bucket_value_cap),
+		}
+		if orange_board_unlocked and player_level >= 8:
+			entry["cap_action"] = "value_cap"
+			entry["cap_hover"] = "Value Cap +1: " + str(value_cap_cost) + " orange"
+		upgrades.append(entry)
+
+	# Add Row (level 2)
+	if player_level >= 2:
+		var entry: Dictionary = {
+			"action": "add_row",
+			"label": "Add Row",
+			"cost_text": "Cost: " + str(regular_upgrade_cost) + " | Rows: " + str(regular_board.num_rows) + "/" + str(gold_row_cap),
+		}
+		if orange_board_unlocked and player_level >= 7:
+			entry["cap_action"] = "row_cap"
+			entry["cap_hover"] = "Row Cap +2: " + str(row_cap_cost) + " orange"
+		upgrades.append(entry)
+
+	# Drop Rate (level 3)
+	if player_level >= 3:
+		var entry: Dictionary = {
+			"action": "drop_rate",
+			"label": "Drop Rate",
+			"cost_text": "Cost: " + str(drop_rate_cost) + " | Rate: " + str(snapped(gold_cooldown_time, 0.01)) + "s | Lvl: " + str(drop_rate_level) + "/" + str(drop_rate_cap),
+		}
+		if orange_board_unlocked and player_level >= 9:
+			entry["cap_action"] = "rate_cap"
+			entry["cap_hover"] = "Rate Cap +1: " + str(rate_cap_cost) + " orange"
+		upgrades.append(entry)
+
+	# Autodropper (level 4)
+	if player_level >= 4:
+		var entry: Dictionary = {
+			"action": "autodropper",
+			"label": "Autodropper",
+			"cost_text": "Cost: " + str(autodropper_cost) + " | Lvl: " + str(autodropper_level) + "/" + str(autodropper_cap),
+		}
+		if orange_board_unlocked and player_level >= 6:
+			entry["cap_action"] = "auto_cap"
+			entry["cap_hover"] = "Auto Cap +1: " + str(auto_cap_cost) + " orange"
+		upgrades.append(entry)
+
+	return upgrades
+
+
+func _orange_upgrades() -> Array[Dictionary]:
+	var upgrades: Array[Dictionary] = []
+
+	if player_level >= 10:
+		upgrades.append({
+			"action": "orange_bucket_value",
+			"label": "Bucket Value +1",
+			"cost_text": "Cost: " + str(orange_bucket_value_cost) + " | Lvl: " + str(orange_bucket_value_level),
+		})
+
+	if player_level >= 11:
+		upgrades.append({
+			"action": "orange_drop_rate",
+			"label": "Drop Rate",
+			"cost_text": "Cost: " + str(orange_drop_rate_cost) + " | Rate: " + str(snapped(orange_cooldown_time, 0.01)) + "s",
+		})
+
+	if player_level >= 12:
+		upgrades.append({
+			"action": "orange_queue_up",
+			"label": "Queue +1",
+			"cost_text": "Cost: " + str(orange_queue_up_cost) + " | Queue: " + str(orange_queue_max),
+		})
+
+	if player_level >= 13:
+		upgrades.append({
+			"action": "orange_add_row",
+			"label": "Add Row",
+			"cost_text": "Cost: " + str(orange_upgrade_cost),
+		})
+
+	return upgrades
+
+
+func _red_upgrades() -> Array[Dictionary]:
+	var upgrades: Array[Dictionary] = []
+
+	upgrades.append({
+		"action": "red_add_row",
+		"label": "Add Row",
+		"cost_text": "Cost: " + str(red_upgrade_cost),
+	})
+
+	return upgrades
+
+
+# === Upgrade action dispatcher ===
+
+func _on_upgrade_action(action_name: String) -> void:
+	match action_name:
+		"bucket_value":
+			_buy_bucket_value()
+		"add_row":
+			_buy_regular_upgrade()
+		"drop_rate":
+			_buy_drop_rate()
+		"autodropper":
+			_buy_autodropper()
+		"value_cap":
+			_buy_value_cap()
+		"row_cap":
+			_buy_row_cap()
+		"rate_cap":
+			_buy_rate_cap()
+		"auto_cap":
+			_buy_auto_cap()
+		"orange_bucket_value":
+			_buy_orange_bucket_value()
+		"orange_drop_rate":
+			_buy_orange_drop_rate()
+		"orange_queue_up":
+			_buy_orange_queue_up()
+		"orange_add_row":
+			_buy_orange_upgrade()
+		"red_add_row":
+			_buy_red_upgrade()
+
+	_refresh_upgrade_panel()
 
 
 # === Gold board upgrade (Add Row) ===
@@ -232,7 +551,6 @@ func _buy_regular_upgrade() -> void:
 	regular_upgrade_cost += regular_upgrade_delta
 	regular_upgrade_delta += 5
 	ui.update_coins(coin_total)
-	ui.update_upgrade(regular_upgrade_cost, regular_board.num_rows, gold_row_cap)
 
 
 # === Bucket Value +1 (gold currency, gold panel, capped) ===
@@ -251,7 +569,6 @@ func _buy_bucket_value() -> void:
 
 	bucket_value_cost *= 2
 	ui.update_coins(coin_total)
-	ui.update_bucket_value(bucket_value_cost, bucket_value_level, bucket_value_cap)
 
 
 # === Drop Rate (gold currency, gold panel, capped) ===
@@ -265,11 +582,12 @@ func _buy_drop_rate() -> void:
 	coin_total -= drop_rate_cost
 	drop_rate_level += 1
 
-	gold_drop_cooldown.wait_time *= 0.9
+	gold_cooldown_time *= 0.9
+	var timer: Timer = board_drop_cooldowns[regular_board]
+	timer.wait_time = gold_cooldown_time
 
 	drop_rate_cost = 100 * (drop_rate_level + 1)
 	ui.update_coins(coin_total)
-	ui.update_drop_rate(drop_rate_cost, gold_drop_cooldown.wait_time, drop_rate_level, drop_rate_cap)
 
 
 # === Autodropper (gold currency, gold panel, capped) ===
@@ -283,76 +601,56 @@ func _buy_autodropper() -> void:
 	coin_total -= autodropper_cost
 	autodropper_level += 1
 
-	autodropper_cost = int(autodropper_cost * UPGRADE_COST_MULTIPLIER)
+	autodropper_cost = int(autodropper_cost * 1.5)
 	autodropper_timer.wait_time = 1.0 / autodropper_level
 	autodropper_timer.start()
 
 	ui.update_coins(coin_total)
-	ui.update_autodropper(autodropper_cost, autodropper_level, autodropper_cap)
 
 
-func _on_autodropper_timeout() -> void:
-	# Auto-drop a gold coin (independent of manual cooldown)
-	if coin_total < 1:
-		return
-	if regular_board.drop_coin():
-		coin_total -= 1
-		ui.update_coins(coin_total)
+# === Orange cap-raise upgrades (orange currency, raise gold caps) ===
 
-
-# === Orange queue ===
-
-func _add_to_orange_queue(count: int) -> void:
-	orange_queue = mini(orange_queue + count, orange_queue_max)
-	if orange_board_unlocked:
-		ui.update_orange_queue(orange_queue, orange_queue_max)
-
-
-func _add_to_red_queue(count: int) -> void:
-	red_queue = mini(red_queue + count, red_queue_max)
-	if red_board_unlocked:
-		ui.update_red_queue(red_queue, red_queue_max)
-
-
-# === Orange board lifecycle ===
-
-func _check_unlock_orange_board() -> void:
-	if orange_board_unlocked:
+func _buy_row_cap() -> void:
+	if orange_coin_total < row_cap_cost:
 		return
 
-	orange_board_unlocked = true
-
-	orange_board = board_scene.instantiate() as PlinkoBoard
-	orange_board.board_type = PlinkoBoard.BoardType.ORANGE
-	add_child(orange_board)
-
-	# No click-to-drop — orange board uses auto-drop queue
-	orange_board.coin_landed.connect(_on_orange_coin_landed)
-	orange_board.board_rebuilt.connect(_adjust_camera)
-
-	orange_board.num_rows = 2
-	orange_board._build_board()
-
-	ui.show_orange_panel()
-	ui.update_orange_coins(orange_coin_total)
-	ui.update_orange_queue(orange_queue, orange_queue_max)
-	ui.update_orange_upgrade(orange_upgrade_cost)
-	ui.update_orange_drop_rate(orange_drop_rate_cost, orange_queue_timer.wait_time)
-	ui.update_orange_queue_up(orange_queue_up_cost, orange_queue_max)
-	ui.update_row_cap(row_cap_cost, gold_row_cap)
-	ui.update_value_cap(value_cap_cost, bucket_value_cap)
-	ui.update_rate_cap(rate_cap_cost, drop_rate_cap)
-	ui.update_auto_cap(auto_cap_cost, autodropper_cap)
-
-
-# === Orange board handlers ===
-
-func _on_orange_coin_landed(value: int, _bucket_type: PlinkoBoard.BucketType) -> void:
-	orange_coin_total += value
+	orange_coin_total -= row_cap_cost
+	gold_row_cap += 2
+	row_cap_cost += 2
 	ui.update_orange_coins(orange_coin_total)
 
 
-# === Orange board upgrade (Add Row) ===
+func _buy_value_cap() -> void:
+	if orange_coin_total < value_cap_cost:
+		return
+
+	orange_coin_total -= value_cap_cost
+	bucket_value_cap += 1
+	value_cap_cost += 2
+	ui.update_orange_coins(orange_coin_total)
+
+
+func _buy_rate_cap() -> void:
+	if orange_coin_total < rate_cap_cost:
+		return
+
+	orange_coin_total -= rate_cap_cost
+	drop_rate_cap += 1
+	rate_cap_cost += 2
+	ui.update_orange_coins(orange_coin_total)
+
+
+func _buy_auto_cap() -> void:
+	if orange_coin_total < auto_cap_cost:
+		return
+
+	orange_coin_total -= auto_cap_cost
+	autodropper_cap += 1
+	auto_cap_cost += 2
+	ui.update_orange_coins(orange_coin_total)
+
+
+# === Orange board upgrades ===
 
 func _buy_orange_upgrade() -> void:
 	if orange_coin_total < orange_upgrade_cost:
@@ -364,25 +662,21 @@ func _buy_orange_upgrade() -> void:
 	orange_upgrade_cost += orange_upgrade_delta
 	orange_upgrade_delta += 2
 	ui.update_orange_coins(orange_coin_total)
-	ui.update_orange_upgrade(orange_upgrade_cost)
 
-
-# === Orange Drop Rate (orange currency, reduces queue timer) ===
 
 func _buy_orange_drop_rate() -> void:
 	if orange_coin_total < orange_drop_rate_cost:
 		return
 
 	orange_coin_total -= orange_drop_rate_cost
-	orange_queue_timer.wait_time *= 0.9
+	orange_cooldown_time *= 0.9
+	var timer: Timer = board_drop_cooldowns[orange_board]
+	timer.wait_time = orange_cooldown_time
 
 	orange_drop_rate_cost += orange_drop_rate_delta
 	orange_drop_rate_delta += 5
 	ui.update_orange_coins(orange_coin_total)
-	ui.update_orange_drop_rate(orange_drop_rate_cost, orange_queue_timer.wait_time)
 
-
-# === Orange Queue +1 (orange currency) ===
 
 func _buy_orange_queue_up() -> void:
 	if orange_coin_total < orange_queue_up_cost:
@@ -393,129 +687,21 @@ func _buy_orange_queue_up() -> void:
 
 	orange_queue_up_cost += 5
 	ui.update_orange_coins(orange_coin_total)
-	ui.update_orange_queue_up(orange_queue_up_cost, orange_queue_max)
-	ui.update_orange_queue(orange_queue, orange_queue_max)
 
 
-# === Orange cap-raise upgrades (orange currency, raise gold caps) ===
-
-func _buy_row_cap() -> void:
-	if orange_coin_total < row_cap_cost:
+func _buy_orange_bucket_value() -> void:
+	if orange_coin_total < orange_bucket_value_cost:
 		return
 
-	orange_coin_total -= row_cap_cost
-	gold_row_cap += 2
+	orange_coin_total -= orange_bucket_value_cost
+	orange_bucket_value_level += 1
 
-	row_cap_cost = int(row_cap_cost * UPGRADE_COST_MULTIPLIER)
+	if orange_board:
+		orange_board.value_bonus = orange_bucket_value_level
+		orange_board._build_board()
+
+	orange_bucket_value_cost *= 2
 	ui.update_orange_coins(orange_coin_total)
-	ui.update_row_cap(row_cap_cost, gold_row_cap)
-	ui.update_upgrade(regular_upgrade_cost, regular_board.num_rows, gold_row_cap)
-
-
-func _buy_value_cap() -> void:
-	if orange_coin_total < value_cap_cost:
-		return
-
-	orange_coin_total -= value_cap_cost
-	bucket_value_cap += 1
-
-	value_cap_cost = int(value_cap_cost * UPGRADE_COST_MULTIPLIER)
-	ui.update_orange_coins(orange_coin_total)
-	ui.update_value_cap(value_cap_cost, bucket_value_cap)
-	ui.update_bucket_value(bucket_value_cost, bucket_value_level, bucket_value_cap)
-
-
-func _buy_rate_cap() -> void:
-	if orange_coin_total < rate_cap_cost:
-		return
-
-	orange_coin_total -= rate_cap_cost
-	drop_rate_cap += 1
-
-	rate_cap_cost = int(rate_cap_cost * UPGRADE_COST_MULTIPLIER)
-	ui.update_orange_coins(orange_coin_total)
-	ui.update_rate_cap(rate_cap_cost, drop_rate_cap)
-	ui.update_drop_rate(drop_rate_cost, gold_drop_cooldown.wait_time, drop_rate_level, drop_rate_cap)
-
-
-func _buy_auto_cap() -> void:
-	if orange_coin_total < auto_cap_cost:
-		return
-
-	orange_coin_total -= auto_cap_cost
-	autodropper_cap += 1
-
-	auto_cap_cost = int(auto_cap_cost * UPGRADE_COST_MULTIPLIER)
-	ui.update_orange_coins(orange_coin_total)
-	ui.update_auto_cap(auto_cap_cost, autodropper_cap)
-	ui.update_autodropper(autodropper_cost, autodropper_level, autodropper_cap)
-
-
-# === Leveling system ===
-
-func _check_level_up() -> void:
-	while player_level < LEVEL_THRESHOLDS.size() and coin_total >= LEVEL_THRESHOLDS[player_level]:
-		player_level += 1
-		_on_level_up(player_level)
-	_update_level_label()
-
-
-func _on_level_up(level: int) -> void:
-	match level:
-		1:
-			ui.show_bucket_value()
-			ui.update_bucket_value(bucket_value_cost, bucket_value_level, bucket_value_cap)
-		2:
-			ui.show_add_row()
-			ui.update_upgrade(regular_upgrade_cost, regular_board.num_rows, gold_row_cap)
-		3:
-			ui.show_drop_rate()
-			ui.update_drop_rate(drop_rate_cost, gold_drop_cooldown.wait_time, drop_rate_level, drop_rate_cap)
-		4:
-			ui.show_autodropper()
-			ui.update_autodropper(autodropper_cost, autodropper_level, autodropper_cap)
-
-
-func _update_level_label() -> void:
-	if player_level < LEVEL_THRESHOLDS.size():
-		var next_threshold := LEVEL_THRESHOLDS[player_level]
-		ui.update_level(player_level, next_threshold)
-		ui.update_level_progress(coin_total, next_threshold)
-	else:
-		ui.update_level(player_level, 0)
-		ui.update_level_progress(coin_total, 0)
-
-
-# === Red board lifecycle ===
-
-func _check_unlock_red_board() -> void:
-	if red_board_unlocked:
-		return
-
-	red_board_unlocked = true
-
-	red_board = board_scene.instantiate() as PlinkoBoard
-	red_board.board_type = PlinkoBoard.BoardType.RED
-	add_child(red_board)
-
-	# No click-to-drop — red board uses auto-drop queue
-	red_board.coin_landed.connect(_on_red_coin_landed)
-	red_board.board_rebuilt.connect(_adjust_camera)
-
-	red_board.num_rows = 2
-	red_board._build_board()
-
-	ui.show_red_panel()
-	ui.update_red_coins(red_coin_total)
-	ui.update_red_queue(red_queue, red_queue_max)
-	ui.update_red_upgrade(red_upgrade_cost)
-
-
-# === Red board handlers ===
-
-func _on_red_coin_landed(value: int, _bucket_type: PlinkoBoard.BucketType) -> void:
-	red_coin_total += value
-	ui.update_red_coins(red_coin_total)
 
 
 # === Red board upgrade (Add Row) ===
@@ -530,7 +716,34 @@ func _buy_red_upgrade() -> void:
 	red_upgrade_cost += red_upgrade_delta
 	red_upgrade_delta += 5
 	ui.update_red_coins(red_coin_total)
-	ui.update_red_upgrade(red_upgrade_cost)
+
+
+# === Leveling system ===
+
+func _check_level_up() -> void:
+	while player_level < LEVEL_THRESHOLDS.size() and coin_total >= LEVEL_THRESHOLDS[player_level]:
+		player_level += 1
+		_on_level_up(player_level)
+	_update_level_label()
+
+
+func _on_level_up(level: int) -> void:
+	if level == 5:
+		regular_board.orange_buckets_enabled = true
+		regular_board._build_board()
+
+	# Every level-up may unlock new upgrades, so refresh the panel
+	_refresh_upgrade_panel()
+
+
+func _update_level_label() -> void:
+	if player_level < LEVEL_THRESHOLDS.size():
+		var next_threshold := LEVEL_THRESHOLDS[player_level]
+		ui.update_level(player_level, next_threshold)
+		ui.update_level_progress(coin_total, next_threshold)
+	else:
+		ui.update_level(player_level, 0)
+		ui.update_level_progress(coin_total, 0)
 
 
 # === Board positioning and camera ===
@@ -565,21 +778,8 @@ func _position_boards() -> void:
 
 func _adjust_camera() -> void:
 	_position_boards()
+	_tween_camera_to_board(selected_board)
 
-	var bounds := regular_board.get_bounds()
-	if orange_board_unlocked and orange_board:
-		bounds = bounds.merge(orange_board.get_bounds())
-	if red_board_unlocked and red_board:
-		bounds = bounds.merge(red_board.get_bounds())
-
-	var center_x := bounds.position.x + bounds.size.x / 2.0
-	var center_y := bounds.position.y + bounds.size.y / 2.0
-	var board_height := bounds.size.y
-	var board_width := bounds.size.x
-
-	# Distance based on whichever dimension is larger (accounting for aspect ratio)
-	var z_for_height := board_height * 0.9
-	var z_for_width := board_width * 0.7
-	var z_distance := maxf(6.0, maxf(z_for_height, z_for_width))
-
-	camera.position = Vector3(center_x, center_y, z_distance)
+	# Update selection indicator size after board rebuild
+	if selected_board:
+		selected_board.set_selected(true)
