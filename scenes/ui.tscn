@@ -11,7 +11,7 @@ offset_top = 20.0
 offset_right = 220.0
 offset_bottom = 50.0
 theme_override_font_sizes/font_size = 24
-text = "Coins: 0"
+text = "Gold: 0"
 
 [node name="OrangeCoinLabel" type="Label" parent="."]
 visible = false
@@ -21,6 +21,15 @@ offset_right = 220.0
 offset_bottom = 80.0
 theme_override_font_sizes/font_size = 24
 text = "Orange: 0"
+
+[node name="RedCoinLabel" type="Label" parent="."]
+visible = false
+offset_left = 20.0
+offset_top = 80.0
+offset_right = 220.0
+offset_bottom = 110.0
+theme_override_font_sizes/font_size = 24
+text = "Red: 0"
 
 [node name="UpgradePanel" type="PanelContainer" parent="."]
 anchors_preset = 11
@@ -35,7 +44,7 @@ layout_mode = 2
 
 [node name="Header" type="Label" parent="UpgradePanel/VBoxContainer"]
 layout_mode = 2
-text = "Upgrades"
+text = "Gold Upgrades"
 
 [node name="UpgradeButton" type="Button" parent="UpgradePanel/VBoxContainer"]
 layout_mode = 2
@@ -53,8 +62,8 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -320.0
-offset_top = -100.0
+offset_left = -330.0
+offset_top = -200.0
 offset_right = -170.0
 grow_horizontal = 0
 grow_vertical = 2
@@ -66,6 +75,14 @@ layout_mode = 2
 layout_mode = 2
 text = "Orange Upgrades"
 
+[node name="OrangeCountdownLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = ""
+
+[node name="OrangeQueueLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Queue: 1/1"
+
 [node name="UpgradeButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
 layout_mode = 2
 focus_mode = 0
@@ -74,3 +91,77 @@ text = "Add Row"
 [node name="CostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
 layout_mode = 2
 text = "Cost: 10"
+
+[node name="AutodropperButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Autodropper"
+
+[node name="AutodropperCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 5 | Lvl: 0 | Cap: 10"
+
+[node name="GoldBonusButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Gold +1"
+
+[node name="GoldBonusCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 5 | Lvl: 0"
+
+[node name="RedUpgradePanel" type="PanelContainer" parent="."]
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -500.0
+offset_top = -200.0
+offset_right = -340.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="RedUpgradePanel"]
+layout_mode = 2
+
+[node name="Header" type="Label" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Red Upgrades"
+
+[node name="RedAddRowButton" type="Button" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Add Row"
+
+[node name="RedCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 10"
+
+[node name="GoldRowCapButton" type="Button" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Gold Row Cap +2"
+
+[node name="GoldRowCapCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 5 | Cap: 10"
+
+[node name="OrangeRowCapButton" type="Button" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Orange Row Cap +2"
+
+[node name="OrangeRowCapCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 5 | Cap: 5"
+
+[node name="AutoCapButton" type="Button" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Auto Cap +2"
+
+[node name="AutoCapCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 5 | Cap: 10"

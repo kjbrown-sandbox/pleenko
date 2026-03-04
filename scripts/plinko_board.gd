@@ -1,11 +1,14 @@
 class_name PlinkoBoard
 extends Node3D
 
-signal coin_landed(value: int, is_orange_bucket: bool)
+enum BoardType { GOLD, ORANGE, RED }
+enum BucketType { GOLD, ORANGE, RED }
+
+signal coin_landed(value: int, bucket_type: BucketType)
 signal drop_requested
 signal board_rebuilt
 
-@export var is_orange_board: bool = false
+@export var board_type: BoardType = BoardType.GOLD
 
 # Board layout constants
 const PEG_SPACING_X := 1.0
@@ -14,8 +17,10 @@ const TOP_Y := 3.0
 const BUCKET_OFFSET_Y := 0.6
 const LABEL_OFFSET_Y := 0.35
 const ORANGE_THRESHOLD := 4
+const RED_THRESHOLD := 5
 
 var num_rows: int = 0
+var value_bonus: int = 0
 
 var coin_scene: PackedScene = preload("res://scenes/coin.tscn")
 
@@ -23,6 +28,7 @@ var coin_scene: PackedScene = preload("res://scenes/coin.tscn")
 var peg_mesh: CylinderMesh
 var bucket_mesh: BoxMesh
 var orange_material: StandardMaterial3D
+var red_material: StandardMaterial3D
 
 @onready var board: Node3D = $Board
 @onready var click_area: StaticBody3D = $ClickArea
@@ -40,6 +46,9 @@ func _ready() -> void:
 
 	orange_material = StandardMaterial3D.new()
 	orange_material.albedo_color = Color.ORANGE
+
+	red_material = StandardMaterial3D.new()
+	red_material.albedo_color = Color.RED
 
 	click_area.input_event.connect(_on_click_area_input_event)
 
@@ -63,8 +72,8 @@ func drop_coin() -> bool:
 		waypoints.append(_peg_position(r, col_index))
 
 	# Final waypoint: the bucket the coin lands in
-	var bucket_value := _bucket_value(col_index)
-	var orange_bucket := _is_orange_bucket(col_index)
+	var b_type := _bucket_type(col_index)
+	var reward := _reward_value(col_index)
 	waypoints.append(_bucket_position(col_index))
 
 	# Convert waypoints from board-local to global coordinates
@@ -75,15 +84,20 @@ func drop_coin() -> bool:
 	var coin: Node3D = coin_scene.instantiate()
 	coin.position = to_global(Vector3(0.0, TOP_Y + 0.8, 0.0))
 
-	if is_orange_board:
-		var mesh := coin.get_node("Mesh") as MeshInstance3D
-		mesh.material_override = orange_material
+	# Tint coin based on board type
+	match board_type:
+		BoardType.ORANGE:
+			var mesh := coin.get_node("Mesh") as MeshInstance3D
+			mesh.material_override = orange_material
+		BoardType.RED:
+			var mesh := coin.get_node("Mesh") as MeshInstance3D
+			mesh.material_override = red_material
 
 	# Add coin to the scene tree (parent will be the scene root)
 	get_tree().root.add_child(coin)
 
-	coin.landed.connect(func(value: int): coin_landed.emit(value, orange_bucket))
-	coin.animate(waypoints, bucket_value)
+	coin.landed.connect(func(_value: int): coin_landed.emit(reward, b_type))
+	coin.animate(waypoints, reward)
 
 	return true
 
@@ -112,8 +126,12 @@ func _build_board() -> void:
 		bucket.mesh = bucket_mesh
 		bucket.position = _bucket_position(i)
 
-		if is_orange_board or _is_orange_bucket(i):
-			bucket.material_override = orange_material
+		var b_type := _bucket_type(i)
+		match b_type:
+			BucketType.ORANGE:
+				bucket.material_override = orange_material
+			BucketType.RED:
+				bucket.material_override = red_material
 
 		board.add_child(bucket)
 
@@ -121,10 +139,17 @@ func _build_board() -> void:
 		label.font_size = 48
 		label.position = _bucket_position(i) + Vector3(0.0, -LABEL_OFFSET_Y, 0.01)
 
-		if not is_orange_board and _is_orange_bucket(i):
-			label.text = "O"
+		# On the gold board, orange/red buckets show letters; otherwise show numeric value
+		if board_type == BoardType.GOLD:
+			match b_type:
+				BucketType.RED:
+					label.text = "R"
+				BucketType.ORANGE:
+					label.text = "O"
+				_:
+					label.text = str(_display_value(i))
 		else:
-			label.text = str(_bucket_value(i))
+			label.text = str(_display_value(i))
 
 		board.add_child(label)
 
@@ -170,7 +195,30 @@ func _bucket_value(index: int) -> int:
 	return int(absf(index - center)) + 1
 
 
-func _is_orange_bucket(index: int) -> bool:
-	if is_orange_board:
-		return false  # Orange board buckets give orange coins but aren't "orange buckets"
-	return _bucket_value(index) >= ORANGE_THRESHOLD
+func _bucket_type(index: int) -> BucketType:
+	# Non-gold boards always return their own type
+	if board_type == BoardType.ORANGE:
+		return BucketType.ORANGE
+	if board_type == BoardType.RED:
+		return BucketType.RED
+	# Gold board: check thresholds (red first since it's higher)
+	var base := _bucket_value(index)
+	if base >= RED_THRESHOLD:
+		return BucketType.RED
+	if base >= ORANGE_THRESHOLD:
+		return BucketType.ORANGE
+	return BucketType.GOLD
+
+
+func _display_value(index: int) -> int:
+	# value_bonus only applies to gold-type buckets on the gold board
+	if board_type == BoardType.GOLD and _bucket_type(index) == BucketType.GOLD:
+		return _bucket_value(index) + value_bonus
+	return _bucket_value(index)
+
+
+func _reward_value(index: int) -> int:
+	# Orange/red buckets on gold board always reward 1 (of their currency)
+	if board_type == BoardType.GOLD and _bucket_type(index) != BucketType.GOLD:
+		return 1
+	return _display_value(index)
