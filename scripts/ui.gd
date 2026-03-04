@@ -8,6 +8,8 @@ signal gold_bonus_pressed
 signal gold_row_cap_pressed
 signal orange_row_cap_pressed
 signal auto_cap_pressed
+signal orange_queue_cap_pressed
+signal red_queue_cap_pressed
 
 @onready var coin_label: Label = $CoinLabel
 @onready var orange_coin_label: Label = $OrangeCoinLabel
@@ -27,6 +29,8 @@ signal auto_cap_pressed
 @onready var gold_bonus_cost_label: Label = $OrangeUpgradePanel/VBoxContainer/GoldBonusCostLabel
 
 @onready var red_upgrade_panel: PanelContainer = $RedUpgradePanel
+@onready var red_countdown_label: Label = $RedUpgradePanel/VBoxContainer/RedCountdownLabel
+@onready var red_queue_label: Label = $RedUpgradePanel/VBoxContainer/RedQueueLabel
 @onready var red_add_row_button: Button = $RedUpgradePanel/VBoxContainer/RedAddRowButton
 @onready var red_cost_label: Label = $RedUpgradePanel/VBoxContainer/RedCostLabel
 @onready var gold_row_cap_button: Button = $RedUpgradePanel/VBoxContainer/GoldRowCapButton
@@ -35,6 +39,10 @@ signal auto_cap_pressed
 @onready var orange_row_cap_cost_label: Label = $RedUpgradePanel/VBoxContainer/OrangeRowCapCostLabel
 @onready var auto_cap_button: Button = $RedUpgradePanel/VBoxContainer/AutoCapButton
 @onready var auto_cap_cost_label: Label = $RedUpgradePanel/VBoxContainer/AutoCapCostLabel
+@onready var orange_queue_cap_button: Button = $RedUpgradePanel/VBoxContainer/OrangeQueueCapButton
+@onready var orange_queue_cap_cost_label: Label = $RedUpgradePanel/VBoxContainer/OrangeQueueCapCostLabel
+@onready var red_queue_cap_button: Button = $RedUpgradePanel/VBoxContainer/RedQueueCapButton
+@onready var red_queue_cap_cost_label: Label = $RedUpgradePanel/VBoxContainer/RedQueueCapCostLabel
 
 
 func _ready() -> void:
@@ -46,6 +54,8 @@ func _ready() -> void:
 	gold_row_cap_button.pressed.connect(func(): gold_row_cap_pressed.emit())
 	orange_row_cap_button.pressed.connect(func(): orange_row_cap_pressed.emit())
 	auto_cap_button.pressed.connect(func(): auto_cap_pressed.emit())
+	orange_queue_cap_button.pressed.connect(func(): orange_queue_cap_pressed.emit())
+	red_queue_cap_button.pressed.connect(func(): red_queue_cap_pressed.emit())
 
 
 func update_coins(total: int) -> void:
@@ -64,12 +74,28 @@ func update_orange_upgrade(cost: int) -> void:
 	orange_cost_label.text = "Cost: " + str(cost)
 
 
+func update_orange_queue(current: int, max_val: int) -> void:
+	orange_queue_label.text = "Queue: " + str(current) + "/" + str(max_val)
+
+
+func update_orange_countdown(text: String) -> void:
+	orange_countdown_label.text = text
+
+
 func update_red_coins(total: int) -> void:
 	red_coin_label.text = "Red: " + str(total)
 
 
 func update_red_upgrade(cost: int) -> void:
 	red_cost_label.text = "Cost: " + str(cost)
+
+
+func update_red_queue(current: int, max_val: int) -> void:
+	red_queue_label.text = "Queue: " + str(current) + "/" + str(max_val)
+
+
+func update_red_countdown(text: String) -> void:
+	red_countdown_label.text = text
 
 
 func update_autodropper(cost: int, level: int, cap: int) -> void:
@@ -92,12 +118,12 @@ func update_auto_cap(cost: int, cap: int) -> void:
 	auto_cap_cost_label.text = "Cost: " + str(cost) + " | Cap: " + str(cap)
 
 
-func update_orange_queue(current: int, max_val: int) -> void:
-	orange_queue_label.text = "Queue: " + str(current) + "/" + str(max_val)
+func update_orange_queue_cap(cost: int, cap: int) -> void:
+	orange_queue_cap_cost_label.text = "Cost: " + str(cost) + " | Cap: " + str(cap)
 
 
-func update_orange_countdown(text: String) -> void:
-	orange_countdown_label.text = text
+func update_red_queue_cap(cost: int, cap: int) -> void:
+	red_queue_cap_cost_label.text = "Cost: " + str(cost) + " | Cap: " + str(cap)
 
 
 func show_orange_panel() -> void:

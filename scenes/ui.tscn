@@ -130,6 +130,14 @@ layout_mode = 2
 layout_mode = 2
 text = "Red Upgrades"
 
+[node name="RedCountdownLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = ""
+
+[node name="RedQueueLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Queue: 0/1"
+
 [node name="RedAddRowButton" type="Button" parent="RedUpgradePanel/VBoxContainer"]
 layout_mode = 2
 focus_mode = 0
@@ -165,3 +173,21 @@ text = "Auto Cap +2"
 [node name="AutoCapCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
 layout_mode = 2
 text = "Cost: 5 | Cap: 10"
+
+[node name="OrangeQueueCapButton" type="Button" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Orange Queue +1"
+
+[node name="OrangeQueueCapCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 5 | Cap: 1"
+
+[node name="RedQueueCapButton" type="Button" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Red Queue +1"
+
+[node name="RedQueueCapCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Cost: 5 | Cap: 1"

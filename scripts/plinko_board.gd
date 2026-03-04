@@ -17,7 +17,7 @@ const TOP_Y := 3.0
 const BUCKET_OFFSET_Y := 0.6
 const LABEL_OFFSET_Y := 0.35
 const ORANGE_THRESHOLD := 4
-const RED_THRESHOLD := 5
+const RED_THRESHOLD := 7
 
 var num_rows: int = 0
 var value_bonus: int = 0
