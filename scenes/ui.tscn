@@ -46,14 +46,42 @@ layout_mode = 2
 layout_mode = 2
 text = "Gold Upgrades"
 
+[node name="LevelLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
+layout_mode = 2
+text = "Level: 0 (next: 10)"
+
 [node name="UpgradeButton" type="Button" parent="UpgradePanel/VBoxContainer"]
+visible = false
 layout_mode = 2
 focus_mode = 0
 text = "Add Row"
 
 [node name="CostLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
+visible = false
 layout_mode = 2
-text = "Cost: 10"
+text = "Cost: 5"
+
+[node name="BucketValueButton" type="Button" parent="UpgradePanel/VBoxContainer"]
+visible = false
+layout_mode = 2
+focus_mode = 0
+text = "Bucket Value +1"
+
+[node name="BucketValueCostLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "Cost: 40 | Lvl: 0"
+
+[node name="DropRateButton" type="Button" parent="UpgradePanel/VBoxContainer"]
+visible = false
+layout_mode = 2
+focus_mode = 0
+text = "Drop Rate"
+
+[node name="DropRateCostLabel" type="Label" parent="UpgradePanel/VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "Cost: 100 | Rate: 1.0s"
 
 [node name="OrangeUpgradePanel" type="PanelContainer" parent="."]
 visible = false
@@ -90,7 +118,7 @@ text = "Add Row"
 
 [node name="CostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
 layout_mode = 2
-text = "Cost: 10"
+text = "Cost: 5"
 
 [node name="AutodropperButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
 layout_mode = 2
@@ -100,15 +128,6 @@ text = "Autodropper"
 [node name="AutodropperCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
 layout_mode = 2
 text = "Cost: 5 | Lvl: 0 | Cap: 10"
-
-[node name="GoldBonusButton" type="Button" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-focus_mode = 0
-text = "Gold +1"
-
-[node name="GoldBonusCostLabel" type="Label" parent="OrangeUpgradePanel/VBoxContainer"]
-layout_mode = 2
-text = "Cost: 5 | Lvl: 0"
 
 [node name="RedUpgradePanel" type="PanelContainer" parent="."]
 visible = false
@@ -145,7 +164,7 @@ text = "Add Row"
 
 [node name="RedCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
 layout_mode = 2
-text = "Cost: 10"
+text = "Cost: 5"
 
 [node name="GoldRowCapButton" type="Button" parent="RedUpgradePanel/VBoxContainer"]
 layout_mode = 2
@@ -191,3 +210,19 @@ text = "Red Queue +1"
 [node name="RedQueueCapCostLabel" type="Label" parent="RedUpgradePanel/VBoxContainer"]
 layout_mode = 2
 text = "Cost: 5 | Cap: 1"
+
+[node name="LevelProgressBar" type="ProgressBar" parent="."]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -30.0
+offset_right = -170.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+min_value = 0.0
+max_value = 10.0
+value = 0.0
+show_percentage = false

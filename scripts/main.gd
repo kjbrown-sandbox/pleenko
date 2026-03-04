@@ -14,12 +14,26 @@ var red_coin_total: int = 0
 var orange_board_unlocked: bool = false
 var red_board_unlocked: bool = false
 
-# --- Upgrade costs (all scale by x1.5) ---
-var regular_upgrade_cost: int = 10
-var orange_upgrade_cost: int = 10
-var red_upgrade_cost: int = 10
+# --- Leveling ---
+var player_level: int = 0
+const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100]
+
+# --- Row upgrade costs (delta formula: cost += delta, delta += 5) ---
+var regular_upgrade_cost: int = 5
+var regular_upgrade_delta: int = 5
+var orange_upgrade_cost: int = 5
+var orange_upgrade_delta: int = 5
+var red_upgrade_cost: int = 5
+var red_upgrade_delta: int = 5
+
+# --- Gold panel upgrades ---
+var bucket_value_cost: int = 40
+var bucket_value_level: int = 0
+var drop_rate_cost: int = 100
+var drop_rate_level: int = 0
+
+# --- Other upgrade costs (x1.5 multiplier) ---
 var autodropper_cost: int = 5
-var gold_bonus_cost: int = 5
 var gold_row_cap_cost: int = 5
 var orange_row_cap_cost: int = 5
 var auto_cap_cost: int = 5
@@ -36,9 +50,6 @@ var red_row_cap: int = 5
 var autodropper_level: int = 0
 var autodropper_cap: int = 10
 var autodropper_timer: Timer
-
-# --- Gold bonus ---
-var gold_bonus_level: int = 0
 
 # --- Gold drop cooldown ---
 var gold_drop_cooldown: Timer
@@ -110,13 +121,15 @@ func _ready() -> void:
 	# UI init
 	ui.update_coins(coin_total)
 	ui.update_upgrade(regular_upgrade_cost)
+	_update_level_label()
 
 	# Connect UI signals
 	ui.upgrade_pressed.connect(_buy_regular_upgrade)
 	ui.orange_upgrade_pressed.connect(_buy_orange_upgrade)
 	ui.red_upgrade_pressed.connect(_buy_red_upgrade)
 	ui.autodropper_pressed.connect(_buy_autodropper)
-	ui.gold_bonus_pressed.connect(_buy_gold_bonus)
+	ui.bucket_value_pressed.connect(_buy_bucket_value)
+	ui.drop_rate_pressed.connect(_buy_drop_rate)
 	ui.gold_row_cap_pressed.connect(_buy_gold_row_cap)
 	ui.orange_row_cap_pressed.connect(_buy_orange_row_cap)
 	ui.auto_cap_pressed.connect(_buy_auto_cap)
@@ -186,6 +199,7 @@ func _on_regular_coin_landed(value: int, bucket_type: PlinkoBoard.BucketType) ->
 		PlinkoBoard.BucketType.GOLD:
 			coin_total += value
 			ui.update_coins(coin_total)
+			_check_level_up()
 		PlinkoBoard.BucketType.ORANGE:
 			_add_to_orange_queue(value)
 			_check_unlock_orange_board()
@@ -205,7 +219,8 @@ func _buy_regular_upgrade() -> void:
 	coin_total -= regular_upgrade_cost
 	regular_board.add_row()
 
-	regular_upgrade_cost = int(regular_upgrade_cost * UPGRADE_COST_MULTIPLIER)
+	regular_upgrade_cost += regular_upgrade_delta
+	regular_upgrade_delta += 5
 	ui.update_coins(coin_total)
 	ui.update_upgrade(regular_upgrade_cost)
 
@@ -248,7 +263,6 @@ func _check_unlock_orange_board() -> void:
 	ui.update_orange_queue(orange_queue, orange_queue_max)
 	ui.update_orange_upgrade(orange_upgrade_cost)
 	ui.update_autodropper(autodropper_cost, autodropper_level, autodropper_cap)
-	ui.update_gold_bonus(gold_bonus_cost, gold_bonus_level)
 
 
 # === Orange board handlers ===
@@ -269,7 +283,8 @@ func _buy_orange_upgrade() -> void:
 	orange_coin_total -= orange_upgrade_cost
 	orange_board.add_row()
 
-	orange_upgrade_cost = int(orange_upgrade_cost * UPGRADE_COST_MULTIPLIER)
+	orange_upgrade_cost += orange_upgrade_delta
+	orange_upgrade_delta += 5
 	ui.update_orange_coins(orange_coin_total)
 	ui.update_orange_upgrade(orange_upgrade_cost)
 
@@ -302,21 +317,72 @@ func _on_autodropper_timeout() -> void:
 		ui.update_coins(coin_total)
 
 
-# === Gold bonus (orange currency) ===
+# === Bucket Value +1 (gold currency, gold panel) ===
 
-func _buy_gold_bonus() -> void:
-	if orange_coin_total < gold_bonus_cost:
+func _buy_bucket_value() -> void:
+	if coin_total < bucket_value_cost:
 		return
 
-	orange_coin_total -= gold_bonus_cost
-	gold_bonus_level += 1
+	coin_total -= bucket_value_cost
+	bucket_value_level += 1
 
-	gold_bonus_cost = int(gold_bonus_cost * UPGRADE_COST_MULTIPLIER)
-	regular_board.value_bonus = gold_bonus_level
+	regular_board.value_bonus = bucket_value_level
 	regular_board._build_board()
 
-	ui.update_orange_coins(orange_coin_total)
-	ui.update_gold_bonus(gold_bonus_cost, gold_bonus_level)
+	bucket_value_cost *= 2
+	ui.update_coins(coin_total)
+	ui.update_bucket_value(bucket_value_cost, bucket_value_level)
+
+
+# === Drop Rate (gold currency, gold panel) ===
+
+func _buy_drop_rate() -> void:
+	if coin_total < drop_rate_cost:
+		return
+
+	coin_total -= drop_rate_cost
+	drop_rate_level += 1
+
+	gold_drop_cooldown.wait_time *= 0.9
+
+	drop_rate_cost = 100 * (drop_rate_level + 1)
+	ui.update_coins(coin_total)
+	ui.update_drop_rate(drop_rate_cost, gold_drop_cooldown.wait_time)
+
+
+# === Leveling system ===
+
+func _check_level_up() -> void:
+	while player_level < LEVEL_THRESHOLDS.size() and coin_total >= LEVEL_THRESHOLDS[player_level]:
+		player_level += 1
+		_on_level_up(player_level)
+	_update_level_label()
+
+
+func _on_level_up(level: int) -> void:
+	match level:
+		1:
+			ui.show_add_row()
+			ui.update_upgrade(regular_upgrade_cost)
+		2:
+			ui.show_bucket_value()
+			ui.update_bucket_value(bucket_value_cost, bucket_value_level)
+		3:
+			ui.show_drop_rate()
+			ui.update_drop_rate(drop_rate_cost, gold_drop_cooldown.wait_time)
+		4:
+			pass  # Placeholder — nothing yet
+
+
+func _update_level_label() -> void:
+	var prev_threshold := 0 if player_level == 0 else LEVEL_THRESHOLDS[player_level - 1]
+	if player_level < LEVEL_THRESHOLDS.size():
+		var next_threshold := LEVEL_THRESHOLDS[player_level]
+		ui.update_level(player_level, next_threshold)
+		ui.update_level_progress(coin_total, prev_threshold, next_threshold)
+	else:
+		ui.update_level(player_level, 0)
+		ui.update_level_progress(coin_total, prev_threshold, 0)
 
 
 # === Red board lifecycle ===
@@ -367,7 +433,8 @@ func _buy_red_upgrade() -> void:
 	red_coin_total -= red_upgrade_cost
 	red_board.add_row()
 
-	red_upgrade_cost = int(red_upgrade_cost * UPGRADE_COST_MULTIPLIER)
+	red_upgrade_cost += red_upgrade_delta
+	red_upgrade_delta += 5
 	ui.update_red_coins(red_coin_total)
 	ui.update_red_upgrade(red_upgrade_cost)
 

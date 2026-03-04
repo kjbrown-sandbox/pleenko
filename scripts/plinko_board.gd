@@ -18,6 +18,8 @@ const BUCKET_OFFSET_Y := 0.6
 const LABEL_OFFSET_Y := 0.35
 const ORANGE_THRESHOLD := 4
 const RED_THRESHOLD := 7
+const ORANGE_ROW_GATE := 6
+const RED_ROW_GATE := 12
 
 var num_rows: int = 0
 var value_bonus: int = 0
@@ -201,11 +203,11 @@ func _bucket_type(index: int) -> BucketType:
 		return BucketType.ORANGE
 	if board_type == BoardType.RED:
 		return BucketType.RED
-	# Gold board: check thresholds (red first since it's higher)
+	# Gold board: check thresholds AND row gates (red first since it's higher)
 	var base := _bucket_value(index)
-	if base >= RED_THRESHOLD:
+	if num_rows >= RED_ROW_GATE and base >= RED_THRESHOLD:
 		return BucketType.RED
-	if base >= ORANGE_THRESHOLD:
+	if num_rows >= ORANGE_ROW_GATE and base >= ORANGE_THRESHOLD:
 		return BucketType.ORANGE
 	return BucketType.GOLD
 
