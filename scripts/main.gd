@@ -139,6 +139,8 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
 		_drop_on_selected_board()
+	if event.is_action_pressed("reset_game"):
+		_reset_game()
 
 
 func _process(_delta: float) -> void:
@@ -799,6 +801,14 @@ func _adjust_camera() -> void:
 # === Save / Load ===
 
 const SAVE_PATH := "user://save.json"
+
+
+func _reset_game() -> void:
+	# Delete save file
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
+	# Reload the entire scene from scratch
+	get_tree().reload_current_scene()
 
 
 func _notification(what: int) -> void:
