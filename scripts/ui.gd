@@ -9,6 +9,7 @@ signal reset_dev_pressed
 @onready var orange_coin_label: Label = $OrangeCoinLabel
 @onready var red_coin_label: Label = $RedCoinLabel
 
+@onready var game_timer_label: Label = $GameTimerLabel
 @onready var level_progress_bar: ProgressBar = $LevelProgressBar
 @onready var level_progress_label: Label = $LevelProgressLabel
 @onready var header_label: Label = $UpgradePanel/VBoxContainer/HeaderLabel
@@ -52,6 +53,14 @@ func _ready() -> void:
 	reset_dev_btn.focus_mode = Control.FOCUS_NONE
 	reset_dev_btn.pressed.connect(func(): reset_dev_pressed.emit())
 	reset_container.add_child(reset_dev_btn)
+
+
+func update_game_timer(total_seconds: float) -> void:
+	var secs := int(total_seconds)
+	var hours := secs / 3600
+	var mins := (secs % 3600) / 60
+	var s := secs % 60
+	game_timer_label.text = str(hours) + ":" + str(mins).pad_zeros(2) + ":" + str(s).pad_zeros(2)
 
 
 func update_coins(total: int) -> void:

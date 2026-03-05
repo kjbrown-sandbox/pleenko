@@ -83,6 +83,9 @@ var red_queue_max: int = 1
 var selected_board: PlinkoBoard
 var camera_tween: Tween
 
+# --- Game timer ---
+var elapsed_time: float = 0.0
+
 # --- Per-board drop cooldowns ---
 var board_drop_cooldowns: Dictionary = {}   # PlinkoBoard → Timer
 var board_drop_labels: Dictionary = {}      # PlinkoBoard → Label3D
@@ -162,7 +165,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_drop_on_selected_board()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	elapsed_time += delta
+	ui.update_game_timer(elapsed_time)
+
 	# Update drop labels for all boards with cooldowns
 	for board: PlinkoBoard in board_drop_cooldowns:
 		var timer: Timer = board_drop_cooldowns[board]
@@ -953,6 +959,7 @@ func _notification(what: int) -> void:
 func _save_game() -> void:
 	var data := {
 		# Currencies
+		"elapsed_time": elapsed_time,
 		"coin_total": coin_total,
 		"coin_max": coin_max,
 		"coin_max_up_cost": coin_max_up_cost,
@@ -1048,6 +1055,7 @@ func _load_game() -> void:
 		return
 
 	# --- Restore scalar state ---
+	elapsed_time = float(data.get("elapsed_time", elapsed_time))
 	coin_total = int(data.get("coin_total", coin_total))
 	coin_max = int(data.get("coin_max", coin_max))
 	coin_max_up_cost = int(data.get("coin_max_up_cost", coin_max_up_cost))
