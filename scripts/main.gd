@@ -115,6 +115,14 @@ func _ready() -> void:
 	autodropper_timer.timeout.connect(_on_autodropper_timeout)
 	add_child(autodropper_timer)
 
+	# Auto-save timer (every 30 seconds)
+	var save_timer := Timer.new()
+	save_timer.wait_time = 30.0
+	save_timer.one_shot = false
+	save_timer.autostart = true
+	save_timer.timeout.connect(_save_game)
+	add_child(save_timer)
+
 	# UI init
 	ui.update_coins(coin_total)
 	_update_level_label()
@@ -123,6 +131,9 @@ func _ready() -> void:
 	# Connect UI signals
 	ui.upgrade_action.connect(_on_upgrade_action)
 	ui.board_tab_selected.connect(_on_board_tab_selected)
+
+	# Load saved progress (must be after all setup)
+	_load_game()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -783,3 +794,198 @@ func _adjust_camera() -> void:
 	# Update selection indicator size after board rebuild
 	if selected_board:
 		selected_board.set_selected(true)
+
+
+# === Save / Load ===
+
+const SAVE_PATH := "user://save.json"
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_save_game()
+		get_tree().quit()
+
+
+func _save_game() -> void:
+	var data := {
+		# Currencies
+		"coin_total": coin_total,
+		"orange_coin_total": orange_coin_total,
+		"red_coin_total": red_coin_total,
+		# Unlock flags
+		"orange_board_unlocked": orange_board_unlocked,
+		"red_board_unlocked": red_board_unlocked,
+		# Level
+		"player_level": player_level,
+		# Row upgrade costs/deltas
+		"regular_upgrade_cost": regular_upgrade_cost,
+		"regular_upgrade_delta": regular_upgrade_delta,
+		"orange_upgrade_cost": orange_upgrade_cost,
+		"orange_upgrade_delta": orange_upgrade_delta,
+		"red_upgrade_cost": red_upgrade_cost,
+		"red_upgrade_delta": red_upgrade_delta,
+		# Gold upgrades
+		"bucket_value_cost": bucket_value_cost,
+		"bucket_value_level": bucket_value_level,
+		"drop_rate_cost": drop_rate_cost,
+		"drop_rate_level": drop_rate_level,
+		"autodropper_cost": autodropper_cost,
+		"autodropper_level": autodropper_level,
+		# Gold upgrade caps
+		"gold_row_cap": gold_row_cap,
+		"bucket_value_cap": bucket_value_cap,
+		"drop_rate_cap": drop_rate_cap,
+		"autodropper_cap": autodropper_cap,
+		# Orange panel upgrades
+		"orange_drop_rate_cost": orange_drop_rate_cost,
+		"orange_drop_rate_delta": orange_drop_rate_delta,
+		"orange_queue_up_cost": orange_queue_up_cost,
+		# Cap-raise costs
+		"row_cap_cost": row_cap_cost,
+		"value_cap_cost": value_cap_cost,
+		"rate_cap_cost": rate_cap_cost,
+		"auto_cap_cost": auto_cap_cost,
+		# Orange bucket value
+		"orange_bucket_value_cost": orange_bucket_value_cost,
+		"orange_bucket_value_level": orange_bucket_value_level,
+		# Row caps
+		"orange_row_cap": orange_row_cap,
+		"red_row_cap": red_row_cap,
+		# Queue state
+		"orange_queue": orange_queue,
+		"orange_queue_max": orange_queue_max,
+		"red_queue": red_queue,
+		"red_queue_max": red_queue_max,
+		# Cooldown times
+		"gold_cooldown_time": gold_cooldown_time,
+		"orange_cooldown_time": orange_cooldown_time,
+		# Gold board state
+		"regular_board_num_rows": regular_board.num_rows,
+		"regular_board_value_bonus": regular_board.value_bonus,
+		"regular_board_orange_buckets_enabled": regular_board.orange_buckets_enabled,
+	}
+
+	# Orange board state (only if unlocked)
+	if orange_board_unlocked and orange_board:
+		data["orange_board_num_rows"] = orange_board.num_rows
+		data["orange_board_value_bonus"] = orange_board.value_bonus
+
+	# Red board state (only if unlocked)
+	if red_board_unlocked and red_board:
+		data["red_board_num_rows"] = red_board.num_rows
+		data["red_board_value_bonus"] = red_board.value_bonus
+
+	var json_string := JSON.stringify(data)
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(json_string)
+
+
+func _load_game() -> void:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return
+
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if not file:
+		return
+
+	var json_string := file.get_as_text()
+	var data = JSON.parse_string(json_string)
+	if data == null or not data is Dictionary:
+		return
+
+	# --- Restore scalar state ---
+	coin_total = int(data.get("coin_total", coin_total))
+	orange_coin_total = int(data.get("orange_coin_total", orange_coin_total))
+	red_coin_total = int(data.get("red_coin_total", red_coin_total))
+
+	orange_board_unlocked = data.get("orange_board_unlocked", orange_board_unlocked)
+	red_board_unlocked = data.get("red_board_unlocked", red_board_unlocked)
+
+	player_level = int(data.get("player_level", player_level))
+
+	regular_upgrade_cost = int(data.get("regular_upgrade_cost", regular_upgrade_cost))
+	regular_upgrade_delta = int(data.get("regular_upgrade_delta", regular_upgrade_delta))
+	orange_upgrade_cost = int(data.get("orange_upgrade_cost", orange_upgrade_cost))
+	orange_upgrade_delta = int(data.get("orange_upgrade_delta", orange_upgrade_delta))
+	red_upgrade_cost = int(data.get("red_upgrade_cost", red_upgrade_cost))
+	red_upgrade_delta = int(data.get("red_upgrade_delta", red_upgrade_delta))
+
+	bucket_value_cost = int(data.get("bucket_value_cost", bucket_value_cost))
+	bucket_value_level = int(data.get("bucket_value_level", bucket_value_level))
+	drop_rate_cost = int(data.get("drop_rate_cost", drop_rate_cost))
+	drop_rate_level = int(data.get("drop_rate_level", drop_rate_level))
+	autodropper_cost = int(data.get("autodropper_cost", autodropper_cost))
+	autodropper_level = int(data.get("autodropper_level", autodropper_level))
+
+	gold_row_cap = int(data.get("gold_row_cap", gold_row_cap))
+	bucket_value_cap = int(data.get("bucket_value_cap", bucket_value_cap))
+	drop_rate_cap = int(data.get("drop_rate_cap", drop_rate_cap))
+	autodropper_cap = int(data.get("autodropper_cap", autodropper_cap))
+
+	orange_drop_rate_cost = int(data.get("orange_drop_rate_cost", orange_drop_rate_cost))
+	orange_drop_rate_delta = int(data.get("orange_drop_rate_delta", orange_drop_rate_delta))
+	orange_queue_up_cost = int(data.get("orange_queue_up_cost", orange_queue_up_cost))
+
+	row_cap_cost = int(data.get("row_cap_cost", row_cap_cost))
+	value_cap_cost = int(data.get("value_cap_cost", value_cap_cost))
+	rate_cap_cost = int(data.get("rate_cap_cost", rate_cap_cost))
+	auto_cap_cost = int(data.get("auto_cap_cost", auto_cap_cost))
+
+	orange_bucket_value_cost = int(data.get("orange_bucket_value_cost", orange_bucket_value_cost))
+	orange_bucket_value_level = int(data.get("orange_bucket_value_level", orange_bucket_value_level))
+
+	orange_row_cap = int(data.get("orange_row_cap", orange_row_cap))
+	red_row_cap = int(data.get("red_row_cap", red_row_cap))
+
+	orange_queue = int(data.get("orange_queue", orange_queue))
+	orange_queue_max = int(data.get("orange_queue_max", orange_queue_max))
+	red_queue = int(data.get("red_queue", red_queue))
+	red_queue_max = int(data.get("red_queue_max", red_queue_max))
+
+	gold_cooldown_time = float(data.get("gold_cooldown_time", gold_cooldown_time))
+	orange_cooldown_time = float(data.get("orange_cooldown_time", orange_cooldown_time))
+
+	# --- Rebuild gold board with saved state ---
+	regular_board.num_rows = int(data.get("regular_board_num_rows", regular_board.num_rows))
+	regular_board.value_bonus = int(data.get("regular_board_value_bonus", regular_board.value_bonus))
+	regular_board.orange_buckets_enabled = data.get("regular_board_orange_buckets_enabled", regular_board.orange_buckets_enabled)
+	regular_board._build_board()
+
+	# Update gold board cooldown timer
+	var gold_timer: Timer = board_drop_cooldowns[regular_board]
+	gold_timer.wait_time = gold_cooldown_time
+
+	# Restore autodropper if it was active
+	if autodropper_level > 0:
+		autodropper_timer.wait_time = 1.0 / autodropper_level
+		autodropper_timer.start()
+
+	# --- Restore orange board if it was unlocked ---
+	# Clear the flag so _check_unlock_orange_board() doesn't early-return
+	if orange_board_unlocked:
+		orange_board_unlocked = false
+		_check_unlock_orange_board()
+		if orange_board:
+			orange_board.num_rows = int(data.get("orange_board_num_rows", orange_board.num_rows))
+			orange_board.value_bonus = int(data.get("orange_board_value_bonus", orange_board.value_bonus))
+			orange_board._build_board()
+
+	# --- Restore red board if it was unlocked ---
+	if red_board_unlocked:
+		red_board_unlocked = false
+		_check_unlock_red_board()
+		if red_board:
+			red_board.num_rows = int(data.get("red_board_num_rows", red_board.num_rows))
+			red_board.value_bonus = int(data.get("red_board_value_bonus", red_board.value_bonus))
+			red_board._build_board()
+
+	# --- Refresh all UI ---
+	ui.update_coins(coin_total)
+	if orange_board_unlocked:
+		ui.update_orange_coins(orange_coin_total)
+	if red_board_unlocked:
+		ui.update_red_coins(red_coin_total)
+	_update_level_label()
+	_refresh_upgrade_panel()
