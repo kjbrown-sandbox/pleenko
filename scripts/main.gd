@@ -7,6 +7,8 @@ var board_scene: PackedScene = preload("res://scenes/plinko_board.tscn")
 
 # --- Currency ---
 var coin_total: int = 100
+var coin_max: int = 500
+var coin_max_up_cost: int = 1
 var orange_coin_total: int = 0
 var red_coin_total: int = 0
 
@@ -357,7 +359,7 @@ func _on_gold_drain_timeout() -> void:
 func _on_regular_coin_landed(value: int, bucket_type: PlinkoBoard.BucketType) -> void:
 	match bucket_type:
 		PlinkoBoard.BucketType.GOLD:
-			coin_total += value
+			coin_total = mini(coin_total + value, coin_max)
 			ui.update_coins(coin_total)
 			_check_level_up()
 		PlinkoBoard.BucketType.ORANGE:
@@ -518,16 +520,16 @@ func _gold_upgrades() -> Array[Dictionary]:
 			entry["cap_hover"] = "Rate Cap +1: " + str(rate_cap_cost) + " orange"
 		upgrades.append(entry)
 
-	# Queue +1 (level 6)
-	if player_level >= 6:
+	# Queue +1 (level 4)
+	if player_level >= 4:
 		upgrades.append({
 			"action": "gold_queue_up",
 			"label": "Queue +1",
 			"cost_text": "Cost: " + str(gold_queue_up_cost) + " | Queue: " + str(gold_queue_max),
 		})
 
-	# Autodropper (level 4)
-	if player_level >= 4:
+	# Autodropper (level 5)
+	if player_level >= 5:
 		var cost_text := "Cost: " + str(autodropper_cost) + " | Lvl: " + str(autodropper_level) + "/" + str(autodropper_cap)
 		if autodropper_level > 0:
 			cost_text += " | avg. coins/sec: " + str(snapped(autodropper_level / 10.0, 0.01))
@@ -546,6 +548,12 @@ func _gold_upgrades() -> Array[Dictionary]:
 
 func _orange_upgrades() -> Array[Dictionary]:
 	var upgrades: Array[Dictionary] = []
+
+	upgrades.append({
+		"action": "coin_max_up",
+		"label": "Gold Cap +500",
+		"cost_text": "Cost: " + str(coin_max_up_cost) + " orange | Cap: " + str(coin_max),
+	})
 
 	if player_level >= 10:
 		upgrades.append({
@@ -612,6 +620,8 @@ func _on_upgrade_action(action_name: String) -> void:
 			_buy_rate_cap()
 		"auto_cap":
 			_buy_auto_cap()
+		"coin_max_up":
+			_buy_coin_max_up()
 		"orange_bucket_value":
 			_buy_orange_bucket_value()
 		"orange_drop_rate":
@@ -749,6 +759,18 @@ func _buy_auto_cap() -> void:
 	orange_coin_total -= auto_cap_cost
 	autodropper_cap += 1
 	auto_cap_cost += 2
+	ui.update_orange_coins(orange_coin_total)
+
+
+# === Gold Cap upgrade (orange currency) ===
+
+func _buy_coin_max_up() -> void:
+	if orange_coin_total < coin_max_up_cost:
+		return
+
+	orange_coin_total -= coin_max_up_cost
+	coin_max += 500
+	coin_max_up_cost += 1
 	ui.update_orange_coins(orange_coin_total)
 
 
@@ -910,6 +932,8 @@ func _save_game() -> void:
 	var data := {
 		# Currencies
 		"coin_total": coin_total,
+		"coin_max": coin_max,
+		"coin_max_up_cost": coin_max_up_cost,
 		"orange_coin_total": orange_coin_total,
 		"red_coin_total": red_coin_total,
 		# Unlock flags
@@ -1001,6 +1025,8 @@ func _load_game() -> void:
 
 	# --- Restore scalar state ---
 	coin_total = int(data.get("coin_total", coin_total))
+	coin_max = int(data.get("coin_max", coin_max))
+	coin_max_up_cost = int(data.get("coin_max_up_cost", coin_max_up_cost))
 	orange_coin_total = int(data.get("orange_coin_total", orange_coin_total))
 	red_coin_total = int(data.get("red_coin_total", red_coin_total))
 
