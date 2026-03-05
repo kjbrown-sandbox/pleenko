@@ -6,7 +6,7 @@ extends Node3D
 var board_scene: PackedScene = preload("res://scenes/plinko_board.tscn")
 
 # --- Currency ---
-var coin_total: int = 100
+var coin_total: int = 1
 var coin_max: int = 500
 var coin_max_up_cost: int = 1
 var orange_coin_total: int = 0
@@ -17,21 +17,23 @@ var orange_board_unlocked: bool = false
 var red_board_unlocked: bool = false
 
 # --- Leveling ---
-var player_level: int = 3
+var player_level: int = 0
 const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 200, 500, 1000, 3000, 5000, 8000, 12000, 18000, 25000]
 
 # --- Row upgrade costs (delta formula: cost += delta, delta += 20) ---
-var regular_upgrade_cost: int = 125
-var regular_upgrade_delta: int = 80
+var regular_upgrade_cost: int = 5
+var regular_upgrade_delta: int = 20
 var orange_upgrade_cost: int = 5
 var orange_upgrade_delta: int = 2
 var red_upgrade_cost: int = 5
 var red_upgrade_delta: int = 5
 
 # --- Gold panel upgrades ---
-var bucket_value_cost: int = 120
-var bucket_value_level: int = 3
-var drop_rate_cost: int = 100
+var bucket_value_cost: int = 15
+var bucket_value_delta: int = 20
+var bucket_value_level: int = 0
+var drop_rate_cost: int = 10
+var drop_rate_delta: int = 50
 var drop_rate_level: int = 0
 var autodropper_cost: int = 50
 
@@ -111,8 +113,7 @@ func _ready() -> void:
 	selected_board = regular_board
 	regular_board.set_selected(true)
 
-	regular_board.num_rows = 8
-	regular_board.value_bonus = 3
+	regular_board.num_rows = 2
 	regular_board._build_board()
 
 	# Autodropper timer (gold board auto-drops, independent of manual cooldown)
@@ -149,6 +150,8 @@ func _ready() -> void:
 	# Connect UI signals
 	ui.upgrade_action.connect(_on_upgrade_action)
 	ui.board_tab_selected.connect(_on_board_tab_selected)
+	ui.reset_pressed.connect(_reset_game)
+	ui.reset_dev_pressed.connect(_reset_game_dev)
 
 	# Load saved progress (must be after all setup)
 	_load_game()
@@ -157,8 +160,6 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
 		_drop_on_selected_board()
-	if event.is_action_pressed("reset_game"):
-		_reset_game()
 
 
 func _process(_delta: float) -> void:
@@ -204,7 +205,7 @@ func _drop_status_text(board: PlinkoBoard) -> String:
 	match board.board_type:
 		PlinkoBoard.BoardType.GOLD:
 			if gold_queue_max == 0:
-				# No queue — simple cooldown
+				# No queue — simple cooldown 	
 				if not gold_drain_timer.is_stopped():
 					return "reloading..."
 				if coin_total < 1:
@@ -667,7 +668,8 @@ func _buy_bucket_value() -> void:
 	regular_board.value_bonus = bucket_value_level
 	regular_board._build_board()
 
-	bucket_value_cost *= 2
+	bucket_value_cost += bucket_value_delta
+	bucket_value_delta += 20
 	ui.update_coins(coin_total)
 
 
@@ -685,7 +687,8 @@ func _buy_drop_rate() -> void:
 	gold_cooldown_time *= 0.8
 	gold_drain_timer.wait_time = gold_cooldown_time
 
-	drop_rate_cost = 100 * (drop_rate_level + 1)
+	drop_rate_cost += drop_rate_delta
+	drop_rate_delta += 50
 	ui.update_coins(coin_total)
 
 
@@ -922,6 +925,25 @@ func _reset_game() -> void:
 	get_tree().reload_current_scene()
 
 
+func _reset_game_dev() -> void:
+	# Write a save with level-3 testing state, then reload
+	var data := {
+		"coin_total": 100,
+		"player_level": 3,
+		"regular_upgrade_cost": 125,
+		"regular_upgrade_delta": 80,
+		"bucket_value_cost": 135,
+		"bucket_value_delta": 80,
+		"bucket_value_level": 3,
+		"regular_board_num_rows": 8,
+		"regular_board_value_bonus": 3,
+	}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(data))
+	get_tree().reload_current_scene()
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_save_game()
@@ -950,8 +972,10 @@ func _save_game() -> void:
 		"red_upgrade_delta": red_upgrade_delta,
 		# Gold upgrades
 		"bucket_value_cost": bucket_value_cost,
+		"bucket_value_delta": bucket_value_delta,
 		"bucket_value_level": bucket_value_level,
 		"drop_rate_cost": drop_rate_cost,
+		"drop_rate_delta": drop_rate_delta,
 		"drop_rate_level": drop_rate_level,
 		"autodropper_cost": autodropper_cost,
 		"autodropper_level": autodropper_level,
@@ -1043,8 +1067,10 @@ func _load_game() -> void:
 	red_upgrade_delta = int(data.get("red_upgrade_delta", red_upgrade_delta))
 
 	bucket_value_cost = int(data.get("bucket_value_cost", bucket_value_cost))
+	bucket_value_delta = int(data.get("bucket_value_delta", bucket_value_delta))
 	bucket_value_level = int(data.get("bucket_value_level", bucket_value_level))
 	drop_rate_cost = int(data.get("drop_rate_cost", drop_rate_cost))
+	drop_rate_delta = int(data.get("drop_rate_delta", drop_rate_delta))
 	drop_rate_level = int(data.get("drop_rate_level", drop_rate_level))
 	autodropper_cost = int(data.get("autodropper_cost", autodropper_cost))
 	autodropper_level = int(data.get("autodropper_level", autodropper_level))

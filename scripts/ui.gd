@@ -2,6 +2,8 @@ extends CanvasLayer
 
 signal upgrade_action(action_name: String)
 signal board_tab_selected(board_type: int)  # PlinkoBoard.BoardType value
+signal reset_pressed
+signal reset_dev_pressed
 
 @onready var coin_label: Label = $CoinLabel
 @onready var orange_coin_label: Label = $OrangeCoinLabel
@@ -26,6 +28,30 @@ func _ready() -> void:
 	gold_tab.pressed.connect(func(): board_tab_selected.emit(0))    # GOLD
 	orange_tab.pressed.connect(func(): board_tab_selected.emit(1))  # ORANGE
 	red_tab.pressed.connect(func(): board_tab_selected.emit(2))     # RED
+
+	# Reset buttons container — left side, vertically centered
+	var reset_container := VBoxContainer.new()
+	reset_container.anchor_left = 0.0
+	reset_container.anchor_right = 0.0
+	reset_container.anchor_top = 0.5
+	reset_container.anchor_bottom = 0.5
+	reset_container.offset_left = 20.0
+	reset_container.offset_top = -35.0
+	reset_container.offset_right = 110.0
+	reset_container.offset_bottom = 35.0
+	add_child(reset_container)
+
+	var reset_btn := Button.new()
+	reset_btn.text = "Reset"
+	reset_btn.focus_mode = Control.FOCUS_NONE
+	reset_btn.pressed.connect(func(): reset_pressed.emit())
+	reset_container.add_child(reset_btn)
+
+	var reset_dev_btn := Button.new()
+	reset_dev_btn.text = "Reset(3)"
+	reset_dev_btn.focus_mode = Control.FOCUS_NONE
+	reset_dev_btn.pressed.connect(func(): reset_dev_pressed.emit())
+	reset_container.add_child(reset_dev_btn)
 
 
 func update_coins(total: int) -> void:
