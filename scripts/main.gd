@@ -18,7 +18,7 @@ var red_board_unlocked: bool = false
 
 # --- Leveling ---
 var player_level: int = 0
-const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 200, 500, 1000, 3000, 5000, 8000, 12000, 18000, 25000]
+const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 150, 250, 350, 500, 1000, 2000, 3000, 5000, 8000]
 
 # --- Row upgrade costs (delta formula: cost += delta, delta += 20) ---
 var regular_upgrade_cost: int = 5
@@ -859,7 +859,11 @@ func _check_level_up() -> void:
 
 
 func _on_level_up(level: int) -> void:
-	if level == 6:
+	if level == 6 or level == 7:
+		# Red Coin: drops separately with 10x value
+		regular_board.drop_coin(5)
+
+	if level == 8:
 		regular_board.orange_buckets_enabled = true
 		regular_board._build_board()
 

@@ -93,7 +93,7 @@ func _update_selection_indicator() -> void:
 	selection_indicator.position = Vector3(0.0, (top + bottom) / 2.0, -0.1)
 
 
-func drop_coin() -> bool:
+func drop_coin(value_multiplier: int = 1) -> bool:
 	if num_rows == 0:
 		return false
 
@@ -116,7 +116,7 @@ func drop_coin() -> bool:
 
 	# Final waypoint: the bucket the coin lands in
 	var b_type := _bucket_type(col_index)
-	var reward := _reward_value(col_index)
+	var reward := _reward_value(col_index) * value_multiplier
 	waypoints.append(_bucket_position(col_index))
 
 	# Convert waypoints from board-local to global coordinates
@@ -127,14 +127,18 @@ func drop_coin() -> bool:
 	var coin: Node3D = coin_scene.instantiate()
 	coin.position = to_global(Vector3(0.0, TOP_Y + 0.8, 0.0))
 
-	# Tint coin based on board type
-	match board_type:
-		BoardType.ORANGE:
-			var mesh := coin.get_node("Mesh") as MeshInstance3D
-			mesh.material_override = orange_material
-		BoardType.RED:
-			var mesh := coin.get_node("Mesh") as MeshInstance3D
-			mesh.material_override = red_material
+	# Tint coin based on board type or multiplier
+	if value_multiplier > 1:
+		var mesh := coin.get_node("Mesh") as MeshInstance3D
+		mesh.material_override = red_material
+	else:
+		match board_type:
+			BoardType.ORANGE:
+				var mesh := coin.get_node("Mesh") as MeshInstance3D
+				mesh.material_override = orange_material
+			BoardType.RED:
+				var mesh := coin.get_node("Mesh") as MeshInstance3D
+				mesh.material_override = red_material
 
 	# Add coin to the scene tree (parent will be the scene root)
 	get_tree().root.add_child(coin)
