@@ -6,7 +6,7 @@ extends Node3D
 var board_scene: PackedScene = preload("res://scenes/plinko_board.tscn")
 
 # --- Currency ---
-var coin_total: int = 1
+var coin_total: int = 100
 var orange_coin_total: int = 0
 var red_coin_total: int = 0
 
@@ -15,20 +15,20 @@ var orange_board_unlocked: bool = false
 var red_board_unlocked: bool = false
 
 # --- Leveling ---
-var player_level: int = 0
-const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 1000, 1500, 2000, 3000, 5000, 8000, 12000, 18000, 25000]
+var player_level: int = 3
+const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 200, 500, 1000, 3000, 5000, 8000, 12000, 18000, 25000]
 
 # --- Row upgrade costs (delta formula: cost += delta, delta += 20) ---
-var regular_upgrade_cost: int = 5
-var regular_upgrade_delta: int = 20
+var regular_upgrade_cost: int = 125
+var regular_upgrade_delta: int = 80
 var orange_upgrade_cost: int = 5
 var orange_upgrade_delta: int = 2
 var red_upgrade_cost: int = 5
 var red_upgrade_delta: int = 5
 
 # --- Gold panel upgrades ---
-var bucket_value_cost: int = 15
-var bucket_value_level: int = 0
+var bucket_value_cost: int = 120
+var bucket_value_level: int = 3
 var drop_rate_cost: int = 100
 var drop_rate_level: int = 0
 var autodropper_cost: int = 50
@@ -109,7 +109,8 @@ func _ready() -> void:
 	selected_board = regular_board
 	regular_board.set_selected(true)
 
-	regular_board.num_rows = 2
+	regular_board.num_rows = 8
+	regular_board.value_bonus = 3
 	regular_board._build_board()
 
 	# Autodropper timer (gold board auto-drops, independent of manual cooldown)
@@ -517,16 +518,16 @@ func _gold_upgrades() -> Array[Dictionary]:
 			entry["cap_hover"] = "Rate Cap +1: " + str(rate_cap_cost) + " orange"
 		upgrades.append(entry)
 
-	# Queue +1 (level 4)
-	if player_level >= 4:
+	# Queue +1 (level 6)
+	if player_level >= 6:
 		upgrades.append({
 			"action": "gold_queue_up",
 			"label": "Queue +1",
 			"cost_text": "Cost: " + str(gold_queue_up_cost) + " | Queue: " + str(gold_queue_max),
 		})
 
-	# Autodropper (level 5)
-	if player_level >= 5:
+	# Autodropper (level 4)
+	if player_level >= 4:
 		var cost_text := "Cost: " + str(autodropper_cost) + " | Lvl: " + str(autodropper_level) + "/" + str(autodropper_cap)
 		if autodropper_level > 0:
 			cost_text += " | avg. coins/sec: " + str(snapped(autodropper_level / 10.0, 0.01))
@@ -829,7 +830,7 @@ func _check_level_up() -> void:
 
 
 func _on_level_up(level: int) -> void:
-	if level == 5:
+	if level == 6:
 		regular_board.orange_buckets_enabled = true
 		regular_board._build_board()
 
