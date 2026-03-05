@@ -19,7 +19,7 @@ var player_level: int = 0
 const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 1000, 1500, 2000, 3000, 5000, 8000, 12000, 18000, 25000]
 
 # --- Row upgrade costs (delta formula: cost += delta, delta += 20) ---
-var regular_upgrade_cost: int = 9
+var regular_upgrade_cost: int = 5
 var regular_upgrade_delta: int = 20
 var orange_upgrade_cost: int = 5
 var orange_upgrade_delta: int = 2
@@ -27,7 +27,7 @@ var red_upgrade_cost: int = 5
 var red_upgrade_delta: int = 5
 
 # --- Gold panel upgrades ---
-var bucket_value_cost: int = 19
+var bucket_value_cost: int = 15
 var bucket_value_level: int = 0
 var drop_rate_cost: int = 100
 var drop_rate_level: int = 0
@@ -65,7 +65,7 @@ var autodropper_timer: Timer
 # --- Gold queue ---
 var gold_queue: int = 0
 var gold_queue_max: int = 0
-var gold_queue_up_cost: int = 50
+var gold_queue_up_cost: int = 30
 var gold_queue_up_delta: int = 10
 var gold_drain_timer: Timer
 
