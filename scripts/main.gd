@@ -18,24 +18,24 @@ var red_board_unlocked: bool = false
 var player_level: int = 0
 const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 1000, 1500, 2000, 3000, 5000, 8000, 12000, 18000, 25000]
 
-# --- Row upgrade costs (delta formula: cost += delta, delta += 5) ---
-var regular_upgrade_cost: int = 5
-var regular_upgrade_delta: int = 5
+# --- Row upgrade costs (delta formula: cost += delta, delta += 20) ---
+var regular_upgrade_cost: int = 9
+var regular_upgrade_delta: int = 20
 var orange_upgrade_cost: int = 5
 var orange_upgrade_delta: int = 2
 var red_upgrade_cost: int = 5
 var red_upgrade_delta: int = 5
 
 # --- Gold panel upgrades ---
-var bucket_value_cost: int = 5
+var bucket_value_cost: int = 19
 var bucket_value_level: int = 0
 var drop_rate_cost: int = 100
 var drop_rate_level: int = 0
-var autodropper_cost: int = 5
+var autodropper_cost: int = 500
 
 # --- Gold upgrade caps (raised by orange) ---
-var gold_row_cap: int = 6
-var bucket_value_cap: int = 5
+var gold_row_cap: int = 8
+var bucket_value_cap: int = 6
 var drop_rate_cap: int = 3
 var autodropper_cap: int = 3
 
@@ -75,7 +75,7 @@ var camera_tween: Tween
 # --- Per-board drop cooldowns ---
 var board_drop_cooldowns: Dictionary = {}   # PlinkoBoard → Timer
 var board_drop_labels: Dictionary = {}      # PlinkoBoard → Label3D
-var gold_cooldown_time := 1.0
+var gold_cooldown_time := 2.0
 var orange_cooldown_time := 1.0
 
 # --- Drop costs ---
@@ -419,8 +419,20 @@ func _refresh_upgrade_header() -> void:
 func _gold_upgrades() -> Array[Dictionary]:
 	var upgrades: Array[Dictionary] = []
 
-	# Bucket Value +1 (level 1)
+	# Add 2 Rows (level 1)
 	if player_level >= 1:
+		var entry: Dictionary = {
+			"action": "add_row",
+			"label": "Add 2 Rows",
+			"cost_text": "Cost: " + str(regular_upgrade_cost) + " | Rows: " + str(regular_board.num_rows) + "/" + str(gold_row_cap),
+		}
+		if orange_board_unlocked and player_level >= 7:
+			entry["cap_action"] = "row_cap"
+			entry["cap_hover"] = "Row Cap +2: " + str(row_cap_cost) + " orange"
+		upgrades.append(entry)
+
+	# Bucket Value +1 (level 2)
+	if player_level >= 2:
 		var entry: Dictionary = {
 			"action": "bucket_value",
 			"label": "Bucket Value +1",
@@ -429,18 +441,6 @@ func _gold_upgrades() -> Array[Dictionary]:
 		if orange_board_unlocked and player_level >= 8:
 			entry["cap_action"] = "value_cap"
 			entry["cap_hover"] = "Value Cap +1: " + str(value_cap_cost) + " orange"
-		upgrades.append(entry)
-
-	# Add Row (level 2)
-	if player_level >= 2:
-		var entry: Dictionary = {
-			"action": "add_row",
-			"label": "Add Row",
-			"cost_text": "Cost: " + str(regular_upgrade_cost) + " | Rows: " + str(regular_board.num_rows) + "/" + str(gold_row_cap),
-		}
-		if orange_board_unlocked and player_level >= 7:
-			entry["cap_action"] = "row_cap"
-			entry["cap_hover"] = "Row Cap +2: " + str(row_cap_cost) + " orange"
 		upgrades.append(entry)
 
 	# Drop Rate (level 3)
@@ -560,9 +560,10 @@ func _buy_regular_upgrade() -> void:
 
 	coin_total -= regular_upgrade_cost
 	regular_board.add_row()
+	regular_board.add_row()
 
 	regular_upgrade_cost += regular_upgrade_delta
-	regular_upgrade_delta += 5
+	regular_upgrade_delta += 20
 	ui.update_coins(coin_total)
 
 
@@ -595,7 +596,7 @@ func _buy_drop_rate() -> void:
 	coin_total -= drop_rate_cost
 	drop_rate_level += 1
 
-	gold_cooldown_time *= 0.9
+	gold_cooldown_time *= 0.8
 	var timer: Timer = board_drop_cooldowns[regular_board]
 	timer.wait_time = gold_cooldown_time
 
@@ -682,7 +683,7 @@ func _buy_orange_drop_rate() -> void:
 		return
 
 	orange_coin_total -= orange_drop_rate_cost
-	orange_cooldown_time *= 0.9
+	orange_cooldown_time *= 0.8
 	var timer: Timer = board_drop_cooldowns[orange_board]
 	timer.wait_time = orange_cooldown_time
 

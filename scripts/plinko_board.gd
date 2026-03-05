@@ -234,11 +234,9 @@ func _bucket_position(index: int) -> Vector3:
 
 
 func _bucket_value(index: int) -> int:
-	# Base value using distance from center: distance * 2 + 1
-	# e.g. 7 buckets → 7 5 3 1 3 5 7
 	var center := num_rows / 2.0
 	var distance := int(absf(index - center))
-	return distance * 2 + 1
+	return distance + 1
 
 
 func _bucket_type(index: int) -> BucketType:
@@ -261,14 +259,16 @@ func _bucket_type(index: int) -> BucketType:
 
 func _display_value(index: int) -> int:
 	# value_bonus increases the delta between buckets:
-	# distance * (2 + value_bonus) + 1
-	# e.g. bonus=1, 7 buckets → 10 7 4 1 4 7 10
+	# distance * (1 + value_bonus) + 1
+	# lvl 0, 7 buckets: 4 3 2 1 2 3 4
+	# lvl 1, 7 buckets: 7 5 3 1 3 5 7
+	# lvl 2, 7 buckets: 10 7 4 1 4 7 10
 	var center := num_rows / 2.0
 	var distance := int(absf(index - center))
 	if board_type == BoardType.GOLD and _bucket_type(index) == BucketType.GOLD:
-		return distance * (2 + value_bonus) + 1
+		return distance * (1 + value_bonus) + 1
 	if board_type == BoardType.ORANGE:
-		return distance * (2 + value_bonus) + 1
+		return distance * (1 + value_bonus) + 1
 	return _bucket_value(index)
 
 
