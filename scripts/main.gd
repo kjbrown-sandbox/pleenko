@@ -286,16 +286,8 @@ func _drop_on_selected_board() -> void:
 					_update_level_label()
 					gold_drain_timer.start()
 			else:
-				# Queue mode
-				if gold_drain_timer.is_stopped() and gold_queue == 0:
-					# Drop immediately, start drain timer
-					if regular_board.drop_coin():
-						coin_total -= 1
-						ui.update_coins(coin_total)
-						_update_level_label()
-						_refresh_upgrade_header()
-						gold_drain_timer.start()
-				elif gold_queue < gold_queue_max:
+				# Queue mode — space only adds to queue
+				if gold_queue < gold_queue_max:
 					gold_queue += 1
 					coin_total -= 1
 					ui.update_coins(coin_total)
