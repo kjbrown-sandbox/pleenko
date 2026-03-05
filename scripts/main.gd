@@ -22,24 +22,23 @@ const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 200, 500, 1000, 3000, 500
 
 # --- Row upgrade costs (delta formula: cost += delta, delta += 20) ---
 var regular_upgrade_cost: int = 5
-var regular_upgrade_delta: int = 20
 var orange_upgrade_cost: int = 5
 var orange_upgrade_delta: int = 2
 var red_upgrade_cost: int = 5
 var red_upgrade_delta: int = 5
 
 # --- Gold panel upgrades ---
-var bucket_value_cost: int = 15
-var bucket_value_delta: int = 20
+var bucket_value_cost: int = 10
+var bucket_value_delta: int = 5
 var bucket_value_level: int = 0
 var drop_rate_cost: int = 10
-var drop_rate_delta: int = 50
+var drop_rate_delta: int = 20
 var drop_rate_level: int = 0
 var autodropper_cost: int = 50
 
 # --- Gold upgrade caps (raised by orange) ---
-var gold_row_cap: int = 10
-var bucket_value_cap: int = 6
+var gold_row_cap: int = 8
+var bucket_value_cap: int = 10
 var drop_rate_cap: int = 3
 var autodropper_cap: int = 10
 
@@ -69,7 +68,7 @@ var autodropper_timer: Timer
 # --- Gold queue ---
 var gold_queue: int = 0
 var gold_queue_max: int = 0
-var gold_queue_up_cost: int = 30
+var gold_queue_up_cost: int = 10
 var gold_queue_up_delta: int = 10
 var gold_drain_timer: Timer
 
@@ -655,8 +654,7 @@ func _buy_regular_upgrade() -> void:
 	regular_board.add_row()
 	regular_board.add_row()
 
-	regular_upgrade_cost += regular_upgrade_delta
-	regular_upgrade_delta += 20
+	regular_upgrade_cost *= 10
 	ui.update_coins(coin_total)
 
 
@@ -675,7 +673,7 @@ func _buy_bucket_value() -> void:
 	regular_board._build_board()
 
 	bucket_value_cost += bucket_value_delta
-	bucket_value_delta += 20
+	bucket_value_delta += 10
 	ui.update_coins(coin_total)
 
 
@@ -690,11 +688,11 @@ func _buy_drop_rate() -> void:
 	coin_total -= drop_rate_cost
 	drop_rate_level += 1
 
-	gold_cooldown_time *= 0.8
+	gold_cooldown_time *= 0.9
 	gold_drain_timer.wait_time = gold_cooldown_time
 
 	drop_rate_cost += drop_rate_delta
-	drop_rate_delta += 50
+	drop_rate_delta += 20
 	ui.update_coins(coin_total)
 
 
@@ -936,10 +934,9 @@ func _reset_game_dev() -> void:
 	var data := {
 		"coin_total": 100,
 		"player_level": 3,
-		"regular_upgrade_cost": 125,
-		"regular_upgrade_delta": 80,
-		"bucket_value_cost": 135,
-		"bucket_value_delta": 80,
+		"regular_upgrade_cost": 5000,
+		"bucket_value_cost": 55,
+		"bucket_value_delta": 35,
 		"bucket_value_level": 3,
 		"regular_board_num_rows": 8,
 		"regular_board_value_bonus": 3,
@@ -972,7 +969,6 @@ func _save_game() -> void:
 		"player_level": player_level,
 		# Row upgrade costs/deltas
 		"regular_upgrade_cost": regular_upgrade_cost,
-		"regular_upgrade_delta": regular_upgrade_delta,
 		"orange_upgrade_cost": orange_upgrade_cost,
 		"orange_upgrade_delta": orange_upgrade_delta,
 		"red_upgrade_cost": red_upgrade_cost,
@@ -1068,7 +1064,6 @@ func _load_game() -> void:
 	player_level = int(data.get("player_level", player_level))
 
 	regular_upgrade_cost = int(data.get("regular_upgrade_cost", regular_upgrade_cost))
-	regular_upgrade_delta = int(data.get("regular_upgrade_delta", regular_upgrade_delta))
 	orange_upgrade_cost = int(data.get("orange_upgrade_cost", orange_upgrade_cost))
 	orange_upgrade_delta = int(data.get("orange_upgrade_delta", orange_upgrade_delta))
 	red_upgrade_cost = int(data.get("red_upgrade_cost", red_upgrade_cost))
