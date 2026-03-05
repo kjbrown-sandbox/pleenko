@@ -101,13 +101,18 @@ func drop_coin() -> bool:
 	var waypoints: Array[Vector3] = []
 	var col_index := 0
 
-	# Start with a center-top waypoint so the coin drops straight down first
-	waypoints.append(Vector3(0.0, TOP_Y, 0.0))
+	# First waypoint: drop straight down to the center of row 0
+	waypoints.append(_peg_position(0, 0))
 
-	for r in range(num_rows):
+	# Each row after the first: randomly bounce left or right
+	for r in range(1, num_rows):
 		if randf() < 0.5:
 			col_index += 1
 		waypoints.append(_peg_position(r, col_index))
+
+	# One final bounce to reach a bucket (num_rows choices = num_rows+1 buckets)
+	if randf() < 0.5:
+		col_index += 1
 
 	# Final waypoint: the bucket the coin lands in
 	var b_type := _bucket_type(col_index)
