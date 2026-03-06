@@ -16,7 +16,7 @@ const ROW_SPACING_Y := 0.8
 const TOP_Y := 3.0
 const BUCKET_OFFSET_Y := 0.6
 const LABEL_OFFSET_Y := 0.35
-const ORANGE_THRESHOLD := 5
+const ORANGE_THRESHOLD := 4
 const RED_THRESHOLD := 7
 const ORANGE_ROW_GATE := 8
 const RED_ROW_GATE := 12
@@ -130,7 +130,7 @@ func drop_coin(value_multiplier: int = 1) -> bool:
 	# Tint coin based on board type or multiplier
 	if value_multiplier > 1:
 		var mesh := coin.get_node("Mesh") as MeshInstance3D
-		mesh.material_override = red_material
+		mesh.material_override = orange_material
 	else:
 		match board_type:
 			BoardType.ORANGE:
@@ -186,15 +186,9 @@ func _build_board() -> void:
 		label.font_size = 48
 		label.position = _bucket_position(i) + Vector3(0.0, -LABEL_OFFSET_Y, 0.01)
 
-		# On the gold board, orange/red buckets show letters; otherwise show numeric value
-		if board_type == BoardType.GOLD:
-			match b_type:
-				BucketType.RED:
-					label.text = "R"
-				BucketType.ORANGE:
-					label.text = "O"
-				_:
-					label.text = str(_display_value(i))
+		# On the gold board, red buckets show "R"; everything else shows numeric value
+		if board_type == BoardType.GOLD and b_type == BucketType.RED:
+			label.text = "R"
 		else:
 			label.text = str(_display_value(i))
 
@@ -269,15 +263,13 @@ func _display_value(index: int) -> int:
 	# lvl 2, 7 buckets: 10 7 4 1 4 7 10
 	var center := num_rows / 2.0
 	var distance := int(absf(index - center))
-	if board_type == BoardType.GOLD and _bucket_type(index) == BucketType.GOLD:
-		return distance * (1 + value_bonus) + 1
-	if board_type == BoardType.ORANGE:
+	if board_type == BoardType.GOLD or board_type == BoardType.ORANGE:
 		return distance * (1 + value_bonus) + 1
 	return _bucket_value(index)
 
 
 func _reward_value(index: int) -> int:
-	# Orange/red buckets on gold board always reward 1 (of their currency)
-	if board_type == BoardType.GOLD and _bucket_type(index) != BucketType.GOLD:
+	# Red buckets on gold board always reward 1 (of their currency)
+	if board_type == BoardType.GOLD and _bucket_type(index) == BucketType.RED:
 		return 1
 	return _display_value(index)
