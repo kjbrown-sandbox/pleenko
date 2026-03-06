@@ -18,7 +18,7 @@ var red_board_unlocked: bool = false
 
 # --- Leveling ---
 var player_level: int = 0
-const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 100, 150, 250, 350, 500, 1000, 2000, 3000, 5000, 8000]
+const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 75, 100, 150, 200, 300, 400, 500, 1000, 2000, 3000, 5000, 8000]
 
 # --- Row upgrade costs (delta formula: cost += delta, delta += 20) ---
 var regular_upgrade_cost: int = 5
@@ -34,7 +34,7 @@ var bucket_value_level: int = 0
 var drop_rate_cost: int = 10
 var drop_rate_delta: int = 20
 var drop_rate_level: int = 0
-var autodropper_cost: int = 50
+var autodropper_cost: int = 10
 
 # --- Gold upgrade caps (raised by orange) ---
 var gold_row_cap: int = 8
@@ -167,6 +167,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	elapsed_time += delta
 	ui.update_game_timer(elapsed_time)
+	_update_level_label()
 
 	# Update drop labels for all boards with cooldowns
 	for board: PlinkoBoard in board_drop_cooldowns:
@@ -295,15 +296,19 @@ func _drop_on_selected_board() -> void:
 					_update_level_label()
 					gold_drain_timer.start()
 			else:
-				# Queue mode — space only adds to queue
+				# Queue mode
 				if gold_queue < gold_queue_max:
-					gold_queue += 1
 					coin_total -= 1
 					ui.update_coins(coin_total)
 					_update_level_label()
-					_refresh_upgrade_header()
 					if gold_drain_timer.is_stopped():
+						# Timer ready — drop immediately
+						regular_board.drop_coin()
 						gold_drain_timer.start()
+					else:
+						# Timer running — add to queue for later
+						gold_queue += 1
+					_refresh_upgrade_header()
 
 		PlinkoBoard.BoardType.ORANGE:
 			var timer: Timer = board_drop_cooldowns.get(selected_board)
@@ -356,7 +361,8 @@ func _on_gold_drain_timeout() -> void:
 		regular_board.drop_coin()
 		gold_queue -= 1
 		_refresh_upgrade_header()
-	if gold_queue <= 0:
+	else:
+		# Queue empty — stop timer (enforces one cooldown cycle after last drop)
 		gold_drain_timer.stop()
 
 
@@ -859,11 +865,11 @@ func _check_level_up() -> void:
 
 
 func _on_level_up(level: int) -> void:
-	if level == 6 or level == 7:
-		# Red Coin: drops separately with 10x value
+	if level >= 6 and level <= 9:
+		# Red Coin: drops separately with 5x value
 		regular_board.drop_coin(5)
 
-	if level == 8:
+	if level == 10:
 		regular_board.orange_buckets_enabled = true
 		regular_board._build_board()
 
