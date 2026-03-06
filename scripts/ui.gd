@@ -5,8 +5,11 @@ signal board_tab_selected(board_type: int)  # PlinkoBoard.BoardType value
 signal reset_pressed
 signal reset_dev_pressed
 signal level_up_dismissed
+signal drop_unrefined_pressed
+signal speed_toggle_pressed
 
 @onready var coin_label: Label = $CoinLabel
+@onready var unrefined_orange_label: Label = $UnrefinedOrangeLabel
 @onready var orange_coin_label: Label = $OrangeCoinLabel
 @onready var red_coin_label: Label = $RedCoinLabel
 
@@ -61,6 +64,27 @@ func _ready() -> void:
 	reset_dev_btn.focus_mode = Control.FOCUS_NONE
 	reset_dev_btn.pressed.connect(func(): reset_dev_pressed.emit())
 	reset_container.add_child(reset_dev_btn)
+
+	var speed_btn := Button.new()
+	speed_btn.text = "Speed x10"
+	speed_btn.focus_mode = Control.FOCUS_NONE
+	speed_btn.pressed.connect(func(): speed_toggle_pressed.emit())
+	reset_container.add_child(speed_btn)
+
+	# Drop unrefined button — near spawn point, 50px to the left of center
+	var drop_unrefined_btn := Button.new()
+	drop_unrefined_btn.text = "Drop Unrefined (1)"
+	drop_unrefined_btn.focus_mode = Control.FOCUS_NONE
+	drop_unrefined_btn.anchor_left = 0.5
+	drop_unrefined_btn.anchor_right = 0.5
+	drop_unrefined_btn.anchor_top = 0.0
+	drop_unrefined_btn.anchor_bottom = 0.0
+	drop_unrefined_btn.offset_left = -180.0
+	drop_unrefined_btn.offset_right = -50.0
+	drop_unrefined_btn.offset_top = 20.0
+	drop_unrefined_btn.offset_bottom = 45.0
+	drop_unrefined_btn.pressed.connect(func(): drop_unrefined_pressed.emit())
+	add_child(drop_unrefined_btn)
 
 	# Level-up dialog (hidden by default)
 	level_up_overlay = ColorRect.new()
@@ -135,6 +159,10 @@ func update_coins(total: int, max_coins: int = 0) -> void:
 		coin_label.text = "Gold: " + str(total)
 
 
+func update_unrefined_orange(total: int) -> void:
+	unrefined_orange_label.text = "Unrefined: " + str(total)
+
+
 func update_orange_coins(total: int) -> void:
 	orange_coin_label.text = "Orange: " + str(total)
 
@@ -169,6 +197,10 @@ func update_header(text: String) -> void:
 func show_orange_currency() -> void:
 	orange_coin_label.visible = true
 	orange_tab.visible = true
+
+
+func show_unrefined_orange() -> void:
+	unrefined_orange_label.visible = true
 
 
 func show_red_currency() -> void:

@@ -9,6 +9,7 @@ var board_scene: PackedScene = preload("res://scenes/plinko_board.tscn")
 var coin_total: int = 1
 var coin_max: int = 500
 var coin_max_up_cost: int = 1
+var unrefined_orange: int = 0
 var orange_coin_total: int = 0
 var red_coin_total: int = 0
 
@@ -32,7 +33,7 @@ var bucket_value_cost: int = 10
 var bucket_value_delta: int = 5
 var bucket_value_level: int = 0
 var drop_rate_cost: int = 10
-var drop_rate_delta: int = 30
+var drop_rate_delta: int = 20
 var drop_rate_level: int = 0
 var autodropper_cost: int = 10
 
@@ -65,8 +66,8 @@ var red_row_cap: int = 5
 var autodropper_level: int = 0
 var autodropper_timer: Timer
 
-# --- Gold queue ---
-var gold_queue: int = 0
+# --- Gold queue (each entry is a multiplier: 1=normal, 3=unrefined, 5=level-up) ---
+var gold_queue: Array[int] = []
 var gold_queue_max: int = 0
 var gold_queue_up_cost: int = 10
 var gold_queue_up_delta: int = 10
@@ -98,6 +99,10 @@ var orange_cooldown_time := 1.0
 var orange_drop_cost := 100   # gold cost to drop on orange
 var red_drop_cost := 1        # orange cost to drop on red
 
+# --- Visual queue ---
+var queue_visual_container: Node3D
+var queue_coin_mesh: SphereMesh
+
 # --- Boards ---
 const BOARD_GAP := 3.0
 var regular_board: PlinkoBoard
@@ -120,6 +125,13 @@ func _ready() -> void:
 
 	regular_board.num_rows = 2
 	regular_board._build_board()
+
+	# Visual queue container (3D coins above drop point)
+	queue_visual_container = Node3D.new()
+	regular_board.add_child(queue_visual_container)
+	queue_coin_mesh = SphereMesh.new()
+	queue_coin_mesh.radius = 0.15
+	queue_coin_mesh.height = 0.3
 
 	# Autodropper timer (gold board auto-drops, independent of manual cooldown)
 	autodropper_timer = Timer.new()
@@ -158,6 +170,8 @@ func _ready() -> void:
 	ui.reset_pressed.connect(_reset_game)
 	ui.reset_dev_pressed.connect(_reset_game_dev)
 	ui.level_up_dismissed.connect(_on_level_up_dismissed)
+	ui.drop_unrefined_pressed.connect(_drop_unrefined_on_gold)
+	ui.speed_toggle_pressed.connect(_toggle_speed)
 
 	# Load saved progress (must be after all setup)
 	_load_game()
@@ -166,6 +180,8 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
 		_drop_on_selected_board()
+	if event.is_action_pressed("drop_unrefined"):
+		_drop_unrefined_on_gold()
 
 
 func _process(delta: float) -> void:
@@ -223,18 +239,18 @@ func _drop_status_text(board: PlinkoBoard) -> String:
 				return "ready (1g)"
 			else:
 				# Queue mode
-				var qs := "[" + str(gold_queue) + "/" + str(gold_queue_max) + "] "
-				if coin_total < 1 and gold_queue == 0:
+				var qs := "[" + str(gold_queue.size()) + "/" + str(gold_queue_max) + "] "
+				if coin_total < 1 and gold_queue.is_empty():
 					return qs + "need gold"
-				if gold_queue >= gold_queue_max:
+				if gold_queue.size() >= gold_queue_max:
 					return qs + "full"
 				return qs + "ready (1g)"
 		PlinkoBoard.BoardType.ORANGE:
-			if orange_queue <= 0:
-				return "need credits"
+			if unrefined_orange <= 0:
+				return "need unrefined"
 			if coin_total < orange_drop_cost:
 				return "need gold"
-			return "ready (" + str(orange_drop_cost) + "g + 1 credit)"
+			return "ready (" + str(orange_drop_cost) + "g + 1 unrefined)"
 		PlinkoBoard.BoardType.RED:
 			if red_queue <= 0:
 				return "need credits"
@@ -303,7 +319,7 @@ func _drop_on_selected_board() -> void:
 					gold_drain_timer.start()
 			else:
 				# Queue mode
-				if gold_queue < gold_queue_max:
+				if gold_queue.size() < gold_queue_max:
 					coin_total -= 1
 					ui.update_coins(coin_total, coin_max)
 					_update_level_label()
@@ -313,7 +329,8 @@ func _drop_on_selected_board() -> void:
 						gold_drain_timer.start()
 					else:
 						# Timer running — add to queue for later
-						gold_queue += 1
+						gold_queue.append(1)
+					_update_queue_visual()
 					_refresh_upgrade_header()
 
 		PlinkoBoard.BoardType.ORANGE:
@@ -322,12 +339,13 @@ func _drop_on_selected_board() -> void:
 				return
 			if coin_total < orange_drop_cost:
 				return
-			if orange_queue <= 0:
+			if unrefined_orange <= 0:
 				return
 			if selected_board.drop_coin():
 				coin_total -= orange_drop_cost
-				orange_queue -= 1
+				unrefined_orange -= 1
 				ui.update_coins(coin_total, coin_max)
+				ui.update_unrefined_orange(unrefined_orange)
 				_update_level_label()
 				_refresh_upgrade_header()
 				if timer:
@@ -353,23 +371,105 @@ func _drop_on_selected_board() -> void:
 # === Autodropper (gold board only) ===
 
 func _on_autodropper_timeout() -> void:
-	if coin_total >= 1 and gold_queue < gold_queue_max:
+	if coin_total >= 1 and gold_queue.size() < gold_queue_max:
 		coin_total -= 1
-		gold_queue += 1
+		gold_queue.append(1)
 		ui.update_coins(coin_total, coin_max)
 		if gold_drain_timer.is_stopped():
 			gold_drain_timer.start()
+		_update_queue_visual()
 		_refresh_upgrade_header()
 
 
 func _on_gold_drain_timeout() -> void:
-	if gold_queue > 0:
-		regular_board.drop_coin()
-		gold_queue -= 1
+	if gold_queue.size() > 0:
+		var multiplier: int = gold_queue.pop_front()
+		regular_board.drop_coin(multiplier)
+		_update_queue_visual()
 		_refresh_upgrade_header()
 	else:
 		# Queue empty — stop timer (enforces one cooldown cycle after last drop)
 		gold_drain_timer.stop()
+
+
+# === Drop unrefined orange on gold board ===
+
+func _drop_unrefined_on_gold() -> void:
+	if ui.is_level_up_visible():
+		return
+	if unrefined_orange <= 0:
+		return
+
+	if gold_queue_max == 0:
+		# No queue — simple cooldown, drop immediately
+		if not gold_drain_timer.is_stopped():
+			return
+		if regular_board.drop_coin(3):
+			unrefined_orange -= 1
+			ui.update_unrefined_orange(unrefined_orange)
+			gold_drain_timer.start()
+	else:
+		# Queue mode — add to queue if not full
+		if gold_queue.size() < gold_queue_max:
+			unrefined_orange -= 1
+			ui.update_unrefined_orange(unrefined_orange)
+			if gold_drain_timer.is_stopped():
+				regular_board.drop_coin(3)
+				gold_drain_timer.start()
+			else:
+				gold_queue.append(3)
+			_update_queue_visual()
+			_refresh_upgrade_header()
+
+
+# === Add to gold queue (allows overfill for level-up rewards) ===
+
+func _add_to_gold_queue(multiplier: int) -> void:
+	if gold_queue_max == 0:
+		# No queue bought yet — drop immediately
+		regular_board.drop_coin(multiplier)
+		if gold_drain_timer.is_stopped():
+			gold_drain_timer.start()
+		return
+
+	# Queue mode — can overfill (level-up only calls this)
+	if gold_drain_timer.is_stopped():
+		regular_board.drop_coin(multiplier)
+		gold_drain_timer.start()
+	else:
+		gold_queue.append(multiplier)
+	_update_queue_visual()
+	_refresh_upgrade_header()
+
+
+# === Visual queue (3D coins stacked above drop point) ===
+
+func _update_queue_visual() -> void:
+	# Clear existing visuals
+	for child in queue_visual_container.get_children():
+		child.queue_free()
+
+	if gold_queue_max == 0:
+		return
+
+	for i in range(gold_queue.size()):
+		var mesh_inst := MeshInstance3D.new()
+		mesh_inst.mesh = queue_coin_mesh
+
+		# Stack vertically above drop point, overlapping slightly
+		var y := PlinkoBoard.TOP_Y + 1.2 + i * 0.25
+		# Bottom coin in front (higher z)
+		var z := 0.05 * (gold_queue.size() - i)
+		mesh_inst.position = Vector3(0.0, y, z)
+
+		# Color based on multiplier
+		var multiplier: int = gold_queue[i]
+		if multiplier >= 3:
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color.ORANGE
+			mesh_inst.material_override = mat
+
+		queue_visual_container.add_child(mesh_inst)
 
 
 # === Coin landed handlers ===
@@ -381,7 +481,8 @@ func _on_regular_coin_landed(value: int, bucket_type: PlinkoBoard.BucketType) ->
 			ui.update_coins(coin_total, coin_max)
 			_check_level_up()
 		PlinkoBoard.BucketType.ORANGE:
-			_add_to_orange_queue(value)
+			unrefined_orange += value
+			ui.update_unrefined_orange(unrefined_orange)
 			_check_unlock_orange_board()
 		PlinkoBoard.BucketType.RED:
 			_add_to_red_queue(value)
@@ -474,10 +575,10 @@ func _refresh_upgrade_panel() -> void:
 		PlinkoBoard.BoardType.GOLD:
 			var header := "Gold Upgrades"
 			if gold_queue_max > 0:
-				header += " [queue: " + str(gold_queue) + "/" + str(gold_queue_max) + "]"
+				header += " [queue: " + str(gold_queue.size()) + "/" + str(gold_queue_max) + "]"
 			ui.show_upgrades_for_board(header, _gold_upgrades())
 		PlinkoBoard.BoardType.ORANGE:
-			var header := "Orange Upgrades [" + str(orange_queue) + "/" + str(orange_queue_max) + "]"
+			var header := "Orange Upgrades [unrefined: " + str(unrefined_orange) + "]"
 			ui.show_upgrades_for_board(header, _orange_upgrades())
 		PlinkoBoard.BoardType.RED:
 			var header := "Red Upgrades [" + str(red_queue) + "/" + str(red_queue_max) + "]"
@@ -491,10 +592,10 @@ func _refresh_upgrade_header() -> void:
 		PlinkoBoard.BoardType.GOLD:
 			var header := "Gold Upgrades"
 			if gold_queue_max > 0:
-				header += " [queue: " + str(gold_queue) + "/" + str(gold_queue_max) + "]"
+				header += " [queue: " + str(gold_queue.size()) + "/" + str(gold_queue_max) + "]"
 			ui.update_header(header)
 		PlinkoBoard.BoardType.ORANGE:
-			ui.update_header("Orange Upgrades [" + str(orange_queue) + "/" + str(orange_queue_max) + "]")
+			ui.update_header("Orange Upgrades [unrefined: " + str(unrefined_orange) + "]")
 		PlinkoBoard.BoardType.RED:
 			ui.update_header("Red Upgrades [" + str(red_queue) + "/" + str(red_queue_max) + "]")
 
@@ -700,11 +801,11 @@ func _buy_drop_rate() -> void:
 	coin_total -= drop_rate_cost
 	drop_rate_level += 1
 
-	gold_cooldown_time *= 0.85
+	gold_cooldown_time *= 0.8
 	gold_drain_timer.wait_time = gold_cooldown_time
 
 	drop_rate_cost += drop_rate_delta
-	drop_rate_delta += 30
+	drop_rate_delta += 20
 	ui.update_coins(coin_total, coin_max)
 
 
@@ -919,14 +1020,16 @@ func _on_level_up_dismissed() -> void:
 	# Perform the action for this level
 	match entry["action"]:
 		"orange_ball":
-			regular_board.drop_coin(5)
+			_add_to_gold_queue(5)
 		"orange_ball_and_cap":
-			regular_board.drop_coin(5)
+			_add_to_gold_queue(5)
 			ui.show_coin_max = true
 			ui.update_coins(coin_total, coin_max)
 		"orange_buckets":
 			regular_board.orange_buckets_enabled = true
 			regular_board._build_board()
+			ui.show_unrefined_orange()
+			ui.update_unrefined_orange(unrefined_orange)
 
 	# Every level-up may unlock new upgrades, so refresh the panel
 	_refresh_upgrade_panel()
@@ -990,6 +1093,13 @@ func _adjust_camera() -> void:
 const SAVE_PATH := "user://save.json"
 
 
+func _toggle_speed() -> void:
+	if Engine.time_scale == 1.0:
+		Engine.time_scale = 10.0
+	else:
+		Engine.time_scale = 1.0
+
+
 func _reset_game() -> void:
 	# Delete save file
 	if FileAccess.file_exists(SAVE_PATH):
@@ -1029,6 +1139,7 @@ func _save_game() -> void:
 		"coin_total": coin_total,
 		"coin_max": coin_max,
 		"coin_max_up_cost": coin_max_up_cost,
+		"unrefined_orange": unrefined_orange,
 		"orange_coin_total": orange_coin_total,
 		"red_coin_total": red_coin_total,
 		# Unlock flags
@@ -1124,6 +1235,7 @@ func _load_game() -> void:
 	coin_total = int(data.get("coin_total", coin_total))
 	coin_max = int(data.get("coin_max", coin_max))
 	coin_max_up_cost = int(data.get("coin_max_up_cost", coin_max_up_cost))
+	unrefined_orange = int(data.get("unrefined_orange", unrefined_orange))
 	orange_coin_total = int(data.get("orange_coin_total", orange_coin_total))
 	red_coin_total = int(data.get("red_coin_total", red_coin_total))
 
@@ -1167,7 +1279,15 @@ func _load_game() -> void:
 	orange_row_cap = int(data.get("orange_row_cap", orange_row_cap))
 	red_row_cap = int(data.get("red_row_cap", red_row_cap))
 
-	gold_queue = int(data.get("gold_queue", gold_queue))
+	# Gold queue — backwards compat: old saves have int, new saves have array
+	var saved_queue = data.get("gold_queue", [])
+	gold_queue = []
+	if saved_queue is Array:
+		for v in saved_queue:
+			gold_queue.append(int(v))
+	elif saved_queue is float or saved_queue is int:
+		for i in range(int(saved_queue)):
+			gold_queue.append(1)
 	gold_queue_max = int(data.get("gold_queue_max", gold_queue_max))
 	gold_queue_up_cost = int(data.get("gold_queue_up_cost", gold_queue_up_cost))
 	gold_queue_up_delta = int(data.get("gold_queue_up_delta", gold_queue_up_delta))
@@ -1188,7 +1308,7 @@ func _load_game() -> void:
 
 	# Update gold drain timer
 	gold_drain_timer.wait_time = gold_cooldown_time
-	if gold_queue > 0:
+	if gold_queue.size() > 0:
 		gold_drain_timer.start()
 
 	# Restore autodropper if it was active
@@ -1218,6 +1338,9 @@ func _load_game() -> void:
 	# --- Refresh all UI ---
 	if player_level >= 9:
 		ui.show_coin_max = true
+	if regular_board.orange_buckets_enabled:
+		ui.show_unrefined_orange()
+		ui.update_unrefined_orange(unrefined_orange)
 	ui.update_coins(coin_total, coin_max)
 	if orange_board_unlocked:
 		ui.update_orange_coins(orange_coin_total)
@@ -1225,3 +1348,4 @@ func _load_game() -> void:
 		ui.update_red_coins(red_coin_total)
 	_update_level_label()
 	_refresh_upgrade_panel()
+	_update_queue_visual()
