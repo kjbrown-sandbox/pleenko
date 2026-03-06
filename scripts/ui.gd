@@ -126,8 +126,13 @@ func update_game_timer(total_seconds: float) -> void:
 	game_timer_label.text = str(hours) + ":" + str(mins).pad_zeros(2) + ":" + str(s).pad_zeros(2)
 
 
-func update_coins(total: int) -> void:
-	coin_label.text = "Gold: " + str(total)
+var show_coin_max: bool = false
+
+func update_coins(total: int, max_coins: int = 0) -> void:
+	if show_coin_max and max_coins > 0:
+		coin_label.text = "Gold: " + str(total) + "/" + str(max_coins)
+	else:
+		coin_label.text = "Gold: " + str(total)
 
 
 func update_orange_coins(total: int) -> void:

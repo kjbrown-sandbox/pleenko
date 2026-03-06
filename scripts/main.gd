@@ -32,14 +32,14 @@ var bucket_value_cost: int = 10
 var bucket_value_delta: int = 5
 var bucket_value_level: int = 0
 var drop_rate_cost: int = 10
-var drop_rate_delta: int = 20
+var drop_rate_delta: int = 30
 var drop_rate_level: int = 0
 var autodropper_cost: int = 10
 
 # --- Gold upgrade caps (raised by orange) ---
 var gold_row_cap: int = 8
 var bucket_value_cap: int = 10
-var drop_rate_cap: int = 3
+var drop_rate_cap: int = 5
 var autodropper_cap: int = 10
 
 # --- Orange panel upgrades ---
@@ -148,7 +148,7 @@ func _ready() -> void:
 	add_child(save_timer)
 
 	# UI init
-	ui.update_coins(coin_total)
+	ui.update_coins(coin_total, coin_max)
 	_update_level_label()
 	_refresh_upgrade_panel()
 
@@ -298,14 +298,14 @@ func _drop_on_selected_board() -> void:
 					return
 				if regular_board.drop_coin():
 					coin_total -= 1
-					ui.update_coins(coin_total)
+					ui.update_coins(coin_total, coin_max)
 					_update_level_label()
 					gold_drain_timer.start()
 			else:
 				# Queue mode
 				if gold_queue < gold_queue_max:
 					coin_total -= 1
-					ui.update_coins(coin_total)
+					ui.update_coins(coin_total, coin_max)
 					_update_level_label()
 					if gold_drain_timer.is_stopped():
 						# Timer ready — drop immediately
@@ -327,7 +327,7 @@ func _drop_on_selected_board() -> void:
 			if selected_board.drop_coin():
 				coin_total -= orange_drop_cost
 				orange_queue -= 1
-				ui.update_coins(coin_total)
+				ui.update_coins(coin_total, coin_max)
 				_update_level_label()
 				_refresh_upgrade_header()
 				if timer:
@@ -356,7 +356,7 @@ func _on_autodropper_timeout() -> void:
 	if coin_total >= 1 and gold_queue < gold_queue_max:
 		coin_total -= 1
 		gold_queue += 1
-		ui.update_coins(coin_total)
+		ui.update_coins(coin_total, coin_max)
 		if gold_drain_timer.is_stopped():
 			gold_drain_timer.start()
 		_refresh_upgrade_header()
@@ -378,7 +378,7 @@ func _on_regular_coin_landed(value: int, bucket_type: PlinkoBoard.BucketType) ->
 	match bucket_type:
 		PlinkoBoard.BucketType.GOLD:
 			coin_total = mini(coin_total + value, coin_max)
-			ui.update_coins(coin_total)
+			ui.update_coins(coin_total, coin_max)
 			_check_level_up()
 		PlinkoBoard.BucketType.ORANGE:
 			_add_to_orange_queue(value)
@@ -667,7 +667,7 @@ func _buy_regular_upgrade() -> void:
 	regular_board.add_row()
 
 	regular_upgrade_cost *= 10
-	ui.update_coins(coin_total)
+	ui.update_coins(coin_total, coin_max)
 
 
 # === Bucket Value +1 (gold currency, gold panel, capped) ===
@@ -686,7 +686,7 @@ func _buy_bucket_value() -> void:
 
 	bucket_value_cost += bucket_value_delta
 	bucket_value_delta += 10
-	ui.update_coins(coin_total)
+	ui.update_coins(coin_total, coin_max)
 
 
 # === Drop Rate (gold currency, gold panel, capped) ===
@@ -700,12 +700,12 @@ func _buy_drop_rate() -> void:
 	coin_total -= drop_rate_cost
 	drop_rate_level += 1
 
-	gold_cooldown_time *= 0.9
+	gold_cooldown_time *= 0.85
 	gold_drain_timer.wait_time = gold_cooldown_time
 
 	drop_rate_cost += drop_rate_delta
-	drop_rate_delta += 20
-	ui.update_coins(coin_total)
+	drop_rate_delta += 30
+	ui.update_coins(coin_total, coin_max)
 
 
 # === Autodropper (gold currency, gold panel, capped) ===
@@ -723,7 +723,7 @@ func _buy_autodropper() -> void:
 	autodropper_timer.wait_time = 10.0 / autodropper_level
 	autodropper_timer.start()
 
-	ui.update_coins(coin_total)
+	ui.update_coins(coin_total, coin_max)
 
 
 # === Gold Queue +1 (gold currency, gold panel, uncapped) ===
@@ -736,7 +736,7 @@ func _buy_gold_queue_up() -> void:
 	gold_queue_max += 1
 
 	gold_queue_up_cost += gold_queue_up_delta
-	ui.update_coins(coin_total)
+	ui.update_coins(coin_total, coin_max)
 
 
 # === Orange cap-raise upgrades (orange currency, raise gold caps) ===
@@ -886,9 +886,12 @@ func _on_level_up(level: int) -> void:
 			message = "You have unlocked Queue in the shop."
 		5:
 			message = "You have unlocked Autodropper in the shop."
-		6, 7, 8, 9:
+		6, 7, 8:
 			message = "An ORANGE ball will be dropped!"
 			action = "orange_ball"
+		9:
+			message = "An ORANGE ball will be dropped!"
+			action = "orange_ball_and_cap"
 		10:
 			message = "You have unlocked Orange Buckets!"
 			action = "orange_buckets"
@@ -917,6 +920,10 @@ func _on_level_up_dismissed() -> void:
 	match entry["action"]:
 		"orange_ball":
 			regular_board.drop_coin(5)
+		"orange_ball_and_cap":
+			regular_board.drop_coin(5)
+			ui.show_coin_max = true
+			ui.update_coins(coin_total, coin_max)
 		"orange_buckets":
 			regular_board.orange_buckets_enabled = true
 			regular_board._build_board()
@@ -1209,7 +1216,9 @@ func _load_game() -> void:
 			red_board._build_board()
 
 	# --- Refresh all UI ---
-	ui.update_coins(coin_total)
+	if player_level >= 9:
+		ui.show_coin_max = true
+	ui.update_coins(coin_total, coin_max)
 	if orange_board_unlocked:
 		ui.update_orange_coins(orange_coin_total)
 	if red_board_unlocked:
