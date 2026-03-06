@@ -18,7 +18,7 @@ var red_board_unlocked: bool = false
 
 # --- Leveling ---
 var player_level: int = 0
-const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 75, 100, 150, 200, 300, 400, 500, 1000, 2000, 3000, 5000, 8000]
+const LEVEL_THRESHOLDS: Array[int] = [10, 20, 50, 75, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 2000, 3000, 5000, 8000]
 
 # --- Row upgrade costs (delta formula: cost += delta, delta += 20) ---
 var regular_upgrade_cost: int = 5
@@ -84,6 +84,9 @@ var camera_tween: Tween
 
 # --- Game timer ---
 var elapsed_time: float = 0.0
+
+# --- Level-up dialog queue ---
+var level_up_queue: Array[Dictionary] = []  # {level, message, action}
 
 # --- Per-board drop cooldowns ---
 var board_drop_cooldowns: Dictionary = {}   # PlinkoBoard → Timer
@@ -154,6 +157,7 @@ func _ready() -> void:
 	ui.board_tab_selected.connect(_on_board_tab_selected)
 	ui.reset_pressed.connect(_reset_game)
 	ui.reset_dev_pressed.connect(_reset_game_dev)
+	ui.level_up_dismissed.connect(_on_level_up_dismissed)
 
 	# Load saved progress (must be after all setup)
 	_load_game()
@@ -280,6 +284,8 @@ func _setup_board_drop(board: PlinkoBoard, cooldown_time: float) -> void:
 
 func _drop_on_selected_board() -> void:
 	if not selected_board:
+		return
+	if ui.is_level_up_visible():
 		return
 
 	match selected_board.board_type:
@@ -567,28 +573,28 @@ func _orange_upgrades() -> Array[Dictionary]:
 		"cost_text": "Cost: " + str(coin_max_up_cost) + " orange | Cap: " + str(coin_max),
 	})
 
-	if player_level >= 10:
+	if player_level >= 15:
 		upgrades.append({
 			"action": "orange_bucket_value",
 			"label": "Bucket Value +1",
 			"cost_text": "Cost: " + str(orange_bucket_value_cost) + " | Lvl: " + str(orange_bucket_value_level),
 		})
 
-	if player_level >= 11:
+	if player_level >= 16:
 		upgrades.append({
 			"action": "orange_drop_rate",
 			"label": "Drop Rate",
 			"cost_text": "Cost: " + str(orange_drop_rate_cost) + " | Rate: " + str(snapped(orange_cooldown_time, 0.01)) + "s",
 		})
 
-	if player_level >= 12:
+	if player_level >= 17:
 		upgrades.append({
 			"action": "orange_queue_up",
 			"label": "Queue +1",
 			"cost_text": "Cost: " + str(orange_queue_up_cost) + " | Queue: " + str(orange_queue_max),
 		})
 
-	if player_level >= 13:
+	if player_level >= 18:
 		upgrades.append({
 			"action": "orange_add_row",
 			"label": "Add Row",
@@ -865,16 +871,62 @@ func _check_level_up() -> void:
 
 
 func _on_level_up(level: int) -> void:
-	if level >= 6 and level <= 9:
-		# Red Coin: drops separately with 5x value
-		regular_board.drop_coin(5)
+	var message := ""
+	var action := ""
 
-	if level == 10:
-		regular_board.orange_buckets_enabled = true
-		regular_board._build_board()
+	match level:
+		1:
+			message = "You have unlocked the shop."
+			action = "shop"
+		2:
+			message = "You have unlocked Bucket Value in the shop."
+		3:
+			message = "You have unlocked Drop Rate in the shop."
+		4:
+			message = "You have unlocked Queue in the shop."
+		5:
+			message = "You have unlocked Autodropper in the shop."
+		6, 7, 8, 9:
+			message = "An ORANGE ball will be dropped!"
+			action = "orange_ball"
+		10:
+			message = "You have unlocked Orange Buckets!"
+			action = "orange_buckets"
+		_:
+			message = "Keep going!"
+
+	level_up_queue.append({"level": level, "message": message, "action": action})
+	if not ui.is_level_up_visible():
+		_show_next_level_up()
+
+
+func _show_next_level_up() -> void:
+	if level_up_queue.is_empty():
+		return
+	var entry: Dictionary = level_up_queue[0]
+	ui.show_level_up_dialog(entry["level"], entry["message"])
+
+
+func _on_level_up_dismissed() -> void:
+	if level_up_queue.is_empty():
+		return
+
+	var entry: Dictionary = level_up_queue.pop_front()
+
+	# Perform the action for this level
+	match entry["action"]:
+		"orange_ball":
+			regular_board.drop_coin(5)
+		"orange_buckets":
+			regular_board.orange_buckets_enabled = true
+			regular_board._build_board()
 
 	# Every level-up may unlock new upgrades, so refresh the panel
 	_refresh_upgrade_panel()
+
+	# Show next queued dialog if any
+	if not level_up_queue.is_empty():
+		_show_next_level_up()
 
 
 func _update_level_label() -> void:

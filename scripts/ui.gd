@@ -4,6 +4,7 @@ signal upgrade_action(action_name: String)
 signal board_tab_selected(board_type: int)  # PlinkoBoard.BoardType value
 signal reset_pressed
 signal reset_dev_pressed
+signal level_up_dismissed
 
 @onready var coin_label: Label = $CoinLabel
 @onready var orange_coin_label: Label = $OrangeCoinLabel
@@ -23,6 +24,13 @@ signal reset_dev_pressed
 
 # Tracks live widgets by action name for targeted updates
 var current_entries: Dictionary = {}
+
+# Level-up dialog
+var level_up_overlay: ColorRect
+var level_up_panel: PanelContainer
+var level_up_title: Label
+var level_up_message: Label
+var level_up_button: Button
 
 
 func _ready() -> void:
@@ -53,6 +61,61 @@ func _ready() -> void:
 	reset_dev_btn.focus_mode = Control.FOCUS_NONE
 	reset_dev_btn.pressed.connect(func(): reset_dev_pressed.emit())
 	reset_container.add_child(reset_dev_btn)
+
+	# Level-up dialog (hidden by default)
+	level_up_overlay = ColorRect.new()
+	level_up_overlay.color = Color(0, 0, 0, 0.5)
+	level_up_overlay.anchor_right = 1.0
+	level_up_overlay.anchor_bottom = 1.0
+	level_up_overlay.visible = false
+	add_child(level_up_overlay)
+
+	level_up_panel = PanelContainer.new()
+	level_up_panel.anchor_left = 0.5
+	level_up_panel.anchor_right = 0.5
+	level_up_panel.anchor_top = 0.5
+	level_up_panel.anchor_bottom = 0.5
+	level_up_panel.offset_left = -150.0
+	level_up_panel.offset_right = 150.0
+	level_up_panel.offset_top = -80.0
+	level_up_panel.offset_bottom = 80.0
+	level_up_overlay.add_child(level_up_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.layout_mode = 2
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	level_up_panel.add_child(vbox)
+
+	level_up_title = Label.new()
+	level_up_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	level_up_title.add_theme_font_size_override("font_size", 24)
+	vbox.add_child(level_up_title)
+
+	level_up_message = Label.new()
+	level_up_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	level_up_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(level_up_message)
+
+	level_up_button = Button.new()
+	level_up_button.text = "Claim Reward"
+	level_up_button.focus_mode = Control.FOCUS_NONE
+	level_up_button.pressed.connect(_on_level_up_dismissed)
+	vbox.add_child(level_up_button)
+
+
+func show_level_up_dialog(level: int, message: String) -> void:
+	level_up_title.text = "LEVEL UP!"
+	level_up_message.text = "You are now level " + str(level) + ".\n" + message
+	level_up_overlay.visible = true
+
+
+func _on_level_up_dismissed() -> void:
+	level_up_overlay.visible = false
+	level_up_dismissed.emit()
+
+
+func is_level_up_visible() -> bool:
+	return level_up_overlay.visible
 
 
 func update_game_timer(total_seconds: float) -> void:
