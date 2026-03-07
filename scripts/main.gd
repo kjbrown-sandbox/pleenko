@@ -974,8 +974,8 @@ func _gold_upgrades() -> Array[Dictionary]:
 			entry["cap_state"] = "available" if orange_coin_total >= row_cap_cost else "too_expensive"
 		upgrades.append(entry)
 
-	# Bucket Value +1 (level 4)
-	if player_level >= 4:
+	# Bucket Value +1 (level 2)
+	if player_level >= 2:
 		var bv_state := "available"
 		if bucket_value_level >= bucket_value_cap:
 			bv_state = "maxed"
@@ -993,8 +993,8 @@ func _gold_upgrades() -> Array[Dictionary]:
 			entry["cap_state"] = "available" if orange_coin_total >= value_cap_cost else "too_expensive"
 		upgrades.append(entry)
 
-	# Drop Rate (level 2)
-	if player_level >= 2:
+	# Drop Rate (level 4)
+	if player_level >= 4:
 		var dr_state := "available"
 		if drop_rate_level >= drop_rate_cap:
 			dr_state = "maxed"
@@ -1055,8 +1055,8 @@ func _orange_upgrades() -> Array[Dictionary]:
 			entry["cap_state"] = "available" if red_coin_total >= orange_row_cap_cost else "too_expensive"
 		upgrades.append(entry)
 
-	# Bucket Value +1 (level 12)
-	if player_level >= 12:
+	# Bucket Value +1 (level 11)
+	if player_level >= 11:
 		var bv_state := "available"
 		if orange_bucket_value_level >= orange_bucket_value_cap:
 			bv_state = "maxed"
@@ -1074,8 +1074,8 @@ func _orange_upgrades() -> Array[Dictionary]:
 			entry["cap_state"] = "available" if red_coin_total >= orange_value_cap_cost else "too_expensive"
 		upgrades.append(entry)
 
-	# Drop Rate (level 11)
-	if player_level >= 11:
+	# Drop Rate (level 12)
+	if player_level >= 12:
 		var dr_state := "available"
 		if orange_drop_rate_level >= orange_drop_rate_cap:
 			dr_state = "maxed"
@@ -1153,8 +1153,8 @@ func _red_upgrades() -> Array[Dictionary]:
 		"state": row_state,
 	})
 
-	# Bucket Value +1 (level 19)
-	if player_level >= 19:
+	# Bucket Value +1 (level 18)
+	if player_level >= 18:
 		var bv_state := "available"
 		if red_bucket_value_level >= red_bucket_value_cap:
 			bv_state = "maxed"
@@ -1167,8 +1167,8 @@ func _red_upgrades() -> Array[Dictionary]:
 			"state": bv_state,
 		})
 
-	# Drop Rate (level 18)
-	if player_level >= 18:
+	# Drop Rate (level 19)
+	if player_level >= 19:
 		var dr_state := "available"
 		if red_drop_rate_level >= red_drop_rate_cap:
 			dr_state = "maxed"
@@ -1577,12 +1577,12 @@ func _on_level_up(level: int) -> void:
 			message = "You have unlocked the shop."
 			action = "shop"
 		2:
-			message = "You have unlocked Drop Rate in the shop."
+			message = "You have unlocked Bucket Value in the shop."
 		3:
 			message = "An ORANGE ball will be dropped!"
 			action = "orange_ball"
 		4:
-			message = "You have unlocked Bucket Value in the shop."
+			message = "You have unlocked Drop Rate in the shop."
 		5:
 			message = "An ORANGE ball will be dropped!"
 			action = "orange_ball"
@@ -1600,9 +1600,9 @@ func _on_level_up(level: int) -> void:
 		10:
 			message = "You have unlocked Add 2 Rows for Orange."
 		11:
-			message = "You have unlocked Drop Rate for Orange."
-		12:
 			message = "You have unlocked Bucket Value for Orange."
+		12:
+			message = "You have unlocked Drop Rate for Orange."
 		13:
 			message = "A RED coin will be dropped on the Orange board!"
 			action = "red_coin"
@@ -1617,9 +1617,9 @@ func _on_level_up(level: int) -> void:
 			message = "You have unlocked Red Buckets on the Orange board!"
 			action = "red_buckets"
 		18:
-			message = "You have unlocked Drop Rate for Red."
-		19:
 			message = "You have unlocked Bucket Value for Red."
+		19:
+			message = "You have unlocked Drop Rate for Red."
 		20:
 			message = "You have unlocked Queue for Red."
 		_:
