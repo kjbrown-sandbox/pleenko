@@ -56,6 +56,9 @@ var autodropper_plus_btn: Button
 var _autodropper_free: int = 0
 var _autodropper_total: int = 0
 
+# Level label to the left of progress bar
+var level_lvl_label: Label
+
 
 func _ready() -> void:
 	gold_tab.pressed.connect(func(): board_tab_selected.emit(0))    # GOLD
@@ -121,12 +124,16 @@ func _ready() -> void:
 	drop_unrefined_btn.focus_mode = Control.FOCUS_NONE
 	drop_unrefined_btn.visible = false
 	drop_unrefined_btn.pressed.connect(func(): drop_unrefined_pressed.emit())
+	drop_unrefined_btn.mouse_entered.connect(func(): show_helper_text("Hotkey: spacebar"))
+	drop_unrefined_btn.mouse_exited.connect(func(): hide_helper_text())
 	spawn_btn_container.add_child(drop_unrefined_btn)
 
 	drop_coin_btn = Button.new()
 	drop_coin_btn.text = "Drop Coin"
 	drop_coin_btn.focus_mode = Control.FOCUS_NONE
 	drop_coin_btn.pressed.connect(func(): drop_coin_pressed.emit())
+	drop_coin_btn.mouse_entered.connect(func(): show_helper_text("Hotkey: spacebar"))
+	drop_coin_btn.mouse_exited.connect(func(): hide_helper_text())
 	spawn_btn_container.add_child(drop_coin_btn)
 
 	# Autodropper row (hidden by default)
@@ -175,6 +182,23 @@ func _ready() -> void:
 	helper_text_label = Label.new()
 	helper_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	helper_text_panel.add_child(helper_text_label)
+
+	# Hide the old level label in the upgrade panel
+	level_label.visible = false
+
+	# "LVL X" label to the left of the progress bar
+	level_lvl_label = Label.new()
+	level_lvl_label.text = "LVL 0"
+	level_lvl_label.anchor_left = 0.0
+	level_lvl_label.anchor_right = 0.0
+	level_lvl_label.anchor_top = 1.0
+	level_lvl_label.anchor_bottom = 1.0
+	level_lvl_label.offset_left = 20.0
+	level_lvl_label.offset_top = -30.0
+	level_lvl_label.offset_right = 75.0
+	level_lvl_label.offset_bottom = -10.0
+	level_lvl_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	add_child(level_lvl_label)
 
 	# Level-up dialog (hidden by default)
 	level_up_overlay = ColorRect.new()
@@ -240,35 +264,24 @@ func update_game_timer(total_seconds: float) -> void:
 	game_timer_label.text = str(hours) + ":" + str(mins).pad_zeros(2) + ":" + str(s).pad_zeros(2)
 
 
-var show_coin_max: bool = false
-
-func update_coins(total: int, max_coins: int = 0) -> void:
-	if show_coin_max and max_coins > 0:
-		coin_label.text = "Gold: " + str(total) + "/" + str(max_coins)
-	else:
-		coin_label.text = "Gold: " + str(total)
+func update_coins(total: int, max_coins: int) -> void:
+	coin_label.text = "Gold: " + str(total) + "/" + str(max_coins)
 
 
 func update_unrefined_orange(total: int) -> void:
 	unrefined_orange_label.text = "Unrefined: " + str(total)
 
 
-func update_orange_coins(total: int) -> void:
-	orange_coin_label.text = "Orange: " + str(total)
+func update_orange_coins(total: int, max_coins: int) -> void:
+	orange_coin_label.text = "Orange: " + str(total) + "/" + str(max_coins)
 
 
-func update_red_coins(total: int) -> void:
-	red_coin_label.text = "Red: " + str(total)
+func update_red_coins(total: int, max_coins: int) -> void:
+	red_coin_label.text = "Red: " + str(total) + "/" + str(max_coins)
 
 
-func update_level(level: int, next_threshold: int) -> void:
-	if next_threshold > 0:
-		level_label.text = "Level: " + str(level) + " (next: " + str(next_threshold) + ")"
-	else:
-		level_label.text = "Level: " + str(level) + " (max)"
-
-
-func update_level_progress(current: int, next_threshold: int) -> void:
+func update_level_progress(level: int, current: int, next_threshold: int) -> void:
+	level_lvl_label.text = "LVL " + str(level)
 	if next_threshold <= 0:
 		level_progress_bar.max_value = 1.0
 		level_progress_bar.value = 1.0
