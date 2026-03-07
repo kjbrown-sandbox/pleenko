@@ -24,6 +24,7 @@ const RED_ROW_GATE := 12
 var num_rows: int = 0
 var value_bonus: int = 0
 var orange_buckets_enabled: bool = false
+var red_buckets_enabled: bool = false
 var selection_indicator: MeshInstance3D
 
 var coin_scene: PackedScene = preload("res://scenes/coin.tscn")
@@ -238,8 +239,12 @@ func _bucket_value(index: int) -> int:
 
 
 func _bucket_type(index: int) -> BucketType:
-	# Non-gold boards always return their own type
+	# Orange board: can have red buckets when enabled
 	if board_type == BoardType.ORANGE:
+		if red_buckets_enabled:
+			var base := _bucket_value(index)
+			if num_rows >= ORANGE_ROW_GATE and base >= ORANGE_THRESHOLD:
+				return BucketType.RED
 		return BucketType.ORANGE
 	if board_type == BoardType.RED:
 		return BucketType.RED

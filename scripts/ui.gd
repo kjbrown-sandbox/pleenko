@@ -6,6 +6,7 @@ signal reset_pressed
 signal reset_dev_pressed
 signal level_up_dismissed
 signal drop_unrefined_pressed
+signal drop_coin_pressed
 signal speed_toggle_pressed
 
 @onready var coin_label: Label = $CoinLabel
@@ -27,6 +28,9 @@ signal speed_toggle_pressed
 
 # Tracks live widgets by action name for targeted updates
 var current_entries: Dictionary = {}
+
+# Spawn-area buttons
+var drop_unrefined_btn: Button
 
 # Level-up dialog
 var level_up_overlay: ColorRect
@@ -71,20 +75,31 @@ func _ready() -> void:
 	speed_btn.pressed.connect(func(): speed_toggle_pressed.emit())
 	reset_container.add_child(speed_btn)
 
-	# Drop unrefined button — near spawn point, 50px to the left of center
-	var drop_unrefined_btn := Button.new()
+	# Spawn-area buttons — centered above the board
+	var spawn_btn_container := VBoxContainer.new()
+	spawn_btn_container.anchor_left = 0.5
+	spawn_btn_container.anchor_right = 0.5
+	spawn_btn_container.anchor_top = 0.0
+	spawn_btn_container.anchor_bottom = 0.0
+	spawn_btn_container.offset_left = -65.0
+	spawn_btn_container.offset_right = 65.0
+	spawn_btn_container.offset_top = 20.0
+	spawn_btn_container.offset_bottom = 80.0
+	add_child(spawn_btn_container)
+
+	drop_unrefined_btn = Button.new()
 	drop_unrefined_btn.text = "Drop Unrefined (1)"
 	drop_unrefined_btn.focus_mode = Control.FOCUS_NONE
-	drop_unrefined_btn.anchor_left = 0.5
-	drop_unrefined_btn.anchor_right = 0.5
-	drop_unrefined_btn.anchor_top = 0.0
-	drop_unrefined_btn.anchor_bottom = 0.0
-	drop_unrefined_btn.offset_left = -180.0
-	drop_unrefined_btn.offset_right = -50.0
-	drop_unrefined_btn.offset_top = 20.0
-	drop_unrefined_btn.offset_bottom = 45.0
+	drop_unrefined_btn.visible = false
 	drop_unrefined_btn.pressed.connect(func(): drop_unrefined_pressed.emit())
-	add_child(drop_unrefined_btn)
+	spawn_btn_container.add_child(drop_unrefined_btn)
+
+	var drop_coin_btn := Button.new()
+	drop_coin_btn.text = "Drop Coin"
+	drop_coin_btn.focus_mode = Control.FOCUS_NONE
+	drop_coin_btn.tooltip_text = "Hotkey: spacebar"
+	drop_coin_btn.pressed.connect(func(): drop_coin_pressed.emit())
+	spawn_btn_container.add_child(drop_coin_btn)
 
 	# Level-up dialog (hidden by default)
 	level_up_overlay = ColorRect.new()
@@ -203,6 +218,10 @@ func show_unrefined_orange() -> void:
 	unrefined_orange_label.visible = true
 
 
+func show_drop_unrefined_button() -> void:
+	drop_unrefined_btn.visible = true
+
+
 func show_red_currency() -> void:
 	red_coin_label.visible = true
 	red_tab.visible = true
@@ -235,6 +254,28 @@ func show_upgrades_for_board(header: String, upgrades: Array[Dictionary]) -> voi
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(func(): upgrade_action.emit(action))
+
+		# Color based on state
+		var state: String = upgrade.get("state", "available")
+		match state:
+			"available":
+				var style := StyleBoxFlat.new()
+				style.bg_color = Color(0.3, 0.55, 0.3)
+				style.set_corner_radius_all(3)
+				btn.add_theme_stylebox_override("normal", style)
+				var hover_style := StyleBoxFlat.new()
+				hover_style.bg_color = Color(0.35, 0.65, 0.35)
+				hover_style.set_corner_radius_all(3)
+				btn.add_theme_stylebox_override("hover", hover_style)
+			"maxed":
+				var style := StyleBoxFlat.new()
+				style.bg_color = Color(0.2, 0.2, 0.2)
+				style.set_corner_radius_all(3)
+				btn.add_theme_stylebox_override("normal", style)
+				btn.add_theme_stylebox_override("hover", style)
+				btn.disabled = true
+			# "too_expensive": keep default gray
+
 		row.add_child(btn)
 
 		# Cost label
@@ -271,6 +312,38 @@ func show_upgrades_for_board(header: String, upgrades: Array[Dictionary]) -> voi
 				"row": row,
 				"cap_button": cap_btn,
 			}
+
+
+## Update the visual state of a single upgrade button without rebuilding the list.
+func update_entry_state(action_name: String, state: String) -> void:
+	if not current_entries.has(action_name):
+		return
+	var entry: Dictionary = current_entries[action_name]
+	if not entry.has("button") or entry["button"] == null:
+		return
+	var btn: Button = entry["button"]
+	match state:
+		"available":
+			btn.disabled = false
+			var style := StyleBoxFlat.new()
+			style.bg_color = Color(0.3, 0.55, 0.3)
+			style.set_corner_radius_all(3)
+			btn.add_theme_stylebox_override("normal", style)
+			var hover_style := StyleBoxFlat.new()
+			hover_style.bg_color = Color(0.35, 0.65, 0.35)
+			hover_style.set_corner_radius_all(3)
+			btn.add_theme_stylebox_override("hover", hover_style)
+		"maxed":
+			var style := StyleBoxFlat.new()
+			style.bg_color = Color(0.2, 0.2, 0.2)
+			style.set_corner_radius_all(3)
+			btn.add_theme_stylebox_override("normal", style)
+			btn.add_theme_stylebox_override("hover", style)
+			btn.disabled = true
+		"too_expensive":
+			btn.disabled = false
+			btn.remove_theme_stylebox_override("normal")
+			btn.remove_theme_stylebox_override("hover")
 
 
 ## Update just the cost text of a single entry without rebuilding the whole list.
