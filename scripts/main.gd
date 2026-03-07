@@ -207,6 +207,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_drop_unrefined_on_gold()
 	if event.is_action_pressed("quicksave"):
 		_quicksave()
+	if event is InputEventKey and event.pressed and not event.echo:
+		match event.keycode:
+			KEY_LEFT:
+				_select_prev_board()
+			KEY_RIGHT:
+				_select_next_board()
 
 
 func _process(delta: float) -> void:
@@ -252,6 +258,29 @@ func select_board(board: PlinkoBoard) -> void:
 	_refresh_upgrade_panel()
 	ui.update_spawn_buttons(board.board_type)
 	ui.update_autodropper_row(board, gold_autodroppers, orange_autodroppers, autodropper_level)
+
+
+func _get_board_order() -> Array[PlinkoBoard]:
+	var boards: Array[PlinkoBoard] = [regular_board]
+	if orange_board_unlocked and orange_board:
+		boards.append(orange_board)
+	if red_board_unlocked and red_board:
+		boards.append(red_board)
+	return boards
+
+
+func _select_prev_board() -> void:
+	var boards := _get_board_order()
+	var idx := boards.find(selected_board)
+	if idx > 0:
+		select_board(boards[idx - 1])
+
+
+func _select_next_board() -> void:
+	var boards := _get_board_order()
+	var idx := boards.find(selected_board)
+	if idx >= 0 and idx < boards.size() - 1:
+		select_board(boards[idx + 1])
 
 
 func _drop_status_text(board: PlinkoBoard) -> String:

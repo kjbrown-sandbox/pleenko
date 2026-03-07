@@ -64,6 +64,12 @@ func _ready() -> void:
 	gold_tab.pressed.connect(func(): board_tab_selected.emit(0))    # GOLD
 	orange_tab.pressed.connect(func(): board_tab_selected.emit(1))  # ORANGE
 	red_tab.pressed.connect(func(): board_tab_selected.emit(2))     # RED
+	gold_tab.mouse_entered.connect(func(): show_helper_text("Hotkeys: <- and -> arrow keys"))
+	gold_tab.mouse_exited.connect(func(): hide_helper_text())
+	orange_tab.mouse_entered.connect(func(): show_helper_text("Hotkeys: <- and -> arrow keys"))
+	orange_tab.mouse_exited.connect(func(): hide_helper_text())
+	red_tab.mouse_entered.connect(func(): show_helper_text("Hotkeys: <- and -> arrow keys"))
+	red_tab.mouse_exited.connect(func(): hide_helper_text())
 
 	# Reset buttons container — left side, vertically centered
 	var reset_container := VBoxContainer.new()
