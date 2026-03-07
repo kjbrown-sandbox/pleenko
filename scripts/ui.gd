@@ -83,8 +83,8 @@ func _ready() -> void:
 	spawn_btn_container.anchor_bottom = 0.0
 	spawn_btn_container.offset_left = -65.0
 	spawn_btn_container.offset_right = 65.0
-	spawn_btn_container.offset_top = 20.0
-	spawn_btn_container.offset_bottom = 80.0
+	spawn_btn_container.offset_top = 2.0
+	spawn_btn_container.offset_bottom = 62.0
 	add_child(spawn_btn_container)
 
 	drop_unrefined_btn = Button.new()

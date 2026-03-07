@@ -760,8 +760,8 @@ func _gold_upgrades() -> Array[Dictionary]:
 			"state": q_state,
 		})
 
-	# Autodropper (level 5)
-	if player_level >= 5:
+	# Autodropper (level 6)
+	if player_level >= 6:
 		var ad_state := "available"
 		if autodropper_level >= autodropper_cap:
 			ad_state = "maxed"
@@ -794,8 +794,8 @@ func _orange_upgrades() -> Array[Dictionary]:
 		"state": "available" if orange_coin_total >= coin_max_up_cost else "too_expensive",
 	})
 
-	# Add 2 Rows (level 7)
-	if player_level >= 7:
+	# Add 2 Rows (level 9)
+	if player_level >= 9:
 		var row_state := "available"
 		if orange_board and orange_board.num_rows >= orange_row_cap:
 			row_state = "maxed"
@@ -809,8 +809,8 @@ func _orange_upgrades() -> Array[Dictionary]:
 			"state": row_state,
 		})
 
-	# Bucket Value +2 (level 9)
-	if player_level >= 9:
+	# Bucket Value +2 (level 10)
+	if player_level >= 10:
 		var bv_state := "available"
 		if orange_bucket_value_level >= orange_bucket_value_cap:
 			bv_state = "maxed"
@@ -823,8 +823,8 @@ func _orange_upgrades() -> Array[Dictionary]:
 			"state": bv_state,
 		})
 
-	# Drop Rate (level 10)
-	if player_level >= 10:
+	# Drop Rate (level 11)
+	if player_level >= 11:
 		var dr_state := "available"
 		if orange_drop_rate_level >= orange_drop_rate_cap:
 			dr_state = "maxed"
@@ -837,8 +837,8 @@ func _orange_upgrades() -> Array[Dictionary]:
 			"state": dr_state,
 		})
 
-	# Queue +1 (level 11)
-	if player_level >= 11:
+	# Queue +1 (level 12)
+	if player_level >= 12:
 		var q_state := "available" if orange_coin_total >= orange_queue_up_cost else "too_expensive"
 		upgrades.append({
 			"action": "orange_queue_up",
@@ -1141,19 +1141,25 @@ func _on_level_up(level: int) -> void:
 		4:
 			message = "You have unlocked Queue in the shop."
 		5:
-			message = "You have unlocked Autodropper in the shop."
+			message = "An ORANGE ball will be dropped!"
+			action = "orange_ball"
 		6:
+			message = "You have unlocked Autodropper in the shop."
+		7:
+			message = "An ORANGE ball will be dropped!"
+			action = "orange_ball"
+		8:
 			message = "You have unlocked Orange Buckets!"
 			action = "orange_buckets"
-		7:
-			message = "You have unlocked Add 2 Rows for Orange."
-		8:
-			message = "You have unlocked Bucket Value for Orange."
 		9:
-			message = "You have unlocked Drop Rate for Orange."
+			message = "You have unlocked Add 2 Rows for Orange."
 		10:
-			message = "You have unlocked Queue for Orange."
+			message = "You have unlocked Bucket Value for Orange."
 		11:
+			message = "You have unlocked Drop Rate for Orange."
+		12:
+			message = "You have unlocked Queue for Orange."
+		13:
 			message = "You have unlocked Red Buckets on the Orange board!"
 			action = "red_buckets"
 		_:
@@ -1514,7 +1520,7 @@ func _load_game() -> void:
 			red_board._build_board()
 
 	# --- Refresh all UI ---
-	if player_level >= 7:
+	if player_level >= 8:
 		ui.show_coin_max = true
 	if regular_board.orange_buckets_enabled:
 		ui.show_unrefined_orange()

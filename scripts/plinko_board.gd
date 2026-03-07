@@ -18,7 +18,7 @@ const BUCKET_OFFSET_Y := 0.6
 const LABEL_OFFSET_Y := 0.35
 const ORANGE_THRESHOLD := 4
 const RED_THRESHOLD := 7
-const ORANGE_ROW_GATE := 8
+const ORANGE_ROW_GATE := 6
 const RED_ROW_GATE := 12
 
 var num_rows: int = 0
