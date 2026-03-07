@@ -615,11 +615,11 @@ func _gold_upgrades() -> Array[Dictionary]:
 			entry["cap_hover"] = "Row Cap +2: " + str(row_cap_cost) + " orange"
 		upgrades.append(entry)
 
-	# Bucket Value +1 (level 2)
+	# Bucket Value +2 (level 2)
 	if player_level >= 2:
 		var entry: Dictionary = {
 			"action": "bucket_value",
-			"label": "Bucket Value +1",
+			"label": "Bucket Value +2",
 			"cost_text": "Cost: " + str(bucket_value_cost) + " | Lvl: " + str(bucket_value_level) + "/" + str(bucket_value_cap),
 		}
 		if orange_board_unlocked:
@@ -677,7 +677,7 @@ func _orange_upgrades() -> Array[Dictionary]:
 	if player_level >= 15:
 		upgrades.append({
 			"action": "orange_bucket_value",
-			"label": "Bucket Value +1",
+			"label": "Bucket Value +2",
 			"cost_text": "Cost: " + str(orange_bucket_value_cost) + " | Lvl: " + str(orange_bucket_value_level),
 		})
 
@@ -771,7 +771,7 @@ func _buy_regular_upgrade() -> void:
 	ui.update_coins(coin_total, coin_max)
 
 
-# === Bucket Value +1 (gold currency, gold panel, capped) ===
+# === Bucket Value +2 (gold currency, gold panel, capped) ===
 
 func _buy_bucket_value() -> void:
 	if coin_total < bucket_value_cost:
@@ -780,7 +780,7 @@ func _buy_bucket_value() -> void:
 		return
 
 	coin_total -= bucket_value_cost
-	bucket_value_level += 1
+	bucket_value_level += 2
 
 	regular_board.value_bonus = bucket_value_level
 	regular_board._build_board()
