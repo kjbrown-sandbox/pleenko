@@ -1186,7 +1186,7 @@ func _on_level_up_dismissed() -> void:
 	# Perform the action for this level
 	match entry["action"]:
 		"orange_ball":
-			_add_to_gold_queue(5)
+			_add_to_gold_queue(3)
 		"orange_buckets":
 			regular_board.orange_buckets_enabled = true
 			regular_board._build_board()
