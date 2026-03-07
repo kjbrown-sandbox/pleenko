@@ -244,6 +244,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				_select_prev_board()
 			KEY_RIGHT:
 				_select_next_board()
+			KEY_P:
+				coin_total = mini(coin_total + 1, coin_max)
+				ui.update_coins(coin_total, coin_max)
+				_check_level_up()
 
 
 func _process(delta: float) -> void:

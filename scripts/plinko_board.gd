@@ -273,6 +273,8 @@ func _display_value(index: int) -> int:
 	if board_type == BoardType.GOLD or board_type == BoardType.ORANGE:
 		if board_type == BoardType.GOLD and _bucket_type(index) == BucketType.ORANGE:
 			distance = distance - (ORANGE_THRESHOLD - 1)
+		if board_type == BoardType.ORANGE and _bucket_type(index) == BucketType.RED:
+			distance = distance - (ORANGE_THRESHOLD - 1)
 		return distance * (1 + value_bonus) + 1
 	return _bucket_value(index)
 
