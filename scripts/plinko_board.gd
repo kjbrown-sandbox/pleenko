@@ -147,7 +147,11 @@ func drop_coin(value_multiplier: int = 1) -> bool:
 	# Add coin to the scene tree (parent will be the scene root)
 	get_tree().root.add_child(coin)
 
-	coin.landed.connect(func(_value: int): coin_landed.emit(reward, b_type))
+	coin.landed.connect(func(_value: int):
+		coin_landed.emit(reward, b_type)
+		if value_multiplier > 1:
+			_show_floating_text(col_index, value_multiplier, reward)
+	)
 	coin.animate(waypoints, reward)
 
 	return true
@@ -284,3 +288,22 @@ func _reward_value(index: int) -> int:
 	if board_type == BoardType.GOLD and _bucket_type(index) == BucketType.RED:
 		return 1
 	return _display_value(index)
+
+
+func _show_floating_text(bucket_index: int, multiplier: int, reward: int) -> void:
+	var label := Label3D.new()
+	label.text = "x" + str(multiplier) + " = " + str(reward)
+	label.font_size = 40
+	label.position = _bucket_position(bucket_index) + Vector3(0.0, 0.3, 0.05)
+	label.modulate = Color(1, 1, 1, 1)
+
+	# Tint red for high multipliers (unrefined red)
+	if multiplier >= 9:
+		label.modulate = Color(1, 0.3, 0.3, 1)
+
+	board.add_child(label)
+
+	var tween := create_tween()
+	tween.tween_property(label, "position:y", label.position.y + 1.5, 1.2)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.6).set_delay(0.6)
+	tween.tween_callback(label.queue_free)
