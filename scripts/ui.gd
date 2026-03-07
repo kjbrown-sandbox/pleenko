@@ -3,7 +3,8 @@ extends CanvasLayer
 signal upgrade_action(action_name: String)
 signal board_tab_selected(board_type: int)  # PlinkoBoard.BoardType value
 signal reset_pressed
-signal reset_dev_pressed
+signal reset_orange_pressed
+signal reset_red_pressed
 signal level_up_dismissed
 signal drop_unrefined_pressed
 signal drop_coin_pressed
@@ -89,11 +90,17 @@ func _ready() -> void:
 	reset_btn.pressed.connect(func(): reset_pressed.emit())
 	reset_container.add_child(reset_btn)
 
-	var reset_dev_btn := Button.new()
-	reset_dev_btn.text = "Reset(3)"
-	reset_dev_btn.focus_mode = Control.FOCUS_NONE
-	reset_dev_btn.pressed.connect(func(): reset_dev_pressed.emit())
-	reset_container.add_child(reset_dev_btn)
+	var reset_orange_btn := Button.new()
+	reset_orange_btn.text = "Reset Orange"
+	reset_orange_btn.focus_mode = Control.FOCUS_NONE
+	reset_orange_btn.pressed.connect(func(): reset_orange_pressed.emit())
+	reset_container.add_child(reset_orange_btn)
+
+	var reset_red_btn := Button.new()
+	reset_red_btn.text = "Reset Red"
+	reset_red_btn.focus_mode = Control.FOCUS_NONE
+	reset_red_btn.pressed.connect(func(): reset_red_pressed.emit())
+	reset_container.add_child(reset_red_btn)
 
 	var speed_btn := Button.new()
 	speed_btn.text = "Speed x10"

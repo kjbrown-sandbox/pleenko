@@ -186,7 +186,8 @@ func _ready() -> void:
 	ui.upgrade_action.connect(_on_upgrade_action)
 	ui.board_tab_selected.connect(_on_board_tab_selected)
 	ui.reset_pressed.connect(_reset_game)
-	ui.reset_dev_pressed.connect(_reset_game_dev)
+	ui.reset_orange_pressed.connect(_reset_orange)
+	ui.reset_red_pressed.connect(_reset_red)
 	ui.level_up_dismissed.connect(_on_level_up_dismissed)
 	ui.drop_unrefined_pressed.connect(_drop_unrefined_on_gold)
 	ui.drop_coin_pressed.connect(_drop_on_selected_board)
@@ -1388,17 +1389,97 @@ func _reset_game() -> void:
 	get_tree().reload_current_scene()
 
 
-func _reset_game_dev() -> void:
-	# Write a save with level-3 testing state, then reload
+func _reset_orange() -> void:
+	# Level 7 (just unlocked orange buckets), all gold upgrades <= 100 purchased
 	var data := {
-		"coin_total": 100,
-		"player_level": 3,
-		"regular_upgrade_cost": 5000,
-		"bucket_value_cost": 55,
-		"bucket_value_delta": 35,
-		"bucket_value_level": 3,
-		"regular_board_num_rows": 8,
-		"regular_board_value_bonus": 3,
+		"player_level": 7,
+		"coin_total": 400,
+		# Gold rows: bought at 6, 60 → 6 rows
+		"regular_upgrade_cost": 600,
+		"regular_board_num_rows": 6,
+		# Bucket value: bought at 10, 15, 30, 55, 90 → level 5 (cap)
+		"bucket_value_level": 5,
+		"bucket_value_cost": 135,
+		"bucket_value_delta": 55,
+		"regular_board_value_bonus": 5,
+		# Drop rate: bought at 10, 30, 70 → level 3
+		"drop_rate_level": 3,
+		"drop_rate_cost": 130,
+		"drop_rate_delta": 80,
+		"gold_cooldown_time": 1.024,
+		# Queue: bought at 10, 20, ..., 100 → max 10
+		"gold_queue_max": 10,
+		"gold_queue_up_cost": 110,
+		# Orange buckets enabled
+		"regular_board_orange_buckets_enabled": true,
+		"orange_board_unlocked": true,
+		"unrefined_orange": 50,
+	}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(data))
+	get_tree().reload_current_scene()
+
+
+func _reset_red() -> void:
+	# Level 15 (just unlocked red buckets on orange), all gold <= 500, all orange <= 60
+	var data := {
+		"player_level": 15,
+		"coin_total": 500,
+		"orange_coin_total": 60,
+		"unrefined_orange": 100,
+		# Gold rows: bought at 6, 60 → 6 rows
+		"regular_upgrade_cost": 600,
+		"regular_board_num_rows": 6,
+		"regular_board_value_bonus": 5,
+		"regular_board_orange_buckets_enabled": true,
+		# Bucket value (gold): 5 buys = cap
+		"bucket_value_level": 5,
+		"bucket_value_cost": 135,
+		"bucket_value_delta": 55,
+		# Drop rate (gold): 5 buys = cap, cooldown 2.0 * 0.8^5
+		"drop_rate_level": 5,
+		"drop_rate_cost": 310,
+		"drop_rate_delta": 120,
+		"gold_cooldown_time": 0.65536,
+		# Queue (gold): 50 buys (10, 20, ..., 500)
+		"gold_queue_max": 50,
+		"gold_queue_up_cost": 510,
+		# Gold Cap +500: 60 buys (1, 2, ..., 60)
+		"coin_max": 30500,
+		"coin_max_up_cost": 61,
+		# Cap raises (row/value/rate): 30 buys each (1, 3, 5, ..., 59)
+		"gold_row_cap": 66,
+		"bucket_value_cap": 35,
+		"drop_rate_cap": 35,
+		"row_cap_cost": 61,
+		"value_cap_cost": 61,
+		"rate_cap_cost": 61,
+		# Orange board
+		"orange_board_unlocked": true,
+		"orange_board_num_rows": 6,
+		"orange_board_value_bonus": 4,
+		"orange_board_red_buckets_enabled": true,
+		"orange_upgrade_cost": 600,
+		# Orange bucket value: 4 buys (10, 15, 30, 55)
+		"orange_bucket_value_level": 4,
+		"orange_bucket_value_cost": 90,
+		"orange_bucket_value_delta": 45,
+		# Orange drop rate: 2 buys (10, 30), cooldown 4.0 * 0.8^2
+		"orange_drop_rate_level": 2,
+		"orange_drop_rate_cost": 70,
+		"orange_drop_rate_delta": 60,
+		"orange_cooldown_time": 2.56,
+		# Orange queue: 3 buys (10, 20, 40)
+		"orange_queue_max": 3,
+		"orange_queue_up_cost": 70,
+		"orange_queue_up_delta": 40,
+		# Autodropper: 6 buys (10, 20, 30, 40, 50, 60)
+		"autodropper_level": 6,
+		"autodropper_cost": 70,
+		# Red board
+		"red_board_unlocked": true,
+		"red_queue": 1,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
