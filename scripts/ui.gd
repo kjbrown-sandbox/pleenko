@@ -10,6 +10,8 @@ signal drop_coin_pressed
 signal speed_toggle_pressed
 signal quicksave_pressed
 signal quickload_pressed
+signal autodropper_plus_pressed
+signal autodropper_minus_pressed
 
 @onready var coin_label: Label = $CoinLabel
 @onready var unrefined_orange_label: Label = $UnrefinedOrangeLabel
@@ -33,6 +35,7 @@ var current_entries: Dictionary = {}
 
 # Spawn-area buttons
 var drop_unrefined_btn: Button
+var drop_coin_btn: Button
 
 # Level-up dialog
 var level_up_overlay: ColorRect
@@ -40,6 +43,18 @@ var level_up_panel: PanelContainer
 var level_up_title: Label
 var level_up_message: Label
 var level_up_button: Button
+
+# Helper text panel
+var helper_text_panel: PanelContainer
+var helper_text_label: Label
+
+# Autodropper row
+var autodropper_row: HBoxContainer
+var autodropper_minus_btn: Button
+var autodropper_label: Label
+var autodropper_plus_btn: Button
+var _autodropper_free: int = 0
+var _autodropper_total: int = 0
 
 
 func _ready() -> void:
@@ -102,18 +117,64 @@ func _ready() -> void:
 	add_child(spawn_btn_container)
 
 	drop_unrefined_btn = Button.new()
-	drop_unrefined_btn.text = "Drop Unrefined (1)"
+	drop_unrefined_btn.text = "Drop Unrefined Orange"
 	drop_unrefined_btn.focus_mode = Control.FOCUS_NONE
 	drop_unrefined_btn.visible = false
 	drop_unrefined_btn.pressed.connect(func(): drop_unrefined_pressed.emit())
 	spawn_btn_container.add_child(drop_unrefined_btn)
 
-	var drop_coin_btn := Button.new()
+	drop_coin_btn = Button.new()
 	drop_coin_btn.text = "Drop Coin"
 	drop_coin_btn.focus_mode = Control.FOCUS_NONE
-	drop_coin_btn.tooltip_text = "Hotkey: spacebar"
 	drop_coin_btn.pressed.connect(func(): drop_coin_pressed.emit())
 	spawn_btn_container.add_child(drop_coin_btn)
+
+	# Autodropper row (hidden by default)
+	autodropper_row = HBoxContainer.new()
+	autodropper_row.visible = false
+	autodropper_row.alignment = BoxContainer.ALIGNMENT_CENTER
+
+	autodropper_minus_btn = Button.new()
+	autodropper_minus_btn.text = "[-]"
+	autodropper_minus_btn.focus_mode = Control.FOCUS_NONE
+	autodropper_minus_btn.pressed.connect(func(): autodropper_minus_pressed.emit())
+	autodropper_minus_btn.mouse_entered.connect(func(): _show_autodropper_hover())
+	autodropper_minus_btn.mouse_exited.connect(func(): hide_helper_text())
+	autodropper_row.add_child(autodropper_minus_btn)
+
+	autodropper_label = Label.new()
+	autodropper_label.text = "Autodroppers: 0"
+	autodropper_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	autodropper_label.mouse_entered.connect(func(): _show_autodropper_hover())
+	autodropper_label.mouse_exited.connect(func(): hide_helper_text())
+	autodropper_row.add_child(autodropper_label)
+
+	autodropper_plus_btn = Button.new()
+	autodropper_plus_btn.text = "[+]"
+	autodropper_plus_btn.focus_mode = Control.FOCUS_NONE
+	autodropper_plus_btn.pressed.connect(func(): autodropper_plus_pressed.emit())
+	autodropper_plus_btn.mouse_entered.connect(func(): _show_autodropper_hover())
+	autodropper_plus_btn.mouse_exited.connect(func(): hide_helper_text())
+	autodropper_row.add_child(autodropper_plus_btn)
+
+	spawn_btn_container.add_child(autodropper_row)
+
+	# Helper text panel — bottom-right corner, hidden by default
+	helper_text_panel = PanelContainer.new()
+	helper_text_panel.anchor_left = 1.0
+	helper_text_panel.anchor_right = 1.0
+	helper_text_panel.anchor_top = 1.0
+	helper_text_panel.anchor_bottom = 1.0
+	helper_text_panel.offset_left = -220.0
+	helper_text_panel.offset_right = -20.0
+	helper_text_panel.offset_top = -80.0
+	helper_text_panel.offset_bottom = -20.0
+	helper_text_panel.visible = false
+	add_child(helper_text_panel)
+
+	helper_text_label = Label.new()
+	helper_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	helper_text_panel.add_child(helper_text_label)
 
 	# Level-up dialog (hidden by default)
 	level_up_overlay = ColorRect.new()
@@ -236,6 +297,17 @@ func show_drop_unrefined_button() -> void:
 	drop_unrefined_btn.visible = true
 
 
+## Updates spawn button visibility based on which board is selected.
+## board_type: 0 = GOLD, 1 = ORANGE, 2 = RED
+func update_spawn_buttons(board_type: int) -> void:
+	match board_type:
+		1:  # ORANGE — only show unrefined drop
+			drop_coin_btn.visible = false
+			drop_unrefined_btn.visible = true
+		_:  # GOLD, RED, etc — show drop coin, hide unrefined unless unlocked
+			drop_coin_btn.visible = true
+
+
 func show_red_currency() -> void:
 	red_coin_label.visible = true
 	red_tab.visible = true
@@ -310,6 +382,18 @@ func show_upgrades_for_board(header: String, upgrades: Array[Dictionary]) -> voi
 			cap_btn.pressed.connect(func(): upgrade_action.emit(cap_action))
 			cap_btn.mouse_entered.connect(func(): cap_cost_label.text = cap_hover)
 			cap_btn.mouse_exited.connect(func(): cap_cost_label.text = "")
+
+			var cap_state: String = upgrade.get("cap_state", "too_expensive")
+			if cap_state == "available":
+				var cap_style := StyleBoxFlat.new()
+				cap_style.bg_color = Color(0.3, 0.55, 0.3)
+				cap_style.set_corner_radius_all(3)
+				cap_btn.add_theme_stylebox_override("normal", cap_style)
+				var cap_hover_style := StyleBoxFlat.new()
+				cap_hover_style.bg_color = Color(0.35, 0.65, 0.35)
+				cap_hover_style.set_corner_radius_all(3)
+				cap_btn.add_theme_stylebox_override("hover", cap_hover_style)
+
 			row.add_child(cap_btn)
 
 		upgrade_list.add_child(row)
@@ -368,6 +452,28 @@ func update_entry_cost(action_name: String, cost_text: String) -> void:
 			(entry["cost_label"] as Label).text = cost_text
 
 
+## Update the visual state of a cap-raise "+" button.
+func update_cap_state(cap_action: String, state: String) -> void:
+	if not current_entries.has(cap_action):
+		return
+	var entry: Dictionary = current_entries[cap_action]
+	if not entry.has("cap_button") or entry["cap_button"] == null:
+		return
+	var cap_btn: Button = entry["cap_button"]
+	if state == "available":
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.3, 0.55, 0.3)
+		style.set_corner_radius_all(3)
+		cap_btn.add_theme_stylebox_override("normal", style)
+		var hover_style := StyleBoxFlat.new()
+		hover_style.bg_color = Color(0.35, 0.65, 0.35)
+		hover_style.set_corner_radius_all(3)
+		cap_btn.add_theme_stylebox_override("hover", hover_style)
+	else:
+		cap_btn.remove_theme_stylebox_override("normal")
+		cap_btn.remove_theme_stylebox_override("hover")
+
+
 ## Update the hover text for a cap-raise button.
 func update_cap_hover(cap_action: String, hover_text: String) -> void:
 	if current_entries.has(cap_action):
@@ -383,3 +489,47 @@ func update_cap_hover(cap_action: String, hover_text: String) -> void:
 					cap_btn.mouse_exited.disconnect(conn["callable"])
 			cap_btn.mouse_entered.connect(func(): cap_cost_label.text = hover_text)
 			cap_btn.mouse_exited.connect(func(): cap_cost_label.text = "")
+
+
+func show_helper_text(text: String) -> void:
+	helper_text_label.text = text
+	helper_text_panel.visible = true
+
+
+func hide_helper_text() -> void:
+	helper_text_panel.visible = false
+
+
+func _show_autodropper_hover() -> void:
+	show_helper_text("You have " + str(_autodropper_free) + "/" + str(_autodropper_total) + " autodroppers free. An autodropper drops 1 coin/second.")
+
+
+## Updates the autodropper row visibility and label based on the current board.
+## board_type: 0 = GOLD, 1 = ORANGE, 2 = RED
+func update_autodropper_row(board: Node, gold_assigned: int, orange_assigned: int, total: int) -> void:
+	if total <= 0:
+		autodropper_row.visible = false
+		return
+
+	# Get board_type from the board node
+	var board_type: int = board.get("board_type") if board else 0
+
+	# Hide on RED board
+	if board_type == 2:
+		autodropper_row.visible = false
+		return
+
+	autodropper_row.visible = true
+	_autodropper_total = total
+	var free_pool := total - gold_assigned - orange_assigned
+
+	var assigned: int
+	if board_type == 1:  # ORANGE
+		assigned = orange_assigned
+	else:  # GOLD
+		assigned = gold_assigned
+
+	_autodropper_free = free_pool
+	autodropper_label.text = "Autodroppers: " + str(assigned)
+	autodropper_minus_btn.disabled = (assigned <= 0)
+	autodropper_plus_btn.disabled = (free_pool <= 0)

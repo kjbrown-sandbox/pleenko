@@ -131,7 +131,10 @@ func drop_coin(value_multiplier: int = 1) -> bool:
 	# Tint coin based on board type or multiplier
 	if value_multiplier > 1:
 		var mesh := coin.get_node("Mesh") as MeshInstance3D
-		mesh.material_override = orange_material
+		if board_type == BoardType.ORANGE:
+			mesh.material_override = red_material
+		else:
+			mesh.material_override = orange_material
 	else:
 		match board_type:
 			BoardType.ORANGE:
