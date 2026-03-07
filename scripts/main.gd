@@ -188,6 +188,8 @@ func _ready() -> void:
 	ui.drop_unrefined_pressed.connect(_drop_unrefined_on_gold)
 	ui.drop_coin_pressed.connect(_drop_on_selected_board)
 	ui.speed_toggle_pressed.connect(_toggle_speed)
+	ui.quicksave_pressed.connect(_quicksave)
+	ui.quickload_pressed.connect(_quickload)
 
 	# Load saved progress (must be after all setup)
 	_load_game()
@@ -198,6 +200,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_drop_on_selected_board()
 	if event.is_action_pressed("drop_unrefined"):
 		_drop_unrefined_on_gold()
+	if event.is_action_pressed("quicksave"):
+		_quicksave()
 
 
 func _process(delta: float) -> void:
@@ -1260,6 +1264,7 @@ func _adjust_camera() -> void:
 # === Save / Load ===
 
 const SAVE_PATH := "user://save.json"
+const QUICKSAVE_PATH := "user://quicksave.json"
 
 
 func _toggle_speed() -> void:
@@ -1301,7 +1306,7 @@ func _notification(what: int) -> void:
 		get_tree().quit()
 
 
-func _save_game() -> void:
+func _build_save_data() -> Dictionary:
 	var data := {
 		# Currencies
 		"elapsed_time": elapsed_time,
@@ -1385,10 +1390,36 @@ func _save_game() -> void:
 		data["red_board_num_rows"] = red_board.num_rows
 		data["red_board_value_bonus"] = red_board.value_bonus
 
-	var json_string := JSON.stringify(data)
+	return data
+
+
+func _save_game() -> void:
+	var json_string := JSON.stringify(_build_save_data())
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(json_string)
+
+
+func _quicksave() -> void:
+	var json_string := JSON.stringify(_build_save_data())
+	var file := FileAccess.open(QUICKSAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(json_string)
+		print("Quicksaved.")
+
+
+func _quickload() -> void:
+	if not FileAccess.file_exists(QUICKSAVE_PATH):
+		print("No quicksave found.")
+		return
+	var file := FileAccess.open(QUICKSAVE_PATH, FileAccess.READ)
+	if not file:
+		return
+	# Write quicksave contents to the main save path, then reload
+	var save_file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if save_file:
+		save_file.store_string(file.get_as_text())
+	get_tree().reload_current_scene()
 
 
 func _load_game() -> void:

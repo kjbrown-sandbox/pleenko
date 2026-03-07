@@ -8,6 +8,8 @@ signal level_up_dismissed
 signal drop_unrefined_pressed
 signal drop_coin_pressed
 signal speed_toggle_pressed
+signal quicksave_pressed
+signal quickload_pressed
 
 @onready var coin_label: Label = $CoinLabel
 @onready var unrefined_orange_label: Label = $UnrefinedOrangeLabel
@@ -74,6 +76,18 @@ func _ready() -> void:
 	speed_btn.focus_mode = Control.FOCUS_NONE
 	speed_btn.pressed.connect(func(): speed_toggle_pressed.emit())
 	reset_container.add_child(speed_btn)
+
+	var quicksave_btn := Button.new()
+	quicksave_btn.text = "Quicksave (S)"
+	quicksave_btn.focus_mode = Control.FOCUS_NONE
+	quicksave_btn.pressed.connect(func(): quicksave_pressed.emit())
+	reset_container.add_child(quicksave_btn)
+
+	var quickload_btn := Button.new()
+	quickload_btn.text = "Quickload"
+	quickload_btn.focus_mode = Control.FOCUS_NONE
+	quickload_btn.pressed.connect(func(): quickload_pressed.emit())
+	reset_container.add_child(quickload_btn)
 
 	# Spawn-area buttons — centered above the board
 	var spawn_btn_container := VBoxContainer.new()
