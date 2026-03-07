@@ -297,7 +297,7 @@ func update_coins(total: int, max_coins: int) -> void:
 
 
 func update_unrefined_orange(total: int) -> void:
-	unrefined_orange_label.text = "Unrefined: " + str(total)
+	unrefined_orange_label.text = "Unrefined Orange: " + str(total)
 
 
 func update_orange_coins(total: int, max_coins: int) -> void:
