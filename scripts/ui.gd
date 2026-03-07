@@ -13,11 +13,13 @@ signal quicksave_pressed
 signal quickload_pressed
 signal autodropper_plus_pressed
 signal autodropper_minus_pressed
+signal drop_unrefined_red_pressed
 
 @onready var coin_label: Label = $CoinLabel
 @onready var unrefined_orange_label: Label = $UnrefinedOrangeLabel
 @onready var orange_coin_label: Label = $OrangeCoinLabel
 @onready var red_coin_label: Label = $RedCoinLabel
+@onready var unrefined_red_label: Label = $UnrefinedRedLabel
 
 @onready var game_timer_label: Label = $GameTimerLabel
 @onready var level_progress_bar: ProgressBar = $LevelProgressBar
@@ -36,7 +38,9 @@ var current_entries: Dictionary = {}
 
 # Spawn-area buttons
 var drop_unrefined_btn: Button
+var drop_unrefined_red_btn: Button
 var drop_coin_btn: Button
+var _red_drop_btn_unlocked: bool = false
 
 # Level-up dialog
 var level_up_overlay: ColorRect
@@ -140,6 +144,15 @@ func _ready() -> void:
 	drop_unrefined_btn.mouse_entered.connect(func(): show_helper_text("Hotkey: spacebar"))
 	drop_unrefined_btn.mouse_exited.connect(func(): hide_helper_text())
 	spawn_btn_container.add_child(drop_unrefined_btn)
+
+	drop_unrefined_red_btn = Button.new()
+	drop_unrefined_red_btn.text = "Drop Unrefined Red"
+	drop_unrefined_red_btn.focus_mode = Control.FOCUS_NONE
+	drop_unrefined_red_btn.visible = false
+	drop_unrefined_red_btn.pressed.connect(func(): drop_unrefined_red_pressed.emit())
+	drop_unrefined_red_btn.mouse_entered.connect(func(): show_helper_text("Drops on current board: x9 on Gold, x3 on Orange"))
+	drop_unrefined_red_btn.mouse_exited.connect(func(): hide_helper_text())
+	spawn_btn_container.add_child(drop_unrefined_red_btn)
 
 	drop_coin_btn = Button.new()
 	drop_coin_btn.text = "Drop Coin"
@@ -330,8 +343,26 @@ func update_spawn_buttons(board_type: int) -> void:
 		1:  # ORANGE — only show unrefined drop
 			drop_coin_btn.visible = false
 			drop_unrefined_btn.visible = true
-		_:  # GOLD, RED, etc — show drop coin, hide unrefined unless unlocked
+			drop_unrefined_red_btn.visible = _red_drop_btn_unlocked
+		2:  # RED — show drop coin, hide unrefined buttons
 			drop_coin_btn.visible = true
+			drop_unrefined_red_btn.visible = false
+		_:  # GOLD — show drop coin, unrefined red if unlocked
+			drop_coin_btn.visible = true
+			drop_unrefined_red_btn.visible = _red_drop_btn_unlocked
+
+
+func show_unrefined_red() -> void:
+	unrefined_red_label.visible = true
+
+
+func update_unrefined_red(total: int) -> void:
+	unrefined_red_label.text = "Unrefined Red: " + str(total)
+
+
+func show_drop_unrefined_red_button() -> void:
+	_red_drop_btn_unlocked = true
+	drop_unrefined_red_btn.visible = true
 
 
 func show_red_currency() -> void:
