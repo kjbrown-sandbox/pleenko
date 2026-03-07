@@ -936,6 +936,7 @@ func _refresh_upgrade_states() -> void:
 		PlinkoBoard.BoardType.RED:
 			_update_state("orange_coin_max_up", false, red_coin_total >= orange_coin_max_up_cost)
 			_update_state("unrefined_orange_max_up", false, red_coin_total >= unrefined_orange_max_up_cost)
+			_update_state("auto_cap_up", false, red_coin_total >= auto_cap_cost)
 			var red_rows := red_board.num_rows if red_board else 0
 			_update_state("red_add_row", red_rows >= red_row_cap, red_coin_total >= red_upgrade_cost)
 			_update_state("red_bucket_value", red_bucket_value_level >= red_bucket_value_cap, red_coin_total >= red_bucket_value_cost)
@@ -1140,6 +1141,14 @@ func _red_upgrades() -> Array[Dictionary]:
 		"state": "available" if red_coin_total >= unrefined_orange_max_up_cost else "too_expensive",
 	})
 
+	# Autodropper Cap +2 (always available)
+	upgrades.append({
+		"action": "auto_cap_up",
+		"label": "Autodropper Cap +1",
+		"cost_text": "Cost: " + str(auto_cap_cost) + " red | Cap: " + str(autodropper_cap),
+		"state": "available" if red_coin_total >= auto_cap_cost else "too_expensive",
+	})
+
 	# Add Row (always available)
 	var row_state := "available"
 	if red_board and red_board.num_rows >= red_row_cap:
@@ -1242,6 +1251,8 @@ func _on_upgrade_action(action_name: String) -> void:
 			_buy_orange_coin_max_up()
 		"unrefined_orange_max_up":
 			_buy_unrefined_orange_max_up()
+		"auto_cap_up":
+			_buy_auto_cap_up()
 
 	_refresh_upgrade_panel()
 
@@ -1369,7 +1380,7 @@ func _buy_coin_max_up() -> void:
 
 	orange_coin_total -= coin_max_up_cost
 	coin_max += 500
-	coin_max_up_cost += 1
+	coin_max_up_cost += 2
 	ui.update_orange_coins(orange_coin_total, orange_coin_max)
 
 
@@ -1381,7 +1392,7 @@ func _buy_orange_coin_max_up() -> void:
 
 	red_coin_total -= orange_coin_max_up_cost
 	orange_coin_max += 500
-	orange_coin_max_up_cost += 1
+	orange_coin_max_up_cost += 2
 	ui.update_red_coins(red_coin_total, red_coin_max)
 	ui.update_orange_coins(orange_coin_total, orange_coin_max)
 
@@ -1394,9 +1405,21 @@ func _buy_unrefined_orange_max_up() -> void:
 
 	red_coin_total -= unrefined_orange_max_up_cost
 	unrefined_orange_max += 50
-	unrefined_orange_max_up_cost += 1
+	unrefined_orange_max_up_cost += 2
 	ui.update_red_coins(red_coin_total, red_coin_max)
 	_refresh_upgrade_header()
+
+
+# === Autodropper Cap +2 (red currency, red panel) ===
+
+func _buy_auto_cap_up() -> void:
+	if red_coin_total < auto_cap_cost:
+		return
+
+	red_coin_total -= auto_cap_cost
+	autodropper_cap += 1
+	auto_cap_cost += 2
+	ui.update_red_coins(red_coin_total, red_coin_max)
 
 
 # === Orange board upgrades ===
