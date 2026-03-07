@@ -24,6 +24,7 @@ signal drop_unrefined_red_pressed
 @onready var game_timer_label: Label = $GameTimerLabel
 @onready var level_progress_bar: ProgressBar = $LevelProgressBar
 @onready var level_progress_label: Label = $LevelProgressLabel
+@onready var upgrade_panel: PanelContainer = $UpgradePanel
 @onready var header_label: Label = $UpgradePanel/VBoxContainer/HeaderLabel
 @onready var level_label: Label = $UpgradePanel/VBoxContainer/LevelLabel
 @onready var upgrade_list: VBoxContainer = $UpgradePanel/VBoxContainer/UpgradeList
@@ -66,6 +67,7 @@ var level_lvl_label: Label
 
 
 func _ready() -> void:
+	upgrade_panel.visible = false
 	gold_tab.pressed.connect(func(): board_tab_selected.emit(0))    # GOLD
 	orange_tab.pressed.connect(func(): board_tab_selected.emit(1))  # ORANGE
 	red_tab.pressed.connect(func(): board_tab_selected.emit(2))     # RED
@@ -377,6 +379,10 @@ func show_red_currency() -> void:
 ##   "cost_text": String — cost/info label text
 ##   "cap_action": String (optional) — action name for "+" cap-raise button
 ##   "cap_hover": String (optional) — hover text for cap cost label
+func show_upgrade_panel() -> void:
+	upgrade_panel.visible = true
+
+
 func show_upgrades_for_board(header: String, upgrades: Array[Dictionary]) -> void:
 	header_label.text = header
 

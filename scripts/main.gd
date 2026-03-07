@@ -38,7 +38,7 @@ var autodropper_cost: int = 10
 
 # --- Gold upgrade caps (raised by orange) ---
 var gold_row_cap: int = 6
-var bucket_value_cap: int = 5
+var bucket_value_cap: int = 7
 var drop_rate_cap: int = 5
 var autodropper_cap: int = 10
 
@@ -52,13 +52,13 @@ var orange_queue_up_delta: int = 10
 var orange_bucket_value_cost: int = 10
 var orange_bucket_value_delta: int = 5
 var orange_bucket_value_level: int = 0
-var orange_bucket_value_cap: int = 10
+var orange_bucket_value_cap: int = 7
 
 # --- Red panel upgrades (same costs as gold/orange, red currency) ---
 var red_bucket_value_cost: int = 10
 var red_bucket_value_delta: int = 5
 var red_bucket_value_level: int = 0
-var red_bucket_value_cap: int = 5
+var red_bucket_value_cap: int = 7
 var red_drop_rate_cost: int = 10
 var red_drop_rate_delta: int = 20
 var red_drop_rate_level: int = 0
@@ -1645,6 +1645,8 @@ func _on_level_up_dismissed() -> void:
 
 	# Perform the action for this level
 	match entry["action"]:
+		"shop":
+			ui.show_upgrade_panel()
 		"orange_ball":
 			_add_to_gold_queue(3)
 		"orange_buckets":
@@ -2153,6 +2155,8 @@ func _load_game() -> void:
 		ui.show_unrefined_red()
 		ui.show_drop_unrefined_red_button()
 		ui.update_unrefined_red(unrefined_red)
+	if player_level >= 1:
+		ui.show_upgrade_panel()
 	ui.update_coins(coin_total, coin_max)
 	if orange_board_unlocked:
 		ui.update_orange_coins(orange_coin_total, orange_coin_max)
