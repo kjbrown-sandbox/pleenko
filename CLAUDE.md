@@ -62,6 +62,7 @@ scripts/
 ### System Responsibilities
 
 **CurrencyManager (Autoload)**
+
 - Owns all balances: gold, unrefined orange, orange, unrefined red, red
 - Owns all caps and cap upgrade costs
 - Methods: add(), spend(), can_afford(), get_balance()
@@ -69,12 +70,14 @@ scripts/
 - UI listens directly to currency_changed — no manual update calls needed
 
 **BoardManager**
+
 - Creates/destroys board instances (gold, orange, red)
 - Handles board positioning and spacing
 - Manages board selection and camera tweening
 - Keyboard navigation between boards
 
 **PlinkoBoard**
+
 - Builds pegs and buckets procedurally based on num_rows
 - Spawns coins via drop_coin()
 - Exposes methods for coins to query: get_peg_position(row, col), get_bucket_position(col), get_bucket_value(col), get_bucket_type(col)
@@ -82,30 +85,35 @@ scripts/
 - Shares mesh resources (peg_mesh, bucket_mesh, materials) across instances
 
 **Coin**
+
 - Receives board reference and starting info on spawn
 - Animates row by row: picks left/right, asks board for next waypoint
 - Determines bucket value at landing time (not drop time)
 - Emits: landed(bucket_value) then queue_free()
 
 **DropManager**
+
 - Owns per-board queues and cooldown timers
 - Owns autodropper pool and assignment
 - Handles queue drainage on timer callbacks
 - Methods: request_drop(board_type), add_to_queue(board_type, multiplier)
 
 **LevelManager**
+
 - Owns player_level and XP tracking
 - Defines level thresholds and rewards
 - Emits: level_changed(new_level), level_up(level, rewards)
 - Gates feature unlocks (shop, upgrades, boards) behind levels
 
 **UpgradeManager**
+
 - Stores upgrade definitions as data (not code branches)
 - Each upgrade: id, display_name, cost_formula, max_level, cap_raise_currency, effect
 - Methods: buy(upgrade_id), can_buy(upgrade_id), get_upgrades_for_board(board_type)
 - Talks to CurrencyManager to spend, emits upgrade_purchased(id, new_level)
 
 **SaveManager**
+
 - Queries other managers for serializable state
 - Writes/reads JSON to user:// path
 - Auto-save timer (30 seconds)
@@ -113,13 +121,13 @@ scripts/
 
 ### Three-Currency Economy
 
-| Currency | Earned On | Used For |
-|----------|-----------|----------|
-| Gold | Gold board buckets | Gold board upgrades |
-| Unrefined Orange | Gold board (orange buckets) | Refined by dropping on gold board (3x multiplier) |
-| Orange | Orange board buckets | Orange upgrades + raise gold upgrade caps |
-| Unrefined Red | Gold/orange board (red buckets) | Refined by dropping (9x on gold, 3x on orange) |
-| Red | Red board buckets | Red upgrades + raise orange upgrade caps |
+| Currency         | Earned On                       | Used For                                          |
+| ---------------- | ------------------------------- | ------------------------------------------------- |
+| Gold             | Gold board buckets              | Gold board upgrades                               |
+| Unrefined Orange | Gold board (orange buckets)     | Refined by dropping on gold board (3x multiplier) |
+| Orange           | Orange board buckets            | Orange upgrades + raise gold upgrade caps         |
+| Unrefined Red    | Gold/orange board (red buckets) | Refined by dropping (9x on gold, 3x on orange)    |
+| Red              | Red board buckets               | Red upgrades + raise orange upgrade caps          |
 
 ### Board Progression Flow
 
@@ -134,7 +142,7 @@ scripts/
 - **Coin paths must be dynamic.** The prototype pre-calculated all waypoints at drop time. When rows were added mid-drop, coins landed at stale positions. Row-by-row waypoint resolution fixes this.
 - **Upgrade data should be data, not code.** The prototype had 42 separate upgrade handler functions. A data-driven approach (array of upgrade definitions) with one generic buy function is far more maintainable.
 - **Cooldown timers per board.** Gold = 2s base, Orange = 4s base, Red = 8s base. Drop rate upgrades multiply by 0.8 per level.
-- **Queue system has two modes.** Gold queue stores multiplier values (1, 3, 9) in an array. Orange/red queues are simple integer counts. Gold queue can overfill during level-up rewards.
+- All queues can overfill during a level up
 - **Shared mesh resources matter for performance.** Create CylinderMesh, BoxMesh, and materials once, reuse for all pegs/buckets. Don't instantiate new meshes per peg.
 - **Tween patterns.** Use create_tween() for fire-and-forget animations. Chain tween_property() calls for sequential movement. Use .set_ease(EASE_IN) + .set_trans(TRANS_QUAD) for gravity-like feel. End with tween_callback() for cleanup.
 - **Node cleanup.** Always queue_free() nodes when done (coins after landing, old pegs/buckets on rebuild). Nodes that aren't freed are memory leaks.
