@@ -1,5 +1,7 @@
 extends Node3D
 
+const PlinkoBoard = preload("res://scripts/plinko_board.gd")
+
 @onready var ui: CanvasLayer = $UI
 @onready var camera: Camera3D = $Camera3D
 
