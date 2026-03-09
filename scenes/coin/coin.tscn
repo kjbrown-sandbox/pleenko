@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3 uid="uid://bn4f5xfwcnaub"]
+
+[sub_resource type="CanvasTexture" id="CanvasTexture_2224i"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4qpj4"]
+albedo_color = Color(1, 1, 0, 1)
+albedo_texture = SubResource("CanvasTexture_2224i")
+albedo_texture_msdf = true
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_ip66u"]
+material = SubResource("StandardMaterial3D_4qpj4")
+top_radius = 0.15
+bottom_radius = 0.15
+height = 0.05
+cap_bottom = false
+
+[node name="Coin" type="Node3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, -1.5246e-23, -1.5246e-23, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0)
+mesh = SubResource("CylinderMesh_ip66u")
