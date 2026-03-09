@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Pleenko"
-run/main_scene="res://entities/coin/coin.tscn"
+run/main_scene="res://entities/main/main.tscn"
 config/auto_accept_quit=false
 config/features=PackedStringArray("4.2", "GL Compatibility")
 config/icon="res://icon.svg"
