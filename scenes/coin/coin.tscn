@@ -1,13 +1,10 @@
-[gd_scene load_steps=4 format=3 uid="uid://bn4f5xfwcnaub"]
-
-[sub_resource type="CanvasTexture" id="CanvasTexture_2224i"]
+[gd_scene load_steps=3 format=3 uid="uid://bn4f5xfwcnaub"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4qpj4"]
-albedo_color = Color(1, 1, 0, 1)
-albedo_texture = SubResource("CanvasTexture_2224i")
-albedo_texture_msdf = true
+albedo_color = Color(1, 0.941176, 0, 1)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_ip66u"]
+lightmap_size_hint = Vector2i(7, 5)
 material = SubResource("StandardMaterial3D_4qpj4")
 top_radius = 0.15
 bottom_radius = 0.15
