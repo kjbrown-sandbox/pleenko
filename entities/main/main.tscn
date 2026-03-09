@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://djihx7hlyi5a6"]
+
+[ext_resource type="PackedScene" uid="uid://dqosetipfxq2w" path="res://entities/plinko_board/plinko_board.tscn" id="1_kykwc"]
+
+[node name="Main" type="Node3D"]
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.08165e-12, 2.08165e-12, 10)
+
+[node name="PlinkoBoard" parent="." instance=ExtResource("1_kykwc")]

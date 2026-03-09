@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://dqosetipfxq2w"]
+
+[ext_resource type="Script" path="res://entities/plinko_board/plinko_board.gd" id="1_wje3v"]
+
+[node name="PlinkoBoard" type="Node3D"]
+script = ExtResource("1_wje3v")
+
+[node name="Pegs" type="Node3D" parent="."]
+
+[node name="Buckets" type="Node3D" parent="."]
