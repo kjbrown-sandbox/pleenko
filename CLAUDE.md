@@ -147,3 +147,7 @@ scripts/
 - **Tween patterns.** Use create_tween() for fire-and-forget animations. Chain tween_property() calls for sequential movement. Use .set_ease(EASE_IN) + .set_trans(TRANS_QUAD) for gravity-like feel. End with tween_callback() for cleanup.
 - **Node cleanup.** Always queue_free() nodes when done (coins after landing, old pegs/buckets on rebuild). Nodes that aren't freed are memory leaks.
 - **Save format versioning.** Plan for save format changes from the start. The prototype had to handle migration of old gold_queue format (int vs array of multipliers).
+
+## Final notes
+
+The old code from the prototype can be found under `deprecated`. This was how things used to work.
