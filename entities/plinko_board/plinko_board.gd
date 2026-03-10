@@ -24,7 +24,7 @@ func _input(event: InputEvent) -> void:
 func drop_coin() -> void:
 	if not can_drop:
 		return
-		
+
 	var coin = CoinScene.instantiate()
 	coin.board = self
 	coin.position = Vector3(0, vertical_spacing + 0.2, 0) # 0.2 is coin + peg radius
@@ -56,5 +56,9 @@ func build_board() -> void:
 	buckets_container.position = Vector3(bucket_x_offset, bucket_y_offset, 0)
 	for i in range(num_buckets):
 		var bucket = BucketScene.instantiate()
+
+		@warning_ignore("integer_division")   
+		var distance_from_center = (abs(i - floor(num_buckets / 2))) * 1 # *1 for now but will be replaced with upgrades
 		bucket.position = Vector3((i * space_between_pegs), 0, 0)
+		bucket.value = distance_from_center + 1
 		buckets_container.add_child(bucket)

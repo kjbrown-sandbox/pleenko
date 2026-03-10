@@ -1,9 +1,12 @@
-[gd_scene load_steps=2 format=3 uid="uid://d3prgdcs44ov5"]
+[gd_scene load_steps=3 format=3 uid="uid://d3prgdcs44ov5"]
+
+[ext_resource type="Script" path="res://entities/bucket/bucket.gd" id="1_wnq05"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_avjfo"]
 size = Vector3(0.9, 0.03, 0.05)
 
 [node name="Bucket" type="Node3D"]
+script = ExtResource("1_wnq05")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 mesh = SubResource("BoxMesh_avjfo")
