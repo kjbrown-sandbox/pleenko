@@ -12,6 +12,8 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 
+var can_drop = true
+
 func _ready() -> void:
 	build_board()
 
@@ -20,11 +22,16 @@ func _input(event: InputEvent) -> void:
 		drop_coin()
 
 func drop_coin() -> void:
+	if not can_drop:
+		return
+		
 	var coin = CoinScene.instantiate()
 	coin.board = self
 	coin.position = Vector3(0, vertical_spacing + 0.2, 0) # 0.2 is coin + peg radius
 	add_child(coin)
 	coin.start(Vector3(0, 0.2, 0))
+	can_drop = false
+	get_tree().create_timer(1.0).timeout.connect(func(): can_drop = true)
 
 func build_board() -> void:
 	for child in pegs_container.get_children():
