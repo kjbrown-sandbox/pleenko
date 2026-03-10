@@ -3,6 +3,7 @@ extends Node3D
 
 @export var num_rows: int = 2
 @export var space_between_pegs: float = 1.0
+@export var vertical_spacing: float
 
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
@@ -20,7 +21,7 @@ func build_board() -> void:
 	for child in buckets_container.get_children():
 		child.queue_free()
 
-	var vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
+	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
 
 	for i in range(num_rows):
 		var x_offset = -i * space_between_pegs / 2
