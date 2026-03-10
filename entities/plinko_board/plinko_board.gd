@@ -7,12 +7,24 @@ extends Node3D
 
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
+const CoinScene := preload("res://entities/coin/coin.tscn")
 
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 
 func _ready() -> void:
 	build_board()
+
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("drop_coin"):
+		drop_coin()
+
+func drop_coin() -> void:
+	var coin = CoinScene.instantiate()
+	coin.board = self
+	coin.position = Vector3(0, vertical_spacing + 0.2, 0) # 0.2 is coin + peg radius
+	add_child(coin)
+	coin.start(Vector3(0, 0.2, 0))
 
 func build_board() -> void:
 	for child in pegs_container.get_children():

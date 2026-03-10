@@ -25,13 +25,13 @@ func _bounce_or_despawn() -> void:
 	else:
 		var x_tween: Tween = create_tween()
 		var direction = 1 if randf() < 0.5 else -1
-		x_tween.tween_property(self, "position:x", position.x + direction * board.space_between_pegs, fall_time) \
+		x_tween.tween_property(self, "position:x", position.x + direction * board.space_between_pegs / 2, fall_time) \
 			.set_ease(Tween.EASE_IN_OUT) \
 			.set_trans(Tween.TRANS_LINEAR)
 		
 		var y_tween: Tween = create_tween()
 		y_tween.tween_property(self, "position:y", position.y + bounce_height, fall_time / 3) \
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		y_tween.tween_property(self, "position:y", position.y - bounce_height - board.vertical_spacing, fall_time * 2 / 3) \
-			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD) \
-			.tween_callback(_bounce_or_despawn)
+		y_tween.tween_property(self, "position:y", position.y - board.vertical_spacing, fall_time * 2 / 3) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		y_tween.tween_callback(_bounce_or_despawn)
