@@ -1,3 +1,4 @@
+class_name PlinkoBoard
 extends Node3D
 
 @export var num_rows: int = 2
@@ -19,17 +20,21 @@ func build_board() -> void:
 	for child in buckets_container.get_children():
 		child.queue_free()
 
+	var vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
+
 	for i in range(num_rows):
 		var x_offset = -i * space_between_pegs / 2
-		var y = -space_between_pegs * (i - 1) * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
+		var y = -vertical_spacing * i
 		for j in range(i + 1):
 			var peg = PegScene.instantiate()
 			peg.position = Vector3(x_offset + (j * space_between_pegs), y, 0)
 			pegs_container.add_child(peg)
 
 	var num_buckets = num_rows + 1
+	var bucket_x_offset = -space_between_pegs * (num_buckets - 1) / 2
+	var bucket_y_offset = -vertical_spacing * num_rows + vertical_spacing / 2
+	buckets_container.position = Vector3(bucket_x_offset, bucket_y_offset, 0)
 	for i in range(num_buckets):
-		var x_offset = -space_between_pegs * (num_buckets - 1) / 2
 		var bucket = BucketScene.instantiate()
-		bucket.position = Vector3(x_offset + (i * space_between_pegs), -space_between_pegs * (num_rows - 1) + space_between_pegs * 0.2, 0)
+		bucket.position = Vector3((i * space_between_pegs), 0, 0)
 		buckets_container.add_child(bucket)
