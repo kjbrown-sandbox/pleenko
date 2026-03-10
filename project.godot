@@ -16,6 +16,10 @@ config/auto_accept_quit=false
 config/features=PackedStringArray("4.2", "GL Compatibility")
 config/icon="res://icon.svg"
 
+[autoload]
+
+UpgradeManager="*res://autoloads/upgrade_manager/upgrade_manager.tscn"
+
 [display]
 
 window/size/viewport_width=1280

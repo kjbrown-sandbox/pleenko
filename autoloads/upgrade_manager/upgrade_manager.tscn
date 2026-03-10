@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c5nje3i7fvdbo"]
+
+[ext_resource type="Script" path="res://autoloads/upgrade_manager/upgrade_manager.gd" id="1_bve6i"]
+
+[node name="UpgradeManager" type="Node"]
+script = ExtResource("1_bve6i")
