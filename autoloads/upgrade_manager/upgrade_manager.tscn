@@ -1,11 +1,12 @@
-[gd_scene load_steps=6 format=3 uid="uid://c5nje3i7fvdbo"]
+[gd_scene format=3 uid="uid://c5nje3i7fvdbo"]
 
-[ext_resource type="Script" path="res://autoloads/upgrade_manager/upgrade_manager.gd" id="1_bve6i"]
-[ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/add_row.tres" id="2_add_row"]
-[ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/bucket_value.tres" id="3_bucket_value"]
-[ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/drop_rate.tres" id="4_drop_rate"]
-[ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/queue.tres" id="5_queue"]
+[ext_resource type="Script" uid="uid://ba22pfwycxmri" path="res://autoloads/upgrade_manager/upgrade_manager.gd" id="1_bve6i"]
+[ext_resource type="Resource" uid="uid://bt7sdhpjn3px6" path="res://autoloads/upgrade_manager/data/add_row.tres" id="2_add_row"]
+[ext_resource type="Script" uid="uid://c571lcduobww" path="res://scripts/upgrade_data.gd" id="2_ro6xb"]
+[ext_resource type="Resource" uid="uid://oq8hriehudyf" path="res://autoloads/upgrade_manager/data/bucket_value.tres" id="3_bucket_value"]
+[ext_resource type="Resource" uid="uid://donkb4g01csbs" path="res://autoloads/upgrade_manager/data/drop_rate.tres" id="4_drop_rate"]
+[ext_resource type="Resource" uid="uid://uvtcpm5fhjis" path="res://autoloads/upgrade_manager/data/queue.tres" id="5_queue"]
 
-[node name="UpgradeManager" type="Node"]
+[node name="UpgradeManager" type="Node" unique_id=10539582]
 script = ExtResource("1_bve6i")
-upgrades = Array[Resource]([ExtResource("2_add_row"), ExtResource("3_bucket_value"), ExtResource("4_drop_rate"), ExtResource("5_queue")])
+upgrades = Array[ExtResource("2_ro6xb")]([ExtResource("2_add_row"), ExtResource("3_bucket_value"), ExtResource("4_drop_rate"), ExtResource("5_queue")])
