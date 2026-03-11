@@ -21,6 +21,12 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
 		drop_coin()
 
+	# REMOVE ME ONCE UPGRADES ARE HOOKED UP
+	if event is InputEventKey and event.pressed and event.keycode == KEY_U:          
+		var success = UpgradeManager.buy(Enums.BoardType.GOLD, "drop_rate")                                                          
+		print("Drop rate upgrade: ", "success" if success else "failed")   
+
+
 func drop_coin() -> void:
 	if not can_drop:
 		return
