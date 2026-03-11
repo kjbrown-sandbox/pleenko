@@ -1,1 +1,0 @@
-var upgrade_data_list: Array[UpgradeData] = []
