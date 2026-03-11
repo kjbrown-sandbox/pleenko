@@ -17,6 +17,9 @@ func can_afford(type: Enums.CurrencyType, amount: int) -> bool:
 func get_balance(type: Enums.CurrencyType) -> int:
    return balances[type]
 
+func get_cap(type: Enums.CurrencyType) -> int:
+   return caps[type]
+
 func add(type: Enums.CurrencyType, amount: int) -> void:
    var cap = caps[type]
    balances[type] = min(cap, balances[type] + amount)

@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://djihx7hlyi5a6"]
 
 [ext_resource type="PackedScene" uid="uid://dqosetipfxq2w" path="res://entities/plinko_board/plinko_board.tscn" id="1_kykwc"]
+[ext_resource type="Script" uid="uid://dqvg32rprv776" path="res://entities/main/coin_values.gd" id="2_dn64k"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 
@@ -12,3 +13,10 @@ num_rows = 4
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1399139]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.85613, 3.95506)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=83467021]
+
+[node name="CoinValues" type="VBoxContainer" parent="CanvasLayer" unique_id=1316177757]
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("2_dn64k")
