@@ -1,14 +1,14 @@
-[gd_scene load_steps=2 format=3 uid="uid://djihx7hlyi5a6"]
+[gd_scene format=3 uid="uid://djihx7hlyi5a6"]
 
 [ext_resource type="PackedScene" uid="uid://dqosetipfxq2w" path="res://entities/plinko_board/plinko_board.tscn" id="1_kykwc"]
 
-[node name="Main" type="Node3D"]
+[node name="Main" type="Node3D" unique_id=441209692]
 
-[node name="Camera3D" type="Camera3D" parent="."]
+[node name="Camera3D" type="Camera3D" parent="." unique_id=767305011]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.08165e-12, 2.08165e-12, 6.73046)
 
-[node name="PlinkoBoard" parent="." instance=ExtResource("1_kykwc")]
+[node name="PlinkoBoard" parent="." unique_id=455905067 instance=ExtResource("1_kykwc")]
 num_rows = 4
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1399139]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.85613, 3.95506)
