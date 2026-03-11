@@ -1,6 +1,6 @@
 extends Node
 
-signal currency_changed(type: Enums.CurrencyType, new_balance: int, cap: int)
+signal currency_changed(type: Enums.CurrencyType, new_balance: int, new_cap: int)
 
 var balances: Dictionary[Enums.CurrencyType, int] = {}
 var caps: Dictionary[Enums.CurrencyType, int] = {}

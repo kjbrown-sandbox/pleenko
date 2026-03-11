@@ -1,3 +1,4 @@
+class_name Bucket
 extends Node3D
 
 @export var value: int = 0:

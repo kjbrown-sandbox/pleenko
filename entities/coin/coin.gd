@@ -1,3 +1,4 @@
+class_name Coin
 extends Node3D
 
 @export var fall_time: float = 0.5
@@ -21,7 +22,7 @@ func start(target: Vector3) -> void:
 
 func _bounce_or_despawn() -> void:
 	if position.y < board.buckets_container.position.y + 0.5:
-		queue_free()
+		board.on_coin_landed(self)
 	else:
 		var x_tween: Tween = create_tween()
 		var direction = 1 if randf() < 0.5 else -1

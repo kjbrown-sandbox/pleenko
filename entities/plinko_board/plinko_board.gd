@@ -39,6 +39,17 @@ func drop_coin() -> void:
 	can_drop = false
 	get_tree().create_timer(1.0).timeout.connect(func(): can_drop = true)
 
+func on_coin_landed(coin: Coin) -> void:
+	var bucket = get_nearest_bucket(coin.global_position.x)
+	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, bucket.value)
+	coin.queue_free()
+
+func get_nearest_bucket(x_position: float) -> Bucket:
+	for bucket in buckets_container.get_children():
+		if abs(bucket.global_position.x - x_position) < 0.5:
+			return bucket
+	return buckets_container.get_children()[0]
+
 func build_board() -> void:
 	for child in pegs_container.get_children():
 		child.queue_free()
@@ -58,7 +69,7 @@ func build_board() -> void:
 
 	var num_buckets = num_rows + 1
 	var bucket_x_offset = -space_between_pegs * (num_buckets - 1) / 2
-	var bucket_y_offset = -vertical_spacing * num_rows + vertical_spacing / 2
+	var bucket_y_offset = -vertical_spacing * num_rows + (vertical_spacing / 3)
 	buckets_container.position = Vector3(bucket_x_offset, bucket_y_offset, 0)
 	for i in range(num_buckets):
 		var bucket = BucketScene.instantiate()
