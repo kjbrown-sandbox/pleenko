@@ -9,6 +9,4 @@ display_name = "Add Rows"
 base_cost = 6
 max_level = 6
 cost_type = 2
-cost_delta = 0
-delta_escalation = 0
 cost_multiplier = 10.0

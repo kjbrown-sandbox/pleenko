@@ -11,4 +11,3 @@ max_level = 7
 cost_type = 1
 cost_delta = 5
 delta_escalation = 10
-cost_multiplier = 0.0
