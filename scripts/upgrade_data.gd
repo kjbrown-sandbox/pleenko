@@ -12,8 +12,6 @@ extends Resource
 @export var delta_escalation: int        ## for ADDITIVE_ESCALATING: delta += this each buy
 @export var cost_multiplier: float       ## for MULTIPLICATIVE: cost *= this each buy
 
-@export var effect: UpgradeEffect
-
 enum CostType {
 	ADDITIVE,                ## cost += delta
 	ADDITIVE_ESCALATING,     ## cost += delta, then delta += delta_escalation
