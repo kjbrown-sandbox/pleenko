@@ -1,4 +1,4 @@
-class_name UpgradeData
+class_name BaseUpgradeData
 extends Resource
 
 @export var id: String
