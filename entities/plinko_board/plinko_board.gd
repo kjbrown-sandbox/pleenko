@@ -15,7 +15,8 @@ const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 
 var board_type = Enums.BoardType
 
-var can_drop = true
+var is_waiting = false
+var has_funds = true
 
 # func _ready() -> void:
 
@@ -31,12 +32,16 @@ func _input(event: InputEvent) -> void:
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
+	# CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 	build_board()
 
 
 func drop_coin() -> void:
-	if not can_drop:
+	if is_waiting:
+		return
+
+	if not CurrencyManager.spend(Enums.currency_for_board(board_type), 1):
 		return
 
 	var coin = CoinScene.instantiate()
@@ -44,8 +49,8 @@ func drop_coin() -> void:
 	coin.position = Vector3(0, vertical_spacing + 0.2, 0) # 0.2 is coin + peg radius
 	add_child(coin)
 	coin.start(Vector3(0, 0.2, 0))
-	can_drop = false
-	get_tree().create_timer(1.0).timeout.connect(func(): can_drop = true)
+	is_waiting = true
+	get_tree().create_timer(1.0).timeout.connect(func(): is_waiting = false)
 
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
@@ -91,3 +96,7 @@ func build_board() -> void:
 func add_two_rows() -> void:
 	num_rows += 2
 	build_board()
+
+# func _on_currency_changed(_type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
+# 	if _type == Enums.currency_for_board(board_type):
+# 		has_funds = new_balance >= 1

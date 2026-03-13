@@ -85,7 +85,7 @@ func can_buy(board_type: Enums.BoardType, upgrade_id: String) -> bool:
 	if state.max_level > 0 and state.level >= state.max_level:
 		return false
 
-	var currency := _currency_for_board(board_type)
+	var currency := Enums.currency_for_board(board_type)
 	return CurrencyManager.can_afford(currency, state.cost)
 
 
@@ -95,7 +95,7 @@ func buy(board_type: Enums.BoardType, upgrade_id: String) -> bool:
 
 	var state: UpgradeState = _state[board_type][upgrade_id]
 
-	var currency := _currency_for_board(board_type)
+	var currency := Enums.currency_for_board(board_type)
 	CurrencyManager.spend(currency, state.cost)
 
 	state.level += 1
@@ -103,18 +103,6 @@ func buy(board_type: Enums.BoardType, upgrade_id: String) -> bool:
 
 	upgrade_purchased.emit(upgrade_id, board_type, state.level)
 	return true
-
-
-func _currency_for_board(board_type: Enums.BoardType) -> Enums.CurrencyType:
-	match board_type:
-		Enums.BoardType.GOLD:
-			return Enums.CurrencyType.GOLD_COIN
-		Enums.BoardType.ORANGE:
-			return Enums.CurrencyType.ORANGE_COIN
-		Enums.BoardType.RED:
-			return Enums.CurrencyType.RED_COIN
-		_:
-			return Enums.CurrencyType.GOLD_COIN
 
 
 func _advance_cost(board_type: Enums.BoardType, upgrade_id: String) -> void:
