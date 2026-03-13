@@ -8,14 +8,17 @@ extends Node3D
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
+const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 
+var board_type = Enums.BoardType
+
 var can_drop = true
 
-func _ready() -> void:
-	build_board()
+# func _ready() -> void:
+
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
@@ -25,6 +28,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_U:          
 		var success = UpgradeManager.buy(Enums.BoardType.GOLD, "drop_rate")                                                          
 		print("Drop rate upgrade: ", "success" if success else "failed")   
+
+func setup(type: Enums.BoardType) -> void:
+	board_type = type
+
+	build_board()
 
 
 func drop_coin() -> void:
@@ -79,3 +87,7 @@ func build_board() -> void:
 		bucket.position = Vector3((i * space_between_pegs), 0, 0)
 		bucket.value = distance_from_center + 1
 		buckets_container.add_child(bucket)
+
+func add_two_rows() -> void:
+	num_rows += 2
+	build_board()
