@@ -11,7 +11,15 @@ func _ready() -> void:
 	build_upgrades()
 
 func build_upgrades() -> void:
-	var row = UpgradeRowScene.instantiate()
-	row.setup("Add rows", func(): plinko_board.add_two_rows())
-	upgrades_container.add_child(row)
+	for upgrade_type in UpgradeManager.UpgradeType.values():
+		var upgrade_id: String = UpgradeManager.UPGRADE_IDS[upgrade_type]
+		var row = UpgradeRowScene.instantiate()
+		row.setup(Enums.BoardType.GOLD, upgrade_id, func(): _buy_upgrade(upgrade_id))
+		upgrades_container.add_child(row)
+
+func _buy_upgrade(upgrade_id: String) -> void:
+	UpgradeManager.buy(Enums.BoardType.GOLD, upgrade_id)
+	# Apply effects specific to this board
+	if upgrade_id == "add_row":
+		plinko_board.add_two_rows()
 

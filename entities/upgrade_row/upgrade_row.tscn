@@ -2,9 +2,10 @@
 
 [ext_resource type="Script" uid="uid://djwgl6f0kkda0" path="res://entities/upgrade_row/upgrade_row.gd" id="1_aqdia"]
 
-[node name="UpgradeRow" type="Control" unique_id=2018403773]
+[node name="UpgradeRow" type="HBoxContainer" unique_id=371831000]
+offset_right = 8.0
+offset_bottom = 8.0
 script = ExtResource("1_aqdia")
 
 [node name="PurchaseUpgradeButton" type="Button" parent="." unique_id=44118311]
-offset_right = 8.0
-offset_bottom = 8.0
+layout_mode = 2

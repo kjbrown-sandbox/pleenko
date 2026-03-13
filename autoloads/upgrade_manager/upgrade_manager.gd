@@ -1,5 +1,20 @@
 extends Node
 
+enum UpgradeType {
+	ADD_ROW,
+	BUCKET_VALUE,
+	DROP_RATE,
+	QUEUE,
+}
+
+## Maps UpgradeType enum values to the string IDs used in .tres data files.
+const UPGRADE_IDS: Dictionary = {
+	UpgradeType.ADD_ROW: "add_row",
+	UpgradeType.BUCKET_VALUE: "bucket_value",
+	UpgradeType.DROP_RATE: "drop_rate",
+	UpgradeType.QUEUE: "queue",
+}
+
 class UpgradeState:
 	var level: int = 0
 	var cost: int = 0
