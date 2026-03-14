@@ -14,3 +14,6 @@ enum RewardType {
 @export var upgrade_type: Enums.UpgradeType
 ## For DROP_COINS:
 @export var coin_count: int = 0
+@export var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN
+@export var coin_multiplier: int = 1
+@export var target_board: Enums.BoardType = Enums.BoardType.GOLD
