@@ -17,6 +17,7 @@ var board_type = Enums.BoardType
 
 var is_waiting = false
 var has_funds = true
+var bucket_value_multiplier: int = 1
 
 # func _ready() -> void:
 
@@ -87,13 +88,17 @@ func build_board() -> void:
 		var bucket = BucketScene.instantiate()
 
 		@warning_ignore("integer_division")   
-		var distance_from_center = (abs(i - floor(num_buckets / 2))) * 1 # *1 for now but will be replaced with upgrades
+		var distance_from_center = (abs(i - floor(num_buckets / 2))) * bucket_value_multiplier
 		bucket.position = Vector3((i * space_between_pegs), 0, 0)
 		bucket.value = distance_from_center + 1
 		buckets_container.add_child(bucket)
 
 func add_two_rows() -> void:
 	num_rows += 2
+	build_board()
+
+func increase_bucket_values() -> void:
+	bucket_value_multiplier += 1
 	build_board()
 
 # func _on_currency_changed(_type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:

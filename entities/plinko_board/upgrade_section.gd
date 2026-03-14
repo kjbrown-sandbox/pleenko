@@ -26,3 +26,5 @@ func _buy_upgrade(upgrade_id: String) -> void:
 	match upgrade_id:
 		"add_row":
 			_board.add_two_rows()
+		"bucket_value":
+			_board.increase_bucket_values()
