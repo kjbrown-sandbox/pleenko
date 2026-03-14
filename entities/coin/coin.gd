@@ -9,6 +9,31 @@ extends Node3D
 
 # The board that spawned this coin — set by the board before calling start()
 var board: PlinkoBoard
+var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
+	set(value):
+		coin_type = value
+		_apply_color()
+var multiplier: int = 1
+
+const COIN_COLORS := {
+	Enums.CurrencyType.GOLD_COIN: Color(1, 0.941176, 0),
+	Enums.CurrencyType.ORANGE_COIN: Color(1, 0.5, 0),
+	Enums.CurrencyType.RED_COIN: Color(1, 0.15, 0.15),
+}
+
+
+func _ready() -> void:
+	_apply_color()
+
+
+func _apply_color() -> void:
+	var mesh_instance := get_node_or_null("MeshInstance3D")
+	if not mesh_instance:
+		return
+	var color: Color = COIN_COLORS.get(coin_type, COIN_COLORS[Enums.CurrencyType.GOLD_COIN])
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mesh_instance.material_override = mat
 
 
 func start(target: Vector3) -> void:
