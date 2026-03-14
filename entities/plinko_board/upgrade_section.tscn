@@ -1,6 +1,9 @@
 [gd_scene format=3 uid="uid://dwssqmgrhvooe"]
 
+[ext_resource type="Script" uid="uid://dramu0pxg8kuh" path="res://entities/plinko_board/upgrade_section.gd" id="1_lrn56"]
+
 [node name="UpgradeSection" type="CanvasLayer" unique_id=1448500383]
+script = ExtResource("1_lrn56")
 
 [node name="Upgrades" type="VBoxContainer" parent="." unique_id=107140261]
 anchors_preset = 1

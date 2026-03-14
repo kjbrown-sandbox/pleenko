@@ -8,10 +8,10 @@ extends Node3D
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
-const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
+@onready var upgrade_section = $UpgradeSection
 
 var board_type = Enums.BoardType
 
@@ -32,8 +32,7 @@ func _input(event: InputEvent) -> void:
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
-	# CurrencyManager.currency_changed.connect(_on_currency_changed)
-
+	upgrade_section.setup(self, type)
 	build_board()
 
 

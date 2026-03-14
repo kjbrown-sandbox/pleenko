@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dqosetipfxq2w"]
 
 [ext_resource type="Script" uid="uid://dpicrqh1sc34f" path="res://entities/plinko_board/plinko_board.gd" id="1_wje3v"]
+[ext_resource type="PackedScene" uid="uid://dwssqmgrhvooe" path="res://entities/plinko_board/upgrade_section.tscn" id="2_upgrade"]
 
 [node name="PlinkoBoard" type="Node3D" unique_id=812938818]
 script = ExtResource("1_wje3v")
@@ -8,3 +9,5 @@ script = ExtResource("1_wje3v")
 [node name="Pegs" type="Node3D" parent="." unique_id=2007669668]
 
 [node name="Buckets" type="Node3D" parent="." unique_id=395647080]
+
+[node name="UpgradeSection" parent="." instance=ExtResource("2_upgrade")]
