@@ -56,7 +56,7 @@ func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _cap: int
 func _update_display() -> void:
 	level_label.text = "LVL %d" % LevelManager.current_level
 
-	var threshold := LevelManager.get_next_threshold()
+	var threshold: int = LevelManager.get_next_threshold()
 	if threshold <= 0:
 		progress_bar.value = 1.0
 		progress_label.text = "MAX"

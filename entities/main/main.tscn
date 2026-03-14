@@ -4,7 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://dqosetipfxq2w" path="res://entities/plinko_board/plinko_board.tscn" id="1_kykwc"]
 [ext_resource type="Script" uid="uid://dqvg32rprv776" path="res://entities/main/coin_values.gd" id="2_dn64k"]
 [ext_resource type="PackedScene" path="res://entities/level_up_dialog/level_up_dialog.tscn" id="3_levelup"]
-[ext_resource type="Script" path="res://entities/level_progress_bar/level_progress_bar.gd" id="4_lvlbar"]
+[ext_resource type="Script" uid="uid://bv8jn2v2y6dbj" path="res://entities/level_progress_bar/level_progress_bar.gd" id="4_lvlbar"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
@@ -13,7 +13,6 @@ script = ExtResource("1_j5li3")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.08165e-12, -1.7165763, 6.980745)
 
 [node name="PlinkoBoard" parent="." unique_id=455905067 instance=ExtResource("1_kykwc")]
-num_rows = 4
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1399139]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.85613, 3.95506)
@@ -25,7 +24,7 @@ offset_right = 40.0
 offset_bottom = 40.0
 script = ExtResource("2_dn64k")
 
-[node name="LevelProgressBar" type="HBoxContainer" parent="CanvasLayer"]
+[node name="LevelProgressBar" type="HBoxContainer" parent="CanvasLayer" unique_id=304912546]
 script = ExtResource("4_lvlbar")
 
-[node name="LevelUpDialog" parent="." instance=ExtResource("3_levelup")]
+[node name="LevelUpDialog" parent="." unique_id=1315791600 instance=ExtResource("3_levelup")]
