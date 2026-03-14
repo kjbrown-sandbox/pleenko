@@ -14,6 +14,13 @@ enum CurrencyType {
    RED_COIN
 }
 
+enum UpgradeType {
+   ADD_ROW,
+   BUCKET_VALUE,
+   DROP_RATE,
+   QUEUE,
+}
+
 static func currency_for_board(board_type: BoardType) -> CurrencyType:
    match board_type:
       BoardType.GOLD:

@@ -13,18 +13,19 @@ func setup(board: PlinkoBoard, board_type: Enums.BoardType) -> void:
 	_build_upgrades()
 
 func _build_upgrades() -> void:
-	for upgrade_type in UpgradeManager.UpgradeType.values():
-		var upgrade_id: String = UpgradeManager.UPGRADE_IDS[upgrade_type]
+	for upgrade_type in Enums.UpgradeType.values():
 		var row = UpgradeRowScene.instantiate()
-		row.setup(_board_type, upgrade_id, _buy_upgrade.bind(upgrade_id))
+		row.setup(_board_type, upgrade_type, _buy_upgrade.bind(upgrade_type))
 		upgrades_container.add_child(row)
 
-func _buy_upgrade(upgrade_id: String) -> void:
-	if not UpgradeManager.buy(_board_type, upgrade_id):
+func _buy_upgrade(upgrade_type: Enums.UpgradeType) -> void:
+	if not UpgradeManager.buy(_board_type, upgrade_type):
 		return
 
-	match upgrade_id:
-		"add_row":
+	match upgrade_type:
+		Enums.UpgradeType.ADD_ROW:
 			_board.add_two_rows()
-		"bucket_value":
+		Enums.UpgradeType.BUCKET_VALUE:
 			_board.increase_bucket_values()
+		Enums.UpgradeType.DROP_RATE:
+			_board.decrease_drop_delay()

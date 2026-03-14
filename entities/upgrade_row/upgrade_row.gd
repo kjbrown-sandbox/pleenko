@@ -2,12 +2,12 @@ extends HBoxContainer
 @onready var purchase_upgrade_button: Button = $PurchaseUpgradeButton
 
 var _board_type: Enums.BoardType
-var _upgrade_id: String
+var _upgrade_type: Enums.UpgradeType
 var _callback: Callable
 
-func setup(board_type: Enums.BoardType, upgrade_id: String, on_upgrade: Callable) -> void:
+func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgrade: Callable) -> void:
 	_board_type = board_type
-	_upgrade_id = upgrade_id
+	_upgrade_type = upgrade_type
 	_callback = on_upgrade
 
 func _ready() -> void:
@@ -23,12 +23,12 @@ func _on_pressed() -> void:
 func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
 	_update_button()
 
-func _on_upgrade_purchased(_id: String, _type: Enums.BoardType, _new_level: int) -> void:
+func _on_upgrade_purchased(_type: Enums.UpgradeType, _board: Enums.BoardType, _new_level: int) -> void:
 	_update_button()
 
 func _update_button() -> void:
-	var data: BaseUpgradeData = UpgradeManager.get_upgrade(_upgrade_id)
-	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_id)
+	var data: BaseUpgradeData = UpgradeManager.get_upgrade(_upgrade_type)
+	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
 	var at_max := state.max_level > 0 and state.level >= state.max_level
 
 	if at_max:
@@ -36,4 +36,4 @@ func _update_button() -> void:
 	else:
 		purchase_upgrade_button.text = "%s — %d gold (Lv %d)" % [data.display_name, state.cost, state.level]
 
-	purchase_upgrade_button.disabled = not UpgradeManager.can_buy(_board_type, _upgrade_id)
+	purchase_upgrade_button.disabled = not UpgradeManager.can_buy(_board_type, _upgrade_type)

@@ -4,6 +4,8 @@ extends Node3D
 @export var num_rows: int = 2
 @export var space_between_pegs: float = 1.0
 @export var vertical_spacing: float
+@export var drop_delay: float = 2.0
+@export var drop_delay_reduction_factor: float = 0.75
 
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
@@ -26,11 +28,6 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
 		drop_coin()
 
-	# REMOVE ME ONCE UPGRADES ARE HOOKED UP
-	if event is InputEventKey and event.pressed and event.keycode == KEY_U:          
-		var success = UpgradeManager.buy(Enums.BoardType.GOLD, "drop_rate")                                                          
-		print("Drop rate upgrade: ", "success" if success else "failed")   
-
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
 	upgrade_section.setup(self, type)
@@ -50,7 +47,7 @@ func drop_coin() -> void:
 	add_child(coin)
 	coin.start(Vector3(0, 0.2, 0))
 	is_waiting = true
-	get_tree().create_timer(1.0).timeout.connect(func(): is_waiting = false)
+	get_tree().create_timer(drop_delay).timeout.connect(func(): is_waiting = false)
 
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
@@ -101,6 +98,5 @@ func increase_bucket_values() -> void:
 	bucket_value_multiplier += 1
 	build_board()
 
-# func _on_currency_changed(_type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
-# 	if _type == Enums.currency_for_board(board_type):
-# 		has_funds = new_balance >= 1
+func decrease_drop_delay() -> void:
+	drop_delay *= drop_delay_reduction_factor

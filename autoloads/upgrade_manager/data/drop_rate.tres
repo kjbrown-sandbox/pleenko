@@ -1,10 +1,10 @@
-[gd_resource type="Resource" script_class="UpgradeData" format=3 uid="uid://donkb4g01csbs"]
+[gd_resource type="Resource" script_class="BaseUpgradeData" format=3 uid="uid://donkb4g01csbs"]
 
 [ext_resource type="Script" uid="uid://c571lcduobww" path="res://scripts/base_upgrade_data.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
-id = "drop_rate"
+type = 2
 display_name = "Drop Rate"
 base_cost = 10
 max_level = 5

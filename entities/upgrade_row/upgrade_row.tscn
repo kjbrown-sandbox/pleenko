@@ -9,3 +9,4 @@ script = ExtResource("1_aqdia")
 
 [node name="PurchaseUpgradeButton" type="Button" parent="." unique_id=44118311]
 layout_mode = 2
+focus_mode = 0

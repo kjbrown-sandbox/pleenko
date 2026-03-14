@@ -1,42 +1,27 @@
 extends Node
 
-enum UpgradeType {
-	ADD_ROW,
-	BUCKET_VALUE,
-	DROP_RATE,
-	QUEUE,
-}
-
-## Maps UpgradeType enum values to the string IDs used in .tres data files.
-const UPGRADE_IDS: Dictionary = {
-	UpgradeType.ADD_ROW: "add_row",
-	UpgradeType.BUCKET_VALUE: "bucket_value",
-	UpgradeType.DROP_RATE: "drop_rate",
-	UpgradeType.QUEUE: "queue",
-}
-
 class UpgradeState:
 	var level: int = 0
 	var cost: int = 0
 	var delta: int = 0
 	var max_level: int = 0  ## 0 = uncapped; mutable for cap raises
 
-signal upgrade_purchased(upgrade_id, board_type, new_level)
+signal upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, new_level: int)
 
 ## Populate this array in the Inspector with .tres BaseUpgradeData resources.
 @export var upgrades: Array[BaseUpgradeData] = []
 
 ## Per-board, per-upgrade runtime state.
-var _state: Dictionary = {}  # BoardType -> upgrade_id -> UpgradeState
+var _state: Dictionary = {}  # BoardType -> UpgradeType -> UpgradeState
 
-## Quick lookup: upgrade_id -> BaseUpgradeData
+## Quick lookup: UpgradeType -> BaseUpgradeData
 var _upgrade_map: Dictionary = {}
 
 
 func _ready() -> void:
 	# Build lookup map
 	for data in upgrades:
-		_upgrade_map[data.id] = data
+		_upgrade_map[data.type] = data
 
 	# Initialize state for every board + upgrade combination
 	for board_type in Enums.BoardType.values():
@@ -46,40 +31,41 @@ func _ready() -> void:
 			s.cost = data.base_cost
 			s.delta = data.cost_delta
 			s.max_level = data.max_level
-			_state[board_type][data.id] = s
+			_state[board_type][data.type] = s
 
 	# Debug: print initial state
 	for board_type in _state:
 		var board_name: String = Enums.BoardType.keys()[board_type]
-		for upgrade_id in _state[board_type]:
-			var s: UpgradeState = _state[board_type][upgrade_id]
+		for upgrade_type in _state[board_type]:
+			var s: UpgradeState = _state[board_type][upgrade_type]
+			var upgrade_name: String = Enums.UpgradeType.keys()[upgrade_type]
 			print("[UpgradeManager] %s/%s — level=%d cost=%d" % [
-				board_name, upgrade_id, s.level, s.cost
+				board_name, upgrade_name, s.level, s.cost
 			])
 
 
-func get_upgrade(id: String) -> BaseUpgradeData:
-	return _upgrade_map.get(id)
+func get_upgrade(upgrade_type: Enums.UpgradeType) -> BaseUpgradeData:
+	return _upgrade_map.get(upgrade_type)
 
 
-func get_level(board_type: Enums.BoardType, upgrade_id: String) -> int:
-	return _state[board_type][upgrade_id].level
+func get_level(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> int:
+	return _state[board_type][upgrade_type].level
 
 
-func get_cost(board_type: Enums.BoardType, upgrade_id: String) -> int:
-	return _state[board_type][upgrade_id].cost
+func get_cost(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> int:
+	return _state[board_type][upgrade_type].cost
 
 
-func get_max_level(board_type: Enums.BoardType, upgrade_id: String) -> int:
-	return _state[board_type][upgrade_id].max_level
+func get_max_level(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> int:
+	return _state[board_type][upgrade_type].max_level
 
 
-func get_state(board_type: Enums.BoardType, upgrade_id: String) -> UpgradeState:
-	return _state[board_type][upgrade_id]
+func get_state(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> UpgradeState:
+	return _state[board_type][upgrade_type]
 
 
-func can_buy(board_type: Enums.BoardType, upgrade_id: String) -> bool:
-	var state: UpgradeState = _state[board_type][upgrade_id]
+func can_buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
+	var state: UpgradeState = _state[board_type][upgrade_type]
 
 	# max_level of 0 means uncapped
 	if state.max_level > 0 and state.level >= state.max_level:
@@ -89,25 +75,25 @@ func can_buy(board_type: Enums.BoardType, upgrade_id: String) -> bool:
 	return CurrencyManager.can_afford(currency, state.cost)
 
 
-func buy(board_type: Enums.BoardType, upgrade_id: String) -> bool:
-	if not can_buy(board_type, upgrade_id):
+func buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
+	if not can_buy(board_type, upgrade_type):
 		return false
 
-	var state: UpgradeState = _state[board_type][upgrade_id]
+	var state: UpgradeState = _state[board_type][upgrade_type]
 
 	var currency := Enums.currency_for_board(board_type)
 	CurrencyManager.spend(currency, state.cost)
 
 	state.level += 1
-	_advance_cost(board_type, upgrade_id)
+	_advance_cost(board_type, upgrade_type)
 
-	upgrade_purchased.emit(upgrade_id, board_type, state.level)
+	upgrade_purchased.emit(upgrade_type, board_type, state.level)
 	return true
 
 
-func _advance_cost(board_type: Enums.BoardType, upgrade_id: String) -> void:
-	var upgrade_state: UpgradeState = _state[board_type][upgrade_id]
-	var data: BaseUpgradeData = _upgrade_map[upgrade_id]
+func _advance_cost(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
+	var upgrade_state: UpgradeState = _state[board_type][upgrade_type]
+	var data: BaseUpgradeData = _upgrade_map[upgrade_type]
 
 	match data.cost_type:
 		BaseUpgradeData.CostType.ADDITIVE:

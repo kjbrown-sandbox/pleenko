@@ -1,7 +1,7 @@
 class_name BaseUpgradeData
 extends Resource
 
-@export var id: String
+@export var type: Enums.UpgradeType
 @export var display_name: String
 
 @export var base_cost: int
