@@ -31,6 +31,7 @@ func setup(type: Enums.BoardType) -> void:
 	upgrade_section.setup(self, type)
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
+	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 
 
 func request_drop() -> void:
@@ -85,8 +86,26 @@ func _on_drop_timer_done() -> void:
 
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
-	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, bucket.value)
+	var award = bucket.value * coin.multiplier
+	CurrencyManager.add(Enums.currency_for_board(board_type), award)
 	coin.queue_free()
+
+
+func force_drop_coin(type: Enums.CurrencyType, mult: int = 1) -> void:
+	var coin = CoinScene.instantiate()
+	coin.board = self
+	coin.coin_type = type
+	coin.multiplier = mult
+	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
+	add_child(coin)
+	coin.start(Vector3(0, 0.2, 0))
+
+
+func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
+	for reward in rewards:
+		if reward.type == RewardData.RewardType.DROP_COINS and reward.target_board == board_type:
+			for i in reward.coin_count:
+				force_drop_coin(reward.coin_type, reward.coin_multiplier)
 
 func get_nearest_bucket(x_position: float) -> Bucket:
 	for bucket in buckets_container.get_children():
