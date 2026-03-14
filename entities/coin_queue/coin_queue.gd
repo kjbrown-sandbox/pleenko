@@ -40,11 +40,12 @@ func has_queue() -> bool:
 	return _capacity > 0
 
 
-func enqueue() -> void:
+func enqueue(coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN) -> void:
 	if is_full():
 		return
 
 	var coin: Coin = CoinScene.instantiate()
+	coin.coin_type = coin_type
 	var slot_index := _coins.size()
 	coin.position = _slot_position(slot_index)
 	coin.rotation = coin_rotation
