@@ -7,6 +7,7 @@ class UpgradeState:
 	var max_level: int = 0  ## 0 = uncapped; mutable for cap raises
 
 signal upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, new_level: int)
+signal upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType)
 
 ## Populate this array in the Inspector with .tres BaseUpgradeData resources.
 @export var upgrades: Array[BaseUpgradeData] = []
@@ -17,21 +18,29 @@ var _state: Dictionary = {}  # BoardType -> UpgradeType -> UpgradeState
 ## Quick lookup: UpgradeType -> BaseUpgradeData
 var _upgrade_map: Dictionary = {}
 
+## Tracks which upgrades are unlocked per board.
+var _unlocked: Dictionary = {}  # BoardType -> UpgradeType -> bool
+
 
 func _ready() -> void:
 	# Build lookup map
 	for data in upgrades:
 		_upgrade_map[data.type] = data
 
-	# Initialize state for every board + upgrade combination
+	# Initialize state and unlock tracking for every board + upgrade combination
 	for board_type in Enums.BoardType.values():
 		_state[board_type] = {}
+		_unlocked[board_type] = {}
 		for data in upgrades:
 			var s := UpgradeState.new()
 			s.cost = data.base_cost
 			s.delta = data.cost_delta
 			s.max_level = data.max_level
 			_state[board_type][data.type] = s
+			_unlocked[board_type][data.type] = false
+
+	# Listen for level rewards to unlock upgrades
+	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 
 	# Debug: print initial state
 	for board_type in _state:
@@ -64,7 +73,25 @@ func get_state(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> 
 	return _state[board_type][upgrade_type]
 
 
+func is_unlocked(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
+	return _unlocked[board_type][upgrade_type]
+
+
+func unlock(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
+	if _unlocked[board_type][upgrade_type]:
+		return
+	_unlocked[board_type][upgrade_type] = true
+	upgrade_unlocked.emit(upgrade_type, board_type)
+	print("[UpgradeManager] Unlocked %s on %s" % [
+		Enums.UpgradeType.keys()[upgrade_type],
+		Enums.BoardType.keys()[board_type]
+	])
+
+
 func can_buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
+	if not is_unlocked(board_type, upgrade_type):
+		return false
+
 	var state: UpgradeState = _state[board_type][upgrade_type]
 
 	# max_level of 0 means uncapped
@@ -89,6 +116,12 @@ func buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
 
 	upgrade_purchased.emit(upgrade_type, board_type, state.level)
 	return true
+
+
+func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
+	for reward in rewards:
+		if reward.type == RewardData.RewardType.UNLOCK_UPGRADE:
+			unlock(reward.board_type, reward.upgrade_type)
 
 
 func _advance_cost(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
