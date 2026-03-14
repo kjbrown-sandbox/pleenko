@@ -14,40 +14,74 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 @onready var upgrade_section = $UpgradeSection
+@onready var coin_queue: CoinQueue = $CoinQueue
 
 var board_type = Enums.BoardType
 
 var is_waiting = false
-var has_funds = true
 var bucket_value_multiplier: int = 1
-
-# func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("drop_coin"):
-		drop_coin()
+		request_drop()
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
 	upgrade_section.setup(self, type)
 	build_board()
+	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 
 
-func drop_coin() -> void:
-	if is_waiting:
+func request_drop() -> void:
+	if not CurrencyManager.can_afford(Enums.currency_for_board(board_type), 1):
 		return
 
-	if not CurrencyManager.spend(Enums.currency_for_board(board_type), 1):
-		return
+	print("coin drop queue, capacity=%d, count=%d" % [coin_queue._capacity, coin_queue.count])
+	if coin_queue.has_queue() and not coin_queue.is_full():
+		print('enqueueing drop')
+		CurrencyManager.spend(Enums.currency_for_board(board_type), 1)
+		coin_queue.enqueue()
+		# If we're not waiting on a drop delay, start dropping immediately
+		if not is_waiting:
+			_drop_from_queue()
+	elif not is_waiting and CurrencyManager.spend(Enums.currency_for_board(board_type), 1):
+		print('drop pping immediately')
+		_drop_immediate()
 
+
+func _drop_immediate() -> void:
 	var coin = CoinScene.instantiate()
 	coin.board = self
-	coin.position = Vector3(0, vertical_spacing + 0.2, 0) # 0.2 is coin + peg radius
+	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
 	add_child(coin)
 	coin.start(Vector3(0, 0.2, 0))
+	_start_drop_timer()
+
+
+func _drop_from_queue() -> void:
+	if coin_queue.is_empty():
+		return
+
+	var coin: Coin = coin_queue.dequeue()
+	coin.board = self
+	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
+	coin.rotation = Vector3.ZERO
+	add_child(coin)
+	coin.start(Vector3(0, 0.2, 0))
+	_start_drop_timer()
+
+
+func _start_drop_timer() -> void:
 	is_waiting = true
-	get_tree().create_timer(drop_delay).timeout.connect(func(): is_waiting = false)
+	get_tree().create_timer(drop_delay).timeout.connect(_on_drop_timer_done)
+
+
+func _on_drop_timer_done() -> void:
+	is_waiting = false
+	if coin_queue.has_queue() and not coin_queue.is_empty():
+		_drop_from_queue()
+
 
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
@@ -84,7 +118,7 @@ func build_board() -> void:
 	for i in range(num_buckets):
 		var bucket = BucketScene.instantiate()
 
-		@warning_ignore("integer_division")   
+		@warning_ignore("integer_division")
 		var distance_from_center = (abs(i - floor(num_buckets / 2))) * bucket_value_multiplier
 		bucket.position = Vector3((i * space_between_pegs), 0, 0)
 		bucket.value = distance_from_center + 1
@@ -100,3 +134,6 @@ func increase_bucket_values() -> void:
 
 func decrease_drop_delay() -> void:
 	drop_delay *= drop_delay_reduction_factor
+
+func increase_queue_capacity() -> void:
+	coin_queue.set_capacity(coin_queue._capacity + 1)

@@ -29,3 +29,5 @@ func _buy_upgrade(upgrade_type: Enums.UpgradeType) -> void:
 			_board.increase_bucket_values()
 		Enums.UpgradeType.DROP_RATE:
 			_board.decrease_drop_delay()
+		Enums.UpgradeType.QUEUE:
+			_board.increase_queue_capacity()

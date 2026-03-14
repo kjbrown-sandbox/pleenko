@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dobi1qqgthmk7"]
+
+[ext_resource type="Script" uid="uid://6isft3gag7vp" path="res://entities/coin_queue/coin_queue.gd" id="1_script"]
+
+[node name="CoinQueue" type="Node3D" unique_id=168447331]
+script = ExtResource("1_script")
