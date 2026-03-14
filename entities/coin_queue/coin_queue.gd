@@ -71,6 +71,9 @@ func _slide_coins_forward() -> void:
 	for i in _coins.size():
 		var coin: Coin = _coins[i]
 		var target := _slot_position(i)
-		var tween: Tween = coin.create_tween()
-		tween.tween_property(coin, "position", target, slide_time) \
-			.set_trans(Tween.TRANS_LINEAR)
+		var delay := i * 0.1
+		get_tree().create_timer(delay).timeout.connect(func():
+			var tween: Tween = coin.create_tween()
+			tween.tween_property(coin, "position", target, slide_time) \
+				.set_trans(Tween.TRANS_LINEAR)
+		)
