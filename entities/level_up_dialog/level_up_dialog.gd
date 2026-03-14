@@ -26,9 +26,7 @@ func _on_claim_pressed() -> void:
 
 func show_dialog() -> void:
 	overlay.visible = true
-	get_tree().paused = true
 
 
 func hide_dialog() -> void:
 	overlay.visible = false
-	get_tree().paused = false
