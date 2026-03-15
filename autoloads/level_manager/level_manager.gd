@@ -25,23 +25,19 @@ func _build_level_table() -> void:
 	levels = [
 		# Level 1
 		_level(7, "You have unlocked the shop.", [
-			_unlock(Enums.UpgradeType.ADD_ROW, Enums.BoardType.GOLD),
+			_unlock_upgrade(Enums.UpgradeType.ADD_ROW, Enums.BoardType.GOLD),
 		]),
 		# Level 2
 		_level(12, "You have unlocked Bucket Value.", [
-			_unlock(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.GOLD),
-		]),
-		# Level 3
-		_level(21, "An ORANGE coin will be dropped!", [
-			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
+			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.GOLD),
 		]),
 		# Level 4
-		_level(35, "An ORANGE coin will be dropped!", [
+		_level(30, "An ORANGE coin will be dropped!", [
 			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
 		]),
 		# Level 5
 		_level(55, "You have unlocked Drop Rate.", [
-			_unlock(Enums.UpgradeType.DROP_RATE, Enums.BoardType.GOLD),
+			_unlock_upgrade(Enums.UpgradeType.DROP_RATE, Enums.BoardType.GOLD),
 		]),
 		# Level 6
 		_level(100, "An ORANGE coin will be dropped!", [
@@ -53,25 +49,25 @@ func _build_level_table() -> void:
 		]),
 		# Level 8
 		_level(200, "You have unlocked Queue.", [
-			_unlock(Enums.UpgradeType.QUEUE, Enums.BoardType.GOLD),
+			_unlock_upgrade(Enums.UpgradeType.QUEUE, Enums.BoardType.GOLD),
 		]),
 		# Level 9
 		_level(300, "An ORANGE coin will be dropped!", [
 			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
 		]),
 		# Level 10
-		_level(400, "You have unlocked Orange Buckets!", []),
+		_level(400, "You have unlocked Orange Buckets!", [_unlock_advanced_bucket(Enums.BoardType.GOLD)]),
 		# Level 11
 		_level(500, "You have unlocked Add 2 Rows for Orange.", [
-			_unlock(Enums.UpgradeType.ADD_ROW, Enums.BoardType.ORANGE),
+			_unlock_upgrade(Enums.UpgradeType.ADD_ROW, Enums.BoardType.ORANGE),
 		]),
 		# Level 12
 		_level(600, "You have unlocked Bucket Value for Orange.", [
-			_unlock(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.ORANGE),
+			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.ORANGE),
 		]),
 		# Level 13
 		_level(700, "You have unlocked Drop Rate for Orange.", [
-			_unlock(Enums.UpgradeType.DROP_RATE, Enums.BoardType.ORANGE),
+			_unlock_upgrade(Enums.UpgradeType.DROP_RATE, Enums.BoardType.ORANGE),
 		]),
 		# Level 14
 		_level(800, "A RED coin will be dropped!", [
@@ -79,7 +75,7 @@ func _build_level_table() -> void:
 		]),
 		# Level 15
 		_level(900, "You have unlocked Queue for Orange.", [
-			_unlock(Enums.UpgradeType.QUEUE, Enums.BoardType.ORANGE),
+			_unlock_upgrade(Enums.UpgradeType.QUEUE, Enums.BoardType.ORANGE),
 		]),
 		# Level 16
 		_level(1000, "You have unlocked Autodropper.", []),
@@ -91,15 +87,15 @@ func _build_level_table() -> void:
 		_level(1500, "You have unlocked Red Buckets!", []),
 		# Level 19
 		_level(1750, "You have unlocked Bucket Value for Red.", [
-			_unlock(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.RED),
+			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.RED),
 		]),
 		# Level 20
 		_level(2000, "You have unlocked Drop Rate for Red.", [
-			_unlock(Enums.UpgradeType.DROP_RATE, Enums.BoardType.RED),
+			_unlock_upgrade(Enums.UpgradeType.DROP_RATE, Enums.BoardType.RED),
 		]),
 		# Level 21
 		_level(2500, "You have unlocked Queue for Red.", [
-			_unlock(Enums.UpgradeType.QUEUE, Enums.BoardType.RED),
+			_unlock_upgrade(Enums.UpgradeType.QUEUE, Enums.BoardType.RED),
 		]),
 		# Level 22
 		_level(3000, "Keep going!", []),
@@ -124,7 +120,7 @@ func _level(threshold: int, message: String, rewards: Array[RewardData]) -> Leve
 
 
 ## Helper to create an UNLOCK_UPGRADE reward.
-func _unlock(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> RewardData:
+func _unlock_upgrade(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> RewardData:
 	var r := RewardData.new()
 	r.type = RewardData.RewardType.UNLOCK_UPGRADE
 	r.upgrade_type = upgrade_type
@@ -142,6 +138,12 @@ func _drop_coins(count: int, coin_type: Enums.CurrencyType, mult: int, target: E
 	r.target_board = target
 	return r
 
+## Helper to create a UNLOCK_BUCKET reward.
+func _unlock_advanced_bucket(target: Enums.BoardType) -> RewardData:
+	var r := RewardData.new()
+	r.type = RewardData.RewardType.UNLOCK_ADVANCED_BUCKET
+	r.target_board = target
+	return r
 
 func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
 	if type != Enums.CurrencyType.GOLD_COIN:

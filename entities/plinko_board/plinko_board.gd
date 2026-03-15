@@ -6,6 +6,7 @@ extends Node3D
 @export var vertical_spacing: float
 @export var drop_delay: float = 2.0
 @export var drop_delay_reduction_factor: float = 0.75
+@export var distance_for_advanced_buckets: int = 3
 
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
@@ -16,11 +17,11 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var upgrade_section = $UpgradeSection
 @onready var coin_queue: CoinQueue = $CoinQueue
 
-var board_type = Enums.BoardType
-
-var is_waiting = false
+var board_type: Enums.BoardType
+var advanced_bucket_type: Enums.BoardType
+var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
-
+var should_show_advanced_buckets: bool = false
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
@@ -28,6 +29,13 @@ func setup(type: Enums.BoardType) -> void:
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
+
+	if board_type == Enums.BoardType.GOLD:
+		advanced_bucket_type = Enums.BoardType.ORANGE
+	elif board_type == Enums.BoardType.ORANGE:
+		advanced_bucket_type = Enums.BoardType.RED
+	else:
+		print("YOU DID NOT FINISH ME")
 
 
 func request_drop() -> void:
@@ -102,6 +110,9 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 		if reward.type == RewardData.RewardType.DROP_COINS and reward.target_board == board_type:
 			for i in reward.coin_count:
 				force_drop_coin(reward.coin_type, reward.coin_multiplier)
+		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET and reward.target_board == board_type:
+			should_show_advanced_buckets = true
+			build_board()
 
 func get_nearest_bucket(x_position: float) -> Bucket:
 	for bucket in buckets_container.get_children():
@@ -130,13 +141,26 @@ func build_board() -> void:
 	var bucket_x_offset = -space_between_pegs * (num_buckets - 1) / 2
 	var bucket_y_offset = -vertical_spacing * num_rows + (vertical_spacing / 3)
 	buckets_container.position = Vector3(bucket_x_offset, bucket_y_offset, 0)
+	
 	for i in range(num_buckets):
 		var bucket = BucketScene.instantiate()
 
 		@warning_ignore("integer_division")
-		var distance_from_center = (abs(i - floor(num_buckets / 2))) * bucket_value_multiplier
-		bucket.position = Vector3((i * space_between_pegs), 0, 0)
-		bucket.value = distance_from_center + 1
+
+		var distance_from_center = (abs(i - floor(num_buckets / 2))) 
+
+		var value = 1
+		var bucket_color = board_type
+		if distance_from_center >= distance_for_advanced_buckets and should_show_advanced_buckets:
+			bucket_color = advanced_bucket_type
+			distance_from_center -= distance_for_advanced_buckets
+
+		# var distance_from_center = (abs(i - floor(num_buckets / 2))) * bucket_value_multiplier
+		value += distance_from_center * bucket_value_multiplier
+		bucket.setup(bucket_color, Vector3(i * space_between_pegs, 0, 0), value)
+		# bucket.position = Vector3((i * space_between_pegs), 0, 0)
+		# bucket.value = distance_from_center + 1
+		# bucket.setup(bucket_color)
 		buckets_container.add_child(bucket)
 
 func add_two_rows() -> void:

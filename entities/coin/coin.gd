@@ -21,7 +21,6 @@ const COIN_COLORS := {
 	Enums.CurrencyType.RED_COIN: Color(1, 0.15, 0.15),
 }
 
-
 func _ready() -> void:
 	_apply_color()
 
