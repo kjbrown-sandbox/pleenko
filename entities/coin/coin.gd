@@ -17,7 +17,9 @@ var multiplier: int = 1
 
 const COIN_COLORS := {
 	Enums.CurrencyType.GOLD_COIN: Color(1, 0.941176, 0),
+	Enums.CurrencyType.RAW_ORANGE: Color(1, 0.5, 0),
 	Enums.CurrencyType.ORANGE_COIN: Color(1, 0.5, 0),
+	Enums.CurrencyType.RAW_RED: Color(1, 0.15, 0.15),
 	Enums.CurrencyType.RED_COIN: Color(1, 0.15, 0.15),
 }
 
