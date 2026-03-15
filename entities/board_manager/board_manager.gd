@@ -78,6 +78,12 @@ func _spawn_board(type: Enums.BoardType) -> void:
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 	_boards.append(board)
 
+func is_board_unlocked(type: Enums.BoardType) -> bool:
+	for board in _boards:
+		if board.board_type == type:
+			return true
+	return false
+
 
 func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
 	match type:
