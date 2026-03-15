@@ -25,6 +25,8 @@ var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
 var should_show_advanced_buckets: bool = false
+var _advanced_drop_button: DropButton
+
 signal board_rebuilt
 
 var _drop_timer_remaining: float = 0.0
@@ -167,8 +169,9 @@ func _on_drop_timer_done() -> void:
 	if coin_queue.has_queue() and not coin_queue.is_empty():
 		_drop_from_queue()
 
-
 func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
+	if not _advanced_drop_button and _type == advanced_bucket_type and _new_balance > 0:
+		_spawn_advanced_drop_button()
 	if not is_waiting:
 		_update_drop_status()
 
@@ -215,7 +218,6 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET and reward.target_board == board_type:
 			should_show_advanced_buckets = true
 			build_board()
-			_spawn_advanced_drop_button()
 
 func _spawn_advanced_drop_button() -> void:
 	var adv_button = DropButtonScene.instantiate()
@@ -226,6 +228,7 @@ func _spawn_advanced_drop_button() -> void:
 	adv_button.setup(adv_costs, "Drop %s (1 %s)" % [raw_name, raw_name])
 	adv_button.pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
 	drop_region_buttons.add_child(adv_button)
+	_advanced_drop_button = adv_button
 
 
 func get_nearest_bucket(x_position: float) -> Bucket:
