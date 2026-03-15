@@ -44,6 +44,7 @@ func _ready() -> void:
 	# drop_button.setup(currencies_needed, "Drop %s" % Enums.CurrencyType.keys()[Enums.currency_for_board(board_type)].to_lower().replace("_", " "))
 
 	drop_button.pressed.connect(request_drop)
+	drop_region_buttons.add_child(drop_button)
 	_update_drop_status()
 
 
