@@ -28,11 +28,11 @@ func _build_level_table() -> void:
 			_unlock_upgrade(Enums.UpgradeType.ADD_ROW, Enums.BoardType.GOLD),
 		]),
 		# Level 2
-		_level(12, "You have unlocked Bucket Value.", [
+		_level(13, "You have unlocked Bucket Value.", [
 			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.GOLD),
 		]),
 		# Level 3
-		_level(30, "An ORANGE coin will be dropped!", [
+		_level(35, "An ORANGE coin will be dropped!", [
 			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
 		]),
 		# Level 4

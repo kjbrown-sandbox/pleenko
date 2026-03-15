@@ -23,6 +23,8 @@ var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
 var should_show_advanced_buckets: bool = false
+signal board_rebuilt
+
 var _drop_timer_remaining: float = 0.0
 
 func setup(type: Enums.BoardType) -> void:
@@ -224,6 +226,18 @@ func build_board() -> void:
 		value += distance_from_center * bucket_value_multiplier
 		bucket.setup(bucket_currency, Vector3(i * space_between_pegs, 0, 0), value)
 		buckets_container.add_child(bucket)
+
+	board_rebuilt.emit()
+
+
+## Returns the bounding rect of this board in local space.
+## Used by BoardManager to frame the camera.
+func get_bounds() -> Rect2:
+	var top := vertical_spacing + 0.5
+	var bottom := -vertical_spacing * num_rows + (vertical_spacing / 3) - 0.5
+	var half_width := (num_rows / 2.0) * space_between_pegs + 0.5
+	return Rect2(-half_width, bottom, half_width * 2.0, top - bottom)
+
 
 func add_two_rows() -> void:
 	num_rows += 2

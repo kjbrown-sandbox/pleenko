@@ -14,16 +14,16 @@ var _boards: Array[PlinkoBoard] = []
 var _active_index: int = 0
 var _camera: Camera3D
 
-## The initial camera offset from board position (captured at startup)
-var _camera_offset: Vector3
+## Minimum Z distance so the camera doesn't get too close on small boards
+const MIN_CAMERA_Z := 6.0
 
 
 func setup(camera: Camera3D) -> void:
 	_camera = camera
-	# Capture the camera's starting offset relative to origin (the first board)
-	_camera_offset = camera.position
 	# Start with just the gold board
 	_spawn_board(Enums.BoardType.GOLD)
+	# Frame the camera on the initial board immediately (no tween)
+	_snap_camera_to_active_board()
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 
@@ -75,6 +75,7 @@ func _spawn_board(type: Enums.BoardType) -> void:
 	if board_index != _active_index:
 		board.upgrade_section.visible = false
 
+	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 	_boards.append(board)
 
 
@@ -86,13 +87,28 @@ func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap:
 			unlock_board(Enums.BoardType.RED)
 
 
+func _on_board_rebuilt(board: PlinkoBoard) -> void:
+	# Only adjust the camera if the rebuilt board is the one we're looking at
+	if board == _boards[_active_index]:
+		_tween_camera_to_active_board()
+
+
+func _get_camera_target(board: PlinkoBoard) -> Vector3:
+	var bounds := board.get_bounds()
+	var center_x := board.position.x + bounds.position.x + bounds.size.x / 2.0
+	var center_y := bounds.position.y + bounds.size.y / 2.0
+	var z_for_height := bounds.size.y * 0.9
+	var z_for_width := bounds.size.x * 0.7
+	var z_distance := maxf(MIN_CAMERA_Z, maxf(z_for_height, z_for_width))
+	return Vector3(center_x, center_y, z_distance)
+
+
+func _snap_camera_to_active_board() -> void:
+	_camera.position = _get_camera_target(_boards[_active_index])
+
+
 func _tween_camera_to_active_board() -> void:
-	var board_pos := _boards[_active_index].position
-	var target := Vector3(
-		board_pos.x + _camera_offset.x,
-		_camera_offset.y,
-		_camera_offset.z,
-	)
+	var target := _get_camera_target(_boards[_active_index])
 	var tween := create_tween()
 	tween.tween_property(_camera, "position", target, camera_tween_duration) \
 		.set_ease(Tween.EASE_IN_OUT) \
