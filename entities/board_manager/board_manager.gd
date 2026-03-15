@@ -28,9 +28,7 @@ func setup(camera: Camera3D) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("drop_coin"):
-		get_active_board().request_drop()
-	elif event.is_action_pressed("board_left"):
+	if event.is_action_pressed("board_left"):
 		switch_board(_active_index - 1)
 	elif event.is_action_pressed("board_right"):
 		switch_board(_active_index + 1)

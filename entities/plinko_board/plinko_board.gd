@@ -44,6 +44,12 @@ func _ready() -> void:
 	# drop_button.setup(currencies_needed, "Drop %s" % Enums.CurrencyType.keys()[Enums.currency_for_board(board_type)].to_lower().replace("_", " "))
 
 	drop_button.pressed.connect(func(): request_drop())
+	# Assign spacebar shortcut so the button visually reacts to the key
+	var shortcut := Shortcut.new()
+	var key_event := InputEventAction.new()
+	key_event.action = "drop_coin"
+	shortcut.events = [key_event]
+	drop_button.shortcut = shortcut
 	drop_region_buttons.add_child(drop_button)
 	_update_drop_status()
 
@@ -77,23 +83,22 @@ func _process(delta: float) -> void:
 		_update_drop_status()
 
 
-func request_drop(costs: Array = [], coin_type: Enums.CurrencyType = -1) -> void:
+func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	if costs.is_empty():
 		costs = _get_drop_costs()
-	if coin_type == -1:
-		coin_type = Enums.currency_for_board(board_type)
+	var drop_coin_type: Enums.CurrencyType = (coin_type as Enums.CurrencyType) if coin_type != -1 else Enums.currency_for_board(board_type)
 
 	if not _can_afford(costs):
 		return
 
 	if coin_queue.has_queue() and not coin_queue.is_full():
 		_spend(costs)
-		coin_queue.enqueue(coin_type)
+		coin_queue.enqueue(drop_coin_type)
 		if not is_waiting:
 			_drop_from_queue()
 	elif not is_waiting:
 		_spend(costs)
-		_drop_immediate(coin_type)
+		_drop_immediate(drop_coin_type)
 
 
 ## Returns the costs to drop a normal coin on this board.
