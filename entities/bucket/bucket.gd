@@ -7,18 +7,18 @@ extends Node3D
 		if is_node_ready():
 			$BucketValue.text = str(value)
 
-var color: Enums.CurrencyType
+var currency_type: Enums.CurrencyType
 
 func _ready() -> void:
 	$BucketValue.text = str(value)
 
 func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) -> void:
-	color = bucket_color
+	currency_type = bucket_color
 	position = _position
 	value = _value
 
 	var mesh_color: Color
-	match color:
+	match currency_type:
 		Enums.CurrencyType.GOLD_COIN:
 			mesh_color = Color(1, 0.941176, 0)
 		Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.ORANGE_COIN:

@@ -90,8 +90,8 @@ func _on_drop_timer_done() -> void:
 
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
-	var award = bucket.value * coin.multiplier
-	CurrencyManager.add(Enums.currency_for_board(board_type), award)
+	var amount = bucket.value * coin.multiplier
+	CurrencyManager.add(bucket.currency_type, amount)
 	coin.queue_free()
 
 
@@ -150,13 +150,13 @@ func build_board() -> void:
 		var distance_from_center = (abs(i - floor(num_buckets / 2))) 
 
 		var value = 1
-		var bucket_color: Enums.CurrencyType = Enums.currency_for_board(board_type)
+		var bucket_currency: Enums.CurrencyType = Enums.currency_for_board(board_type)
 		if distance_from_center >= distance_for_advanced_buckets and should_show_advanced_buckets:
-			bucket_color = advanced_bucket_type
+			bucket_currency = advanced_bucket_type
 			distance_from_center -= distance_for_advanced_buckets
 
 		value += distance_from_center * bucket_value_multiplier
-		bucket.setup(bucket_color, Vector3(i * space_between_pegs, 0, 0), value)
+		bucket.setup(bucket_currency, Vector3(i * space_between_pegs, 0, 0), value)
 		buckets_container.add_child(bucket)
 
 func add_two_rows() -> void:
