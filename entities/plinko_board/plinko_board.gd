@@ -18,7 +18,7 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var coin_queue: CoinQueue = $CoinQueue
 
 var board_type: Enums.BoardType
-var advanced_bucket_type: Enums.BoardType
+var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
 var should_show_advanced_buckets: bool = false
@@ -31,9 +31,9 @@ func setup(type: Enums.BoardType) -> void:
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 
 	if board_type == Enums.BoardType.GOLD:
-		advanced_bucket_type = Enums.BoardType.ORANGE
+		advanced_bucket_type = Enums.CurrencyType.RAW_ORANGE
 	elif board_type == Enums.BoardType.ORANGE:
-		advanced_bucket_type = Enums.BoardType.RED
+		advanced_bucket_type = Enums.CurrencyType.RAW_RED
 	else:
 		print("YOU DID NOT FINISH ME")
 
@@ -150,17 +150,13 @@ func build_board() -> void:
 		var distance_from_center = (abs(i - floor(num_buckets / 2))) 
 
 		var value = 1
-		var bucket_color = board_type
+		var bucket_color: Enums.CurrencyType = Enums.currency_for_board(board_type)
 		if distance_from_center >= distance_for_advanced_buckets and should_show_advanced_buckets:
 			bucket_color = advanced_bucket_type
 			distance_from_center -= distance_for_advanced_buckets
 
-		# var distance_from_center = (abs(i - floor(num_buckets / 2))) * bucket_value_multiplier
 		value += distance_from_center * bucket_value_multiplier
 		bucket.setup(bucket_color, Vector3(i * space_between_pegs, 0, 0), value)
-		# bucket.position = Vector3((i * space_between_pegs), 0, 0)
-		# bucket.value = distance_from_center + 1
-		# bucket.setup(bucket_color)
 		buckets_container.add_child(bucket)
 
 func add_two_rows() -> void:
