@@ -11,12 +11,14 @@ extends Node3D
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
+const DropButtonScene := preload("res://entities/drop_section/drop_button.tscn")
 
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 @onready var upgrade_section = $UpgradeSection
 @onready var coin_queue: CoinQueue = $CoinQueue
-@onready var drop_status_label: Label3D = $DropStatusLabel
+@onready var drop_status_label: Label = $DropSection/VBoxContainer/StatusLabel
+@onready var drop_region_buttons: HBoxContainer = $DropSection/VBoxContainer/HBoxContainer
 
 var board_type: Enums.BoardType
 var advanced_bucket_type: Enums.CurrencyType
@@ -26,6 +28,25 @@ var should_show_advanced_buckets: bool = false
 signal board_rebuilt
 
 var _drop_timer_remaining: float = 0.0
+
+func _ready() -> void:
+	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
+	var drop_button = DropButtonScene.instantiate()
+	var currencies_needed: Array[DropButton.CurrencyNeeded] = []
+	var drop_button_label = ""
+	for cost in _get_drop_costs():
+		currencies_needed.append(DropButton.CurrencyNeeded.new(cost[0], cost[1]))
+		drop_button_label += "%d %s, " % [cost[1], Enums.CurrencyType.keys()[cost[0]].to_lower().replace("_", " ")]
+	drop_button_label = drop_button_label.substr(0, drop_button_label.length() - 2) # remove trailing comma and space
+	drop_button.setup(currencies_needed, "Drop %s (%s)" % [Enums.CurrencyType.keys()[Enums.currency_for_board(board_type)].to_lower().replace("_", " "), drop_button_label])
+
+	
+	# drop_button.setup(currencies_needed, "Drop %s" % Enums.CurrencyType.keys()[Enums.currency_for_board(board_type)].to_lower().replace("_", " "))
+
+	drop_button.pressed.connect(request_drop)
+	_update_drop_status()
+
+
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
@@ -45,8 +66,8 @@ func setup(type: Enums.BoardType) -> void:
 			advanced_bucket_type = Enums.CurrencyType.RAW_RED
 
 	# Position the label above the drop point
-	drop_status_label.position = Vector3(0, vertical_spacing + 0.7, 0)
-	_update_drop_status()
+	# drop_status_label.position = Vector3(0, vertical_spacing + 0.7, 0)
+
 
 
 func _process(delta: float) -> void:
@@ -194,8 +215,6 @@ func build_board() -> void:
 
 	for child in buckets_container.get_children():
 		child.queue_free()
-
-	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
 
 	for i in range(num_rows):
 		var x_offset = -i * space_between_pegs / 2
