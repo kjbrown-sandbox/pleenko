@@ -6,7 +6,7 @@ class CurrencyNeeded:
    var amount: int
    func _init(_type: Enums.CurrencyType, _amount: int) -> void:
       type = _type
-      _amount = amount
+      amount = _amount
 
 var currencies_needed: Array[CurrencyNeeded] = []
 

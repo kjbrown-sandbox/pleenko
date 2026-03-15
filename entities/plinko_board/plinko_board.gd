@@ -43,7 +43,7 @@ func _ready() -> void:
 	
 	# drop_button.setup(currencies_needed, "Drop %s" % Enums.CurrencyType.keys()[Enums.currency_for_board(board_type)].to_lower().replace("_", " "))
 
-	drop_button.pressed.connect(request_drop)
+	drop_button.pressed.connect(func(): request_drop())
 	drop_region_buttons.add_child(drop_button)
 	_update_drop_status()
 
@@ -77,25 +77,26 @@ func _process(delta: float) -> void:
 		_update_drop_status()
 
 
-func request_drop() -> void:
-	if not _can_afford_drop():
+func request_drop(costs: Array = [], coin_type: Enums.CurrencyType = -1) -> void:
+	if costs.is_empty():
+		costs = _get_drop_costs()
+	if coin_type == -1:
+		coin_type = Enums.currency_for_board(board_type)
+
+	if not _can_afford(costs):
 		return
 
-	print("coin drop queue, capacity=%d, count=%d" % [coin_queue._capacity, coin_queue.count])
 	if coin_queue.has_queue() and not coin_queue.is_full():
-		print('enqueueing drop')
-		_spend_drop()
-		coin_queue.enqueue()
-		# If we're not waiting on a drop delay, start dropping immediately
+		_spend(costs)
+		coin_queue.enqueue(coin_type)
 		if not is_waiting:
 			_drop_from_queue()
 	elif not is_waiting:
-		_spend_drop()
-		_drop_immediate()
+		_spend(costs)
+		_drop_immediate(coin_type)
 
 
-## Returns the costs to drop a coin on this board as an array of [CurrencyType, amount] pairs.
-## Gold: 1 gold. Orange: 1 raw orange + 100 gold. Red: 1 raw red + 100 orange.
+## Returns the costs to drop a normal coin on this board.
 func _get_drop_costs() -> Array:
 	match board_type:
 		Enums.BoardType.GOLD:
@@ -108,21 +109,27 @@ func _get_drop_costs() -> Array:
 			return []
 
 
-func _can_afford_drop() -> bool:
-	for cost in _get_drop_costs():
+## Returns the cost to drop an advanced coin (1 raw currency of the next tier).
+func _get_advanced_drop_costs() -> Array:
+	return [[advanced_bucket_type, 1]]
+
+
+func _can_afford(costs: Array) -> bool:
+	for cost in costs:
 		if not CurrencyManager.can_afford(cost[0], cost[1]):
 			return false
 	return true
 
 
-func _spend_drop() -> void:
-	for cost in _get_drop_costs():
+func _spend(costs: Array) -> void:
+	for cost in costs:
 		CurrencyManager.spend(cost[0], cost[1])
 
 
-func _drop_immediate() -> void:
+func _drop_immediate(coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN) -> void:
 	var coin = CoinScene.instantiate()
 	coin.board = self
+	coin.coin_type = coin_type
 	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
 	add_child(coin)
 	coin.start(Vector3(0, 0.2, 0))
@@ -203,6 +210,18 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET and reward.target_board == board_type:
 			should_show_advanced_buckets = true
 			build_board()
+			_spawn_advanced_drop_button()
+
+func _spawn_advanced_drop_button() -> void:
+	var adv_button = DropButtonScene.instantiate()
+	var adv_costs: Array[DropButton.CurrencyNeeded] = [
+		DropButton.CurrencyNeeded.new(advanced_bucket_type, 1)
+	]
+	var raw_name: String = Enums.CurrencyType.keys()[advanced_bucket_type].to_lower().replace("_", " ")
+	adv_button.setup(adv_costs, "Drop %s (1 %s)" % [raw_name, raw_name])
+	adv_button.pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
+	drop_region_buttons.add_child(adv_button)
+
 
 func get_nearest_bucket(x_position: float) -> Bucket:
 	for bucket in buckets_container.get_children():
