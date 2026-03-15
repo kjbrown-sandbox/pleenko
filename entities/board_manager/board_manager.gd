@@ -24,6 +24,7 @@ func setup(camera: Camera3D) -> void:
 	_camera_offset = camera.position
 	# Start with just the gold board
 	_spawn_board(Enums.BoardType.GOLD)
+	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 
 func _input(event: InputEvent) -> void:
@@ -75,6 +76,14 @@ func _spawn_board(type: Enums.BoardType) -> void:
 		board.upgrade_section.visible = false
 
 	_boards.append(board)
+
+
+func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
+	match type:
+		Enums.CurrencyType.RAW_ORANGE:
+			unlock_board(Enums.BoardType.ORANGE)
+		Enums.CurrencyType.RAW_RED:
+			unlock_board(Enums.BoardType.RED)
 
 
 func _tween_camera_to_active_board() -> void:
