@@ -5,10 +5,17 @@ var _visible_currencies: Array[Enums.CurrencyType] = [Enums.CurrencyType.GOLD_CO
 
 var _board_manager: BoardManager
 
-func _ready() -> void:
-	_board_manager = %BoardManager
+func setup(board_manager: BoardManager) -> void:
+	_board_manager = board_manager
+
+	# Check if any boards are already unlocked
+	for currency_type in Enums.CurrencyType.values():
+		if not _visible_currencies.has(currency_type) and _is_board_for_coin_type_unlocked(currency_type):
+			_visible_currencies.append(currency_type)
+
 	_update_currencies()
 
+func _ready() -> void:
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 	UpgradeManager.cap_raise_unlocked.connect(_on_cap_raise_unlocked)
 
@@ -29,7 +36,9 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, cap: int) 
 		var coin_name = Enums.CurrencyType.keys()[type]
 		label.text = "%s: %d / %d" % [coin_name, new_balance, cap]
 		if new_balance >= cap:
-			label.add_color_override("font_color", Color(1, 0.15, 0.15))
+			label.add_theme_color_override("font_color", Color(1, 0.15, 0.15))
+		else:
+			label.add_theme_color_override("font_color", Color(1, 1, 1))
 
 	_update_all_cap_buttons()
 
