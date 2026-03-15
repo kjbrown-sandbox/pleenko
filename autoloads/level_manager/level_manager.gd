@@ -55,46 +55,50 @@ func _build_level_table() -> void:
 		_level(300, "An ORANGE coin will be dropped!", [
 			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
 		]),
+		# Level 8
+		_level(400, "An ORANGE coin will be dropped!", [
+			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
+		]),
 		# Level 9
-		_level(400, "You have unlocked Orange Buckets!", [_unlock_advanced_bucket(Enums.BoardType.GOLD)]),
+		_level(500, "You have unlocked Orange Buckets!", [_unlock_advanced_bucket(Enums.BoardType.GOLD)]),
 		# Level 10
-		_level(500, "You have unlocked Add 2 Rows for Orange.", [
+		_level(600, "You have unlocked Add 2 Rows for Orange.", [
 			_unlock_upgrade(Enums.UpgradeType.ADD_ROW, Enums.BoardType.ORANGE),
 		]),
 		# Level 11
-		_level(600, "You have unlocked Bucket Value for Orange.", [
+		_level(700, "You have unlocked Bucket Value for Orange.", [
 			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.ORANGE),
 		]),
 		# Level 12
-		_level(700, "You have unlocked Drop Rate for Orange.", [
+		_level(800, "You have unlocked Drop Rate for Orange.", [
 			_unlock_upgrade(Enums.UpgradeType.DROP_RATE, Enums.BoardType.ORANGE),
 		]),
 		# Level 13
-		_level(800, "A RED coin will be dropped!", [
+		_level(900, "A RED coin will be dropped!", [
 			_drop_coins(1, Enums.CurrencyType.RED_COIN, 1, Enums.BoardType.ORANGE),
 		]),
 		# Level 14
-		_level(900, "You have unlocked Queue for Orange.", [
+		_level(1000, "You have unlocked Queue for Orange.", [
 			_unlock_upgrade(Enums.UpgradeType.QUEUE, Enums.BoardType.ORANGE),
 		]),
 		# Level 15
-		_level(1000, "You have unlocked Autodropper.", []),
+		_level(1250, "You have unlocked Autodropper.", []),
 		# Level 16
-		_level(1250, "A RED coin will be dropped!", [
+		_level(1500, "A RED coin will be dropped!", [
 			_drop_coins(1, Enums.CurrencyType.RED_COIN, 1, Enums.BoardType.ORANGE),
 		]),
 		# Level 17
-		_level(1500, "You have unlocked Red Buckets!", []),
+		_level(2000, "You have unlocked Red Buckets!", []),
 		# Level 18
-		_level(1750, "You have unlocked Bucket Value for Red.", [
+		_level(2250, "You have unlocked Bucket Value for Red.", [
 			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.RED),
 		]),
 		# Level 19
-		_level(2000, "You have unlocked Drop Rate for Red.", [
+		_level(2500, "You have unlocked Drop Rate for Red.", [
 			_unlock_upgrade(Enums.UpgradeType.DROP_RATE, Enums.BoardType.RED),
 		]),
 		# Level 20
-		_level(2500, "You have unlocked Queue for Red.", [
+		_level(2750, "You have unlocked Queue for Red.", [
 			_unlock_upgrade(Enums.UpgradeType.QUEUE, Enums.BoardType.RED),
 		]),
 		# Level 21

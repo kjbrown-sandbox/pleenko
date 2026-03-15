@@ -30,29 +30,57 @@ func setup(type: Enums.BoardType) -> void:
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 
-	if board_type == Enums.BoardType.GOLD:
-		advanced_bucket_type = Enums.CurrencyType.RAW_ORANGE
-	elif board_type == Enums.BoardType.ORANGE:
-		advanced_bucket_type = Enums.CurrencyType.RAW_RED
-	else:
-		print("YOU DID NOT FINISH ME")
+	# Each board tier doubles the base drop delay: gold=2s, orange=4s, red=8s, etc.
+	drop_delay = drop_delay * pow(2, board_type)
+
+	match board_type:
+		Enums.BoardType.GOLD:
+			advanced_bucket_type = Enums.CurrencyType.RAW_ORANGE
+		Enums.BoardType.ORANGE:
+			advanced_bucket_type = Enums.CurrencyType.RAW_RED
 
 
 func request_drop() -> void:
-	if not CurrencyManager.can_afford(Enums.currency_for_board(board_type), 1):
+	if not _can_afford_drop():
 		return
 
 	print("coin drop queue, capacity=%d, count=%d" % [coin_queue._capacity, coin_queue.count])
 	if coin_queue.has_queue() and not coin_queue.is_full():
 		print('enqueueing drop')
-		CurrencyManager.spend(Enums.currency_for_board(board_type), 1)
+		_spend_drop()
 		coin_queue.enqueue()
 		# If we're not waiting on a drop delay, start dropping immediately
 		if not is_waiting:
 			_drop_from_queue()
-	elif not is_waiting and CurrencyManager.spend(Enums.currency_for_board(board_type), 1):
-		print('drop pping immediately')
+	elif not is_waiting:
+		_spend_drop()
 		_drop_immediate()
+
+
+## Returns the costs to drop a coin on this board as an array of [CurrencyType, amount] pairs.
+## Gold: 1 gold. Orange: 1 raw orange + 100 gold. Red: 1 raw red + 100 orange.
+func _get_drop_costs() -> Array:
+	match board_type:
+		Enums.BoardType.GOLD:
+			return [[Enums.CurrencyType.GOLD_COIN, 1]]
+		Enums.BoardType.ORANGE:
+			return [[Enums.CurrencyType.RAW_ORANGE, 1], [Enums.CurrencyType.GOLD_COIN, 100]]
+		Enums.BoardType.RED:
+			return [[Enums.CurrencyType.RAW_RED, 1], [Enums.CurrencyType.ORANGE_COIN, 100]]
+		_:
+			return []
+
+
+func _can_afford_drop() -> bool:
+	for cost in _get_drop_costs():
+		if not CurrencyManager.can_afford(cost[0], cost[1]):
+			return false
+	return true
+
+
+func _spend_drop() -> void:
+	for cost in _get_drop_costs():
+		CurrencyManager.spend(cost[0], cost[1])
 
 
 func _drop_immediate() -> void:
