@@ -16,12 +16,14 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var buckets_container: Node3D = $Buckets
 @onready var upgrade_section = $UpgradeSection
 @onready var coin_queue: CoinQueue = $CoinQueue
+@onready var drop_status_label: Label3D = $DropStatusLabel
 
 var board_type: Enums.BoardType
 var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
 var should_show_advanced_buckets: bool = false
+var _drop_timer_remaining: float = 0.0
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
@@ -29,6 +31,7 @@ func setup(type: Enums.BoardType) -> void:
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
+	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 	# Each board tier doubles the base drop delay: gold=2s, orange=4s, red=8s, etc.
 	drop_delay = drop_delay * pow(2, board_type)
@@ -38,6 +41,16 @@ func setup(type: Enums.BoardType) -> void:
 			advanced_bucket_type = Enums.CurrencyType.RAW_ORANGE
 		Enums.BoardType.ORANGE:
 			advanced_bucket_type = Enums.CurrencyType.RAW_RED
+
+	# Position the label above the drop point
+	drop_status_label.position = Vector3(0, vertical_spacing + 0.7, 0)
+	_update_drop_status()
+
+
+func _process(delta: float) -> void:
+	if is_waiting:
+		_drop_timer_remaining = maxf(0.0, _drop_timer_remaining - delta)
+		_update_drop_status()
 
 
 func request_drop() -> void:
@@ -107,13 +120,38 @@ func _drop_from_queue() -> void:
 
 func _start_drop_timer() -> void:
 	is_waiting = true
+	_drop_timer_remaining = drop_delay
 	get_tree().create_timer(drop_delay).timeout.connect(_on_drop_timer_done)
 
 
 func _on_drop_timer_done() -> void:
 	is_waiting = false
+	_drop_timer_remaining = 0.0
+	_update_drop_status()
 	if coin_queue.has_queue() and not coin_queue.is_empty():
 		_drop_from_queue()
+
+
+func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
+	if not is_waiting:
+		_update_drop_status()
+
+
+func _update_drop_status() -> void:
+	var text: String
+	if is_waiting:
+		text = "%.1fs" % _drop_timer_remaining
+	else:
+		var parts: PackedStringArray = []
+		for cost in _get_drop_costs():
+			var currency_name: String = Enums.CurrencyType.keys()[cost[0]].to_lower().replace("_", " ")
+			parts.append("%d %s" % [cost[1], currency_name])
+		text = "Need " + ", ".join(parts)
+
+	if coin_queue.has_queue():
+		text += " [%d/%d]" % [coin_queue.count, coin_queue._capacity]
+
+	drop_status_label.text = text
 
 
 func on_coin_landed(coin: Coin) -> void:

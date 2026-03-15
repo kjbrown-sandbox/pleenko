@@ -15,3 +15,6 @@ script = ExtResource("1_wje3v")
 script = ExtResource("3_coinqueue")
 
 [node name="UpgradeSection" parent="." unique_id=453723975 instance=ExtResource("2_upgrade")]
+
+[node name="DropStatusLabel" type="Label3D" parent="."]
+font_size = 32
