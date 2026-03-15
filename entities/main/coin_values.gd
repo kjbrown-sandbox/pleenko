@@ -54,9 +54,10 @@ func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
 
 
 func _update_currencies() -> void:
-	# Clear existing rows
+	# Clear existing rows and cap button references
 	for child in get_children():
 		child.queue_free()
+	_cap_buttons.clear()
 
 	# Rebuild from _visible_currencies
 	for currency_type in _visible_currencies:
@@ -71,7 +72,15 @@ func _update_currencies() -> void:
 		label.text = "%s: %d / %d" % [coin_name, amount, cap]
 		row.add_child(label)
 
+		var cap_button := Button.new()
+		cap_button.visible = false
+		cap_button.pressed.connect(_on_cap_raise_pressed.bind(currency_type))
+		row.add_child(cap_button)
+		_cap_buttons[currency_type] = cap_button
+
 		add_child(row)
+
+	_update_all_cap_buttons()
 
 
 func _on_cap_raise_unlocked(_board_type: Enums.BoardType) -> void:
