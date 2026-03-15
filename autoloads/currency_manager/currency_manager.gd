@@ -12,7 +12,7 @@ func _ready() -> void:
       balances[currency_type] = 0
       caps[currency_type] = 50 if currency_type in [Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.RAW_RED] else 500
       _cap_raise_levels[currency_type] = 0
-   balances[Enums.CurrencyType.GOLD_COIN] = 6
+   balances[Enums.CurrencyType.GOLD_COIN] = 1
 
 func can_afford(type: Enums.CurrencyType, amount: int) -> bool:
    return amount <= balances[type]
