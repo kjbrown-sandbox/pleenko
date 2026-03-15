@@ -16,6 +16,7 @@ const DropButtonScene := preload("res://entities/drop_section/drop_button.tscn")
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 @onready var upgrade_section = $UpgradeSection
+@onready var drop_section = $DropSection
 @onready var coin_queue: CoinQueue = $CoinQueue
 @onready var drop_status_label: Label = $DropSection/VBoxContainer/StatusLabel
 @onready var drop_region_buttons: HBoxContainer = $DropSection/VBoxContainer/HBoxContainer
@@ -26,32 +27,24 @@ var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
 var should_show_advanced_buckets: bool = false
 var _advanced_drop_button: DropButton
+var _drop_buttons: Dictionary = {}  # StringName -> DropButton
 
 signal board_rebuilt
+signal autodropper_adjust_requested(button_id: StringName, delta: int)
 
 var _drop_timer_remaining: float = 0.0
 
 func _ready() -> void:
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
-	var drop_button = DropButtonScene.instantiate()
-	var currencies_needed: Array[DropButton.CurrencyNeeded] = []
-	var drop_button_label = ""
-	for cost in _get_drop_costs():
-		currencies_needed.append(DropButton.CurrencyNeeded.new(cost[0], cost[1]))
-		drop_button_label += "%d %s, " % [cost[1], Enums.CurrencyType.keys()[cost[0]].to_lower().replace("_", " ")]
-	drop_button_label = drop_button_label.substr(0, drop_button_label.length() - 2) # remove trailing comma and space
-	drop_button.setup(currencies_needed, "Drop %s (%s)" % [Enums.CurrencyType.keys()[Enums.currency_for_board(board_type)].to_lower().replace("_", " "), drop_button_label])
-
-	
-	# drop_button.setup(currencies_needed, "Drop %s" % Enums.CurrencyType.keys()[Enums.currency_for_board(board_type)].to_lower().replace("_", " "))
-
-	drop_button.pressed.connect(func(): request_drop())
+	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[board_type])
+	var drop_button = _create_drop_button(normal_id, _get_drop_costs())
+	drop_button.drop_pressed.connect(func(): request_drop())
 	# Assign spacebar shortcut so the button visually reacts to the key
 	var shortcut := Shortcut.new()
 	var key_event := InputEventAction.new()
 	key_event.action = "drop_coin"
 	shortcut.events = [key_event]
-	drop_button.shortcut = shortcut
+	drop_button.set_shortcut(shortcut)
 	drop_region_buttons.add_child(drop_button)
 	_update_drop_status()
 
@@ -170,7 +163,8 @@ func _on_drop_timer_done() -> void:
 		_drop_from_queue()
 
 func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
-	if not _advanced_drop_button and _type == advanced_bucket_type and _new_balance > 0:
+	if not _advanced_drop_button and board_type != Enums.BoardType.RED \
+			and _type == advanced_bucket_type and _new_balance > 0:
 		_spawn_advanced_drop_button()
 	if not is_waiting:
 		_update_drop_status()
@@ -197,6 +191,8 @@ func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
 	var amount = bucket.value * coin.multiplier
 	CurrencyManager.add(bucket.currency_type, amount)
+	if coin.multiplier > 1:
+		_show_floating_text(coin.global_position, coin.multiplier, amount)
 	coin.queue_free()
 
 
@@ -220,13 +216,9 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 			build_board()
 
 func _spawn_advanced_drop_button() -> void:
-	var adv_button = DropButtonScene.instantiate()
-	var adv_costs: Array[DropButton.CurrencyNeeded] = [
-		DropButton.CurrencyNeeded.new(advanced_bucket_type, 1)
-	]
-	var raw_name: String = Enums.CurrencyType.keys()[advanced_bucket_type].to_lower().replace("_", " ")
-	adv_button.setup(adv_costs, "Drop %s (1 %s)" % [raw_name, raw_name])
-	adv_button.pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
+	var adv_id := StringName("%s_ADVANCED" % Enums.BoardType.keys()[board_type])
+	var adv_button = _create_drop_button(adv_id, _get_advanced_drop_costs())
+	adv_button.drop_pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
 	drop_region_buttons.add_child(adv_button)
 	_advanced_drop_button = adv_button
 
@@ -297,5 +289,53 @@ func increase_bucket_values() -> void:
 func decrease_drop_delay() -> void:
 	drop_delay *= drop_delay_reduction_factor
 
+func _show_floating_text(pos: Vector3, multiplier: int, total: int) -> void:
+	var label := Label3D.new()
+	label.text = "x%d = %d" % [multiplier, total]
+	label.font_size = 40
+	label.position = Vector3(pos.x, pos.y + 0.3, pos.z + 0.05)
+	if multiplier >= 9:
+		label.modulate = Color(1, 0.3, 0.3, 1)
+	add_child(label)
+
+	var tween := create_tween()
+	tween.tween_property(label, "position:y", label.position.y + 1.5, 1.2)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.6).set_delay(0.6)
+	tween.tween_callback(label.queue_free)
+
+
 func increase_queue_capacity() -> void:
 	coin_queue.set_capacity(coin_queue._capacity + 1)
+
+
+func _create_drop_button(btn_id: StringName, costs: Array) -> DropButton:
+	var button = DropButtonScene.instantiate()
+	var currencies_needed: Array[DropButton.CurrencyNeeded] = []
+	var label_parts: PackedStringArray = []
+	for cost in costs:
+		currencies_needed.append(DropButton.CurrencyNeeded.new(cost[0], cost[1]))
+		label_parts.append("%d %s" % [cost[1], Enums.CurrencyType.keys()[cost[0]].to_lower().replace("_", " ")])
+	var cost_str := ", ".join(label_parts)
+	var coin_name: String = Enums.CurrencyType.keys()[costs[0][0]].to_lower().replace("_", " ")
+	button.setup(currencies_needed, "Drop %s (%s)" % [coin_name, cost_str], btn_id)
+	button.autodropper_adjust_requested.connect(
+		func(bid: StringName, delta: int): autodropper_adjust_requested.emit(bid, delta)
+	)
+	_drop_buttons[btn_id] = button
+	return button
+
+
+func try_autodrop(is_advanced: bool) -> void:
+	var costs: Array = _get_advanced_drop_costs() if is_advanced else _get_drop_costs()
+	var coin_type: int = advanced_bucket_type if is_advanced else -1
+	if _can_afford(costs):
+		request_drop(costs, coin_type)
+
+
+func set_autodroppers_visible(vis: bool) -> void:
+	for button in _drop_buttons.values():
+		button.show_autodropper_controls(vis)
+
+
+func get_drop_button(btn_id: StringName) -> DropButton:
+	return _drop_buttons.get(btn_id)

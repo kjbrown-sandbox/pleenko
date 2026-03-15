@@ -19,6 +19,7 @@ enum UpgradeType {
    BUCKET_VALUE,
    DROP_RATE,
    QUEUE,
+   AUTODROPPER,
 }
 
 static func currency_for_board(board_type: BoardType) -> CurrencyType:

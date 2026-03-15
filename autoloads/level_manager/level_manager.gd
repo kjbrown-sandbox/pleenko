@@ -82,7 +82,10 @@ func _build_level_table() -> void:
 			_unlock_upgrade(Enums.UpgradeType.QUEUE, Enums.BoardType.ORANGE),
 		]),
 		# Level 15
-		_level(1250, "You have unlocked Autodropper.", []),
+		_level(1250, "You have unlocked Autodropper.", [
+			_unlock_autodropper(),
+			_unlock_upgrade(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.ORANGE),
+		]),
 		# Level 16
 		_level(1500, "A RED coin will be dropped!", [
 			_drop_coins(1, Enums.CurrencyType.RED_COIN, 1, Enums.BoardType.ORANGE),
@@ -141,6 +144,13 @@ func _drop_coins(count: int, coin_type: Enums.CurrencyType, mult: int, target: E
 	r.coin_multiplier = mult
 	r.target_board = target
 	return r
+
+## Helper to create an UNLOCK_AUTODROPPER reward.
+func _unlock_autodropper() -> RewardData:
+	var r := RewardData.new()
+	r.type = RewardData.RewardType.UNLOCK_AUTODROPPER
+	return r
+
 
 ## Helper to create a UNLOCK_BUCKET reward.
 func _unlock_advanced_bucket(target: Enums.BoardType) -> RewardData:

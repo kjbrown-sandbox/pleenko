@@ -11,6 +11,7 @@ class UpgradeState:
 signal upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, new_level: int)
 signal upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType)
 signal cap_raise_unlocked(board_type: Enums.BoardType)
+signal autodropper_unlocked
 
 ## Populate this array in the Inspector with .tres BaseUpgradeData resources.
 @export var upgrades: Array[BaseUpgradeData] = []
@@ -131,6 +132,8 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 	for reward in rewards:
 		if reward.type == RewardData.RewardType.UNLOCK_UPGRADE:
 			unlock(reward.board_type, reward.upgrade_type)
+		elif reward.type == RewardData.RewardType.UNLOCK_AUTODROPPER:
+			autodropper_unlocked.emit()
 
 
 func is_cap_raise_available(board_type: Enums.BoardType) -> bool:

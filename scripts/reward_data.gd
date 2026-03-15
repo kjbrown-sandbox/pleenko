@@ -6,6 +6,7 @@ enum RewardType {
 	DROP_COINS,
 	UNLOCK_BOARD,
 	UNLOCK_ADVANCED_BUCKET,
+	UNLOCK_AUTODROPPER,
 }
 
 @export var type: RewardType

@@ -2,8 +2,27 @@
 
 [ext_resource type="Script" uid="uid://clb6qvwkbgmii" path="res://entities/drop_section/drop_button.gd" id="1_hmjgw"]
 
-[node name="DropButton" type="Button" unique_id=1342315207]
+[node name="DropButton" type="VBoxContainer" unique_id=1342315207]
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("1_hmjgw")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="MinusButton" type="Button" parent="HBoxContainer"]
+layout_mode = 2
+text = "-"
+
+[node name="MainButton" type="Button" parent="HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Drop"
-script = ExtResource("1_hmjgw")
+
+[node name="PlusButton" type="Button" parent="HBoxContainer"]
+layout_mode = 2
+text = "+"
+
+[node name="RateLabel" type="Label" parent="."]
+layout_mode = 2
+horizontal_alignment = 1
