@@ -22,10 +22,6 @@ var is_waiting = false
 var bucket_value_multiplier: int = 1
 
 
-func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("drop_coin"):
-		request_drop()
-
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
 	upgrade_section.setup(self, type)

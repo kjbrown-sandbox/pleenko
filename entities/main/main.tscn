@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://djihx7hlyi5a6"]
 
 [ext_resource type="Script" uid="uid://der5dhn1xrahx" path="res://entities/main/main.gd" id="1_j5li3"]
-[ext_resource type="PackedScene" uid="uid://dqosetipfxq2w" path="res://entities/plinko_board/plinko_board.tscn" id="1_kykwc"]
+[ext_resource type="Script" uid="uid://c6xaea0tfy1nk" path="res://entities/board_manager/board_manager.gd" id="2_brdmgr"]
 [ext_resource type="Script" uid="uid://dqvg32rprv776" path="res://entities/main/coin_values.gd" id="2_dn64k"]
 [ext_resource type="PackedScene" path="res://entities/level_up_dialog/level_up_dialog.tscn" id="3_levelup"]
 [ext_resource type="Script" uid="uid://bv8jn2v2y6dbj" path="res://entities/level_progress_bar/level_progress_bar.gd" id="4_lvlbar"]
@@ -12,7 +12,8 @@ script = ExtResource("1_j5li3")
 [node name="Camera3D" type="Camera3D" parent="." unique_id=767305011]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.08165e-12, -1.7165763, 6.980745)
 
-[node name="PlinkoBoard" parent="." unique_id=455905067 instance=ExtResource("1_kykwc")]
+[node name="BoardManager" type="Node3D" parent="." unique_id=934128328]
+script = ExtResource("2_brdmgr")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1399139]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.85613, 3.95506)

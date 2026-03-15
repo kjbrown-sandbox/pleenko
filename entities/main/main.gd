@@ -1,7 +1,9 @@
 extends Node3D
 
-@onready var plinko_board: Node3D = $PlinkoBoard
+@onready var board_manager: BoardManager = $BoardManager
+@onready var camera: Camera3D = $Camera3D
 
 
 func _ready() -> void:
-	plinko_board.setup(Enums.BoardType.GOLD)
+	board_manager.setup(camera)
+	# board_manager.unlock_board(Enums.BoardType.ORANGE) # just here for testing that orange can be unlocked
