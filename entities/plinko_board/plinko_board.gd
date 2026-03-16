@@ -86,14 +86,19 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	if not _can_afford(costs):
 		return
 
+	var coin: Coin = CoinScene.instantiate()
+	coin.coin_type = drop_coin_type
+	if drop_coin_type == advanced_bucket_type:
+		coin.multiplier = 3
+
 	if coin_queue.has_queue() and not coin_queue.is_full():
 		_spend(costs)
-		coin_queue.enqueue(drop_coin_type)
+		coin_queue.enqueue(coin)
 		if not is_waiting:
 			_drop_from_queue()
 	elif not is_waiting:
 		_spend(costs)
-		_drop_immediate(drop_coin_type)
+		_drop_immediate_coin(coin)
 
 
 ## Returns the costs to drop a normal coin on this board.
@@ -126,10 +131,8 @@ func _spend(costs: Array) -> void:
 		CurrencyManager.spend(cost[0], cost[1])
 
 
-func _drop_immediate(coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN) -> void:
-	var coin = CoinScene.instantiate()
+func _drop_immediate_coin(coin: Coin) -> void:
 	coin.board = self
-	coin.coin_type = coin_type
 	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
 	add_child(coin)
 	coin.start(Vector3(0, 0.2, 0))

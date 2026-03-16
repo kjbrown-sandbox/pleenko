@@ -1,8 +1,6 @@
 class_name CoinQueue
 extends Node3D
 
-const CoinScene := preload("res://entities/coin/coin.tscn")
-
 ## Where the first coin in the queue sits (local to this node).
 @export var start_position: Vector3 = Vector3(-1, sqrt(3)/2 + 0.2, 0)
 ## Spacing between coins along the X axis.
@@ -40,12 +38,10 @@ func has_queue() -> bool:
 	return _capacity > 0
 
 
-func enqueue(coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN) -> void:
+func enqueue(coin: Coin) -> void:
 	if is_full():
 		return
 
-	var coin: Coin = CoinScene.instantiate()
-	coin.coin_type = coin_type
 	var slot_index := _coins.size()
 	coin.position = _slot_position(slot_index)
 	coin.rotation = coin_rotation
