@@ -26,6 +26,7 @@ var _board_container: Node3D
 var _coin_container: Node3D
 var _drop_timer := 0.0
 var _coin_index := 0
+var _halo_shader: Shader
 
 # Currency type ints (mirrors Enums.CurrencyType values)
 const GOLD_COIN := 0
@@ -45,6 +46,24 @@ func _ready() -> void:
 	_coin_container = Node3D.new()
 	_coin_container.name = "Coins"
 	add_child(_coin_container)
+
+	_halo_shader = Shader.new()
+	_halo_shader.code = "
+shader_type spatial;
+render_mode unshaded, blend_mix, cull_disabled;
+uniform vec4 glow_color : source_color = vec4(1.0, 1.0, 1.0, 0.1);
+uniform float opacity_mult = 1.0;
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+void fragment() {
+	float dist = length(UV - vec2(0.5)) * 2.0;
+	float falloff = exp(-dist * dist * 3.0);
+	float noise = (hash(FRAGCOORD.xy) - 0.5) / 255.0;
+	ALBEDO = glow_color.rgb;
+	ALPHA = max(falloff * glow_color.a * opacity_mult + noise, 0.0);
+}
+"
 
 	if not theme:
 		theme = VisualTheme.new()
@@ -218,7 +237,7 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 			label.owner = get_tree().edited_scene_root
 
 	# ── Board glow (soft radial gradient behind the board center) ──
-	if theme.board_glow_opacity > 0:
+	if theme.board_glow_enabled and theme.board_glow_opacity > 0:
 		var glow_y := -vertical_spacing * theme.board_rows / 2.0
 		var glow := MeshInstance3D.new()
 		var glow_mesh := QuadMesh.new()
@@ -226,24 +245,7 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 		glow.mesh = glow_mesh
 
 		var glow_shader := ShaderMaterial.new()
-		var shader := Shader.new()
-		shader.code = "
-shader_type spatial;
-render_mode unshaded, blend_mix, cull_disabled;
-uniform vec4 glow_color : source_color = vec4(1.0, 1.0, 1.0, 0.1);
-float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-void fragment() {
-	float dist = length(UV - vec2(0.5)) * 2.0;
-	float falloff = exp(-dist * dist * 3.0);
-	// Dither to eliminate banding at low alpha
-	float noise = (hash(FRAGCOORD.xy) - 0.5) / 255.0;
-	ALBEDO = glow_color.rgb;
-	ALPHA = max(falloff * glow_color.a + noise, 0.0);
-}
-"
-		glow_shader.shader = shader
+		glow_shader.shader = _halo_shader
 		var glow_color := theme.get_coin_color(currency_type)
 		glow_color.a = theme.board_glow_opacity
 		glow_shader.set_shader_parameter("glow_color", glow_color)
@@ -426,6 +428,28 @@ func _flash_nearest_peg(coin_pos: Vector3, board_offset: Vector3, currency: int)
 	glow_tween.tween_property(peg_mat, "albedo_color", theme.peg_color, theme.peg_glow_duration) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	closest_peg.set_meta("glow_tween", glow_tween)
+
+	# ── Peg halo — soft radial glow that fades with the peg ──
+	if theme.peg_glow_halo_enabled and _halo_shader:
+		var halo := MeshInstance3D.new()
+		var halo_mesh := QuadMesh.new()
+		halo_mesh.size = Vector2(theme.peg_glow_halo_radius, theme.peg_glow_halo_radius)
+		halo.mesh = halo_mesh
+
+		var halo_mat := ShaderMaterial.new()
+		halo_mat.shader = _halo_shader
+		var halo_color := glow_color
+		halo_color.a = theme.peg_glow_halo_opacity
+		halo_mat.set_shader_parameter("glow_color", halo_color)
+		halo_mat.set_shader_parameter("opacity_mult", 1.0)
+		halo.material_override = halo_mat
+		halo.position = Vector3(closest_peg.global_position.x, closest_peg.global_position.y, closest_peg.global_position.z - 0.05)
+		_coin_container.add_child(halo)
+
+		var halo_tween := create_tween()
+		halo_tween.tween_property(halo_mat, "shader_parameter/opacity_mult", 0.0, theme.peg_glow_duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		halo_tween.tween_callback(halo.queue_free)
 
 
 func _pulse_nearest_bucket(coin_pos: Vector3, board_offset: Vector3) -> void:

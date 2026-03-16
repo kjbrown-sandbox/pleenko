@@ -35,3 +35,6 @@ bucket_red_color = Color(0.55, 0.2, 0.2, 1)
 bucket_pulse_scale = 1.1
 bucket_pulse_duration = 0.18
 coin_spawn_scale_duration = 0.12
+board_glow_enabled = false
+peg_glow_halo_enabled = true
+peg_glow_halo_opacity = 0.03
