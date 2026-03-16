@@ -5,9 +5,9 @@
 
 [sub_resource type="Environment" id="Environment_tljf2"]
 background_mode = 1
-background_color = Color(0.18, 0.2, 0.24, 1)
+background_color = Color(0.14, 0.16, 0.22, 1)
 ambient_light_source = 2
-ambient_light_color = Color(0.3, 0.35, 0.45, 1)
+ambient_light_color = Color(0.25, 0.3, 0.45, 1)
 ambient_light_energy = 0.3
 
 [node name="StyleLab" type="Node3D" unique_id=1947261719]

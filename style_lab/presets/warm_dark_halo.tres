@@ -1,18 +1,18 @@
-[gd_resource type="Resource" script_class="VisualTheme" format=3 uid="uid://dr6w84q5k5rfs"]
+[gd_resource type="Resource" script_class="VisualTheme" format=3]
 
 [ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_fbp74"]
 [ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
 
 [resource]
 script = ExtResource("1_vt")
-background_color = Color(0.14, 0.16, 0.22, 1)
-ambient_light_color = Color(0.25, 0.3, 0.45, 1)
+background_color = Color(0.18, 0.2, 0.24, 1)
+ambient_light_color = Color(0.3, 0.35, 0.45, 1)
 ambient_light_energy = 0.3
-directional_light_color = Color(0.6, 0.65, 0.8, 1)
+directional_light_color = Color(0.7, 0.75, 0.85, 1)
 directional_light_energy = 1.0
 directional_light_angle = Vector3(-40, -30, 0)
 peg_radius = 0.05
-peg_color = Color(0.25, 0.28, 0.35, 1)
+peg_color = Color(0.3, 0.32, 0.36, 1)
 peg_roughness = 0.7
 peg_metallic = 0.2
 bucket_width = 0.85
