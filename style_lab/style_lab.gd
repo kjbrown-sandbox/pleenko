@@ -231,11 +231,16 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 shader_type spatial;
 render_mode unshaded, blend_mix, cull_disabled;
 uniform vec4 glow_color : source_color = vec4(1.0, 1.0, 1.0, 0.1);
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
 void fragment() {
-	float dist = length(UV - vec2(0.5));
-	float alpha = smoothstep(0.5, 0.0, dist) * glow_color.a;
+	float dist = length(UV - vec2(0.5)) * 2.0;
+	float falloff = exp(-dist * dist * 3.0);
+	// Dither to eliminate banding at low alpha
+	float noise = (hash(FRAGCOORD.xy) - 0.5) / 255.0;
 	ALBEDO = glow_color.rgb;
-	ALPHA = alpha;
+	ALPHA = max(falloff * glow_color.a + noise, 0.0);
 }
 "
 		glow_shader.shader = shader
@@ -318,17 +323,16 @@ func _animate_coin_drop(coin: MeshInstance3D, board_offset: Vector3,
 	var fall_time := 0.4
 	var bounce_height := 0.2
 
-	var bucket_y := -vertical_spacing * theme.board_rows + (vertical_spacing / 3)
-	if coin.position.y < board_offset.y + bucket_y + 0.5 or row >= theme.board_rows:
-		_on_demo_coin_landed(coin, board_offset, currency, vertical_spacing)
-		return
-
 	# ── Peg glow VFX ──
 	_flash_nearest_peg(coin.position, board_offset, currency)
 
 	var direction := 1.0 if randf() < 0.5 else -1.0
 	var next_x := coin.position.x + direction * theme.space_between_pegs / 2
 	var next_y := coin.position.y - vertical_spacing
+
+	# Check if this bounce would land the coin at or past bucket level
+	var bucket_y := board_offset.y - vertical_spacing * theme.board_rows + (vertical_spacing / 3)
+	var is_landing := next_y < bucket_y + 0.5 or row + 1 >= theme.board_rows
 
 	# Horizontal movement
 	var x_tween := create_tween()
@@ -342,7 +346,11 @@ func _animate_coin_drop(coin: MeshInstance3D, board_offset: Vector3,
 	y_tween.tween_property(coin, "position:y", next_y, fall_time * 2 / 3) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	y_tween.tween_callback(func():
-		if is_instance_valid(coin):
+		if not is_instance_valid(coin):
+			return
+		if is_landing:
+			_on_demo_coin_landed(coin, board_offset, currency, vertical_spacing)
+		else:
 			_animate_coin_drop(coin, board_offset, currency, vertical_spacing, row + 1)
 	)
 

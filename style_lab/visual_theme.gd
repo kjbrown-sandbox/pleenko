@@ -86,8 +86,8 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var floating_text_duration := 1.2
 @export var coin_spawn_scale_from := 0.0                          # fade-in start scale
 @export var coin_spawn_scale_duration := 0.15
-@export var board_glow_radius := 3.0                              # size of the soft glow behind each board
-@export var board_glow_opacity := 0.08                            # very subtle
+@export var board_glow_radius := 6.0                              # size of the soft glow behind each board
+@export var board_glow_opacity := 0.04                            # very subtle
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
