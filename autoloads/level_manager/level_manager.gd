@@ -96,7 +96,7 @@ func _build_level_table() -> void:
 			_drop_coins(1, Enums.CurrencyType.RED_COIN, 1, Enums.BoardType.ORANGE),
 		]),
 		# Level 17
-		_level(2000, "You have unlocked Red Buckets!", []),
+		_level(2000, "You have unlocked Red Buckets!", [_unlock_advanced_bucket(Enums.BoardType.ORANGE)]),
 		# Level 18
 		_level(2250, "You have unlocked Bucket Value for Red.", [
 			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.RED),
