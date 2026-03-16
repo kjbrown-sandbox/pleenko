@@ -28,6 +28,7 @@ func setup(camera: Camera3D) -> void:
 	# Frame the camera on the initial board immediately (no tween)
 	_snap_camera_to_active_board()
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
+	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 
 	# Autodropper timer (1 tick per second, starts paused)
 	_autodrop_timer = Timer.new()
@@ -108,6 +109,20 @@ func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap:
 			unlock_board(Enums.BoardType.ORANGE)
 		Enums.CurrencyType.RAW_RED:
 			unlock_board(Enums.BoardType.RED)
+
+
+func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
+	for reward in rewards:
+		if reward.target_board != _boards[_active_index].board_type:
+			_switch_to_board_type(reward.target_board)
+			return
+
+
+func _switch_to_board_type(type: Enums.BoardType) -> void:
+	for i in _boards.size():
+		if _boards[i].board_type == type:
+			switch_board(i)
+			return
 
 
 func _on_board_rebuilt(board: PlinkoBoard) -> void:
