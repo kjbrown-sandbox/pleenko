@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="VisualTheme" format=3 uid="uid://dj7m47cy7foex"]
+
+[ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
+
+[resource]
+script = ExtResource("1_vt")
+unshaded = null
