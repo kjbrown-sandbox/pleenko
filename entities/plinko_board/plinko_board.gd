@@ -219,6 +219,8 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 			build_board()
 
 func _spawn_advanced_drop_button() -> void:
+	if _advanced_drop_button:
+		return
 	var adv_id := StringName("%s_ADVANCED" % Enums.BoardType.keys()[board_type])
 	var adv_button = _create_drop_button(adv_id, _get_advanced_drop_costs())
 	adv_button.drop_pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
