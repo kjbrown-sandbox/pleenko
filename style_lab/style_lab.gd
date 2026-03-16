@@ -211,7 +211,7 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 		label.outline_size = theme.label_outline_size
 		if theme.label_font:
 			label.font = theme.label_font
-		label.position = Vector3(0, -0.15, 0.05)
+		label.position = Vector3(0, theme.bucket_label_offset, 0.05)
 		label.modulate = theme.get_bucket_color(bucket_currency)
 		bucket.add_child(label)
 		if Engine.is_editor_hint():
