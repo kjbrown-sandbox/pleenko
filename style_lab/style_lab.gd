@@ -149,7 +149,7 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 
 	var vertical_spacing := theme.space_between_pegs * sqrt(3) / 2
 	var peg_mesh := theme.make_peg_mesh()
-	var peg_mat := theme.make_peg_material()
+	var peg_list: Array[MeshInstance3D] = []
 
 	# ── Pegs ──
 	for row in range(theme.board_rows):
@@ -158,7 +158,10 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 		for col in range(row + 1):
 			var peg := MeshInstance3D.new()
 			peg.mesh = peg_mesh
+			# Each peg gets its own material for independent glow
+			var peg_mat := theme.make_peg_material()
 			peg.material_override = peg_mat
+			peg.set_meta("own_mat", peg_mat)
 			peg.position = Vector3(
 				x_start + col * theme.space_between_pegs, y, 0
 			)
@@ -166,8 +169,10 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 			if theme.peg_shape == VisualTheme.PegShape.CYLINDER:
 				peg.rotation = Vector3(PI / 2, 0, 0)
 			board_root.add_child(peg)
+			peg_list.append(peg)
 			if Engine.is_editor_hint():
 				peg.owner = get_tree().edited_scene_root
+	board_root.set_meta("pegs", peg_list)
 
 	# ── Buckets ──
 	var num_buckets := theme.board_rows + 1
@@ -212,6 +217,37 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 		if Engine.is_editor_hint():
 			label.owner = get_tree().edited_scene_root
 
+	# ── Board glow (soft radial gradient behind the board center) ──
+	if theme.board_glow_opacity > 0:
+		var glow_y := -vertical_spacing * theme.board_rows / 2.0
+		var glow := MeshInstance3D.new()
+		var glow_mesh := QuadMesh.new()
+		glow_mesh.size = Vector2(theme.board_glow_radius * 2, theme.board_glow_radius * 2)
+		glow.mesh = glow_mesh
+
+		var glow_shader := ShaderMaterial.new()
+		var shader := Shader.new()
+		shader.code = "
+shader_type spatial;
+render_mode unshaded, blend_mix, cull_disabled;
+uniform vec4 glow_color : source_color = vec4(1.0, 1.0, 1.0, 0.1);
+void fragment() {
+	float dist = length(UV - vec2(0.5));
+	float alpha = smoothstep(0.5, 0.0, dist) * glow_color.a;
+	ALBEDO = glow_color.rgb;
+	ALPHA = alpha;
+}
+"
+		glow_shader.shader = shader
+		var glow_color := theme.get_coin_color(currency_type)
+		glow_color.a = theme.board_glow_opacity
+		glow_shader.set_shader_parameter("glow_color", glow_color)
+		glow.material_override = glow_shader
+		glow.position = Vector3(0, glow_y, -0.1)
+		board_root.add_child(glow)
+		if Engine.is_editor_hint():
+			glow.owner = get_tree().edited_scene_root
+
 	# ── Static coin display (one coin sitting at top, visible in editor) ──
 	var display_coin := MeshInstance3D.new()
 	display_coin.mesh = theme.make_coin_mesh()
@@ -250,13 +286,12 @@ func _spawn_demo_coin() -> void:
 			RED_COIN:
 				board_offset = Vector3(spacing, 0, 0)
 
-	var start_pos := board_offset + Vector3(0, vertical_spacing * 0.5 + 0.5, 0)
-	var first_target := board_offset + Vector3(0, vertical_spacing * 0.5, 0)
+	var drop_pos := board_offset + Vector3(0, vertical_spacing * 0.5, 0)
 
 	var coin := MeshInstance3D.new()
 	coin.mesh = theme.make_coin_mesh()
 	coin.material_override = theme.make_coin_material(currency)
-	coin.position = start_pos
+	coin.position = drop_pos + Vector3(0, 0.5, 0)
 	if theme.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		coin.rotation = Vector3(PI / 2, 0, 0)
 	_coin_container.add_child(coin)
@@ -268,79 +303,67 @@ func _spawn_demo_coin() -> void:
 		scale_tween.tween_property(coin, "scale", Vector3.ONE, theme.coin_spawn_scale_duration) \
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
-	# Animate through the board
-	_animate_coin_drop(coin, first_target, board_offset, currency, vertical_spacing)
+	# Initial drop to first row, then start bouncing
+	var drop_tween := create_tween()
+	drop_tween.tween_property(coin, "position", drop_pos, 0.3) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	drop_tween.tween_callback(func():
+		if is_instance_valid(coin):
+			_animate_coin_drop(coin, board_offset, currency, vertical_spacing)
+	)
 
 
-func _animate_coin_drop(coin: MeshInstance3D, target: Vector3, board_offset: Vector3,
+func _animate_coin_drop(coin: MeshInstance3D, board_offset: Vector3,
 		currency: int, vertical_spacing: float, row: int = 0) -> void:
 	var fall_time := 0.4
 	var bounce_height := 0.2
 
-	var tween := create_tween()
-	tween.tween_property(coin, "position", target, fall_time) \
+	var bucket_y := -vertical_spacing * theme.board_rows + (vertical_spacing / 3)
+	if coin.position.y < board_offset.y + bucket_y + 0.5 or row >= theme.board_rows:
+		_on_demo_coin_landed(coin, board_offset, currency, vertical_spacing)
+		return
+
+	# ── Peg glow VFX ──
+	_flash_nearest_peg(coin.position, board_offset, currency)
+
+	var direction := 1.0 if randf() < 0.5 else -1.0
+	var next_x := coin.position.x + direction * theme.space_between_pegs / 2
+	var next_y := coin.position.y - vertical_spacing
+
+	# Horizontal movement
+	var x_tween := create_tween()
+	x_tween.tween_property(coin, "position:x", next_x, fall_time) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_LINEAR)
+
+	# Vertical arc: up then down
+	var y_tween := create_tween()
+	y_tween.tween_property(coin, "position:y", coin.position.y + bounce_height, fall_time / 3) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	y_tween.tween_property(coin, "position:y", next_y, fall_time * 2 / 3) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tween.tween_callback(func():
-		if not is_instance_valid(coin):
-			return
-
-		# ── Peg flash VFX ──
-		_flash_nearest_peg(coin.position, board_offset, currency)
-
-		var bucket_y := -vertical_spacing * theme.board_rows + (vertical_spacing / 3)
-		if coin.position.y < board_offset.y + bucket_y + 0.5 or row >= theme.board_rows:
-			_on_demo_coin_landed(coin, board_offset, currency, vertical_spacing)
-			return
-
-		var direction := 1.0 if randf() < 0.5 else -1.0
-		var next_x := coin.position.x + direction * theme.space_between_pegs / 2
-		var next_y := coin.position.y - vertical_spacing
-
-		# Horizontal movement
-		var x_tween := create_tween()
-		x_tween.tween_property(coin, "position:x", next_x, fall_time) \
-			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_LINEAR)
-
-		# Vertical arc: up then down
-		var y_tween := create_tween()
-		y_tween.tween_property(coin, "position:y", coin.position.y + bounce_height, fall_time / 3) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		y_tween.tween_property(coin, "position:y", next_y, fall_time * 2 / 3) \
-			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		y_tween.tween_callback(func():
-			if is_instance_valid(coin):
-				var next_target := Vector3(next_x, next_y, coin.position.z)
-				_animate_coin_drop(coin, next_target, board_offset, currency, vertical_spacing, row + 1)
-		)
+	y_tween.tween_callback(func():
+		if is_instance_valid(coin):
+			_animate_coin_drop(coin, board_offset, currency, vertical_spacing, row + 1)
 	)
 
 
 func _on_demo_coin_landed(coin: MeshInstance3D, board_offset: Vector3,
-		currency: int, vertical_spacing: float) -> void:
+		currency: int, _vertical_spacing: float) -> void:
 	if not is_instance_valid(coin):
 		return
 
 	# ── Bucket pulse VFX ──
-	_pulse_nearest_bucket(coin.position, board_offset, vertical_spacing)
-
-	# ── Landing scale pop ──
-	var pop_tween := create_tween()
-	var pop_scale := Vector3.ONE * theme.coin_land_scale_pop
-	pop_tween.tween_property(coin, "scale", pop_scale, theme.coin_land_pop_duration * 0.4) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	pop_tween.tween_property(coin, "scale", Vector3.ONE, theme.coin_land_pop_duration * 0.6) \
-		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)
+	_pulse_nearest_bucket(coin.position, board_offset)
 
 	# ── Floating text ──
 	var multiplier := randi_range(1, 5)
 	if multiplier > 1:
 		_show_demo_floating_text(coin.position, multiplier, multiplier * 3, currency)
 
-	# Clean up coin after a moment
-	var cleanup := create_tween()
-	cleanup.tween_interval(0.8)
-	cleanup.tween_property(coin, "modulate:a", 0.0, 0.3)
-	cleanup.tween_callback(coin.queue_free)
+	# ── Particle scatter — coin disappears into small fragments ──
+	var land_pos := coin.position
+	coin.queue_free()
+	_spawn_scatter_particles(land_pos, currency)
 
 
 # ── VFX helpers ──────────────────────────────────────────────────────
@@ -349,48 +372,55 @@ func _flash_nearest_peg(coin_pos: Vector3, board_offset: Vector3, currency: int)
 	if not _board_container:
 		return
 
+	# Find the right board_root
+	var target_board: Node3D = null
+	for board_root in _board_container.get_children():
+		if board_root.position.distance_to(board_offset) < 0.01:
+			target_board = board_root
+			break
+	if not target_board:
+		return
+
+	# Use cached peg list (stored as metadata during build)
+	var pegs: Array = target_board.get_meta("pegs", [])
 	var closest_peg: MeshInstance3D = null
 	var closest_dist := INF
 
-	for board_root in _board_container.get_children():
-		if board_root.position != board_offset:
+	for peg: MeshInstance3D in pegs:
+		if not is_instance_valid(peg):
 			continue
-		for child in board_root.get_children():
-			if not child is MeshInstance3D:
-				continue
-			# Skip buckets (BoxMesh) and coins
-			if child.mesh is BoxMesh:
-				continue
-			if child.mesh is SphereMesh or child.mesh is CylinderMesh:
-				var dist := coin_pos.distance_to(child.global_position)
-				if dist < closest_dist and dist < theme.space_between_pegs * 0.8:
-					closest_dist = dist
-					closest_peg = child
+		var dist := coin_pos.distance_to(peg.global_position)
+		if dist < closest_dist and dist < theme.space_between_pegs * 0.8:
+			closest_dist = dist
+			closest_peg = peg
 
 	if not closest_peg:
 		return
 
-	# Flash: set emission to coin color, then fade back
-	var flash_color := theme.get_coin_color(currency)
-	var flash_mat := theme.make_peg_material()
-	flash_mat.emission_enabled = true
-	flash_mat.emission = flash_color
-	flash_mat.emission_energy_multiplier = theme.peg_flash_intensity
+	# Each peg gets its own material so glows don't interfere
+	# Create one if it doesn't have its own yet
+	var peg_mat: StandardMaterial3D = closest_peg.get_meta("own_mat", null)
+	if not peg_mat:
+		peg_mat = theme.make_peg_material()
+		closest_peg.set_meta("own_mat", peg_mat)
+		closest_peg.material_override = peg_mat
 
-	var original_mat := closest_peg.material_override
-	closest_peg.material_override = flash_mat
+	# Set to coin color immediately, then tween back
+	var glow_color := theme.get_coin_color(currency)
+	peg_mat.albedo_color = glow_color
 
-	var flash_tween := create_tween()
-	flash_tween.tween_property(flash_mat, "emission_energy_multiplier", 0.0, theme.peg_flash_duration) \
+	# Kill any existing glow tween on this peg
+	var old_tween: Tween = closest_peg.get_meta("glow_tween", null)
+	if old_tween and old_tween.is_valid():
+		old_tween.kill()
+
+	var glow_tween := create_tween()
+	glow_tween.tween_property(peg_mat, "albedo_color", theme.peg_color, theme.peg_glow_duration) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	flash_tween.tween_callback(func():
-		if is_instance_valid(closest_peg):
-			closest_peg.material_override = original_mat
-	)
+	closest_peg.set_meta("glow_tween", glow_tween)
 
 
-func _pulse_nearest_bucket(coin_pos: Vector3, board_offset: Vector3,
-		_vertical_spacing: float) -> void:
+func _pulse_nearest_bucket(coin_pos: Vector3, board_offset: Vector3) -> void:
 	if not _board_container:
 		return
 
@@ -434,6 +464,40 @@ func _show_demo_floating_text(pos: Vector3, multiplier: int, total: int, currenc
 	tween.parallel().tween_property(label, "modulate:a", 0.0, theme.floating_text_duration * 0.5) \
 		.set_delay(theme.floating_text_duration * 0.5)
 	tween.tween_callback(label.queue_free)
+
+
+func _spawn_scatter_particles(pos: Vector3, currency: int) -> void:
+	var color := theme.get_coin_color(currency)
+	var particle_mesh := SphereMesh.new()
+	particle_mesh.radius = theme.coin_radius * 0.25
+	particle_mesh.height = theme.coin_radius * 0.5
+
+	for i in range(theme.coin_land_particle_count):
+		var particle := MeshInstance3D.new()
+		particle.mesh = particle_mesh
+		# Each particle needs its own material for independent alpha fade
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		if theme.unshaded:
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		particle.material_override = mat
+		particle.position = pos
+		_coin_container.add_child(particle)
+
+		# Spread 150 degrees centered downward (-90deg = down, so range is -165 to -15 in deg)
+		var angle := randf_range(deg_to_rad(-165), deg_to_rad(-15))
+		var speed := theme.coin_land_particle_speed * randf_range(0.5, 1.0)
+		var target_pos := pos + Vector3(cos(angle) * speed * 0.3, sin(angle) * speed * 0.3, 0)
+		var dur := theme.coin_land_particle_duration
+
+		var t := create_tween()
+		t.set_parallel(true)
+		t.tween_property(particle, "position", target_pos, dur) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		t.tween_property(particle, "scale", Vector3.ZERO, dur) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		t.chain().tween_callback(particle.queue_free)
 
 
 # ── Utilities ────────────────────────────────────────────────────────

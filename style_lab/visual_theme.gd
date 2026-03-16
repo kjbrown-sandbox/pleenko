@@ -75,16 +75,19 @@ enum CoinShape { SPHERE, CYLINDER }
 
 # ── VFX ──────────────────────────────────────────────────────────────
 @export_group("VFX")
-@export var peg_flash_duration := 0.15                            # seconds
-@export var peg_flash_intensity := 0.6                            # emission strength during flash
-@export var coin_land_scale_pop := 1.3                            # scale multiplier on land
-@export var coin_land_pop_duration := 0.2
+@export var peg_glow_duration := 1.0                              # how long peg glows after coin touch
+@export var peg_glow_intensity := 0.8                             # starting emission strength
+@export var coin_land_particle_count := 8                         # scatter particles on landing
+@export var coin_land_particle_speed := 2.0                       # how fast particles fly outward
+@export var coin_land_particle_duration := 0.6                    # how long particles live
 @export var bucket_pulse_scale := 1.08                            # scale on receive
 @export var bucket_pulse_duration := 0.15
 @export var floating_text_rise := 1.5                             # units upward
 @export var floating_text_duration := 1.2
 @export var coin_spawn_scale_from := 0.0                          # fade-in start scale
 @export var coin_spawn_scale_duration := 0.15
+@export var board_glow_radius := 3.0                              # size of the soft glow behind each board
+@export var board_glow_opacity := 0.08                            # very subtle
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
