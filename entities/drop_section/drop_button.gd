@@ -84,8 +84,9 @@ func _update_rate_label() -> void:
 func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
    if not is_node_ready():
       return
+   # Check ALL required currencies, not just the one that changed
    for currency in currencies_needed:
-      if currency.type == _type:
-         _main_button.disabled = not CurrencyManager.can_afford(currency.type, currency.amount)
+      if not CurrencyManager.can_afford(currency.type, currency.amount):
+         _main_button.disabled = true
          return
    _main_button.disabled = false
