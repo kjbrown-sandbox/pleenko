@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="Pleenko"
-run/main_scene="res://entities/main/main.tscn"
+run/main_scene="uid://cfuxy0nnxo0pt"
 config/auto_accept_quit=false
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
@@ -26,6 +26,7 @@ CurrencyManager="*uid://cqbvoj3y28mjh"
 UpgradeManager="*res://autoloads/upgrade_manager/upgrade_manager.tscn"
 LevelManager="*res://autoloads/level_manager/level_manager.tscn"
 SaveManager="*res://autoloads/save_manager/save_manager.gd"
+SceneManager="*uid://cglkqn47ngw6w"
 
 [display]
 

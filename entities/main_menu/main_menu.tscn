@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://cfuxy0nnxo0pt"]
+
+[ext_resource type="Script" uid="uid://bi7eoe88lya5s" path="res://entities/main_menu/main_menu.gd" id="1_6wyxo"]
+
+[node name="MainMenu" type="Node3D" unique_id=1111347995]
+script = ExtResource("1_6wyxo")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=527360778]
+
+[node name="HBoxContainer" type="HBoxContainer" parent="CanvasLayer" unique_id=1425641681]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PlayButton" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=1475028527]
+layout_mode = 2
+size_flags_horizontal = 6
+size_flags_vertical = 4
+text = "Play"
