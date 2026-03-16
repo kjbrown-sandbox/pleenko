@@ -36,6 +36,11 @@ var _drop_timer_remaining: float = 0.0
 
 func _ready() -> void:
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
+
+
+func setup(type: Enums.BoardType) -> void:
+	board_type = type
+
 	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[board_type])
 	var drop_button = _create_drop_button(normal_id, _get_drop_costs())
 	drop_button.drop_pressed.connect(func(): request_drop())
@@ -47,11 +52,6 @@ func _ready() -> void:
 	drop_button.set_shortcut(shortcut)
 	drop_region_buttons.add_child(drop_button)
 	_update_drop_status()
-
-
-
-func setup(type: Enums.BoardType) -> void:
-	board_type = type
 	upgrade_section.setup(self, type)
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
