@@ -1,6 +1,7 @@
 extends VBoxContainer
 
 var _cap_buttons: Dictionary = {}  # CurrencyType -> Button
+var _labels: Dictionary = {}  # CurrencyType -> Label
 var _visible_currencies: Array[Enums.CurrencyType] = [Enums.CurrencyType.GOLD_COIN]
 
 var _board_manager: BoardManager
@@ -32,9 +33,8 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, cap: int) 
 		_update_currencies()
 
 	# Update the label if this currency has a row
-	var row = find_child(str(type), false, false)
-	if row:
-		var label = row.get_node("Label") as Label
+	var label: Label = _labels.get(type)
+	if label:
 		var coin_name = Enums.CurrencyType.keys()[type]
 		label.text = "%s: %d / %d" % [coin_name, new_balance, cap]
 		if new_balance >= cap:
@@ -56,23 +56,23 @@ func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
 
 
 func _update_currencies() -> void:
-	# Clear existing rows and cap button references
+	# Clear existing rows and references
 	for child in get_children():
 		child.queue_free()
 	_cap_buttons.clear()
+	_labels.clear()
 
 	# Rebuild from _visible_currencies
 	for currency_type in _visible_currencies:
 		var row := HBoxContainer.new()
-		row.name = str(currency_type)
 
 		var label := Label.new()
-		label.name = "Label"
 		var amount = CurrencyManager.get_balance(currency_type)
 		var cap = CurrencyManager.get_cap(currency_type)
 		var coin_name = Enums.CurrencyType.keys()[currency_type]
 		label.text = "%s: %d / %d" % [coin_name, amount, cap]
 		row.add_child(label)
+		_labels[currency_type] = label
 
 		var cap_button := Button.new()
 		cap_button.visible = false

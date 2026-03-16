@@ -53,7 +53,8 @@ func _update_button() -> void:
 	if at_max:
 		purchase_upgrade_button.text = "%s (MAX)" % data.display_name
 	else:
-		purchase_upgrade_button.text = "%s — %d gold (Lv %d)" % [data.display_name, state.cost, state.level]
+		var currency_name: String = Enums.CurrencyType.keys()[Enums.currency_for_board(_board_type)].to_lower().replace("_", " ")
+		purchase_upgrade_button.text = "%s — %d %s (Lv %d)" % [data.display_name, state.cost, currency_name, state.level]
 
 	purchase_upgrade_button.disabled = not UpgradeManager.can_buy(_board_type, _upgrade_type)
 
