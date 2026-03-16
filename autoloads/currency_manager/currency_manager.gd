@@ -91,3 +91,28 @@ func buy_cap_raise(type: Enums.CurrencyType) -> bool:
    caps[type] += cap_raise_amount(type)
    currency_changed.emit(type, balances[type], caps[type])
    return true
+
+
+func serialize() -> Dictionary:
+   var data := {}
+   for currency_type in Enums.CurrencyType.values():
+      var key: String = Enums.CurrencyType.keys()[currency_type]
+      data[key] = {
+         "balance": balances[currency_type],
+         "cap": caps[currency_type],
+         "cap_raise_level": _cap_raise_levels[currency_type],
+      }
+   return data
+
+
+func deserialize(data: Dictionary) -> void:
+   for currency_type in Enums.CurrencyType.values():
+      var key: String = Enums.CurrencyType.keys()[currency_type]
+      if key in data:
+         var entry: Dictionary = data[key]
+         balances[currency_type] = entry.get("balance", 0)
+         caps[currency_type] = entry.get("cap", 500)
+         _cap_raise_levels[currency_type] = entry.get("cap_raise_level", 0)
+   # Emit currency_changed for each type so UI updates
+   for currency_type in Enums.CurrencyType.values():
+      currency_changed.emit(currency_type, balances[currency_type], caps[currency_type])

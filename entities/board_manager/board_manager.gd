@@ -212,3 +212,65 @@ func _update_all_button_displays() -> void:
 			var button: DropButton = board._drop_buttons[bid]
 			var assigned: int = _assignments.get(bid, 0)
 			button.update_autodropper_state(assigned, free_count)
+
+
+func serialize() -> Dictionary:
+	var data := {}
+	data["autodroppers_unlocked"] = _autodroppers_unlocked
+
+	# Which boards are spawned
+	var board_types: Array[int] = []
+	for board in _boards:
+		board_types.append(board.board_type)
+	data["board_types"] = board_types
+
+	# Which boards have advanced buckets visible
+	var advanced_buckets := {}
+	for board in _boards:
+		var key: String = Enums.BoardType.keys()[board.board_type]
+		advanced_buckets[key] = board.should_show_advanced_buckets
+	data["advanced_buckets"] = advanced_buckets
+
+	# Autodropper assignments (StringName -> int)
+	var assignments_data := {}
+	for button_id in _assignments:
+		assignments_data[String(button_id)] = _assignments[button_id]
+	data["assignments"] = assignments_data
+
+	return data
+
+
+func deserialize(data: Dictionary) -> void:
+	# Spawn any boards beyond gold
+	var board_types: Array = data.get("board_types", [0])
+	for board_type_int in board_types:
+		var board_type: Enums.BoardType = board_type_int as Enums.BoardType
+		unlock_board(board_type)
+
+	# Build per-board upgrade state for apply_saved_state
+	var advanced_buckets: Dictionary = data.get("advanced_buckets", {})
+	for board in _boards:
+		var board_key: String = Enums.BoardType.keys()[board.board_type]
+		var upgrade_state := {}
+		for upgrade_type in Enums.UpgradeType.values():
+			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
+			upgrade_state[upgrade_key] = UpgradeManager.get_level(board.board_type, upgrade_type)
+		upgrade_state["show_advanced_buckets"] = advanced_buckets.get(board_key, false)
+		board.apply_saved_state(upgrade_state)
+
+	# Restore autodropper state
+	_autodroppers_unlocked = data.get("autodroppers_unlocked", false)
+	if _autodroppers_unlocked:
+		for board in _boards:
+			board.set_autodroppers_visible(true)
+
+	var assignments_data: Dictionary = data.get("assignments", {})
+	for key in assignments_data:
+		_assignments[StringName(key)] = assignments_data[key]
+
+	if get_total_assigned() > 0:
+		_autodrop_timer.start()
+	_update_all_button_displays()
+
+	# Re-frame camera on active board
+	_snap_camera_to_active_board()

@@ -207,3 +207,12 @@ func get_progress() -> float:
 	var threshold: int = levels[current_level].threshold
 	var gold: int = CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN)
 	return float(gold) / float(threshold) if threshold > 0 else 0.0
+
+
+func serialize() -> Dictionary:
+	return { "current_level": current_level }
+
+
+func deserialize(data: Dictionary) -> void:
+	current_level = data.get("current_level", 0)
+	level_changed.emit(current_level)

@@ -182,6 +182,87 @@ func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap:
 				cap_raise_unlocked.emit(Enums.BoardType.ORANGE)
 
 
+func serialize() -> Dictionary:
+	var data := {}
+
+	# Serialize per-board, per-upgrade state
+	var state_data := {}
+	for board_type in _state:
+		var board_key: String = Enums.BoardType.keys()[board_type]
+		state_data[board_key] = {}
+		for upgrade_type in _state[board_type]:
+			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
+			var s: UpgradeState = _state[board_type][upgrade_type]
+			state_data[board_key][upgrade_key] = {
+				"level": s.level,
+				"cost": s.cost,
+				"delta": s.delta,
+				"current_cap": s.current_cap,
+				"cap_level": s.cap_level,
+			}
+	data["state"] = state_data
+
+	# Serialize unlocks
+	var unlocked_data := {}
+	for board_type in _unlocked:
+		var board_key: String = Enums.BoardType.keys()[board_type]
+		unlocked_data[board_key] = {}
+		for upgrade_type in _unlocked[board_type]:
+			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
+			unlocked_data[board_key][upgrade_key] = _unlocked[board_type][upgrade_type]
+	data["unlocked"] = unlocked_data
+
+	# Serialize cap raise availability
+	var cap_raise_data := {}
+	for board_type in _cap_raise_available:
+		var board_key: String = Enums.BoardType.keys()[board_type]
+		cap_raise_data[board_key] = _cap_raise_available[board_type]
+	data["cap_raise_available"] = cap_raise_data
+
+	return data
+
+
+func deserialize(data: Dictionary) -> void:
+	# Restore per-board, per-upgrade state
+	var state_data: Dictionary = data.get("state", {})
+	for board_type in Enums.BoardType.values():
+		var board_key: String = Enums.BoardType.keys()[board_type]
+		if board_key not in state_data:
+			continue
+		for upgrade_type in Enums.UpgradeType.values():
+			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
+			if upgrade_key not in state_data[board_key]:
+				continue
+			var entry: Dictionary = state_data[board_key][upgrade_key]
+			var s: UpgradeState = _state[board_type][upgrade_type]
+			s.level = entry.get("level", 0)
+			s.cost = entry.get("cost", 0)
+			s.delta = entry.get("delta", 0)
+			s.current_cap = entry.get("current_cap", s.base_cap)
+			s.cap_level = entry.get("cap_level", 0)
+
+	# Restore unlocks
+	var unlocked_data: Dictionary = data.get("unlocked", {})
+	for board_type in Enums.BoardType.values():
+		var board_key: String = Enums.BoardType.keys()[board_type]
+		if board_key not in unlocked_data:
+			continue
+		for upgrade_type in Enums.UpgradeType.values():
+			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
+			if upgrade_key not in unlocked_data[board_key]:
+				continue
+			if unlocked_data[board_key][upgrade_key]:
+				unlock(board_type, upgrade_type)
+
+	# Restore cap raise availability
+	var cap_raise_data: Dictionary = data.get("cap_raise_available", {})
+	for board_type in Enums.BoardType.values():
+		var board_key: String = Enums.BoardType.keys()[board_type]
+		if board_key in cap_raise_data and cap_raise_data[board_key]:
+			_cap_raise_available[board_type] = true
+			cap_raise_unlocked.emit(board_type)
+
+
 func _advance_cost(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
 	var upgrade_state: UpgradeState = _state[board_type][upgrade_type]
 	var data: BaseUpgradeData = _upgrade_map[upgrade_type]

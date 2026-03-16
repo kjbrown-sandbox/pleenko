@@ -339,3 +339,24 @@ func set_autodroppers_visible(vis: bool) -> void:
 
 func get_drop_button(btn_id: StringName) -> DropButton:
 	return _drop_buttons.get(btn_id)
+
+
+## Applies saved upgrade state to this board without going through buy logic.
+func apply_saved_state(upgrade_state: Dictionary) -> void:
+	var add_row_level: int = upgrade_state.get("ADD_ROW", 0)
+	num_rows = 2 + add_row_level * 2
+
+	bucket_value_multiplier = 1 + upgrade_state.get("BUCKET_VALUE", 0)
+
+	var drop_rate_level: int = upgrade_state.get("DROP_RATE", 0)
+	for i in drop_rate_level:
+		drop_delay *= drop_delay_reduction_factor
+
+	var queue_level: int = upgrade_state.get("QUEUE", 0)
+	coin_queue.set_capacity(queue_level)
+
+	if upgrade_state.get("show_advanced_buckets", false):
+		should_show_advanced_buckets = true
+		_spawn_advanced_drop_button()
+
+	build_board()
