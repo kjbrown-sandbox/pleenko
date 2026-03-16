@@ -76,6 +76,7 @@ func _update_currencies() -> void:
 
 		var cap_button := Button.new()
 		cap_button.visible = false
+		cap_button.focus_mode = Control.FOCUS_NONE
 		cap_button.pressed.connect(_on_cap_raise_pressed.bind(currency_type))
 		row.add_child(cap_button)
 		_cap_buttons[currency_type] = cap_button

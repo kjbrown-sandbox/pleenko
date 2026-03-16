@@ -28,6 +28,8 @@ func _ready():
    _main_button.pressed.connect(func(): drop_pressed.emit())
    _minus_button.pressed.connect(func(): autodropper_adjust_requested.emit(button_id, -1))
    _plus_button.pressed.connect(func(): autodropper_adjust_requested.emit(button_id, 1))
+   _minus_button.focus_mode = Control.FOCUS_NONE
+   _plus_button.focus_mode = Control.FOCUS_NONE
    # Hide autodropper controls by default
    _minus_button.visible = false
    _plus_button.visible = false

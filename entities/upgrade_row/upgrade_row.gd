@@ -12,6 +12,8 @@ func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgr
 	_callback = on_upgrade
 
 func _ready() -> void:
+	purchase_upgrade_button.focus_mode = Control.FOCUS_NONE
+	cap_raise_button.focus_mode = Control.FOCUS_NONE
 	_update_button()
 	purchase_upgrade_button.pressed.connect(_on_pressed)
 	cap_raise_button.pressed.connect(_on_cap_raise_pressed)
