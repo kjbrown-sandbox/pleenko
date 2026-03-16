@@ -21,6 +21,11 @@ func _ready() -> void:
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 
+func reset() -> void:
+	current_level = 0
+	_pending.clear()
+
+
 func _build_level_table() -> void:
 	levels = [
 		# Level 1

@@ -34,7 +34,14 @@ func _ready() -> void:
 	for data in upgrades:
 		_upgrade_map[data.type] = data
 
-	# Initialize state and unlock tracking for every board + upgrade combination
+	_init_state()
+
+	# Listen for level rewards to unlock upgrades
+	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
+	CurrencyManager.currency_changed.connect(_on_currency_changed)
+
+
+func _init_state() -> void:
 	for board_type in Enums.BoardType.values():
 		_state[board_type] = {}
 		_unlocked[board_type] = {}
@@ -48,9 +55,9 @@ func _ready() -> void:
 			_state[board_type][data.type] = s
 			_unlocked[board_type][data.type] = false
 
-	# Listen for level rewards to unlock upgrades
-	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
-	CurrencyManager.currency_changed.connect(_on_currency_changed)
+
+func reset() -> void:
+	_init_state()
 
 	# Debug: print initial state
 	for board_type in _state:
@@ -171,6 +178,8 @@ func buy_cap_raise(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType)
 
 
 func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
+	if _new_balance <= 0:
+		return
 	match type:
 		Enums.CurrencyType.RAW_ORANGE:
 			if not _cap_raise_available[Enums.BoardType.GOLD]:

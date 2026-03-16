@@ -7,7 +7,10 @@ var caps: Dictionary[Enums.CurrencyType, int] = {}
 var _cap_raise_levels: Dictionary[Enums.CurrencyType, int] = {}
 
 func _ready() -> void:
-   # Initialize balances and caps for each currency type
+   reset()
+
+
+func reset() -> void:
    for currency_type in Enums.CurrencyType.values():
       balances[currency_type] = 0
       caps[currency_type] = 50 if currency_type in [Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.RAW_RED] else 500

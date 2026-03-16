@@ -13,11 +13,11 @@ func _ready() -> void:
 	# Load existing save if one exists
 	if SaveManager.has_save():
 		SaveManager.load_game()
+		coin_values.refresh_visible_currencies()
 
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("quicksave"):
 		SaveManager.save_game()
 	elif event.is_action_pressed("reset_game"):
-		# TODO: add confirmation dialog before resetting
-		pass
+		SaveManager.reset_game()

@@ -13,6 +13,7 @@ func setup(board_manager: BoardManager) -> void:
 		if not _visible_currencies.has(currency_type) and _is_board_for_coin_type_unlocked(currency_type):
 			_visible_currencies.append(currency_type)
 
+	_visible_currencies.sort()
 	_update_currencies()
 
 func _ready() -> void:
@@ -27,6 +28,7 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, cap: int) 
 	# Check if new currencies should become visible
 	if not _visible_currencies.has(type) and _is_board_for_coin_type_unlocked(type):
 		_visible_currencies.append(type)
+		_visible_currencies.sort()
 		_update_currencies()
 
 	# Update the label if this currency has a row
@@ -81,6 +83,18 @@ func _update_currencies() -> void:
 		add_child(row)
 
 	_update_all_cap_buttons()
+
+
+func refresh_visible_currencies() -> void:
+	var changed := false
+	for currency_type in Enums.CurrencyType.values():
+		if not _visible_currencies.has(currency_type) and _is_board_for_coin_type_unlocked(currency_type):
+			_visible_currencies.append(currency_type)
+			changed = true
+	if changed:
+		# Re-sort to match enum definition order
+		_visible_currencies.sort()
+		_update_currencies()
 
 
 func _on_cap_raise_unlocked(_board_type: Enums.BoardType) -> void:

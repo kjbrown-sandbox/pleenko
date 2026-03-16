@@ -76,3 +76,14 @@ func load_game() -> bool:
 
 func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
+
+
+func reset_game() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
+	CurrencyManager.reset()
+	LevelManager.reset()
+	UpgradeManager.reset()
+	_board_manager = null
+	print("[SaveManager] Game reset. Reloading scene.")
+	get_tree().reload_current_scene()
