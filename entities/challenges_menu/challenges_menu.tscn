@@ -1,0 +1,55 @@
+[gd_scene format=3 uid="uid://ccjinwh0my1hi"]
+
+[node name="ChallengesMenu" type="Node3D" unique_id=359478775]
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1681931290]
+
+[node name="HBoxContainer" type="VBoxContainer" parent="CanvasLayer" unique_id=1100398251]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -43.0
+offset_top = -85.5
+offset_right = 43.0
+offset_bottom = 85.5
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Challenge1" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=76173463]
+layout_mode = 2
+size_flags_horizontal = 6
+size_flags_vertical = 8
+text = "Challenge 1
+"
+
+[node name="Challenge2" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=152986607]
+layout_mode = 2
+size_flags_horizontal = 6
+size_flags_vertical = 8
+text = "Challenge 2
+"
+
+[node name="Challenge3" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=1395903603]
+layout_mode = 2
+size_flags_horizontal = 6
+size_flags_vertical = 8
+text = "Challenge 3
+"
+
+[node name="Challenge4" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=2126988941]
+layout_mode = 2
+size_flags_horizontal = 6
+size_flags_vertical = 8
+text = "Challenge 4
+"
+
+[node name="Challenge5" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=1636768703]
+layout_mode = 2
+size_flags_horizontal = 6
+size_flags_vertical = 8
+text = "Challenge 5
+"

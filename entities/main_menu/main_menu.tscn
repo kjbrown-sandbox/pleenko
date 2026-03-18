@@ -7,7 +7,7 @@ script = ExtResource("1_6wyxo")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=527360778]
 
-[node name="HBoxContainer" type="HBoxContainer" parent="CanvasLayer" unique_id=1425641681]
+[node name="HBoxContainer" type="VBoxContainer" parent="CanvasLayer" unique_id=2131159827]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -19,5 +19,13 @@ size_flags_vertical = 3
 [node name="PlayButton" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=1475028527]
 layout_mode = 2
 size_flags_horizontal = 6
-size_flags_vertical = 4
-text = "Play"
+size_flags_vertical = 10
+text = "Campaign
+"
+
+[node name="ChallengesButton" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=1386039177]
+layout_mode = 2
+size_flags_horizontal = 6
+size_flags_vertical = 2
+text = "Challenges
+"
