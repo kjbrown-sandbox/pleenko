@@ -168,6 +168,8 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 	if type != Enums.CurrencyType.GOLD_COIN:
 		return
 
+	var was_empty := _pending.is_empty()
+
 	while current_level < levels.size():
 		var next_level_data: LevelData = levels[current_level]
 		if new_balance >= next_level_data.threshold:
@@ -178,7 +180,7 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 		else:
 			break
 
-	if _pending.size() == 1:
+	if was_empty and not _pending.is_empty():
 		var entry = _pending[0]
 		level_up_ready.emit(entry["level"], entry["level_data"])
 
