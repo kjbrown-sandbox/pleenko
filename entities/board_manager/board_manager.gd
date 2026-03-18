@@ -104,6 +104,8 @@ func is_board_unlocked(type: Enums.BoardType) -> bool:
 
 
 func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
+	if _new_balance <= 0:
+		return
 	match type:
 		Enums.CurrencyType.RAW_ORANGE:
 			if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.ORANGE):
