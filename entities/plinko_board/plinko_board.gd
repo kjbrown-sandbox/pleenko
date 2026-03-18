@@ -28,6 +28,7 @@ var bucket_value_multiplier: int = 1
 var should_show_advanced_buckets: bool = false
 var _advanced_drop_button: DropButton
 var _drop_buttons: Dictionary = {}  # StringName -> DropButton
+var multi_drop_count: int = -1
 
 signal board_rebuilt
 signal autodropper_adjust_requested(button_id: StringName, delta: int)
@@ -36,6 +37,7 @@ var _drop_timer_remaining: float = 0.0
 
 func _ready() -> void:
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
+	multi_drop_count = PrestigeManager.get_multi_drop(board_type)
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -86,6 +88,9 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	if not _can_afford(costs):
 		return
 
+	multi_drop_count = PrestigeManager.get_multi_drop(board_type)
+
+	# First coin — normal queue/immediate path (pays cost once)
 	var coin: Coin = CoinScene.instantiate()
 	coin.coin_type = drop_coin_type
 	if drop_coin_type == advanced_bucket_type:
@@ -99,6 +104,18 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	elif not is_waiting:
 		_spend(costs)
 		_drop_immediate_coin(coin)
+	else:
+		return  # Can't drop right now
+
+	# Extra coins — staggered, bypass queue and cost
+	var mult := 3 if drop_coin_type == advanced_bucket_type else 1
+	for i in range(1, multi_drop_count):
+		get_tree().create_timer(i * 0.15).timeout.connect(
+			force_drop_coin.bind(drop_coin_type, mult)
+		)
+
+	if multi_drop_count > 1:
+		_show_multi_drop_label(multi_drop_count)
 
 
 ## Returns the costs to drop a normal coin on this board.
@@ -306,6 +323,19 @@ func _show_floating_text(pos: Vector3, multiplier: int, total: int) -> void:
 	var tween := create_tween()
 	tween.tween_property(label, "position:y", label.position.y + 1.5, 1.2)
 	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.6).set_delay(0.6)
+	tween.tween_callback(label.queue_free)
+
+
+func _show_multi_drop_label(count: int) -> void:
+	var label := Label3D.new()
+	label.text = "x%d" % count
+	label.font_size = 48
+	label.position = Vector3(0, vertical_spacing + 0.5, 0)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	add_child(label)
+	var tween := create_tween()
+	tween.tween_property(label, "position:y", label.position.y + 0.5, 0.6)
+	tween.parallel().tween_property(label, "modulate", Color(1, 1, 1, 0), 0.6)
 	tween.tween_callback(label.queue_free)
 
 
