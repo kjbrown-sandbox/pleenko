@@ -64,9 +64,10 @@ func load_game() -> bool:
 
 	# Deserialize prestige first — BoardManager queries it during deserialize
 	PrestigeManager.deserialize(data.get("prestige", {}))
-	# Then the rest in dependency order
-	CurrencyManager.deserialize(data.get("currency", {}))
+	# LevelManager before CurrencyManager so current_level is correct
+	# when currency_changed signals fire during currency restore
 	LevelManager.deserialize(data.get("level", {}))
+	CurrencyManager.deserialize(data.get("currency", {}))
 	UpgradeManager.deserialize(data.get("upgrades", {}))
 	_board_manager.deserialize(data.get("boards", {}))
 
