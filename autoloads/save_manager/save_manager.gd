@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 1
+const SAVE_VERSION := 2
 const AUTO_SAVE_INTERVAL := 30.0
 
 var _auto_save_timer: Timer
@@ -25,6 +25,7 @@ func save_game() -> void:
 		"level": LevelManager.serialize(),
 		"upgrades": UpgradeManager.serialize(),
 		"boards": _board_manager.serialize(),
+		"prestige": PrestigeManager.serialize(),
 	}
 
 	var json_string := JSON.stringify(data, "\t")
@@ -59,12 +60,11 @@ func load_game() -> bool:
 
 	var data: Dictionary = json.data
 	var version: int = data.get("version", 0)
-	if version != SAVE_VERSION:
-		print("[SaveManager] Save version mismatch: expected %d, got %d" % [SAVE_VERSION, version])
-		# Future: add migration logic here
-		return false
+	data = _migrate(data, version)
 
-	# Deserialize in dependency order: currency first, then level, upgrades, boards
+	# Deserialize prestige first — BoardManager queries it during deserialize
+	PrestigeManager.deserialize(data.get("prestige", {}))
+	# Then the rest in dependency order
 	CurrencyManager.deserialize(data.get("currency", {}))
 	LevelManager.deserialize(data.get("level", {}))
 	UpgradeManager.deserialize(data.get("upgrades", {}))
@@ -79,11 +79,33 @@ func has_save() -> bool:
 
 
 func reset_game() -> void:
+	# Capture prestige data before wiping the save — prestige survives resets
+	var prestige_data := PrestigeManager.serialize()
+
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
+
+	# Write a minimal save containing only prestige + version so it persists
+	var minimal_save := {
+		"version": SAVE_VERSION,
+		"prestige": prestige_data,
+	}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(minimal_save, "\t"))
+		file.close()
+
 	CurrencyManager.reset()
 	LevelManager.reset()
 	UpgradeManager.reset()
 	_board_manager = null
-	print("[SaveManager] Game reset. Reloading scene.")
+	print("[SaveManager] Game reset (prestige preserved). Reloading scene.")
 	get_tree().reload_current_scene()
+
+
+func _migrate(data: Dictionary, version: int) -> Dictionary:
+	if version < 2:
+		data["prestige"] = {}
+		print("[SaveManager] Migrated save v%d -> v2" % version)
+	data["version"] = SAVE_VERSION
+	return data

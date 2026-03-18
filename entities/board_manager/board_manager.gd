@@ -106,9 +106,15 @@ func is_board_unlocked(type: Enums.BoardType) -> bool:
 func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
 	match type:
 		Enums.CurrencyType.RAW_ORANGE:
-			unlock_board(Enums.BoardType.ORANGE)
+			if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.ORANGE):
+				unlock_board(Enums.BoardType.ORANGE)
+			elif PrestigeManager.can_prestige(Enums.BoardType.ORANGE):
+				PrestigeManager.trigger_prestige(Enums.BoardType.ORANGE)
 		Enums.CurrencyType.RAW_RED:
-			unlock_board(Enums.BoardType.RED)
+			if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.RED):
+				unlock_board(Enums.BoardType.RED)
+			elif PrestigeManager.can_prestige(Enums.BoardType.RED):
+				PrestigeManager.trigger_prestige(Enums.BoardType.RED)
 
 
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
