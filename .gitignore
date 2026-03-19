@@ -1,3 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# GdUnit4 (dev dependency, installed via AssetLib)
+addons/gdUnit4/

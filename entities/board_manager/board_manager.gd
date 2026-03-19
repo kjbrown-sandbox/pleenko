@@ -254,6 +254,19 @@ func serialize() -> Dictionary:
 		advanced_buckets[key] = board.should_show_advanced_buckets
 	data["advanced_buckets"] = advanced_buckets
 
+	# Per-board computed state (read by OfflineCalculator)
+	var board_state := {}
+	for board in _boards:
+		var key: String = Enums.BoardType.keys()[board.board_type]
+		board_state[key] = {
+			"num_rows": board.num_rows,
+			"drop_delay": board.drop_delay,
+			"bucket_value_multiplier": board.bucket_value_multiplier,
+			"distance_for_advanced_buckets": board.distance_for_advanced_buckets,
+			"multi_drop_count": board.multi_drop_count,
+		}
+	data["board_state"] = board_state
+
 	# Autodropper assignments (StringName -> int)
 	var assignments_data := {}
 	for button_id in _assignments:

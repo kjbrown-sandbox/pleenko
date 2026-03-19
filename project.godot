@@ -34,6 +34,10 @@ SceneManager="*uid://cglkqn47ngw6w"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg")
+
 [input]
 
 drop_coin={

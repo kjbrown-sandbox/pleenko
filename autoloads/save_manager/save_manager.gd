@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3
 const AUTO_SAVE_INTERVAL := 30.0
 
 var _auto_save_timer: Timer
@@ -21,6 +21,7 @@ func setup(board_manager: BoardManager) -> void:
 func save_game() -> void:
 	var data := {
 		"version": SAVE_VERSION,
+		"save_timestamp": Time.get_unix_time_from_system(),
 		"currency": CurrencyManager.serialize(),
 		"level": LevelManager.serialize(),
 		"upgrades": UpgradeManager.serialize(),
@@ -61,6 +62,14 @@ func load_game() -> bool:
 	var data: Dictionary = json.data
 	var version: int = data.get("version", 0)
 	data = _migrate(data, version)
+
+	# Compute offline earnings before deserializing into managers
+	var saved_time: float = data.get("save_timestamp", 0.0)
+	if saved_time > 0.0:
+		var elapsed: float = Time.get_unix_time_from_system() - saved_time
+		var updated := OfflineCalculator.calculate(data, elapsed)
+		data["currency"] = updated["currency"]
+		print("[SaveManager] Applied offline earnings for %.0f seconds." % elapsed)
 
 	# Deserialize prestige first — BoardManager queries it during deserialize
 	PrestigeManager.deserialize(data.get("prestige", {}))
@@ -108,5 +117,9 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 	if version < 2:
 		data["prestige"] = {}
 		print("[SaveManager] Migrated save v%d -> v2" % version)
+	if version < 3:
+		# No-op: old saves just won't have save_timestamp.
+		# load_game() defaults to 0.0, so offline calculator will skip.
+		print("[SaveManager] Migrated save v%d -> v3" % version)
 	data["version"] = SAVE_VERSION
 	return data
