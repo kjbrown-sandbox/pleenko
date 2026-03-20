@@ -1,6 +1,9 @@
 [gd_scene format=3 uid="uid://ccjinwh0my1hi"]
 
+[ext_resource type="Script" uid="uid://crmoas344c888" path="res://entities/challenges_menu/challenges_menu.gd" id="1_syrbf"]
+
 [node name="ChallengesMenu" type="Node3D" unique_id=359478775]
+script = ExtResource("1_syrbf")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1681931290]
 

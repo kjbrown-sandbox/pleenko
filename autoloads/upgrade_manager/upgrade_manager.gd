@@ -16,6 +16,10 @@ signal autodropper_unlocked
 ## Populate this array in the Inspector with .tres BaseUpgradeData resources.
 @export var upgrades: Array[BaseUpgradeData] = []
 
+## Optional gate callable: Callable(upgrade_type: Enums.UpgradeType) -> bool
+## Set by ChallengeManager to block upgrades during challenges.
+var upgrade_gate: Callable
+
 ## Per-board, per-upgrade runtime state.
 var _state: Dictionary = {}  # BoardType -> UpgradeType -> UpgradeState
 
@@ -106,6 +110,8 @@ func unlock(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> voi
 
 
 func can_buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
+	if upgrade_gate.is_valid() and not upgrade_gate.call(upgrade_type):
+		return false
 	if not is_unlocked(board_type, upgrade_type):
 		return false
 
@@ -133,6 +139,13 @@ func buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
 
 	upgrade_purchased.emit(upgrade_type, board_type, state.level)
 	return true
+
+
+func force_apply(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
+	var state: UpgradeState = _state[board_type][upgrade_type]
+	state.level += 1
+	_advance_cost(board_type, upgrade_type)
+	upgrade_purchased.emit(upgrade_type, board_type, state.level)
 
 
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:

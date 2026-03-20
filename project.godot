@@ -28,6 +28,7 @@ LevelManager="*res://autoloads/level_manager/level_manager.tscn"
 PrestigeManager="*res://autoloads/prestige_manager/prestige_manager.gd"
 SaveManager="*res://autoloads/save_manager/save_manager.gd"
 SceneManager="*uid://cglkqn47ngw6w"
+ChallengeManager="*uid://dselpc6ibkk2q"
 
 [display]
 

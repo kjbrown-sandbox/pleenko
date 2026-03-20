@@ -17,6 +17,10 @@ var _autodroppers_unlocked: bool = false
 var _assignments: Dictionary = {}  # StringName -> int (button_id → assigned count)
 var _autodrop_timer: Timer
 
+## Optional gate callable: Callable(board_type: Enums.BoardType) -> bool
+## Set by ChallengeManager to restrict boards during challenges.
+var board_gate: Callable
+
 ## Minimum Z distance so the camera doesn't get too close on small boards
 const MIN_CAMERA_Z := 6.0
 
@@ -52,8 +56,14 @@ func get_active_board() -> PlinkoBoard:
 	return _boards[_active_index]
 
 
+func get_boards() -> Array[PlinkoBoard]:
+	return _boards
+
+
 ## Call this when a new board type is unlocked (e.g. orange, red).
 func unlock_board(type: Enums.BoardType) -> void:
+	if board_gate.is_valid() and not board_gate.call(type):
+		return
 	# Don't spawn duplicates
 	for board in _boards:
 		if board.board_type == type:

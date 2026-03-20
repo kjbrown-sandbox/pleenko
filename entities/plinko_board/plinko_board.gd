@@ -32,6 +32,8 @@ var multi_drop_count: int = -1
 
 signal board_rebuilt
 signal autodropper_adjust_requested(button_id: StringName, delta: int)
+signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type: Enums.CurrencyType, amount: int)
+signal autodrop_failed(board_type: Enums.BoardType)
 
 var _drop_timer_remaining: float = 0.0
 
@@ -209,11 +211,18 @@ func _update_drop_status() -> void:
 
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
+	var bucket_idx := _get_bucket_index(bucket)
 	var amount = bucket.value * coin.multiplier
 	CurrencyManager.add(bucket.currency_type, amount)
+	coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount)
 	if coin.multiplier > 1:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
 	coin.queue_free()
+
+
+func _get_bucket_index(bucket: Bucket) -> int:
+	var children := buckets_container.get_children()
+	return children.find(bucket)
 
 
 func force_drop_coin(type: Enums.CurrencyType, mult: int = 1) -> void:
@@ -365,6 +374,8 @@ func try_autodrop(is_advanced: bool) -> void:
 	var coin_type: int = advanced_bucket_type if is_advanced else -1
 	if _can_afford(costs):
 		request_drop(costs, coin_type)
+	else:
+		autodrop_failed.emit(board_type)
 
 
 func set_autodroppers_visible(vis: bool) -> void:

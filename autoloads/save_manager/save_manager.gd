@@ -89,6 +89,20 @@ func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
 
+func load_prestige_only() -> void:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if not file:
+		return
+	var json := JSON.new()
+	if json.parse(file.get_as_text()) != OK:
+		return
+	file.close()
+	var data: Dictionary = json.data
+	PrestigeManager.deserialize(data.get("prestige", {}))
+
+
 func reset_game() -> void:
 	# Capture prestige data before wiping the save — prestige survives resets
 	var prestige_data := PrestigeManager.serialize()
