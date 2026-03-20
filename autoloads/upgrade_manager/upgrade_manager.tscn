@@ -2,11 +2,11 @@
 
 [ext_resource type="Script" uid="uid://ba22pfwycxmri" path="res://autoloads/upgrade_manager/upgrade_manager.gd" id="1_bve6i"]
 [ext_resource type="Resource" uid="uid://bt7sdhpjn3px6" path="res://autoloads/upgrade_manager/data/add_row.tres" id="2_add_row"]
-[ext_resource type="Script" uid="uid://c571lcduobww" path="res://scripts/base_upgrade_data.gd" id="2_ro6xb"]
+[ext_resource type="Script" uid="uid://c571lcduobww" path="res://autoloads/upgrade_manager/base_upgrade_data.gd" id="2_ro6xb"]
 [ext_resource type="Resource" uid="uid://oq8hriehudyf" path="res://autoloads/upgrade_manager/data/bucket_value.tres" id="3_bucket_value"]
 [ext_resource type="Resource" uid="uid://donkb4g01csbs" path="res://autoloads/upgrade_manager/data/drop_rate.tres" id="4_drop_rate"]
 [ext_resource type="Resource" uid="uid://uvtcpm5fhjis" path="res://autoloads/upgrade_manager/data/queue.tres" id="5_queue"]
-[ext_resource type="Resource" uid="uid://autodropper_upgrade" path="res://autoloads/upgrade_manager/data/autodropper.tres" id="6_autodropper"]
+[ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/autodropper.tres" id="6_autodropper"]
 
 [node name="UpgradeManager" type="Node" unique_id=10539582]
 script = ExtResource("1_bve6i")
