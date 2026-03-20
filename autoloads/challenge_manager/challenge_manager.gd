@@ -13,6 +13,7 @@ var _total_drops: int = 0
 var _bucket_hits: Dictionary = {}  # "BoardType_BucketIndex" -> int
 var _last_bucket: Dictionary = {}  # BoardType -> int (last bucket index hit)
 var _same_bucket_streak: Dictionary = {}  # BoardType -> int
+var _survive_passed: bool = false
 
 
 func set_challenge(challenge: ChallengeData) -> void:
@@ -82,17 +83,10 @@ func _process(delta: float) -> void:
 
 
 func _on_time_up() -> void:
-	# For Survive objectives, running out of time means you won
-	var has_survive := false
-	for objective in _challenge.objectives:
-		if objective is ChallengeObjective.Survive:
-			has_survive = true
-			break
-
-	if has_survive:
+	_survive_passed = true
+	if _check_all_objectives_met():
 		challenge_completed.emit()
 	else:
-		# Time ran out without completing objectives
 		challenge_failed.emit("Time's up!")
 
 
@@ -147,14 +141,15 @@ func _check_bucket_constraints(board_type: Enums.BoardType, bucket_index: int) -
 
 
 func _check_objectives() -> void:
-	var all_met := true
+	if _check_all_objectives_met():
+		challenge_completed.emit()
+
+
+func _check_all_objectives_met() -> bool:
 	for objective in _challenge.objectives:
 		if not _is_objective_met(objective):
-			all_met = false
-			break
-
-	if all_met:
-		challenge_completed.emit()
+			return false
+	return true
 
 
 func _is_objective_met(objective: ChallengeObjective) -> bool:
@@ -168,8 +163,7 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 		return _board_manager.is_board_unlocked(objective.board_type)
 
 	elif objective is ChallengeObjective.Survive:
-		# Survive is checked via autodrop_failed and time_up — always "in progress" here
-		return false
+		return _survive_passed
 
 	elif objective is ChallengeObjective.GetSameBucketXTimes:
 		if objective.in_a_row:
@@ -299,6 +293,7 @@ func clear_challenge() -> void:
 	_bucket_hits.clear()
 	_last_bucket.clear()
 	_same_bucket_streak.clear()
+	_survive_passed = false
 
 	# Clear gates
 	UpgradeManager.upgrade_gate = Callable()
