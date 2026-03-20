@@ -4,6 +4,7 @@ extends Node3D
 @onready var camera: Camera3D = $Camera3D
 @onready var coin_values = $CanvasLayer/CoinValues
 @onready var challenge_hud = $CanvasLayer/ChallengeHUD
+@onready var game_timer: Label = $CanvasLayer/GameTimer
 
 func _ready() -> void:
 	board_manager.setup(camera)
@@ -62,3 +63,12 @@ func _input(event: InputEvent) -> void:
 		SaveManager.save_game()
 	elif event.is_action_pressed("reset_game"):
 		SaveManager.reset_game()
+
+
+func _process(_delta: float) -> void:
+	if not is_instance_valid(game_timer):
+		return
+	var seconds := Time.get_ticks_msec() / 1000.0
+	var mins := int(seconds) / 60
+	var secs := int(seconds) % 60
+	game_timer.text = "%d:%02d" % [mins, secs]

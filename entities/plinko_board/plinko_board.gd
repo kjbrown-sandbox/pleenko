@@ -6,7 +6,7 @@ extends Node3D
 @export var vertical_spacing: float
 @export var drop_delay: float = 2.0
 @export var drop_delay_reduction_factor: float = 0.75
-@export var distance_for_advanced_buckets: int = 3
+@export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
