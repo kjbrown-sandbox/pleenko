@@ -4,8 +4,8 @@
 [ext_resource type="Script" uid="uid://c6xaea0tfy1nk" path="res://entities/board_manager/board_manager.gd" id="2_brdmgr"]
 [ext_resource type="Script" uid="uid://dqvg32rprv776" path="res://entities/main/coin_values.gd" id="2_dn64k"]
 [ext_resource type="PackedScene" path="res://entities/level_up_dialog/level_up_dialog.tscn" id="3_levelup"]
-[ext_resource type="PackedScene" path="res://entities/prestige_dialog/prestige_dialog.tscn" id="5_prestige"]
 [ext_resource type="Script" uid="uid://bv8jn2v2y6dbj" path="res://entities/level_progress_bar/level_progress_bar.gd" id="4_lvlbar"]
+[ext_resource type="PackedScene" path="res://entities/prestige_dialog/prestige_dialog.tscn" id="5_prestige"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
@@ -31,4 +31,4 @@ script = ExtResource("4_lvlbar")
 
 [node name="LevelUpDialog" parent="." unique_id=1315791600 instance=ExtResource("3_levelup")]
 
-[node name="PrestigeDialog" parent="." instance=ExtResource("5_prestige")]
+[node name="PrestigeDialog" parent="." unique_id=1265018027 instance=ExtResource("5_prestige")]

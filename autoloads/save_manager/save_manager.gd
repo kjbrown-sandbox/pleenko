@@ -8,14 +8,15 @@ var _auto_save_timer: Timer
 var _board_manager: BoardManager
 
 
-func setup(board_manager: BoardManager) -> void:
+func setup(board_manager: BoardManager, should_autosave: bool) -> void:
 	_board_manager = board_manager
 
-	_auto_save_timer = Timer.new()
-	_auto_save_timer.wait_time = AUTO_SAVE_INTERVAL
-	_auto_save_timer.autostart = true
-	_auto_save_timer.timeout.connect(save_game)
-	add_child(_auto_save_timer)
+	if should_autosave:
+		_auto_save_timer = Timer.new()
+		_auto_save_timer.wait_time = AUTO_SAVE_INTERVAL
+		_auto_save_timer.autostart = true
+		_auto_save_timer.timeout.connect(save_game)
+		add_child(_auto_save_timer)
 
 
 func save_game() -> void:
@@ -105,13 +106,15 @@ func reset_game() -> void:
 		file.store_string(JSON.stringify(minimal_save, "\t"))
 		file.close()
 
+	reset_state()
+	get_tree().reload_current_scene()
+
+func reset_state() -> void:
 	CurrencyManager.reset()
 	LevelManager.reset()
 	UpgradeManager.reset()
 	_board_manager = null
 	print("[SaveManager] Game reset (prestige preserved). Reloading scene.")
-	get_tree().reload_current_scene()
-
 
 func _migrate(data: Dictionary, version: int) -> Dictionary:
 	if version < 2:
@@ -123,3 +126,15 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 		print("[SaveManager] Migrated save v%d -> v3" % version)
 	data["version"] = SAVE_VERSION
 	return data
+
+func toggle_auto_save(enabled: bool) -> void:
+	if enabled:
+		if not _auto_save_timer.is_stopped():
+			return
+		_auto_save_timer.start()
+		print("[SaveManager] Auto-save enabled.")
+	else:
+		if _auto_save_timer.is_stopped():
+			return
+		_auto_save_timer.stop()
+		print("[SaveManager] Auto-save disabled.")

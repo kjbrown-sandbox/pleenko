@@ -8,7 +8,7 @@ extends Node3D
 func _ready() -> void:
 	board_manager.setup(camera)
 	coin_values.setup(board_manager)
-	SaveManager.setup(board_manager)
+	SaveManager.setup(board_manager, true)
 
 	# Load existing save if one exists
 	if SaveManager.has_save():
