@@ -1,28 +1,111 @@
 extends HBoxContainer
-@onready var purchase_upgrade_button: Button = $PurchaseUpgradeButton
+
+@onready var purchase_button: Button = $PurchaseButton
 @onready var cap_raise_button: Button = $CapRaiseButton
 
 var _board_type: Enums.BoardType
 var _upgrade_type: Enums.UpgradeType
 var _callback: Callable
+var _currency_type: int = -1
+
+# Progress bar fill nodes (built in _ready)
+var _fill_clip: Control
+var _fill_rect: ColorRect
+var _fill_label: Label
+var _base_label: Label
 
 func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgrade: Callable) -> void:
 	_board_type = board_type
 	_upgrade_type = upgrade_type
 	_callback = on_upgrade
+	_currency_type = Enums.currency_for_board(_board_type)
 
 func _ready() -> void:
-	purchase_upgrade_button.focus_mode = Control.FOCUS_NONE
+	var t: VisualTheme = ThemeProvider.theme
+	var btn_font: Font = t.button_font if t.button_font else t.label_font
+
+	# Style the purchase button as an outline-only container
+	_apply_outline_style(purchase_button)
+
+	# Hide the button's own text — we draw our own labels
+	purchase_button.add_theme_color_override("font_color", Color.TRANSPARENT)
+	purchase_button.add_theme_color_override("font_hover_color", Color.TRANSPARENT)
+	purchase_button.add_theme_color_override("font_pressed_color", Color.TRANSPARENT)
+	purchase_button.add_theme_color_override("font_disabled_color", Color.TRANSPARENT)
+
+	# Base label (unfilled area — text in light bg color)
+	_base_label = Label.new()
+	_base_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_base_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_base_label.add_theme_font_size_override("font_size", t.button_font_size)
+	_base_label.add_theme_color_override("font_color", t.normal_text_color)
+	if btn_font:
+		_base_label.add_theme_font_override("font", btn_font)
+	_base_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_base_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	purchase_button.add_child(_base_label)
+
+	# Clip container for the fill
+	_fill_clip = Control.new()
+	_fill_clip.clip_contents = true
+	_fill_clip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fill_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	purchase_button.add_child(_fill_clip)
+
+	# Fill color rect (full size, clipped by parent)
+	_fill_rect = ColorRect.new()
+	_fill_rect.color = t.button_enabled_color
+	_fill_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fill_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fill_clip.add_child(_fill_rect)
+
+	# Fill label (inverted text — bg color, clipped to filled area)
+	_fill_label = Label.new()
+	_fill_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_fill_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_fill_label.add_theme_font_size_override("font_size", t.button_font_size)
+	_fill_label.add_theme_color_override("font_color", t.background_color)
+	if btn_font:
+		_fill_label.add_theme_font_override("font", btn_font)
+	_fill_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fill_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fill_clip.add_child(_fill_label)
+
+	# Cap raise button — standard themed button
+	t.apply_button_theme(cap_raise_button)
+
+	purchase_button.focus_mode = Control.FOCUS_NONE
 	cap_raise_button.focus_mode = Control.FOCUS_NONE
 	_update_button()
-	purchase_upgrade_button.pressed.connect(_on_pressed)
+	purchase_button.pressed.connect(_on_pressed)
+	purchase_button.mouse_entered.connect(_on_hover.bind(purchase_button))
 	cap_raise_button.pressed.connect(_on_cap_raise_pressed)
+	cap_raise_button.mouse_entered.connect(_on_hover.bind(cap_raise_button))
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
 	UpgradeManager.cap_raise_unlocked.connect(_on_cap_raise_unlocked)
 
-	# Check if cap raising is already available (board was unlocked before this row existed)
 	_update_cap_raise_visibility()
+
+
+func _apply_outline_style(button: Button) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var border_col := t.button_enabled_color
+
+	# Transparent background with colored border
+	var normal_style := t._make_stylebox(Color.TRANSPARENT, border_col)
+	var hover_style := t._make_stylebox(Color.TRANSPARENT, t.button_hovered_color)
+	var disabled_style := t._make_stylebox(Color.TRANSPARENT, border_col.darkened(0.3))
+
+	button.add_theme_stylebox_override("normal", normal_style)
+	button.add_theme_stylebox_override("hover", hover_style)
+	button.add_theme_stylebox_override("pressed", hover_style)
+	button.add_theme_stylebox_override("disabled", disabled_style)
+	button.add_theme_font_size_override("font_size", t.button_font_size)
+	var btn_font: Font = t.button_font if t.button_font else t.label_font
+	if btn_font:
+		button.add_theme_font_override("font", btn_font)
+
 
 func _on_pressed() -> void:
 	_callback.call()
@@ -44,7 +127,6 @@ func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:
 
 func _update_cap_raise_visibility() -> void:
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
-	# Only show for capped upgrades when cap raising is available
 	cap_raise_button.visible = state.base_cap > 0 and UpgradeManager.is_cap_raise_available(_board_type)
 
 func _update_button() -> void:
@@ -52,16 +134,43 @@ func _update_button() -> void:
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
 	var at_max := state.current_cap > 0 and state.level >= state.current_cap
 
+	var display_text: String
 	if at_max:
-		purchase_upgrade_button.text = "%s (MAX)" % data.display_name
+		display_text = "%s (MAX)" % data.display_name
 	else:
 		var currency_name: String = Enums.CurrencyType.keys()[Enums.currency_for_board(_board_type)].to_lower().replace("_", " ")
-		purchase_upgrade_button.text = "%s — %d %s (Lv %d)" % [data.display_name, state.cost, currency_name, state.level]
+		display_text = "%s — %d %s (Lv %d)" % [data.display_name, state.cost, currency_name, state.level]
 
-	purchase_upgrade_button.disabled = not UpgradeManager.can_buy(_board_type, _upgrade_type)
+	purchase_button.text = display_text
+	_base_label.text = display_text
+	_fill_label.text = display_text
 
-	# Update cap raise button state
+	_update_fill(state)
+
+	purchase_button.disabled = not UpgradeManager.can_buy(_board_type, _upgrade_type)
+
 	if cap_raise_button.visible:
 		var cap_cost := UpgradeManager.get_cap_raise_cost(_board_type, _upgrade_type)
 		cap_raise_button.text = "+ (%d)" % cap_cost
 		cap_raise_button.disabled = not UpgradeManager.can_buy_cap_raise(_board_type, _upgrade_type)
+
+
+func _update_fill(state: UpgradeManager.UpgradeState) -> void:
+	if not _fill_clip:
+		return
+	var fill_percent := 0.0
+	if state.current_cap > 0:
+		fill_percent = clampf(float(state.level) / float(state.current_cap), 0.0, 1.0)
+	_fill_clip.anchor_right = fill_percent
+	_fill_clip.offset_right = 0
+
+
+func _on_hover(button: Button) -> void:
+	if button.disabled:
+		return
+	var t: VisualTheme = ThemeProvider.theme
+	var tween := create_tween()
+	tween.tween_property(button, "scale", Vector2.ONE * t.button_pulse_scale, t.button_pulse_duration * 0.4) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(button, "scale", Vector2.ONE, t.button_pulse_duration * 0.6) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)
