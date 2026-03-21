@@ -5,33 +5,48 @@
 
 [resource]
 script = ExtResource("1_vt")
-background_color = Color(0.18, 0.2, 0.24, 1)
-ambient_light_color = Color(0.3, 0.35, 0.45, 1)
+
+bg_shade_1 = Color(0.1, 0.11, 0.14, 1)
+bg_shade_2 = Color(0.18, 0.2, 0.24, 1)
+bg_shade_3 = Color(0.3, 0.32, 0.36, 1)
+bg_shade_4 = Color(0.45, 0.48, 0.54, 1)
+bg_shade_5 = Color(0.7, 0.75, 0.85, 1)
+bg_shade_6 = Color(0.9, 0.92, 0.96, 1)
+
+gold_dark = Color(0.6, 0.5, 0.12, 1)
+gold_normal = Color(0.95, 0.82, 0.3, 1)
+gold_light = Color(1.0, 0.94, 0.6, 1)
+
+orange_dark = Color(0.55, 0.28, 0.12, 1)
+orange_normal = Color(0.95, 0.5, 0.25, 1)
+orange_light = Color(1.0, 0.72, 0.5, 1)
+
+red_dark = Color(0.5, 0.1, 0.08, 1)
+red_normal = Color(0.9, 0.25, 0.2, 1)
+red_light = Color(1.0, 0.5, 0.45, 1)
+
 ambient_light_energy = 0.3
-directional_light_color = Color(0.7, 0.75, 0.85, 1)
 directional_light_energy = 1.0
 directional_light_angle = Vector3(-40, -30, 0)
+
 peg_radius = 0.05
-peg_color = Color(0.3, 0.32, 0.36, 1)
 peg_roughness = 0.7
 peg_metallic = 0.2
+
 bucket_width = 0.85
 bucket_height = 0.06
 bucket_depth = 0.06
 bucket_roughness = 0.6
 bucket_metallic = 0.15
 bucket_label_offset = -0.3
+
 label_font = ExtResource("1_fbp74")
+
 coin_radius = 0.14
 coin_roughness = 0.2
 coin_metallic = 0.6
 coin_emission_strength = 0.35
-gold_color = Color(0.95, 0.82, 0.3, 1)
-orange_color = Color(0.95, 0.5, 0.25, 1)
-red_color = Color(0.9, 0.25, 0.2, 1)
-bucket_gold_color = Color(0.9490196, 0.81960785, 0.3019608, 1)
-bucket_orange_color = Color(0.6, 0.35, 0.25, 1)
-bucket_red_color = Color(0.55, 0.2, 0.2, 1)
+
 bucket_pulse_scale = 1.1
 bucket_pulse_duration = 0.18
 coin_spawn_scale_duration = 0.12

@@ -13,13 +13,54 @@ const ORANGE_COIN := 2
 const RAW_RED := 3
 const RED_COIN := 4
 
-# ── Background / Environment ─────────────────────────────────────────
+# ── Palette enum ─────────────────────────────────────────────────────
+enum Palette {
+	BG_1, BG_2, BG_3, BG_4, BG_5, BG_6,
+	GOLD_DARK, GOLD_NORMAL, GOLD_LIGHT,
+	ORANGE_DARK, ORANGE_NORMAL, ORANGE_LIGHT,
+	RED_DARK, RED_NORMAL, RED_LIGHT,
+}
+
+# ── Colors (master palette) ──────────────────────────────────────────
+# Background shades: six steps from darkest to lightest
+@export_group("Colors – Background")
+@export var bg_shade_1 := Color(0.12, 0.11, 0.10)                # darkest
+@export var bg_shade_2 := Color(0.25, 0.24, 0.22)
+@export var bg_shade_3 := Color(0.45, 0.43, 0.40)
+@export var bg_shade_4 := Color(0.65, 0.63, 0.60)
+@export var bg_shade_5 := Color(0.85, 0.83, 0.80)
+@export var bg_shade_6 := Color(0.96, 0.95, 0.92)                # lightest
+
+# Per-currency colors: dark, normal, light
+@export_group("Colors – Gold")
+@export var gold_dark := Color(0.55, 0.45, 0.10)
+@export var gold_normal := Color(0.85, 0.75, 0.25)
+@export var gold_light := Color(1.0, 0.94, 0.55)
+
+@export_group("Colors – Orange")
+@export var orange_dark := Color(0.55, 0.25, 0.12)
+@export var orange_normal := Color(0.85, 0.45, 0.3)
+@export var orange_light := Color(1.0, 0.7, 0.55)
+
+@export_group("Colors – Red")
+@export var red_dark := Color(0.4, 0.08, 0.1)
+@export var red_normal := Color(0.7, 0.2, 0.25)
+@export var red_light := Color(1.0, 0.45, 0.45)
+
+# ── Color assignments (pick from palette via dropdown) ───────────────
+@export_group("Color Assignments")
+@export var background_source: Palette = Palette.BG_6
+@export var ambient_light_source: Palette = Palette.BG_5
+@export var directional_light_source: Palette = Palette.BG_6
+@export var peg_color_source: Palette = Palette.BG_4
+@export var high_multiplier_source: Palette = Palette.RED_LIGHT
+@export var normal_text_source: Palette = Palette.BG_6
+@export var at_cap_text_source: Palette = Palette.RED_LIGHT
+
+# ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")
-@export var background_color := Color(0.96, 0.95, 0.92)          # warm off-white
 @export var unshaded := true                                      # flat color, no lighting
-@export var ambient_light_color := Color(0.95, 0.93, 0.88)
 @export var ambient_light_energy := 0.4
-@export var directional_light_color := Color(1.0, 0.98, 0.94)
 @export var directional_light_energy := 0.8
 @export var directional_light_angle := Vector3(-35, -20, 0)      # euler degrees
 
@@ -29,7 +70,6 @@ enum PegShape { SPHERE, CYLINDER }
 @export var peg_shape: PegShape = PegShape.SPHERE
 @export var peg_radius := 0.08
 @export var peg_height := 0.05                                    # cylinder only
-@export var peg_color := Color(0.75, 0.73, 0.70)                 # subtle but visible
 @export var peg_roughness := 0.9
 @export var peg_metallic := 0.0
 
@@ -49,9 +89,6 @@ enum PegShape { SPHERE, CYLINDER }
 @export var label_outline_size := 0                               # 0 = no outline
 @export var floating_text_font_size := 40
 @export var multi_drop_font_size := 48
-@export var high_multiplier_color := Color(1.0, 0.3, 0.3, 1.0)   # red tint for big multipliers
-@export var normal_text_color := Color(1.0, 1.0, 1.0, 1.0)
-@export var at_cap_text_color := Color(1.0, 0.15, 0.15, 1.0)     # warning when currency is capped
 
 # ── Coins ────────────────────────────────────────────────────────────
 @export_group("Coins")
@@ -64,17 +101,6 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var coin_emission_strength := 0.15                        # subtle glow
 @export var coin_fall_time := 0.4                                 # seconds per row bounce
 @export var coin_bounce_height := 0.2                             # upward arc between rows
-
-# ── Accent Colors (the sharp contrast colors) ───────────────────────
-@export_group("Accent Colors")
-@export var gold_color := Color(0.85, 0.75, 0.25)                # dusty gold
-@export var orange_color := Color(0.85, 0.45, 0.3)               # muted coral
-@export var red_color := Color(0.7, 0.2, 0.25)                   # deep maroon
-
-# Bucket colors default to the same as coin colors but can be overridden
-@export var bucket_gold_color := Color(0.85, 0.75, 0.25)
-@export var bucket_orange_color := Color(0.85, 0.45, 0.3)
-@export var bucket_red_color := Color(0.7, 0.2, 0.25)
 
 # ── Spacing / Layout ────────────────────────────────────────────────
 @export_group("Spacing")
@@ -102,31 +128,89 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var peg_glow_halo_opacity := 0.06
 
 
-# ── Helpers ──────────────────────────────────────────────────────────
+# ── Palette resolver ─────────────────────────────────────────────────
+
+func _resolve(source: Palette) -> Color:
+	match source:
+		Palette.BG_1: return bg_shade_1
+		Palette.BG_2: return bg_shade_2
+		Palette.BG_3: return bg_shade_3
+		Palette.BG_4: return bg_shade_4
+		Palette.BG_5: return bg_shade_5
+		Palette.BG_6: return bg_shade_6
+		Palette.GOLD_DARK: return gold_dark
+		Palette.GOLD_NORMAL: return gold_normal
+		Palette.GOLD_LIGHT: return gold_light
+		Palette.ORANGE_DARK: return orange_dark
+		Palette.ORANGE_NORMAL: return orange_normal
+		Palette.ORANGE_LIGHT: return orange_light
+		Palette.RED_DARK: return red_dark
+		Palette.RED_NORMAL: return red_normal
+		Palette.RED_LIGHT: return red_light
+		_: return bg_shade_6
+
+
+# ── Derived colors (resolved from palette assignments) ───────────────
+
+var background_color: Color:
+	get: return _resolve(background_source)
+var ambient_light_color: Color:
+	get: return _resolve(ambient_light_source)
+var directional_light_color: Color:
+	get: return _resolve(directional_light_source)
+var peg_color: Color:
+	get: return _resolve(peg_color_source)
+var high_multiplier_color: Color:
+	get: return _resolve(high_multiplier_source)
+var normal_text_color: Color:
+	get: return _resolve(normal_text_source)
+var at_cap_text_color: Color:
+	get: return _resolve(at_cap_text_source)
+
+
+# ── Color helpers ────────────────────────────────────────────────────
 
 func get_coin_color(currency_type: int) -> Color:
 	match currency_type:
 		GOLD_COIN:
-			return gold_color
+			return gold_normal
 		RAW_ORANGE, ORANGE_COIN:
-			return orange_color
+			return orange_normal
 		RAW_RED, RED_COIN:
-			return red_color
+			return red_normal
 		_:
-			return gold_color
+			return gold_normal
+
+
+func get_coin_color_light(currency_type: int) -> Color:
+	match currency_type:
+		GOLD_COIN:
+			return gold_light
+		RAW_ORANGE, ORANGE_COIN:
+			return orange_light
+		RAW_RED, RED_COIN:
+			return red_light
+		_:
+			return gold_light
+
+
+func get_coin_color_dark(currency_type: int) -> Color:
+	match currency_type:
+		GOLD_COIN:
+			return gold_dark
+		RAW_ORANGE, ORANGE_COIN:
+			return orange_dark
+		RAW_RED, RED_COIN:
+			return red_dark
+		_:
+			return gold_dark
 
 
 func get_bucket_color(currency_type: int) -> Color:
-	match currency_type:
-		GOLD_COIN:
-			return bucket_gold_color
-		RAW_ORANGE, ORANGE_COIN:
-			return bucket_orange_color
-		RAW_RED, RED_COIN:
-			return bucket_red_color
-		_:
-			return bucket_gold_color
+	return get_coin_color(currency_type)
 
+
+# ── Material / mesh factories ────────────────────────────────────────
 
 func make_coin_material(currency_type: int) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
