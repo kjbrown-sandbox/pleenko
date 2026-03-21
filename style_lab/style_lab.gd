@@ -322,8 +322,8 @@ func _spawn_demo_coin() -> void:
 
 func _animate_coin_drop(coin: MeshInstance3D, board_offset: Vector3,
 		currency: int, vertical_spacing: float, row: int = 0) -> void:
-	var fall_time := 0.4
-	var bounce_height := 0.2
+	var fall_time := theme.coin_fall_time
+	var bounce_height := theme.coin_bounce_height
 
 	# ── Peg glow VFX ──
 	_flash_nearest_peg(coin.position, board_offset, currency)

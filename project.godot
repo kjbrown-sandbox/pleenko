@@ -29,6 +29,7 @@ PrestigeManager="*res://autoloads/prestige_manager/prestige_manager.gd"
 SaveManager="*res://autoloads/save_manager/save_manager.gd"
 SceneManager="*uid://cglkqn47ngw6w"
 ChallengeManager="*uid://dselpc6ibkk2q"
+ThemeProvider="*res://autoloads/theme_provider/theme_provider.tscn"
 
 [display]
 

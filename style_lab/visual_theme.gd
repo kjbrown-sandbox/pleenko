@@ -47,6 +47,11 @@ enum PegShape { SPHERE, CYLINDER }
 @export_group("Text")
 @export var label_font: Font
 @export var label_outline_size := 0                               # 0 = no outline
+@export var floating_text_font_size := 40
+@export var multi_drop_font_size := 48
+@export var high_multiplier_color := Color(1.0, 0.3, 0.3, 1.0)   # red tint for big multipliers
+@export var normal_text_color := Color(1.0, 1.0, 1.0, 1.0)
+@export var at_cap_text_color := Color(1.0, 0.15, 0.15, 1.0)     # warning when currency is capped
 
 # ── Coins ────────────────────────────────────────────────────────────
 @export_group("Coins")
@@ -57,6 +62,8 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var coin_roughness := 0.3
 @export var coin_metallic := 0.4
 @export var coin_emission_strength := 0.15                        # subtle glow
+@export var coin_fall_time := 0.4                                 # seconds per row bounce
+@export var coin_bounce_height := 0.2                             # upward arc between rows
 
 # ── Accent Colors (the sharp contrast colors) ───────────────────────
 @export_group("Accent Colors")

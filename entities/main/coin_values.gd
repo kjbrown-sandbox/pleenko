@@ -38,9 +38,9 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, cap: int) 
 		var coin_name = Enums.CurrencyType.keys()[type]
 		label.text = "%s: %d / %d" % [coin_name, new_balance, cap]
 		if new_balance >= cap:
-			label.add_theme_color_override("font_color", Color(1, 0.15, 0.15))
+			label.add_theme_color_override("font_color", ThemeProvider.theme.at_cap_text_color)
 		else:
-			label.add_theme_color_override("font_color", Color(1, 1, 1))
+			label.add_theme_color_override("font_color", ThemeProvider.theme.normal_text_color)
 
 	_update_all_cap_buttons()
 

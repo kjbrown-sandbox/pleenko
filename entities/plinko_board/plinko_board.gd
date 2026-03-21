@@ -2,8 +2,8 @@ class_name PlinkoBoard
 extends Node3D
 
 @export var num_rows: int = 2
-@export var space_between_pegs: float = 1.0
-@export var vertical_spacing: float
+var space_between_pegs: float
+var vertical_spacing: float
 @export var drop_delay: float = 2.0
 @export var drop_delay_reduction_factor: float = 0.75
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
@@ -38,6 +38,7 @@ signal autodrop_failed(board_type: Enums.BoardType)
 var _drop_timer_remaining: float = 0.0
 
 func _ready() -> void:
+	space_between_pegs = ThemeProvider.theme.space_between_pegs
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type)
 
@@ -267,12 +268,23 @@ func build_board() -> void:
 	for child in buckets_container.get_children():
 		child.queue_free()
 
+	var t: VisualTheme = ThemeProvider.theme
+	var peg_mesh := t.make_peg_mesh()
+	var peg_mat := t.make_peg_material()
+
 	for i in range(num_rows):
 		var x_offset = -i * space_between_pegs / 2
 		var y = -vertical_spacing * i
 		for j in range(i + 1):
 			var peg = PegScene.instantiate()
 			peg.position = Vector3(x_offset + (j * space_between_pegs), y, 0)
+			var mesh_instance: MeshInstance3D = peg.get_node("MeshInstance3D")
+			mesh_instance.mesh = peg_mesh
+			mesh_instance.material_override = peg_mat
+			if t.peg_shape == VisualTheme.PegShape.CYLINDER:
+				mesh_instance.rotation = Vector3(PI / 2, 0, 0)
+			else:
+				mesh_instance.rotation = Vector3.ZERO
 			pegs_container.add_child(peg)
 
 	var num_buckets = num_rows + 1
@@ -321,24 +333,33 @@ func decrease_drop_delay() -> void:
 	drop_delay *= drop_delay_reduction_factor
 
 func _show_floating_text(pos: Vector3, multiplier: int, total: int) -> void:
+	var t: VisualTheme = ThemeProvider.theme
 	var label := Label3D.new()
 	label.text = "x%d = %d" % [multiplier, total]
-	label.font_size = 40
+	label.font_size = t.floating_text_font_size
+	label.outline_size = t.label_outline_size
+	if t.label_font:
+		label.font = t.label_font
 	label.position = Vector3(pos.x, pos.y + 0.3, pos.z + 0.05)
 	if multiplier >= 9:
-		label.modulate = Color(1, 0.3, 0.3, 1)
+		label.modulate = t.high_multiplier_color
 	add_child(label)
 
 	var tween := create_tween()
-	tween.tween_property(label, "position:y", label.position.y + 1.5, 1.2)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.6).set_delay(0.6)
+	tween.tween_property(label, "position:y", label.position.y + t.floating_text_rise, t.floating_text_duration)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, t.floating_text_duration * 0.5) \
+		.set_delay(t.floating_text_duration * 0.5)
 	tween.tween_callback(label.queue_free)
 
 
 func _show_multi_drop_label(count: int) -> void:
+	var t: VisualTheme = ThemeProvider.theme
 	var label := Label3D.new()
 	label.text = "x%d" % count
-	label.font_size = 48
+	label.font_size = t.multi_drop_font_size
+	label.outline_size = t.label_outline_size
+	if t.label_font:
+		label.font = t.label_font
 	label.position = Vector3(0, vertical_spacing + 0.5, 0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	add_child(label)

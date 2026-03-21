@@ -17,19 +17,17 @@ func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) ->
 	position = _position
 	value = _value
 
-	var mesh_color: Color
-	match currency_type:
-		Enums.CurrencyType.GOLD_COIN:
-			mesh_color = Color(1, 0.941176, 0)
-		Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.ORANGE_COIN:
-			mesh_color = Color(1, 0.5, 0)
-		Enums.CurrencyType.RAW_RED, Enums.CurrencyType.RED_COIN:
-			mesh_color = Color(1, 0.15, 0.15)
-
+	var t: VisualTheme = ThemeProvider.theme
 	var mesh_instance := get_node_or_null("MeshInstance3D")
-	if not mesh_instance:
-		return
+	if mesh_instance:
+		mesh_instance.mesh = t.make_bucket_mesh()
+		mesh_instance.material_override = t.make_bucket_material(currency_type)
 
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = mesh_color
-	mesh_instance.material_override = mat
+	var label := get_node_or_null("BucketValue") as Label3D
+	if label:
+		label.font_size = t.bucket_label_font_size
+		label.outline_size = t.label_outline_size
+		label.position = Vector3(0, t.bucket_label_offset, 0.05)
+		label.modulate = t.get_bucket_color(currency_type)
+		if t.label_font:
+			label.font = t.label_font

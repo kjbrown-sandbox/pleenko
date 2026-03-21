@@ -13,6 +13,8 @@ script = ExtResource("1_j5li3")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=767305011]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.08165e-12, -1.7165763, 6.980745)
+projection = 1
+size = 11.0
 
 [node name="BoardManager" type="Node3D" parent="." unique_id=934128328]
 script = ExtResource("2_brdmgr")

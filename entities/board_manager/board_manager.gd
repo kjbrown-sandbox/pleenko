@@ -158,6 +158,12 @@ func _get_camera_target(board: PlinkoBoard) -> Vector3:
 	var z_distance := maxf(MIN_CAMERA_Z, maxf(z_for_height, z_for_width))
 	return Vector3(center_x, center_y, z_distance)
 
+func _get_camera_size_for_board(board: PlinkoBoard) -> float:
+	var bounds := board.get_bounds()
+	var height := bounds.size.y + 2.0  # Add some padding so the top row isn't cut off
+	var width := bounds.size.x
+	return max(height, width)
+
 
 func _snap_camera_to_active_board() -> void:
 	_camera.position = _get_camera_target(_boards[_active_index])
@@ -168,7 +174,10 @@ func _tween_camera_to_active_board() -> void:
 	var tween := create_tween()
 	tween.tween_property(_camera, "position", target, camera_tween_duration) \
 		.set_ease(Tween.EASE_IN_OUT) \
-		.set_trans(Tween.TRANS_QUAD)
+		.set_trans(Tween.TRANS_CUBIC)
+	tween.parallel().tween_property(_camera, "size", _get_camera_size_for_board(_boards[_active_index]), camera_tween_duration) \
+		.set_ease(Tween.EASE_IN_OUT) \
+		.set_trans(Tween.TRANS_CUBIC)
 
 
 # --- Autodropper ---
