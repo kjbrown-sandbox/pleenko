@@ -102,6 +102,21 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var coin_fall_time := 0.4                                 # seconds per row bounce
 @export var coin_bounce_height := 0.2                             # upward arc between rows
 
+# ── Buttons ──────────────────────────────────────────────────────────
+@export_group("Buttons")
+@export var button_enabled_source: Palette = Palette.BG_3
+@export var button_disabled_source: Palette = Palette.BG_2
+@export var button_hovered_source: Palette = Palette.BG_4
+@export var button_text_source: Palette = Palette.BG_6
+@export var button_font: Font
+@export var button_font_size := 14
+@export var button_padding := Vector2(5, 5)                       # horizontal, vertical
+@export var button_border_radius := 4
+@export var button_border_width := 3
+@export var button_border_source: Palette = Palette.BG_4
+@export var button_pulse_scale := 1.03
+@export var button_pulse_duration := 0.12
+
 # ── Spacing / Layout ────────────────────────────────────────────────
 @export_group("Spacing")
 @export var space_between_pegs := 1.0
@@ -167,6 +182,58 @@ var normal_text_color: Color:
 	get: return _resolve(normal_text_source)
 var at_cap_text_color: Color:
 	get: return _resolve(at_cap_text_source)
+var button_enabled_color: Color:
+	get: return _resolve(button_enabled_source)
+var button_disabled_color: Color:
+	get: return _resolve(button_disabled_source)
+var button_hovered_color: Color:
+	get: return _resolve(button_hovered_source)
+var button_text_color: Color:
+	get: return _resolve(button_text_source)
+var button_border_color: Color:
+	get: return _resolve(button_border_source)
+
+
+# ── Button style helpers ─────────────────────────────────────────────
+
+func _make_stylebox(bg_color: Color, border_col: Color = Color.TRANSPARENT) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg_color
+	s.corner_radius_top_left = button_border_radius
+	s.corner_radius_top_right = button_border_radius
+	s.corner_radius_bottom_left = button_border_radius
+	s.corner_radius_bottom_right = button_border_radius
+	s.content_margin_left = button_padding.x
+	s.content_margin_right = button_padding.x
+	s.content_margin_top = button_padding.y
+	s.content_margin_bottom = button_padding.y
+	if button_border_width > 0:
+		s.border_width_left = button_border_width
+		s.border_width_right = button_border_width
+		s.border_width_top = button_border_width
+		s.border_width_bottom = button_border_width
+		s.border_color = border_col if border_col.a > 0 else button_border_color
+	return s
+
+
+func apply_button_theme(button: Button, currency_type: int = -1) -> void:
+	var enabled_col := get_coin_color(currency_type) if currency_type >= 0 else button_enabled_color
+	var hovered_col := get_coin_color_light(currency_type) if currency_type >= 0 else button_hovered_color
+	var disabled_col := get_coin_color_dark(currency_type) if currency_type >= 0 else button_disabled_color
+	var border_col := get_coin_color(currency_type) if currency_type >= 0 else button_border_color
+	button.add_theme_stylebox_override("normal", _make_stylebox(enabled_col, border_col))
+	button.add_theme_stylebox_override("hover", _make_stylebox(hovered_col, border_col))
+	button.add_theme_stylebox_override("pressed", _make_stylebox(hovered_col, border_col))
+	button.add_theme_stylebox_override("disabled", _make_stylebox(disabled_col, border_col.darkened(0.3)))
+	button.add_theme_font_size_override("font_size", button_font_size)
+	var text_col := bg_shade_6 if currency_type >= 0 else button_text_color
+	button.add_theme_color_override("font_color", text_col)
+	button.add_theme_color_override("font_hover_color", text_col)
+	button.add_theme_color_override("font_pressed_color", text_col)
+	button.add_theme_color_override("font_disabled_color", text_col.darkened(0.4))
+	var font: Font = button_font if button_font else label_font
+	if font:
+		button.add_theme_font_override("font", font)
 
 
 # ── Color helpers ────────────────────────────────────────────────────
