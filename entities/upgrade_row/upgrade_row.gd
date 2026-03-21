@@ -13,6 +13,7 @@ var _fill_clip: Control
 var _fill_rect: ColorRect
 var _fill_label: Label
 var _base_label: Label
+var _is_hovered := false
 
 func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgrade: Callable) -> void:
 	_board_type = board_type
@@ -33,7 +34,7 @@ func _ready() -> void:
 	purchase_button.add_theme_color_override("font_pressed_color", Color.TRANSPARENT)
 	purchase_button.add_theme_color_override("font_disabled_color", Color.TRANSPARENT)
 
-	# Base label (unfilled area — text in light bg color)
+	# Base label (unfilled area — text color)
 	_base_label = Label.new()
 	_base_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_base_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -78,7 +79,8 @@ func _ready() -> void:
 	cap_raise_button.focus_mode = Control.FOCUS_NONE
 	_update_button()
 	purchase_button.pressed.connect(_on_pressed)
-	purchase_button.mouse_entered.connect(_on_hover.bind(purchase_button))
+	purchase_button.mouse_entered.connect(_on_mouse_entered)
+	purchase_button.mouse_exited.connect(_on_mouse_exited)
 	cap_raise_button.pressed.connect(_on_cap_raise_pressed)
 	cap_raise_button.mouse_entered.connect(_on_hover.bind(cap_raise_button))
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
@@ -91,11 +93,11 @@ func _ready() -> void:
 func _apply_outline_style(button: Button) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var border_col := t.button_enabled_color
+	var disabled_border := t.button_disabled_color
 
-	# Transparent background with colored border
 	var normal_style := t._make_stylebox(Color.TRANSPARENT, border_col)
 	var hover_style := t._make_stylebox(Color.TRANSPARENT, t.button_hovered_color)
-	var disabled_style := t._make_stylebox(Color.TRANSPARENT, border_col.darkened(0.3))
+	var disabled_style := t._make_stylebox(Color.TRANSPARENT, disabled_border)
 
 	button.add_theme_stylebox_override("normal", normal_style)
 	button.add_theme_stylebox_override("hover", hover_style)
@@ -147,12 +149,30 @@ func _update_button() -> void:
 
 	_update_fill(state)
 
-	purchase_button.disabled = not UpgradeManager.can_buy(_board_type, _upgrade_type)
+	var is_disabled := not UpgradeManager.can_buy(_board_type, _upgrade_type)
+	purchase_button.disabled = is_disabled
+	_apply_fill_colors(is_disabled)
 
 	if cap_raise_button.visible:
 		var cap_cost := UpgradeManager.get_cap_raise_cost(_board_type, _upgrade_type)
 		cap_raise_button.text = "+ (%d)" % cap_cost
 		cap_raise_button.disabled = not UpgradeManager.can_buy_cap_raise(_board_type, _upgrade_type)
+
+
+func _apply_fill_colors(is_disabled: bool) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	if is_disabled:
+		_fill_rect.color = t.button_disabled_color
+		_base_label.add_theme_color_override("font_color", t.normal_text_color.darkened(0.4))
+		_fill_label.add_theme_color_override("font_color", t.background_color.darkened(0.2))
+	elif _is_hovered:
+		_fill_rect.color = t.button_hovered_color
+		_base_label.add_theme_color_override("font_color", t.normal_text_color)
+		_fill_label.add_theme_color_override("font_color", t.background_color)
+	else:
+		_fill_rect.color = t.button_enabled_color
+		_base_label.add_theme_color_override("font_color", t.normal_text_color)
+		_fill_label.add_theme_color_override("font_color", t.background_color)
 
 
 func _update_fill(state: UpgradeManager.UpgradeState) -> void:
@@ -163,6 +183,17 @@ func _update_fill(state: UpgradeManager.UpgradeState) -> void:
 		fill_percent = clampf(float(state.level) / float(state.current_cap), 0.0, 1.0)
 	_fill_clip.anchor_right = fill_percent
 	_fill_clip.offset_right = 0
+
+
+func _on_mouse_entered() -> void:
+	_is_hovered = true
+	if not purchase_button.disabled:
+		_apply_fill_colors(false)
+
+func _on_mouse_exited() -> void:
+	_is_hovered = false
+	if not purchase_button.disabled:
+		_apply_fill_colors(false)
 
 
 func _on_hover(button: Button) -> void:
