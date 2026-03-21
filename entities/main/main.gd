@@ -7,6 +7,7 @@ extends Node3D
 @onready var game_timer: Label = $CanvasLayer/GameTimer
 
 func _ready() -> void:
+	_setup_environment()
 	board_manager.setup(camera)
 	coin_values.setup(board_manager)
 
@@ -14,6 +15,26 @@ func _ready() -> void:
 		_setup_challenge()
 	else:
 		_setup_normal()
+
+
+func _setup_environment() -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = t.background_color
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = t.ambient_light_color
+	env.ambient_light_energy = t.ambient_light_energy
+	var env_node := WorldEnvironment.new()
+	env_node.environment = env
+	add_child(env_node)
+
+	if not t.unshaded:
+		var light := DirectionalLight3D.new()
+		light.light_color = t.directional_light_color
+		light.light_energy = t.directional_light_energy
+		light.rotation_degrees = t.directional_light_angle
+		add_child(light)
 
 
 func _setup_normal() -> void:
