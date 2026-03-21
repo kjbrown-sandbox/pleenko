@@ -5,8 +5,7 @@ signal board_switched(board: PlinkoBoard)
 
 const BoardScene: PackedScene = preload("res://entities/plinko_board/plinko_board.tscn")
 
-## Horizontal distance between board centers
-@export var board_spacing: float = 7.0
+var board_spacing: float
 ## How long the camera tween takes
 @export var camera_tween_duration: float = 0.4
 
@@ -27,6 +26,7 @@ const MIN_CAMERA_Z := 6.0
 
 func setup(camera: Camera3D) -> void:
 	_camera = camera
+	board_spacing = ThemeProvider.theme.board_spacing
 	# Start with just the gold board
 	_spawn_board(Enums.BoardType.GOLD)
 	# Frame the camera on the initial board immediately (no tween)
