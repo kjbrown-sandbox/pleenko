@@ -8,6 +8,7 @@ extends Node3D
 			$BucketValue.text = str(value)
 
 var currency_type: Enums.CurrencyType
+var _base_material: StandardMaterial3D
 
 func _ready() -> void:
 	$BucketValue.text = str(value)
@@ -21,7 +22,8 @@ func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) ->
 	var mesh_instance := get_node_or_null("MeshInstance3D")
 	if mesh_instance:
 		mesh_instance.mesh = t.make_bucket_mesh()
-		mesh_instance.material_override = t.make_bucket_material(currency_type)
+		_base_material = t.make_bucket_material(currency_type)
+		mesh_instance.material_override = _base_material
 
 	var label := get_node_or_null("BucketValue") as Label3D
 	if label:
@@ -31,3 +33,24 @@ func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) ->
 		label.modulate = t.get_bucket_color(currency_type)
 		if t.label_font:
 			label.font = t.label_font
+
+
+func pulse() -> void:
+	var t: VisualTheme = ThemeProvider.theme
+
+	# Flash to light color
+	if _base_material:
+		var flash_color := t.get_coin_color_light(currency_type)
+		_base_material.albedo_color = flash_color
+		var color_tween := create_tween()
+		color_tween.tween_property(_base_material, "albedo_color",
+			t.get_bucket_color(currency_type), t.bucket_pulse_duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+	# Scale pop
+	var scale_tween := create_tween()
+	var target_scale := Vector3.ONE * t.bucket_pulse_scale
+	scale_tween.tween_property(self, "scale", target_scale, t.bucket_pulse_duration * 0.4) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	scale_tween.tween_property(self, "scale", Vector3.ONE, t.bucket_pulse_duration * 0.6) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)

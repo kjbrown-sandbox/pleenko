@@ -216,6 +216,7 @@ func on_coin_landed(coin: Coin) -> void:
 	var amount = bucket.value * coin.multiplier
 	CurrencyManager.add(bucket.currency_type, amount)
 	coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount)
+	bucket.pulse()
 	if coin.multiplier > 1:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
 	coin.queue_free()
