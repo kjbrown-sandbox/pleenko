@@ -1,16 +1,16 @@
-[gd_scene load_steps=3 format=3 uid="uid://d3prgdcs44ov5"]
+[gd_scene format=3 uid="uid://d3prgdcs44ov5"]
 
-[ext_resource type="Script" path="res://entities/bucket/bucket.gd" id="1_wnq05"]
+[ext_resource type="Script" uid="uid://rm4ofwgeqr3d" path="res://entities/bucket/bucket.gd" id="1_wnq05"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_avjfo"]
 size = Vector3(0.9, 0.03, 0.05)
 
-[node name="Bucket" type="Node3D"]
+[node name="Bucket" type="Node3D" unique_id=53163307]
 script = ExtResource("1_wnq05")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1637234369]
 mesh = SubResource("BoxMesh_avjfo")
 
-[node name="BucketValue" type="Label3D" parent="."]
+[node name="BucketValue" type="Label3D" parent="." unique_id=2013189851]
 offset = Vector2(2.08165e-12, -29)
 text = "5"

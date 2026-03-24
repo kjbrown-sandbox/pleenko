@@ -111,7 +111,7 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var button_hovered_source: Palette = Palette.BG_6
 @export var button_text_source: Palette = Palette.BG_6
 @export var button_font: Font
-@export var button_font_size := 28 
+@export var button_font_size := 40 
 @export var button_padding := Vector2(16, 5)                      # horizontal, vertical
 @export var button_border_radius := 4
 @export var button_border_width := 3
