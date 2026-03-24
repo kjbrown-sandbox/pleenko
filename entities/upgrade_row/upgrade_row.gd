@@ -26,6 +26,7 @@ func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgr
 	_currency_type = Enums.currency_for_board(_board_type)
 
 func _ready() -> void:
+	clip_contents = false
 	var t: VisualTheme = ThemeProvider.theme
 	var bold_font: Font = preload("res://style_lab/VendSans-Bold.ttf")
 	var btn_font: Font = t.button_font if t.button_font else bold_font
@@ -199,7 +200,12 @@ func _update_button() -> void:
 
 	if cap_raise_button.visible:
 		cap_raise_button.text = "+"
-		cap_raise_button.disabled = not UpgradeManager.can_buy_cap_raise(_board_type, _upgrade_type)
+		var can_raise := UpgradeManager.can_buy_cap_raise(_board_type, _upgrade_type)
+		cap_raise_button.disabled = not can_raise
+		var t: VisualTheme = ThemeProvider.theme
+		var cap_bg: Color = t.button_enabled_color if can_raise else t.bg_shade_1
+		for style in _cap_styles:
+			style.bg_color = cap_bg
 
 
 func _apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
