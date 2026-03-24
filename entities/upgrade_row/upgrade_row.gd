@@ -113,9 +113,10 @@ func _apply_outline_style(button: Button) -> void:
 	var border_col := t.button_enabled_color
 	var disabled_border := t.button_disabled_color
 
-	var normal_style := t._make_stylebox(Color.TRANSPARENT, border_col)
-	var hover_style := t._make_stylebox(Color.TRANSPARENT, t.button_hovered_color)
-	var disabled_style := t._make_stylebox(Color.TRANSPARENT, disabled_border)
+	var base_bg := t.bg_shade_2
+	var normal_style := t._make_stylebox(base_bg, border_col)
+	var hover_style := t._make_stylebox(base_bg, t.button_hovered_color)
+	var disabled_style := t._make_stylebox(base_bg, disabled_border)
 
 	button.add_theme_stylebox_override("normal", normal_style)
 	button.add_theme_stylebox_override("hover", hover_style)
@@ -179,22 +180,16 @@ func _update_button() -> void:
 
 func _apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 	var t: VisualTheme = ThemeProvider.theme
+	_base_label.add_theme_color_override("font_color", t.normal_text_color)
+	_fill_label.add_theme_color_override("font_color", t.normal_text_color)
 	if at_max:
 		_fill_rect.color = t.button_disabled_color
-		_base_label.add_theme_color_override("font_color", t.normal_text_color.darkened(0.4))
-		_fill_label.add_theme_color_override("font_color", t.background_color)
 	elif is_disabled:
 		_fill_rect.color = t.button_disabled_color
-		_base_label.add_theme_color_override("font_color", t.normal_text_color.darkened(0.4))
-		_fill_label.add_theme_color_override("font_color", t.background_color.darkened(0.2))
 	elif _is_hovered:
 		_fill_rect.color = t.button_hovered_color
-		_base_label.add_theme_color_override("font_color", t.normal_text_color)
-		_fill_label.add_theme_color_override("font_color", t.background_color)
 	else:
 		_fill_rect.color = t.button_enabled_color
-		_base_label.add_theme_color_override("font_color", t.normal_text_color)
-		_fill_label.add_theme_color_override("font_color", t.background_color)
 
 
 func _sync_fill_label_size() -> void:
