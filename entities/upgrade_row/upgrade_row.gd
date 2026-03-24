@@ -160,7 +160,7 @@ func _update_button() -> void:
 		display_text = "%s (MAX)" % data.display_name
 	else:
 		var currency_name: String = Enums.CurrencyType.keys()[Enums.currency_for_board(_board_type)].to_lower().replace("_", " ")
-		display_text = "%s — %d %s (Lv %d)" % [data.display_name, state.cost, currency_name, state.level]
+		display_text = "%s" % [data.display_name]
 
 	purchase_button.text = display_text
 	_base_label.text = display_text
