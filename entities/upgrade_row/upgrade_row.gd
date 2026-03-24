@@ -169,7 +169,7 @@ func _update_button() -> void:
 
 	var is_disabled := not UpgradeManager.can_buy(_board_type, _upgrade_type)
 	purchase_button.disabled = is_disabled
-	_apply_fill_colors(is_disabled)
+	_apply_fill_colors(is_disabled, at_max)
 
 	if cap_raise_button.visible:
 		var cap_cost := UpgradeManager.get_cap_raise_cost(_board_type, _upgrade_type)
@@ -177,9 +177,13 @@ func _update_button() -> void:
 		cap_raise_button.disabled = not UpgradeManager.can_buy_cap_raise(_board_type, _upgrade_type)
 
 
-func _apply_fill_colors(is_disabled: bool) -> void:
+func _apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	if is_disabled:
+	if at_max:
+		_fill_rect.color = t.button_disabled_color
+		_base_label.add_theme_color_override("font_color", t.normal_text_color.darkened(0.4))
+		_fill_label.add_theme_color_override("font_color", t.background_color)
+	elif is_disabled:
 		_fill_rect.color = t.button_disabled_color
 		_base_label.add_theme_color_override("font_color", t.normal_text_color.darkened(0.4))
 		_fill_label.add_theme_color_override("font_color", t.background_color.darkened(0.2))

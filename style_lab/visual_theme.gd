@@ -104,9 +104,9 @@ enum CoinShape { SPHERE, CYLINDER }
 
 # ── Buttons ──────────────────────────────────────────────────────────
 @export_group("Buttons")
-@export var button_enabled_source: Palette = Palette.BG_3
-@export var button_disabled_source: Palette = Palette.BG_2
-@export var button_hovered_source: Palette = Palette.BG_4
+@export var button_enabled_source: Palette = Palette.BG_4
+@export var button_disabled_source: Palette = Palette.BG_3
+@export var button_hovered_source: Palette = Palette.BG_6
 @export var button_text_source: Palette = Palette.BG_6
 @export var button_font: Font
 @export var button_font_size := 28 
