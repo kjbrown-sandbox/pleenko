@@ -19,12 +19,14 @@ enum Palette {
 	GOLD_DARK, GOLD_NORMAL, GOLD_LIGHT,
 	ORANGE_DARK, ORANGE_NORMAL, ORANGE_LIGHT,
 	RED_DARK, RED_NORMAL, RED_LIGHT,
+	BG_7,
 }
 
 # ── Colors (master palette) ──────────────────────────────────────────
-# Background shades: six steps from darkest to lightest
+# Background shades: seven steps from darkest to lightest
 @export_group("Colors – Background")
-@export var bg_shade_1 := Color(0.12, 0.11, 0.10)                # darkest
+@export var bg_shade_7 := Color(0.06, 0.05, 0.04)                # darkest
+@export var bg_shade_1 := Color(0.12, 0.11, 0.10)
 @export var bg_shade_2 := Color(0.25, 0.24, 0.22)
 @export var bg_shade_3 := Color(0.45, 0.43, 0.40)
 @export var bg_shade_4 := Color(0.65, 0.63, 0.60)
@@ -49,7 +51,7 @@ enum Palette {
 
 # ── Color assignments (pick from palette via dropdown) ───────────────
 @export_group("Color Assignments")
-@export var background_source: Palette = Palette.BG_6
+@export var background_source: Palette = Palette.BG_7
 @export var ambient_light_source: Palette = Palette.BG_5
 @export var directional_light_source: Palette = Palette.BG_6
 @export var peg_color_source: Palette = Palette.BG_4
@@ -154,6 +156,7 @@ func _resolve(source: Palette) -> Color:
 		Palette.BG_4: return bg_shade_4
 		Palette.BG_5: return bg_shade_5
 		Palette.BG_6: return bg_shade_6
+		Palette.BG_7: return bg_shade_7
 		Palette.GOLD_DARK: return gold_dark
 		Palette.GOLD_NORMAL: return gold_normal
 		Palette.GOLD_LIGHT: return gold_light

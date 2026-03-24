@@ -113,7 +113,7 @@ func _apply_outline_style(button: Button) -> void:
 	var border_col := t.button_enabled_color
 	var disabled_border := t.button_disabled_color
 
-	var base_bg := t.bg_shade_2
+	var base_bg := t.bg_shade_1
 	var normal_style := t._make_stylebox(base_bg, border_col)
 	var hover_style := t._make_stylebox(base_bg, t.button_hovered_color)
 	var disabled_style := t._make_stylebox(base_bg, disabled_border)
@@ -180,16 +180,15 @@ func _update_button() -> void:
 
 func _apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	_base_label.add_theme_color_override("font_color", t.normal_text_color)
-	_fill_label.add_theme_color_override("font_color", t.normal_text_color)
-	if at_max:
+	var text_color: Color
+	if is_disabled or at_max:
+		text_color = t._resolve(VisualTheme.Palette.BG_5)
 		_fill_rect.color = t.button_disabled_color
-	elif is_disabled:
-		_fill_rect.color = t.button_disabled_color
-	elif _is_hovered:
-		_fill_rect.color = t.button_hovered_color
 	else:
+		text_color = t.normal_text_color
 		_fill_rect.color = t.button_enabled_color
+	_base_label.add_theme_color_override("font_color", text_color)
+	_fill_label.add_theme_color_override("font_color", text_color)
 
 
 func _sync_fill_label_size() -> void:

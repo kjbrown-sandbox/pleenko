@@ -5,6 +5,7 @@
 
 [resource]
 script = ExtResource("1_vt")
+bg_shade_7 = Color(0.06846325, 0.07935896, 0.11568151, 1)
 bg_shade_1 = Color(0.08, 0.09, 0.13, 1)
 bg_shade_2 = Color(0.14, 0.16, 0.22, 1)
 bg_shade_3 = Color(0.25, 0.28, 0.35, 1)
@@ -20,7 +21,6 @@ orange_light = Color(1, 0.72, 0.5, 1)
 red_dark = Color(0.5, 0.1, 0.08, 1)
 red_normal = Color(0.9, 0.25, 0.2, 1)
 red_light = Color(1, 0.5, 0.45, 1)
-background_source = 1
 ambient_light_source = 2
 directional_light_source = 3
 ambient_light_energy = 0.3
