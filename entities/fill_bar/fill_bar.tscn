@@ -1,0 +1,24 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://entities/fill_bar/fill_bar.gd" id="1_fill"]
+[ext_resource type="FontFile" uid="uid://ohlabsbs4ksf" path="res://style_lab/VendSans-Bold.ttf" id="2_font"]
+
+[node name="FillBar" type="HBoxContainer"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+script = ExtResource("1_fill")
+
+[node name="MainButton" type="Button" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_fonts/font = ExtResource("2_font")
+text = "Fill Bar"
+
+[node name="CapButton" type="Button" parent="."]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+focus_mode = 0
+theme_override_fonts/font = ExtResource("2_font")
+text = "+"

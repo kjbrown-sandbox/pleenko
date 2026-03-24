@@ -1,15 +1,16 @@
 extends VBoxContainer
 
-var _cap_buttons: Dictionary = {}  # CurrencyType -> Button
-var _labels: Dictionary = {}  # CurrencyType -> Label
+const FillBarScene := preload("res://entities/fill_bar/fill_bar.tscn")
+
+var _bars: Dictionary = {}  # CurrencyType -> FillBar node
 var _visible_currencies: Array[Enums.CurrencyType] = [Enums.CurrencyType.GOLD_COIN]
+var _hover_info_label: Label
 
 var _board_manager: BoardManager
 
 func setup(board_manager: BoardManager) -> void:
 	_board_manager = board_manager
 
-	# Check if any boards are already unlocked
 	for currency_type in Enums.CurrencyType.values():
 		if not _visible_currencies.has(currency_type) and _is_board_for_coin_type_unlocked(currency_type):
 			_visible_currencies.append(currency_type)
@@ -20,27 +21,18 @@ func setup(board_manager: BoardManager) -> void:
 func _ready() -> void:
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 	UpgradeManager.cap_raise_unlocked.connect(_on_cap_raise_unlocked)
-
-	# Check if any cap raises are already available
-	_update_all_cap_buttons()
+	_update_all_bars()
 
 
 func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, cap: int) -> void:
-	# Check if new currencies should become visible
 	if not _visible_currencies.has(type) and _is_board_for_coin_type_unlocked(type):
 		_visible_currencies.append(type)
 		_visible_currencies.sort()
 		_update_currencies()
 
-	# Update the label if this currency has a row
-	var label: Label = _labels.get(type)
-	if label:
-		var coin_name = Enums.CurrencyType.keys()[type]
-		label.text = "%s: %d / %d" % [coin_name, new_balance, cap]
-		if new_balance >= cap:
-			label.add_theme_color_override("font_color", ThemeProvider.theme.at_cap_text_color)
-		else:
-			label.add_theme_color_override("font_color", ThemeProvider.theme.normal_text_color)
+	var bar = _bars.get(type)
+	if bar:
+		_update_bar(bar, type, new_balance, cap)
 
 	_update_all_cap_buttons()
 
@@ -56,34 +48,82 @@ func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
 
 
 func _update_currencies() -> void:
-	# Clear existing rows and references
 	for child in get_children():
 		child.queue_free()
-	_cap_buttons.clear()
-	_labels.clear()
+	_bars.clear()
+	_hover_info_label = null
 
-	# Rebuild from _visible_currencies
 	for currency_type in _visible_currencies:
-		var row := HBoxContainer.new()
+		var bar = FillBarScene.instantiate()
+		add_child(bar)
 
-		var label := Label.new()
-		var amount = CurrencyManager.get_balance(currency_type)
-		var cap = CurrencyManager.get_cap(currency_type)
-		var coin_name = Enums.CurrencyType.keys()[currency_type]
-		label.text = "%s: %d / %d" % [coin_name, amount, cap]
-		row.add_child(label)
-		_labels[currency_type] = label
+		var t: VisualTheme = ThemeProvider.theme
+		# Inverted: fill color shows while growing (good), disabled color when at cap (bad)
+		var fill_color: Color = t.get_coin_color(currency_type)
+		var disabled_color: Color = t.get_coin_color_dark(currency_type)
+		bar.setup(fill_color, disabled_color)
 
-		var cap_button := Button.new()
-		cap_button.visible = false
-		cap_button.focus_mode = Control.FOCUS_NONE
-		cap_button.pressed.connect(_on_cap_raise_pressed.bind(currency_type))
-		row.add_child(cap_button)
-		_cap_buttons[currency_type] = cap_button
+		var amount := CurrencyManager.get_balance(currency_type)
+		var cap := CurrencyManager.get_cap(currency_type)
+		_update_bar(bar, currency_type, amount, cap)
 
-		add_child(row)
+		# Main bar is not clickable
+		bar.main_button.disabled = true
+		bar.main_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		bar.cap_pressed.connect(_on_cap_raise_pressed.bind(currency_type))
+		bar.cap_mouse_entered.connect(_on_cap_hover.bind(currency_type))
+		bar.cap_mouse_exited.connect(_on_cap_unhover)
+
+		_bars[currency_type] = bar
+
+	# Hover info label at the bottom
+	_hover_info_label = Label.new()
+	_hover_info_label.visible = false
+	_hover_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var t: VisualTheme = ThemeProvider.theme
+	_hover_info_label.add_theme_font_size_override("font_size", int(t.button_font_size))
+	_hover_info_label.add_theme_color_override("font_color", t._resolve(VisualTheme.Palette.BG_5))
+	var font: Font = t.button_font if t.button_font else t.label_font
+	if font:
+		_hover_info_label.add_theme_font_override("font", font)
+	add_child(_hover_info_label)
 
 	_update_all_cap_buttons()
+
+
+func _update_bar(bar, type: Enums.CurrencyType, balance: int, cap: int) -> void:
+	var at_cap := cap > 0 and balance >= cap
+	var coin_name := _get_currency_name(type)
+
+	if at_cap:
+		bar.update_text("%s (MAX)" % coin_name)
+		bar.set_fill(1.0)
+		bar.apply_fill_colors(true, true)
+	else:
+		bar.update_text(coin_name)
+		var fill_pct := clampf(float(balance) / float(cap), 0.0, 1.0) if cap > 0 else 0.0
+		bar.set_fill(fill_pct)
+		bar.apply_fill_colors(false)
+
+
+func _get_currency_name(type: int) -> String:
+	return Enums.CurrencyType.keys()[type].to_lower().replace("_", " ").replace(" coin", "")
+
+
+func _on_cap_hover(type: Enums.CurrencyType) -> void:
+	if not _hover_info_label:
+		return
+	var cost := CurrencyManager.get_cap_raise_cost(type)
+	var cap_currency: int = CurrencyManager.cap_raise_currency(type)
+	var currency_name := _get_currency_name(cap_currency)
+	_hover_info_label.text = "Cost: %d %s" % [cost, currency_name]
+	_hover_info_label.visible = true
+
+
+func _on_cap_unhover() -> void:
+	if _hover_info_label:
+		_hover_info_label.visible = false
 
 
 func refresh_visible_currencies() -> void:
@@ -93,7 +133,6 @@ func refresh_visible_currencies() -> void:
 			_visible_currencies.append(currency_type)
 			changed = true
 	if changed:
-		# Re-sort to match enum definition order
 		_visible_currencies.sort()
 		_update_currencies()
 
@@ -104,15 +143,27 @@ func _on_cap_raise_unlocked(_board_type: Enums.BoardType) -> void:
 
 func _on_cap_raise_pressed(type: Enums.CurrencyType) -> void:
 	CurrencyManager.buy_cap_raise(type)
+	_update_all_cap_buttons()
+	if _hover_info_label and _hover_info_label.visible:
+		_on_cap_hover(type)
+
+
+func _update_all_bars() -> void:
+	for currency_type in _bars:
+		var bar = _bars[currency_type]
+		var amount := CurrencyManager.get_balance(currency_type)
+		var cap := CurrencyManager.get_cap(currency_type)
+		_update_bar(bar, currency_type, amount, cap)
+	_update_all_cap_buttons()
 
 
 func _update_all_cap_buttons() -> void:
-	for currency_type in _cap_buttons:
-		var button: Button = _cap_buttons[currency_type]
+	for currency_type in _bars:
+		var bar = _bars[currency_type]
 		var board: int = CurrencyManager.cap_raise_board(currency_type)
-		button.visible = board != -1 and UpgradeManager.is_cap_raise_available(board)
-		if button.visible:
-			var cost := CurrencyManager.get_cap_raise_cost(currency_type)
-			var raise_amount := CurrencyManager.cap_raise_amount(currency_type)
-			button.text = "+%d (%d)" % [raise_amount, cost]
-			button.disabled = not CurrencyManager.can_buy_cap_raise(currency_type)
+		var show := board != -1 and UpgradeManager.is_cap_raise_available(board)
+		bar.show_cap_button(show)
+		if show:
+			var can_afford := CurrencyManager.can_buy_cap_raise(currency_type)
+			bar.set_cap_disabled(not can_afford)
+			bar.set_cap_filled(can_afford)
