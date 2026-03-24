@@ -166,7 +166,7 @@ func _update_button() -> void:
 	_base_label.text = display_text
 	_fill_label.text = display_text
 
-	_update_fill(state)
+	_update_fill(state, at_max)
 
 	var is_disabled := not UpgradeManager.can_buy(_board_type, _upgrade_type)
 	purchase_button.disabled = is_disabled
@@ -198,12 +198,15 @@ func _sync_fill_label_size() -> void:
 	_fill_label.position = Vector2.ZERO
 
 
-func _update_fill(state: UpgradeManager.UpgradeState) -> void:
+func _update_fill(state: UpgradeManager.UpgradeState, at_max: bool) -> void:
 	if not _fill_clip:
 		return
 	var fill_percent := 0.0
-	if state.current_cap > 0:
-		fill_percent = clampf(float(state.level) / float(state.current_cap), 0.0, 1.0)
+	if at_max:
+		fill_percent = 1.0
+	elif state.cost > 0:
+		var balance: int = CurrencyManager.get_balance(Enums.currency_for_board(_board_type))
+		fill_percent = clampf(float(balance) / float(state.cost), 0.0, 1.0)
 	_fill_clip.anchor_right = fill_percent
 	_fill_clip.offset_right = 0
 
