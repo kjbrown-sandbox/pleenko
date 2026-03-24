@@ -15,7 +15,16 @@ grow_horizontal = 0
 theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
 
-[node name="Upgrades" type="VBoxContainer" parent="MarginContainer" unique_id=107140261]
+[node name="OuterVBox" type="VBoxContainer" parent="MarginContainer" unique_id=384080975]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_constants/separation = 10
+
+[node name="Upgrades" type="VBoxContainer" parent="MarginContainer/OuterVBox" unique_id=107140261]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HoverInfo" type="Label" parent="MarginContainer/OuterVBox" unique_id=74694662]
+visible = false
+layout_mode = 2
+horizontal_alignment = 1

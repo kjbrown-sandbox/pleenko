@@ -1,5 +1,7 @@
 extends HBoxContainer
 
+signal hover_info_changed(text: String)
+
 @onready var purchase_button: Button = $PurchaseButton
 @onready var cap_raise_button: Button = $CapRaiseButton
 
@@ -100,7 +102,8 @@ func _ready() -> void:
 	purchase_button.mouse_entered.connect(_on_mouse_entered)
 	purchase_button.mouse_exited.connect(_on_mouse_exited)
 	cap_raise_button.pressed.connect(_on_cap_raise_pressed)
-	cap_raise_button.mouse_entered.connect(_on_hover.bind(cap_raise_button))
+	cap_raise_button.mouse_entered.connect(_on_cap_raise_mouse_entered)
+	cap_raise_button.mouse_exited.connect(_on_cap_raise_mouse_exited)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
 	UpgradeManager.cap_raise_unlocked.connect(_on_cap_raise_unlocked)
@@ -131,10 +134,12 @@ func _apply_outline_style(button: Button) -> void:
 func _on_pressed() -> void:
 	_callback.call()
 	_update_button()
+	hover_info_changed.emit(_get_purchase_hover_text())
 
 func _on_cap_raise_pressed() -> void:
 	UpgradeManager.buy_cap_raise(_board_type, _upgrade_type)
 	_update_button()
+	hover_info_changed.emit(_get_cap_raise_hover_text())
 
 func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
 	_update_button()
@@ -173,8 +178,7 @@ func _update_button() -> void:
 	_apply_fill_colors(is_disabled, at_max)
 
 	if cap_raise_button.visible:
-		var cap_cost := UpgradeManager.get_cap_raise_cost(_board_type, _upgrade_type)
-		cap_raise_button.text = "+ (%d)" % cap_cost
+		cap_raise_button.text = "+"
 		cap_raise_button.disabled = not UpgradeManager.can_buy_cap_raise(_board_type, _upgrade_type)
 
 
@@ -215,14 +219,22 @@ func _on_mouse_entered() -> void:
 	_is_hovered = true
 	if not purchase_button.disabled:
 		_apply_fill_colors(false)
+	hover_info_changed.emit(_get_purchase_hover_text())
 
 func _on_mouse_exited() -> void:
 	_is_hovered = false
 	if not purchase_button.disabled:
 		_apply_fill_colors(false)
+	hover_info_changed.emit("")
 
+func _on_cap_raise_mouse_entered() -> void:
+	hover_info_changed.emit(_get_cap_raise_hover_text())
+	_pulse_button(cap_raise_button)
 
-func _on_hover(button: Button) -> void:
+func _on_cap_raise_mouse_exited() -> void:
+	hover_info_changed.emit("")
+
+func _pulse_button(button: Button) -> void:
 	if button.disabled:
 		return
 	var t: VisualTheme = ThemeProvider.theme
@@ -231,3 +243,24 @@ func _on_hover(button: Button) -> void:
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tween.tween_property(button, "scale", Vector2.ONE, t.button_pulse_duration * 0.6) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)
+
+func _get_currency_name(currency_type: int) -> String:
+	return Enums.CurrencyType.keys()[currency_type].to_lower().replace("_", " ").replace(" coin", "")
+
+func _get_purchase_hover_text() -> String:
+	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
+	var at_max := state.current_cap > 0 and state.level >= state.current_cap
+	if at_max:
+		return ""
+	var currency_name := _get_currency_name(Enums.currency_for_board(_board_type))
+	# var level_text := "Lv %d → %d" % [state.level, state.level + 1]
+	# if state.current_cap > 0:
+	# 	level_text += " (max %d)" % state.current_cap
+	return "Cost: %d %s" % [state.cost, currency_name]
+
+func _get_cap_raise_hover_text() -> String:
+	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
+	var cap_cost := UpgradeManager.get_cap_raise_cost(_board_type, _upgrade_type)
+	var cap_currency: int = Enums.cap_raise_currency_for_board(_board_type)
+	var currency_name := _get_currency_name(cap_currency)
+	return "Cost: %d %s  |  Cap %d → %d" % [cap_cost, currency_name, state.current_cap, state.current_cap + 1]
