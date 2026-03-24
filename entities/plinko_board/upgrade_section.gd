@@ -2,7 +2,7 @@ extends CanvasLayer
 
 const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 
-@onready var upgrades_container: VBoxContainer = $Upgrades
+@onready var upgrades_container: VBoxContainer = $MarginContainer/Upgrades
 
 var _board: PlinkoBoard
 var _board_type: Enums.BoardType
