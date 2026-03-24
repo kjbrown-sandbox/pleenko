@@ -18,4 +18,4 @@ theme_override_constants/margin_right = 20
 [node name="Upgrades" type="VBoxContainer" parent="MarginContainer" unique_id=107140261]
 layout_mode = 2
 size_flags_vertical = 0
-theme_override_constants/separation = 30
+theme_override_constants/separation = 10
