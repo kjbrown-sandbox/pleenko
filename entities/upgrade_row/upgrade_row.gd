@@ -23,7 +23,8 @@ func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgr
 
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	var btn_font: Font = t.button_font if t.button_font else t.label_font
+	var bold_font: Font = preload("res://style_lab/VendSans-Bold.ttf")
+	var btn_font: Font = t.button_font if t.button_font else bold_font
 
 	# Style the purchase button as an outline-only container
 	_apply_outline_style(purchase_button)
@@ -34,15 +35,21 @@ func _ready() -> void:
 	purchase_button.add_theme_color_override("font_pressed_color", Color.TRANSPARENT)
 	purchase_button.add_theme_color_override("font_disabled_color", Color.TRANSPARENT)
 
+	# Inset for labels/fill so they sit inside the border
+	var inset: float = t.button_border_width
+
 	# Base label (unfilled area — text color)
 	_base_label = Label.new()
 	_base_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_base_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_base_label.add_theme_font_size_override("font_size", t.button_font_size)
 	_base_label.add_theme_color_override("font_color", t.normal_text_color)
-	if btn_font:
-		_base_label.add_theme_font_override("font", btn_font)
+	_base_label.add_theme_font_override("font", btn_font)
 	_base_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_base_label.offset_left = inset
+	_base_label.offset_top = inset
+	_base_label.offset_right = -inset
+	_base_label.offset_bottom = -inset
 	_base_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	purchase_button.add_child(_base_label)
 
@@ -50,10 +57,14 @@ func _ready() -> void:
 	_fill_clip = Control.new()
 	_fill_clip.clip_contents = true
 	_fill_clip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fill_clip.offset_left = inset
+	_fill_clip.offset_top = inset
+	_fill_clip.offset_right = -inset
+	_fill_clip.offset_bottom = -inset
 	_fill_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	purchase_button.add_child(_fill_clip)
 
-	# Fill color rect (full size, clipped by parent)
+	# Fill color rect (full size within clip)
 	_fill_rect = ColorRect.new()
 	_fill_rect.color = t.button_enabled_color
 	_fill_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -61,16 +72,23 @@ func _ready() -> void:
 	_fill_clip.add_child(_fill_rect)
 
 	# Fill label (inverted text — bg color, clipped to filled area)
+	# Must span the full button content area so text centers correctly,
+	# even though the clip container may be narrower.
 	_fill_label = Label.new()
 	_fill_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_fill_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_fill_label.add_theme_font_size_override("font_size", t.button_font_size)
 	_fill_label.add_theme_color_override("font_color", t.background_color)
-	if btn_font:
-		_fill_label.add_theme_font_override("font", btn_font)
-	_fill_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fill_label.add_theme_font_override("font", btn_font)
+	_fill_label.anchor_left = 0
+	_fill_label.anchor_top = 0
+	_fill_label.anchor_right = 0
+	_fill_label.anchor_bottom = 0
 	_fill_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_fill_clip.add_child(_fill_label)
+	# Keep fill label sized to match base label (which auto-sizes via anchors)
+	_base_label.resized.connect(_sync_fill_label_size)
+	_sync_fill_label_size.call_deferred()
 
 	# Cap raise button — standard themed button
 	t.apply_button_theme(cap_raise_button)
@@ -173,6 +191,13 @@ func _apply_fill_colors(is_disabled: bool) -> void:
 		_fill_rect.color = t.button_enabled_color
 		_base_label.add_theme_color_override("font_color", t.normal_text_color)
 		_fill_label.add_theme_color_override("font_color", t.background_color)
+
+
+func _sync_fill_label_size() -> void:
+	if not _fill_label or not _base_label:
+		return
+	_fill_label.size = _base_label.size
+	_fill_label.position = Vector2.ZERO
 
 
 func _update_fill(state: UpgradeManager.UpgradeState) -> void:

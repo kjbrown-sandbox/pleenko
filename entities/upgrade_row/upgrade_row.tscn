@@ -1,21 +1,27 @@
 [gd_scene format=3 uid="uid://b7g4wiwy64dus"]
 
 [ext_resource type="Script" uid="uid://djwgl6f0kkda0" path="res://entities/upgrade_row/upgrade_row.gd" id="1_aqdia"]
+[ext_resource type="FontFile" uid="uid://ohlabsbs4ksf" path="res://style_lab/VendSans-Bold.ttf" id="2_w0uyf"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_w0uyf"]
+corner_radius_top_left = 3
+corner_radius_bottom_left = 3
 
 [node name="UpgradeRow" type="HBoxContainer" unique_id=371831000]
-custom_minimum_size = Vector2(88, 0)
-offset_right = 8.0
-offset_bottom = 8.0
+size_flags_horizontal = 3
 script = ExtResource("1_aqdia")
 
 [node name="PurchaseButton" type="Button" parent="." unique_id=44118311]
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
+theme_override_fonts/font = ExtResource("2_w0uyf")
+theme_override_styles/normal = SubResource("StyleBoxFlat_w0uyf")
 text = "Add rows"
 
 [node name="CapRaiseButton" type="Button" parent="." unique_id=1786631797]
-custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
+size_flags_vertical = 3
 focus_mode = 0
+theme_override_fonts/font = ExtResource("2_w0uyf")
 text = "+"
