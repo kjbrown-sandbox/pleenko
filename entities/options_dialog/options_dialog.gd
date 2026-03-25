@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-signal return_to_menu_pressed
+const MainMenuScene := preload("res://entities/main_menu/main_menu.tscn")
 
 var _overlay: ColorRect
 var _panel: VBoxContainer
@@ -63,4 +63,10 @@ func _on_overlay_input(event: InputEvent) -> void:
 
 
 func _on_return_pressed() -> void:
-	return_to_menu_pressed.emit()
+	if not ChallengeManager.is_active_challenge:
+		SaveManager.save_game()
+		SaveManager.toggle_auto_save(false)
+	else:
+		ChallengeManager.clear_challenge()
+		SaveManager.reset_state()
+	SceneManager.set_new_scene(MainMenuScene)

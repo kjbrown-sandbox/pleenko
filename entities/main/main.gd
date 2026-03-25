@@ -1,8 +1,6 @@
 extends Node3D
 
-const MainMenuScene := preload("res://entities/main_menu/main_menu.tscn")
 const OptionsDialogScript := preload("res://entities/options_dialog/options_dialog.gd")
-const IconScene := preload("res://entities/icon/icon.tscn")
 
 @onready var board_manager: BoardManager = $BoardManager
 @onready var camera: Camera3D = $Camera3D
@@ -104,21 +102,10 @@ func _setup_options_dialog() -> void:
 	_options_dialog.layer = 10
 	_options_dialog.set_script(OptionsDialogScript)
 	add_child(_options_dialog)
-	_options_dialog.return_to_menu_pressed.connect(_on_return_to_menu)
 
 
 func _on_gear_pressed() -> void:
 	_options_dialog.show_dialog()
-
-
-func _on_return_to_menu() -> void:
-	if not ChallengeManager.is_active_challenge:
-		SaveManager.save_game()
-		SaveManager.toggle_auto_save(false)
-	else:
-		ChallengeManager.clear_challenge()
-		SaveManager.reset_state()
-	SceneManager.set_new_scene(MainMenuScene)
 
 
 func _process(_delta: float) -> void:
