@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://bnr48yvvij4ge"]
+
+[ext_resource type="Script" uid="uid://dljp650pd0a87" path="res://entities/icon/icon.gd" id="1_oqyie"]
+[ext_resource type="Texture2D" uid="uid://cctj08765bmkt" path="res://assets/icons/gear.png" id="2_24bdt"]
+
+[node name="Icon" type="TextureButton" unique_id=824553164]
+texture_filter = 1
+custom_minimum_size = Vector2(32, 32)
+texture_normal = ExtResource("2_24bdt")
+ignore_texture_size = true
+stretch_mode = 0
+script = ExtResource("1_oqyie")
+icon_texture = ExtResource("2_24bdt")
