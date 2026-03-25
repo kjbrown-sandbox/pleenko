@@ -13,9 +13,19 @@ func _ready() -> void:
 func reset() -> void:
    for currency_type in Enums.CurrencyType.values():
       balances[currency_type] = 0
-      caps[currency_type] = 100 if currency_type in [Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.RAW_RED] else 500
+      var tier := TierRegistry.get_tier_for_currency(currency_type)
+      if tier:
+         if TierRegistry.is_raw_currency(currency_type):
+            caps[currency_type] = tier.raw_cap
+         else:
+            caps[currency_type] = tier.primary_cap
+      else:
+         caps[currency_type] = 500
       _cap_raise_levels[currency_type] = 0
-   balances[Enums.CurrencyType.GOLD_COIN] = 1
+   # Starting tier gets 1 coin
+   var starting := TierRegistry.get_tier_by_index(0)
+   if starting:
+      balances[starting.primary_currency] = 1
 
 func can_afford(type: Enums.CurrencyType, amount: int) -> bool:
    return amount <= balances[type]
@@ -40,35 +50,35 @@ func spend(type: Enums.CurrencyType, amount: int) -> bool:
 
 
 ## Returns the currency used to raise this currency's cap, or -1 if none.
+## A tier's currencies' caps are raised using the next tier's primary currency.
 func cap_raise_currency(type: Enums.CurrencyType) -> int:
-   match type:
-      Enums.CurrencyType.GOLD_COIN:
-         return Enums.CurrencyType.ORANGE_COIN
-      Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.ORANGE_COIN:
-         return Enums.CurrencyType.RED_COIN
-      _:
-         return -1
+   var tier := TierRegistry.get_tier_for_currency(type)
+   if not tier:
+      return -1
+   return TierRegistry.cap_raise_currency(tier.board_type)
 
 
-## Returns how much the cap increases per raise: +500 for coins, +50 for raw.
+## Returns how much the cap increases per raise.
 func cap_raise_amount(type: Enums.CurrencyType) -> int:
-   match type:
-      Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.RAW_RED:
-         return 100
-      _:
-         return 500
+   var tier := TierRegistry.get_tier_for_currency(type)
+   if not tier:
+      return 500
+   if TierRegistry.is_raw_currency(type):
+      return tier.raw_cap  # raw currencies raise by their initial cap amount
+   return tier.primary_cap  # primary currencies raise by their initial cap amount
 
 
-## Returns the board type whose unlock gates this currency's cap raise.
-## GOLD_COIN -> GOLD (needs orange board), RAW_ORANGE/ORANGE_COIN -> ORANGE (needs red board).
+## Returns the board type that gates this currency's cap raise.
+## A currency's cap raise is gated by the tier that owns it having a next tier unlocked.
 func cap_raise_board(type: Enums.CurrencyType) -> int:
-   match type:
-      Enums.CurrencyType.GOLD_COIN:
-         return Enums.BoardType.GOLD
-      Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.ORANGE_COIN:
-         return Enums.BoardType.ORANGE
-      _:
-         return -1
+   var tier := TierRegistry.get_tier_for_currency(type)
+   if not tier:
+      return -1
+   # Cap raises are available when this tier's board exists
+   # (the cost currency comes from the next tier)
+   if TierRegistry.cap_raise_currency(tier.board_type) == -1:
+      return -1
+   return tier.board_type
 
 
 func get_cap_raise_cost(type: Enums.CurrencyType) -> int:

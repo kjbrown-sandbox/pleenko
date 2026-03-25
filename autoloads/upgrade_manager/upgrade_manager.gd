@@ -193,15 +193,15 @@ func buy_cap_raise(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType)
 func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
 	if _new_balance <= 0:
 		return
-	match type:
-		Enums.CurrencyType.RAW_ORANGE:
-			if not _cap_raise_available[Enums.BoardType.GOLD]:
-				_cap_raise_available[Enums.BoardType.GOLD] = true
-				cap_raise_unlocked.emit(Enums.BoardType.GOLD)
-		Enums.CurrencyType.RAW_RED:
-			if not _cap_raise_available[Enums.BoardType.ORANGE]:
-				_cap_raise_available[Enums.BoardType.ORANGE] = true
-				cap_raise_unlocked.emit(Enums.BoardType.ORANGE)
+	# When a raw currency is earned, enable cap raises for the previous tier's board.
+	# e.g. earning RAW_ORANGE enables cap raises on GOLD board.
+	for i in range(1, TierRegistry.get_tier_count()):
+		var tier := TierRegistry.get_tier_by_index(i)
+		if tier.raw_currency == type:
+			var prev := TierRegistry.get_tier_by_index(i - 1)
+			if prev and not _cap_raise_available[prev.board_type]:
+				_cap_raise_available[prev.board_type] = true
+				cap_raise_unlocked.emit(prev.board_type)
 
 
 func serialize() -> Dictionary:

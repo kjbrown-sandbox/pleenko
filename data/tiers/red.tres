@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="TierData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tier_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+board_type = 2
+display_name = "Red"
+primary_currency = 4
+raw_currency = 3
+previous_currency_cost = 100
+primary_cap = 500
+raw_cap = 100
+color_dark = Color(0.4, 0.08, 0.1, 1)
+color_normal = Color(0.7, 0.2, 0.25, 1)
+color_light = Color(1, 0.45, 0.45, 1)

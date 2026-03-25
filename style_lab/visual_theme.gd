@@ -242,39 +242,44 @@ func apply_button_theme(button: Button, currency_type: int = -1) -> void:
 # ── Color helpers ────────────────────────────────────────────────────
 
 func get_coin_color(currency_type: int) -> Color:
+	if _has_tier_registry():
+		var tier := TierRegistry.get_tier_for_currency(currency_type)
+		if tier:
+			return tier.color_normal
+	# Fallback for @tool / editor context
 	match currency_type:
-		GOLD_COIN:
-			return gold_normal
-		RAW_ORANGE, ORANGE_COIN:
-			return orange_normal
-		RAW_RED, RED_COIN:
-			return red_normal
-		_:
-			return gold_normal
+		GOLD_COIN: return gold_normal
+		RAW_ORANGE, ORANGE_COIN: return orange_normal
+		RAW_RED, RED_COIN: return red_normal
+		_: return gold_normal
 
 
 func get_coin_color_light(currency_type: int) -> Color:
+	if _has_tier_registry():
+		var tier := TierRegistry.get_tier_for_currency(currency_type)
+		if tier:
+			return tier.color_light
 	match currency_type:
-		GOLD_COIN:
-			return gold_light
-		RAW_ORANGE, ORANGE_COIN:
-			return orange_light
-		RAW_RED, RED_COIN:
-			return red_light
-		_:
-			return gold_light
+		GOLD_COIN: return gold_light
+		RAW_ORANGE, ORANGE_COIN: return orange_light
+		RAW_RED, RED_COIN: return red_light
+		_: return gold_light
 
 
 func get_coin_color_dark(currency_type: int) -> Color:
+	if _has_tier_registry():
+		var tier := TierRegistry.get_tier_for_currency(currency_type)
+		if tier:
+			return tier.color_dark
 	match currency_type:
-		GOLD_COIN:
-			return gold_dark
-		RAW_ORANGE, ORANGE_COIN:
-			return orange_dark
-		RAW_RED, RED_COIN:
-			return red_dark
-		_:
-			return gold_dark
+		GOLD_COIN: return gold_dark
+		RAW_ORANGE, ORANGE_COIN: return orange_dark
+		RAW_RED, RED_COIN: return red_dark
+		_: return gold_dark
+
+
+func _has_tier_registry() -> bool:
+	return not Engine.is_editor_hint() and is_instance_valid(TierRegistry) and TierRegistry._by_primary.size() > 0
 
 
 func get_bucket_color(currency_type: int) -> Color:

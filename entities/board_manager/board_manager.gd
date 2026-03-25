@@ -27,8 +27,8 @@ const MIN_CAMERA_Z := 6.0
 func setup(camera: Camera3D) -> void:
 	_camera = camera
 	board_spacing = ThemeProvider.theme.board_spacing
-	# Start with just the gold board
-	_spawn_board(Enums.BoardType.GOLD)
+	# Start with the first tier's board
+	_spawn_board(TierRegistry.get_tier_by_index(0).board_type)
 	# Frame the camera on the initial board immediately (no tween)
 	_snap_camera_to_active_board()
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
@@ -116,17 +116,15 @@ func is_board_unlocked(type: Enums.BoardType) -> bool:
 func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
 	if _new_balance <= 0:
 		return
-	match type:
-		Enums.CurrencyType.RAW_ORANGE:
-			if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.ORANGE):
-				unlock_board(Enums.BoardType.ORANGE)
-			elif PrestigeManager.can_prestige(Enums.BoardType.ORANGE):
-				PrestigeManager.trigger_prestige(Enums.BoardType.ORANGE)
-		Enums.CurrencyType.RAW_RED:
-			if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.RED):
-				unlock_board(Enums.BoardType.RED)
-			elif PrestigeManager.can_prestige(Enums.BoardType.RED):
-				PrestigeManager.trigger_prestige(Enums.BoardType.RED)
+	# When a raw currency is earned, unlock or prestige the board it belongs to.
+	for i in range(1, TierRegistry.get_tier_count()):
+		var tier := TierRegistry.get_tier_by_index(i)
+		if tier.raw_currency == type:
+			if PrestigeManager.is_board_unlocked_permanently(tier.board_type):
+				unlock_board(tier.board_type)
+			elif PrestigeManager.can_prestige(tier.board_type):
+				PrestigeManager.trigger_prestige(tier.board_type)
+			break
 
 
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:

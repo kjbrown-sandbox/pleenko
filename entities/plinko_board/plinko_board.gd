@@ -63,14 +63,10 @@ func setup(type: Enums.BoardType) -> void:
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
-	# Each board tier doubles the base drop delay: gold=2s, orange=4s, red=8s, etc.
-	drop_delay = drop_delay * pow(2, board_type)
-
-	match board_type:
-		Enums.BoardType.GOLD:
-			advanced_bucket_type = Enums.CurrencyType.RAW_ORANGE
-		Enums.BoardType.ORANGE:
-			advanced_bucket_type = Enums.CurrencyType.RAW_RED
+	drop_delay = TierRegistry.get_base_drop_delay(board_type)
+	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
+	if adv >= 0:
+		advanced_bucket_type = adv
 
 	# Position the label above the drop point
 	# drop_status_label.position = Vector3(0, vertical_spacing + 0.7, 0)
@@ -123,15 +119,7 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 
 ## Returns the costs to drop a normal coin on this board.
 func _get_drop_costs() -> Array:
-	match board_type:
-		Enums.BoardType.GOLD:
-			return [[Enums.CurrencyType.GOLD_COIN, 1]]
-		Enums.BoardType.ORANGE:
-			return [[Enums.CurrencyType.RAW_ORANGE, 1], [Enums.CurrencyType.GOLD_COIN, 100]]
-		Enums.BoardType.RED:
-			return [[Enums.CurrencyType.RAW_RED, 1], [Enums.CurrencyType.RAW_ORANGE, 100]]
-		_:
-			return []
+	return TierRegistry.get_drop_costs(board_type)
 
 
 ## Returns the cost to drop an advanced coin (1 raw currency of the next tier).
@@ -186,7 +174,7 @@ func _on_drop_timer_done() -> void:
 		_drop_from_queue()
 
 func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
-	if not _advanced_drop_button and board_type != Enums.BoardType.RED \
+	if not _advanced_drop_button and TierRegistry.has_next_tier(board_type) \
 			and _type == advanced_bucket_type and _new_balance > 0:
 		_spawn_advanced_drop_button()
 	if not is_waiting:

@@ -1,0 +1,10 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://autoloads/tier_registry/tier_registry.gd" id="1"]
+[ext_resource type="Resource" path="res://data/tiers/gold.tres" id="2"]
+[ext_resource type="Resource" path="res://data/tiers/orange.tres" id="3"]
+[ext_resource type="Resource" path="res://data/tiers/red.tres" id="4"]
+
+[node name="TierRegistry" type="Node"]
+script = ExtResource("1")
+tiers = [ExtResource("2"), ExtResource("3"), ExtResource("4")]

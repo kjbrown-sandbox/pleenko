@@ -38,17 +38,17 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, cap: int) 
 
 
 func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
-	match coin_type:
-		Enums.CurrencyType.RAW_ORANGE:
-			return CurrencyManager.get_balance(Enums.CurrencyType.RAW_ORANGE) > 0 or _board_manager.is_board_unlocked(Enums.BoardType.ORANGE)
-		Enums.CurrencyType.ORANGE_COIN:
-			return _board_manager.is_board_unlocked(Enums.BoardType.ORANGE)
-		Enums.CurrencyType.RAW_RED:
-			return CurrencyManager.get_balance(Enums.CurrencyType.RAW_RED) > 0 or _board_manager.is_board_unlocked(Enums.BoardType.RED)
-		Enums.CurrencyType.RED_COIN:
-			return _board_manager.is_board_unlocked(Enums.BoardType.RED)
-		_:
-			return true
+	var tier := TierRegistry.get_tier_for_currency(coin_type)
+	if not tier:
+		return true
+	# Starting tier currencies are always visible
+	if TierRegistry.is_starting_tier(tier.board_type):
+		return true
+	# Raw currencies show up as soon as you have any (earned before board unlocks)
+	if TierRegistry.is_raw_currency(coin_type) and CurrencyManager.get_balance(coin_type) > 0:
+		return true
+	# Otherwise, the tier's board must be unlocked
+	return _board_manager.is_board_unlocked(tier.board_type)
 
 
 func _update_currencies() -> void:

@@ -16,18 +16,15 @@ func is_board_unlocked_permanently(board_type: Enums.BoardType) -> bool:
 
 
 ## Returns how many coins should drop per single drop on a given board.
-## Gold: 1 + sum of all prestige counts.  Orange: 1 + red count.  Red: always 1.
+## Each tier gets +1 for every prestige count from tiers at higher indices.
+## e.g. Gold gets bonuses from orange AND red prestige, orange from red only.
 func get_multi_drop(board_type: Enums.BoardType) -> int:
-	match board_type:
-		Enums.BoardType.GOLD:
-			var total := 0
-			for count in _prestige_counts.values():
-				total += count
-			return 1 + total
-		Enums.BoardType.ORANGE:
-			return 1 + _prestige_counts.get(Enums.BoardType.RED, 0)
-		_:
-			return 1
+	var idx := TierRegistry.get_tier_index(board_type)
+	var bonus := 0
+	for i in range(idx + 1, TierRegistry.get_tier_count()):
+		var higher_tier := TierRegistry.get_tier_by_index(i)
+		bonus += _prestige_counts.get(higher_tier.board_type, 0)
+	return 1 + bonus
 
 
 func trigger_prestige(board_type: Enums.BoardType) -> void:

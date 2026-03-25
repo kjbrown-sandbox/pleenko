@@ -28,13 +28,35 @@ var _drop_timer := 0.0
 var _coin_index := 0
 var _halo_shader: Shader
 
-# Currency type ints (mirrors Enums.CurrencyType values)
+# Currency type ints (mirrors Enums.CurrencyType values, used as @tool fallback)
 const GOLD_COIN := 0
 const ORANGE_COIN := 2
 const RED_COIN := 4
 const RAW_ORANGE := 1
 const RAW_RED := 3
 const COIN_TYPES := [0, 2, 4]  # GOLD_COIN, ORANGE_COIN, RED_COIN
+
+func _get_primary_currencies() -> Array:
+	if not Engine.is_editor_hint() and is_instance_valid(TierRegistry) and TierRegistry._by_primary.size() > 0:
+		var result: Array = []
+		for tier in TierRegistry.tiers:
+			result.append(tier.primary_currency)
+		return result
+	return COIN_TYPES
+
+func _get_advanced_bucket(currency_type: int) -> int:
+	if not Engine.is_editor_hint() and is_instance_valid(TierRegistry) and TierRegistry._by_primary.size() > 0:
+		var tier := TierRegistry.get_tier_for_currency(currency_type)
+		if tier:
+			return TierRegistry.advanced_bucket_currency(tier.board_type)
+		return -1
+	match currency_type:
+		GOLD_COIN: return RAW_ORANGE
+		ORANGE_COIN: return RAW_RED
+		_: return -1
+
+func _has_advanced_bucket(currency_type: int) -> bool:
+	return _get_advanced_bucket(currency_type) >= 0
 
 # ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -94,13 +116,15 @@ func rebuild() -> void:
 	_clear_children(_board_container)
 	_clear_children(_coin_container)
 
-	if show_all_tiers:
+	var primaries := _get_primary_currencies()
+	if show_all_tiers and primaries.size() > 1:
 		var spacing := theme.space_between_pegs * (theme.board_rows + 2)
-		_build_board_slice(Vector3(-spacing, 0, 0), GOLD_COIN)
-		_build_board_slice(Vector3.ZERO, ORANGE_COIN)
-		_build_board_slice(Vector3(spacing, 0, 0), RED_COIN)
+		var total := primaries.size()
+		for idx in total:
+			var x_offset := (idx - total / 2.0 + 0.5) * spacing
+			_build_board_slice(Vector3(x_offset, 0, 0), primaries[idx])
 	else:
-		_build_board_slice(Vector3.ZERO, GOLD_COIN)
+		_build_board_slice(Vector3.ZERO, primaries[0] if primaries.size() > 0 else GOLD_COIN)
 
 
 func _setup_environment() -> void:
@@ -207,13 +231,8 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 		var bucket_currency := currency_type
 		@warning_ignore("integer_division")
 		var dist_from_center: int = abs(i - num_buckets / 2)
-		if dist_from_center >= 3 and currency_type != RED_COIN:
-			# Show "advanced" color on edges
-			match currency_type:
-				GOLD_COIN:
-					bucket_currency = RAW_ORANGE
-				ORANGE_COIN:
-					bucket_currency = RAW_RED
+		if dist_from_center >= 3 and _has_advanced_bucket(currency_type):
+			bucket_currency = _get_advanced_bucket(currency_type)
 
 		bucket.material_override = theme.make_bucket_material(bucket_currency)
 		bucket.position = Vector3(
@@ -274,24 +293,21 @@ func _spawn_demo_coin() -> void:
 		return
 
 	# Pick which board to drop on
-	var currency: int = COIN_TYPES[_coin_index % COIN_TYPES.size()]
+	var primaries := _get_primary_currencies()
+	var currency: int = primaries[_coin_index % primaries.size()]
 	if not show_all_tiers:
-		currency = GOLD_COIN
+		currency = primaries[0] if primaries.size() > 0 else GOLD_COIN
 	_coin_index += 1
 
 	var vertical_spacing := theme.space_between_pegs * sqrt(3) / 2
 
 	# Determine board offset
 	var board_offset := Vector3.ZERO
-	if show_all_tiers:
+	if show_all_tiers and primaries.size() > 1:
 		var spacing := theme.space_between_pegs * (theme.board_rows + 2)
-		match currency:
-			GOLD_COIN:
-				board_offset = Vector3(-spacing, 0, 0)
-			ORANGE_COIN:
-				board_offset = Vector3.ZERO
-			RED_COIN:
-				board_offset = Vector3(spacing, 0, 0)
+		var idx := primaries.find(currency)
+		if idx >= 0:
+			board_offset = Vector3((idx - primaries.size() / 2.0 + 0.5) * spacing, 0, 0)
 
 	var drop_pos := board_offset + Vector3(0, vertical_spacing * 0.5, 0)
 

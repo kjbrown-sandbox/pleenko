@@ -23,25 +23,10 @@ enum UpgradeType {
 }
 
 static func currency_for_board(board_type: BoardType) -> CurrencyType:
-   match board_type:
-      BoardType.GOLD:
-         return CurrencyType.GOLD_COIN
-      BoardType.ORANGE:
-         return CurrencyType.ORANGE_COIN
-      BoardType.RED:
-         return CurrencyType.RED_COIN
-      _:
-         return CurrencyType.GOLD_COIN
+   return TierRegistry.primary_currency(board_type)
 
 
 ## Returns the currency used to raise caps on a board's upgrades.
-## Gold upgrades cost orange, orange upgrades cost red.
-## Returns -1 if no cap-raise currency exists (e.g. red has no next tier yet).
+## Returns -1 if no cap-raise currency exists (last tier).
 static func cap_raise_currency_for_board(board_type: BoardType) -> CurrencyType:
-   match board_type:
-      BoardType.GOLD:
-         return CurrencyType.ORANGE_COIN
-      BoardType.ORANGE:
-         return CurrencyType.RED_COIN
-      _:
-         return -1
+   return TierRegistry.cap_raise_currency(board_type)

@@ -28,13 +28,10 @@ static func _primary_currency_key(board_type: Enums.BoardType) -> String:
 	return _currency_key(Enums.currency_for_board(board_type))
 
 static func _advanced_currency_key(board_type: Enums.BoardType) -> String:
-	match board_type:
-		Enums.BoardType.GOLD:
-			return _currency_key(Enums.CurrencyType.RAW_ORANGE)
-		Enums.BoardType.ORANGE:
-			return _currency_key(Enums.CurrencyType.RAW_RED)
-		_:
-			return ""
+	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
+	if adv < 0:
+		return ""
+	return _currency_key(adv)
 
 
 ## Takes the full save dictionary and elapsed seconds, returns a modified copy
@@ -212,17 +209,11 @@ static func _get_drop_costs(board_type: Enums.BoardType, assignment_type: String
 	if assignment_type == "ADVANCED":
 		return [[_advanced_currency_key(board_type), 1]]
 
-	match board_type:
-		Enums.BoardType.GOLD:
-			return [[_currency_key(Enums.CurrencyType.GOLD_COIN), 1]]
-		Enums.BoardType.ORANGE:
-			return [[_currency_key(Enums.CurrencyType.RAW_ORANGE), 1],
-					[_currency_key(Enums.CurrencyType.GOLD_COIN), 100]]
-		Enums.BoardType.RED:
-			return [[_currency_key(Enums.CurrencyType.RAW_RED), 1],
-					[_currency_key(Enums.CurrencyType.ORANGE_COIN), 100]]
-		_:
-			return []
+	var costs := TierRegistry.get_drop_costs(board_type)
+	var result: Array = []
+	for cost in costs:
+		result.append([_currency_key(cost[0]), cost[1]])
+	return result
 
 
 static func _get_balance(currency_data: Dictionary, currency_key: String) -> int:
