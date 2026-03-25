@@ -16,10 +16,10 @@ func _ready() -> void:
 	offset_left = 10
 	offset_right = -10
 
-	# Level label: "LVL 0"
+	# Level label: "LVL 0/10"
 	level_label = Label.new()
 	level_label.text = "LVL 0"
-	level_label.custom_minimum_size.x = 60
+	level_label.custom_minimum_size.x = 80
 	add_child(level_label)
 
 	# Progress bar
@@ -48,20 +48,21 @@ func _on_level_changed(_new_level: int) -> void:
 	_update_display()
 
 
-func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _cap: int) -> void:
-	if type == Enums.CurrencyType.GOLD_COIN:
-		_update_display()
+func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _cap: int) -> void:
+	_update_display()
 
 
 func _update_display() -> void:
-	level_label.text = "LVL %d" % LevelManager.current_level
+	var total := LevelManager.get_total_levels()
+	level_label.text = "LVL %d/%d" % [LevelManager.current_level + 1, total]
 
 	var threshold: int = LevelManager.get_next_threshold()
 	if threshold <= 0:
 		progress_bar.value = 1.0
 		progress_label.text = "MAX"
 	else:
-		var gold := CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN)
+		var currency := LevelManager.get_active_currency()
+		var balance := CurrencyManager.get_balance(currency)
 		progress_bar.max_value = threshold
-		progress_bar.value = mini(gold, threshold)
-		progress_label.text = "%d/%d" % [gold, threshold]
+		progress_bar.value = mini(balance, threshold)
+		progress_label.text = "%d/%d" % [balance, threshold]

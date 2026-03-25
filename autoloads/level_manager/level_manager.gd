@@ -1,5 +1,8 @@
 extends Node
 
+const LEVELS_PER_TIER := 10
+const TIER_THRESHOLDS := [7, 13, 35, 55, 100, 150, 200, 300, 400, 500]
+
 var levels: Array[LevelData] = []
 var current_level: int = 0
 
@@ -26,107 +29,95 @@ func reset() -> void:
 	_pending.clear()
 
 
+func rebuild_levels() -> void:
+	_build_level_table()
+
+
 func _build_level_table() -> void:
-	levels = [
-		# Level 1
-		_level(7, "You have unlocked the shop.", [
-			_unlock_upgrade(Enums.UpgradeType.ADD_ROW, Enums.BoardType.GOLD),
-		]),
-		# Level 2
-		_level(13, "You have unlocked Bucket Value.", [
-			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.GOLD),
-		]),
-		# Level 3
-		_level(35, "An ORANGE coin will be dropped!", [
-			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
-		]),
-		# Level 4
-		_level(55, "You have unlocked Drop Rate.", [
-			_unlock_upgrade(Enums.UpgradeType.DROP_RATE, Enums.BoardType.GOLD),
-		]),
-		# Level 5
-		_level(100, "An ORANGE coin will be dropped!", [
-			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
-		]),
-		# Level 6
-		_level(150, "An ORANGE coin will be dropped!", [
-			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
-		]),
-		# Level 7
-		_level(200, "You have unlocked Queue.", [
-			_unlock_upgrade(Enums.UpgradeType.QUEUE, Enums.BoardType.GOLD),
-		]),
-		# Level 8
-		_level(300, "An ORANGE coin will be dropped!", [
-			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
-		]),
-		# Level 8
-		_level(400, "An ORANGE coin will be dropped!", [
-			_drop_coins(1, Enums.CurrencyType.ORANGE_COIN, 3, Enums.BoardType.GOLD),
-		]),
-		# Level 9
-		_level(500, "You have unlocked Orange Buckets!", [_unlock_advanced_bucket(Enums.BoardType.GOLD)]),
-		# Level 10
-		_level(600, "You have unlocked Add 2 Rows for Orange.", [
-			_unlock_upgrade(Enums.UpgradeType.ADD_ROW, Enums.BoardType.ORANGE),
-		]),
-		# Level 11
-		_level(700, "You have unlocked Bucket Value for Orange.", [
-			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.ORANGE),
-		]),
-		# Level 12
-		_level(800, "You have unlocked Drop Rate for Orange.", [
-			_unlock_upgrade(Enums.UpgradeType.DROP_RATE, Enums.BoardType.ORANGE),
-		]),
-		# Level 13
-		_level(900, "A RED coin will be dropped!", [
-			_drop_coins(1, Enums.CurrencyType.RED_COIN, 1, Enums.BoardType.ORANGE),
-		]),
-		# Level 14
-		_level(1000, "You have unlocked Queue for Orange.", [
-			_unlock_upgrade(Enums.UpgradeType.QUEUE, Enums.BoardType.ORANGE),
-		]),
-		# Level 15
-		_level(1250, "You have unlocked Autodropper.", [
-			_unlock_autodropper(),
-			_unlock_upgrade(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.ORANGE),
-		]),
-		# Level 16
-		_level(1500, "A RED coin will be dropped!", [
-			_drop_coins(1, Enums.CurrencyType.RED_COIN, 1, Enums.BoardType.ORANGE),
-		]),
-		# Level 17
-		_level(2000, "You have unlocked Red Buckets!", [_unlock_advanced_bucket(Enums.BoardType.ORANGE)]),
-		# Level 18
-		_level(2250, "You have unlocked Bucket Value for Red.", [
-			_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, Enums.BoardType.RED),
-		]),
-		# Level 19
-		_level(2500, "You have unlocked Drop Rate for Red.", [
-			_unlock_upgrade(Enums.UpgradeType.DROP_RATE, Enums.BoardType.RED),
-		]),
-		# Level 20
-		_level(2750, "You have unlocked Queue for Red.", [
-			_unlock_upgrade(Enums.UpgradeType.QUEUE, Enums.BoardType.RED),
-		]),
-		# Level 21
-		_level(3000, "Keep going!", []),
-		# Level 22
-		_level(3500, "Keep going!", []),
-		# Level 23
-		_level(4000, "Keep going!", []),
-		# Level 24
-		_level(5000, "Keep going!", []),
-		# Level 25
-		_level(10000, "Keep going!", []),
-	]
+	levels.clear()
+
+	# Always build gold tier
+	_build_tier_levels(Enums.BoardType.GOLD)
+
+	# Add tiers unlocked via prestige
+	for i in range(1, TierRegistry.get_tier_count()):
+		var tier := TierRegistry.get_tier_by_index(i)
+		if PrestigeManager.is_board_unlocked_permanently(tier.board_type):
+			_build_tier_levels(tier.board_type)
+		else:
+			break  # Tiers unlock sequentially
+
+
+func _build_tier_levels(board_type: Enums.BoardType) -> void:
+	var next_tier := TierRegistry.get_next_tier(board_type)
+	var currency_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
+	var tier_name := Enums.BoardType.keys()[board_type].capitalize()
+
+	for slot in LEVELS_PER_TIER:
+		var data := LevelData.new()
+		data.threshold = TIER_THRESHOLDS[slot]
+		data.currency_type = currency_type
+
+		match slot:
+			0:  # Unlock ADD_ROW
+				data.message = "You have unlocked Add Row for %s." % tier_name
+				data.rewards = [_unlock_upgrade(Enums.UpgradeType.ADD_ROW, board_type)]
+			1:  # Unlock BUCKET_VALUE
+				data.message = "You have unlocked Bucket Value for %s." % tier_name
+				data.rewards = [_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, board_type)]
+			2:  # Drop advanced coin (x3)
+				_set_advanced_drop(data, next_tier, board_type)
+			3:  # Unlock DROP_RATE
+				data.message = "You have unlocked Drop Rate for %s." % tier_name
+				data.rewards = [_unlock_upgrade(Enums.UpgradeType.DROP_RATE, board_type)]
+			4:  # Drop advanced coin (x3)
+				_set_advanced_drop(data, next_tier, board_type)
+			5:  # Drop advanced coin (x3)
+				_set_advanced_drop(data, next_tier, board_type)
+			6:  # Unlock QUEUE
+				data.message = "You have unlocked Queue for %s." % tier_name
+				data.rewards = [_unlock_upgrade(Enums.UpgradeType.QUEUE, board_type)]
+			7:  # Drop advanced coin (x3)
+				_set_advanced_drop(data, next_tier, board_type)
+			8:  # Special slot
+				_set_special_slot(data, board_type, next_tier)
+			9:  # Unlock advanced buckets
+				if next_tier:
+					var adv_name := Enums.BoardType.keys()[next_tier.board_type].capitalize()
+					data.message = "You have unlocked %s Buckets!" % adv_name
+					data.rewards = [_unlock_advanced_bucket(board_type)]
+				else:
+					data.message = "Keep going!"
+					data.rewards = []
+
+		levels.append(data)
+
+
+func _set_advanced_drop(data: LevelData, next_tier: TierData, board_type: Enums.BoardType) -> void:
+	if next_tier:
+		var adv_name := Enums.BoardType.keys()[next_tier.board_type].capitalize()
+		data.message = "A %s coin will be dropped!" % adv_name
+		data.rewards = [_drop_coins(1, next_tier.primary_currency, 3, board_type)]
+	else:
+		data.message = "Keep going!"
+		data.rewards = []
+
+
+func _set_special_slot(data: LevelData, board_type: Enums.BoardType, next_tier: TierData) -> void:
+	if board_type == Enums.BoardType.ORANGE:
+		data.message = "You have unlocked Autodropper."
+		data.rewards = [_unlock_autodropper(), _unlock_upgrade(Enums.UpgradeType.AUTODROPPER, board_type)]
+	else:
+		# Gold and Red+: drop advanced coin
+		_set_advanced_drop(data, next_tier, board_type)
 
 
 ## Helper to create a LevelData resource inline.
-func _level(threshold: int, message: String, rewards: Array[RewardData]) -> LevelData:
+func _level(threshold: int, message: String, p_currency_type: Enums.CurrencyType, rewards: Array[RewardData]) -> LevelData:
 	var data := LevelData.new()
 	data.threshold = threshold
 	data.message = message
+	data.currency_type = p_currency_type
 	data.rewards = rewards
 	return data
 
@@ -164,14 +155,18 @@ func _unlock_advanced_bucket(target: Enums.BoardType) -> RewardData:
 	r.target_board = target
 	return r
 
+
 func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
-	if type != Enums.CurrencyType.GOLD_COIN:
+	if type != get_active_currency():
 		return
 
 	var was_empty := _pending.is_empty()
 
 	while current_level < levels.size():
 		var next_level_data: LevelData = levels[current_level]
+		# Only advance if this level tracks the currency that changed
+		if next_level_data.currency_type != type:
+			break
 		if new_balance >= next_level_data.threshold:
 			current_level += 1
 			_pending.append({ "level": current_level, "level_data": next_level_data })
@@ -202,6 +197,24 @@ func claim_rewards() -> void:
 		level_up_ready.emit(next["level"], next["level_data"])
 
 
+func get_active_currency() -> Enums.CurrencyType:
+	if current_level >= levels.size():
+		if levels.is_empty():
+			return Enums.CurrencyType.GOLD_COIN
+		return levels[levels.size() - 1].currency_type
+	return levels[current_level].currency_type
+
+
+func get_total_levels() -> int:
+	return levels.size()
+
+
+func get_tier_for_level(level: int) -> Enums.BoardType:
+	var tier_index := (level - 1) / LEVELS_PER_TIER
+	var tier := TierRegistry.get_tier_by_index(tier_index)
+	return tier.board_type if tier else Enums.BoardType.GOLD
+
+
 func get_next_threshold() -> int:
 	if current_level >= levels.size():
 		return -1
@@ -212,8 +225,8 @@ func get_progress() -> float:
 	if current_level >= levels.size():
 		return 1.0
 	var threshold: int = levels[current_level].threshold
-	var gold: int = CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN)
-	return float(gold) / float(threshold) if threshold > 0 else 0.0
+	var balance: int = CurrencyManager.get_balance(get_active_currency())
+	return float(balance) / float(threshold) if threshold > 0 else 0.0
 
 
 func serialize() -> Dictionary:
@@ -222,4 +235,5 @@ func serialize() -> Dictionary:
 
 func deserialize(data: Dictionary) -> void:
 	current_level = data.get("current_level", 0)
+	_build_level_table()
 	level_changed.emit(current_level)
