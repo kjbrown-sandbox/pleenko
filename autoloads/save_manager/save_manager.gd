@@ -11,6 +11,12 @@ var _board_manager: BoardManager
 func setup(board_manager: BoardManager, should_autosave: bool) -> void:
 	_board_manager = board_manager
 
+	# Clean up any existing timer from a previous scene
+	if _auto_save_timer:
+		_auto_save_timer.stop()
+		_auto_save_timer.queue_free()
+		_auto_save_timer = null
+
 	if should_autosave:
 		_auto_save_timer = Timer.new()
 		_auto_save_timer.wait_time = AUTO_SAVE_INTERVAL
@@ -142,6 +148,8 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 	return data
 
 func toggle_auto_save(enabled: bool) -> void:
+	if not _auto_save_timer:
+		return
 	if enabled:
 		if not _auto_save_timer.is_stopped():
 			return

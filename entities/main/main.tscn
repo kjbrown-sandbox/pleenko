@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://bv8jn2v2y6dbj" path="res://entities/level_progress_bar/level_progress_bar.gd" id="4_lvlbar"]
 [ext_resource type="PackedScene" path="res://entities/prestige_dialog/prestige_dialog.tscn" id="5_prestige"]
 [ext_resource type="Script" uid="uid://byxgr86jpb1oy" path="res://entities/main/challenge_hud.gd" id="6_chalhud"]
+[ext_resource type="PackedScene" uid="uid://bnr48yvvij4ge" path="res://entities/icon/icon.tscn" id="6_kg4ji"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
@@ -65,6 +66,18 @@ anchor_right = 1.0
 offset_left = -150.0
 offset_bottom = 30.0
 horizontal_alignment = 2
+
+[node name="OptionsIcon" parent="CanvasLayer" unique_id=824553164 instance=ExtResource("6_kg4ji")]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -100.0
+offset_top = -133.0
+offset_bottom = -33.0
+grow_horizontal = 0
+grow_vertical = 0
 
 [node name="LevelUpDialog" parent="." unique_id=1315791600 instance=ExtResource("3_levelup")]
 

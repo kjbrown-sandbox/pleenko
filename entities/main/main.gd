@@ -1,15 +1,24 @@
 extends Node3D
 
+const MainMenuScene := preload("res://entities/main_menu/main_menu.tscn")
+const OptionsDialogScript := preload("res://entities/options_dialog/options_dialog.gd")
+const IconScene := preload("res://entities/icon/icon.tscn")
+
 @onready var board_manager: BoardManager = $BoardManager
 @onready var camera: Camera3D = $Camera3D
 @onready var coin_values = $CanvasLayer/CoinValues
 @onready var challenge_hud = $CanvasLayer/ChallengeHUD
 @onready var game_timer: Label = $CanvasLayer/GameTimer
+@onready var options_icon: TextureButton = $CanvasLayer/OptionsIcon
+
+var _options_dialog: CanvasLayer
 
 func _ready() -> void:
 	_setup_environment()
 	board_manager.setup(camera)
 	coin_values.setup(board_manager)
+	_setup_gear_button()
+	_setup_options_dialog()
 
 	if ChallengeManager.is_active_challenge:
 		_setup_challenge()
@@ -84,6 +93,32 @@ func _input(event: InputEvent) -> void:
 		SaveManager.save_game()
 	elif event.is_action_pressed("reset_game"):
 		SaveManager.reset_game()
+
+
+func _setup_gear_button() -> void:
+	options_icon.pressed.connect(_on_gear_pressed)
+
+
+func _setup_options_dialog() -> void:
+	_options_dialog = CanvasLayer.new()
+	_options_dialog.layer = 10
+	_options_dialog.set_script(OptionsDialogScript)
+	add_child(_options_dialog)
+	_options_dialog.return_to_menu_pressed.connect(_on_return_to_menu)
+
+
+func _on_gear_pressed() -> void:
+	_options_dialog.show_dialog()
+
+
+func _on_return_to_menu() -> void:
+	if not ChallengeManager.is_active_challenge:
+		SaveManager.save_game()
+		SaveManager.toggle_auto_save(false)
+	else:
+		ChallengeManager.clear_challenge()
+		SaveManager.reset_state()
+	SceneManager.set_new_scene(MainMenuScene)
 
 
 func _process(_delta: float) -> void:
