@@ -123,7 +123,7 @@ enum CoinShape { SPHERE, CYLINDER }
 @export_group("Spacing")
 @export var space_between_pegs := 1.0
 @export var board_rows := 6                                       # demo row count
-@export var board_spacing := 10.0											# space between boards in multi-board setups
+@export var board_spacing := 20.0											# space between boards in multi-board setups
 
 # ── VFX ──────────────────────────────────────────────────────────────
 @export_group("VFX")
