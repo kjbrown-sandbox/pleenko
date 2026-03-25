@@ -39,9 +39,13 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, cap: int) 
 
 func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
 	match coin_type:
-		Enums.CurrencyType.ORANGE_COIN, Enums.CurrencyType.RAW_ORANGE:
+		Enums.CurrencyType.RAW_ORANGE:
+			return CurrencyManager.get_balance(Enums.CurrencyType.RAW_ORANGE) > 0 or _board_manager.is_board_unlocked(Enums.BoardType.ORANGE)
+		Enums.CurrencyType.ORANGE_COIN:
 			return _board_manager.is_board_unlocked(Enums.BoardType.ORANGE)
-		Enums.CurrencyType.RED_COIN, Enums.CurrencyType.RAW_RED:
+		Enums.CurrencyType.RAW_RED:
+			return CurrencyManager.get_balance(Enums.CurrencyType.RAW_RED) > 0 or _board_manager.is_board_unlocked(Enums.BoardType.RED)
+		Enums.CurrencyType.RED_COIN:
 			return _board_manager.is_board_unlocked(Enums.BoardType.RED)
 		_:
 			return true
@@ -97,11 +101,11 @@ func _update_bar(bar, type: Enums.CurrencyType, balance: int, cap: int) -> void:
 	var coin_name := _get_currency_name(type)
 
 	if at_cap:
-		bar.update_text("%s (MAX)" % coin_name)
+		bar.update_text("%s %d/%d (MAX)" % [coin_name, balance, cap])
 		bar.set_fill(1.0)
 		bar.apply_fill_colors(true, true)
 	else:
-		bar.update_text(coin_name)
+		bar.update_text("%s %d/%d" % [coin_name, balance, cap])
 		var fill_pct := clampf(float(balance) / float(cap), 0.0, 1.0) if cap > 0 else 0.0
 		bar.set_fill(fill_pct)
 		bar.apply_fill_colors(false)

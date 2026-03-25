@@ -1,21 +1,21 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://b6gbfhxvkrhth"]
 
-[ext_resource type="Script" path="res://entities/fill_bar/fill_bar.gd" id="1_fill"]
+[ext_resource type="Script" uid="uid://cq4jqetl2407m" path="res://entities/fill_bar/fill_bar.gd" id="1_fill"]
 [ext_resource type="FontFile" uid="uid://ohlabsbs4ksf" path="res://style_lab/VendSans-Bold.ttf" id="2_font"]
 
-[node name="FillBar" type="HBoxContainer"]
+[node name="FillBar" type="HBoxContainer" unique_id=1268010706]
 size_flags_horizontal = 3
 theme_override_constants/separation = 6
 script = ExtResource("1_fill")
 
-[node name="MainButton" type="Button" parent="."]
+[node name="MainButton" type="Button" parent="." unique_id=1759501505]
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
 theme_override_fonts/font = ExtResource("2_font")
 text = "Fill Bar"
 
-[node name="CapButton" type="Button" parent="."]
+[node name="CapButton" type="Button" parent="." unique_id=1978433370]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3

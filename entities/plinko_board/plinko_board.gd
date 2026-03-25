@@ -129,7 +129,7 @@ func _get_drop_costs() -> Array:
 		Enums.BoardType.ORANGE:
 			return [[Enums.CurrencyType.RAW_ORANGE, 1], [Enums.CurrencyType.GOLD_COIN, 100]]
 		Enums.BoardType.RED:
-			return [[Enums.CurrencyType.RAW_RED, 1], [Enums.CurrencyType.ORANGE_COIN, 100]]
+			return [[Enums.CurrencyType.RAW_RED, 1], [Enums.CurrencyType.RAW_ORANGE, 100]]
 		_:
 			return []
 

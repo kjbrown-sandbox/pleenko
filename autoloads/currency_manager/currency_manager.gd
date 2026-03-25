@@ -13,7 +13,7 @@ func _ready() -> void:
 func reset() -> void:
    for currency_type in Enums.CurrencyType.values():
       balances[currency_type] = 0
-      caps[currency_type] = 50 if currency_type in [Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.RAW_RED] else 500
+      caps[currency_type] = 100 if currency_type in [Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.RAW_RED] else 500
       _cap_raise_levels[currency_type] = 0
    balances[Enums.CurrencyType.GOLD_COIN] = 1
 
@@ -54,7 +54,7 @@ func cap_raise_currency(type: Enums.CurrencyType) -> int:
 func cap_raise_amount(type: Enums.CurrencyType) -> int:
    match type:
       Enums.CurrencyType.RAW_ORANGE, Enums.CurrencyType.RAW_RED:
-         return 50
+         return 100
       _:
          return 500
 
