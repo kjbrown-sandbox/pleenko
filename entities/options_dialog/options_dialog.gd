@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-const MainMenuScene := preload("res://entities/main_menu/main_menu.tscn")
+const MAIN_MENU_PATH := "res://entities/main_menu/main_menu.tscn"
 
 var _overlay: ColorRect
 var _panel: VBoxContainer
@@ -69,4 +69,4 @@ func _on_return_pressed() -> void:
 	else:
 		ChallengeManager.clear_challenge()
 		SaveManager.reset_state()
-	SceneManager.set_new_scene(MainMenuScene)
+	SceneManager.set_new_scene(load(MAIN_MENU_PATH))
