@@ -41,7 +41,7 @@ func _build_level_table() -> void:
 
 	# Add tiers unlocked via prestige
 	for i in range(1, TierRegistry.get_tier_count()):
-		var tier := TierRegistry.get_tier_by_index(i)
+		var tier: TierData = TierRegistry.get_tier_by_index(i)
 		if PrestigeManager.is_board_unlocked_permanently(tier.board_type):
 			_build_tier_levels(tier.board_type)
 		else:
@@ -49,9 +49,9 @@ func _build_level_table() -> void:
 
 
 func _build_tier_levels(board_type: Enums.BoardType) -> void:
-	var next_tier := TierRegistry.get_next_tier(board_type)
+	var next_tier: TierData = TierRegistry.get_next_tier(board_type)
 	var currency_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
-	var tier_name := Enums.BoardType.keys()[board_type].capitalize()
+	var tier_name: String = Enums.BoardType.keys()[board_type].capitalize()
 
 	for slot in LEVELS_PER_TIER:
 		var data := LevelData.new()
@@ -83,7 +83,7 @@ func _build_tier_levels(board_type: Enums.BoardType) -> void:
 				_set_special_slot(data, board_type, next_tier)
 			9:  # Unlock advanced buckets
 				if next_tier:
-					var adv_name := Enums.BoardType.keys()[next_tier.board_type].capitalize()
+					var adv_name: String = Enums.BoardType.keys()[next_tier.board_type].capitalize()
 					data.message = "You have unlocked %s Buckets!" % adv_name
 					data.rewards = [_unlock_advanced_bucket(board_type)]
 				else:
@@ -95,7 +95,7 @@ func _build_tier_levels(board_type: Enums.BoardType) -> void:
 
 func _set_advanced_drop(data: LevelData, next_tier: TierData, board_type: Enums.BoardType) -> void:
 	if next_tier:
-		var adv_name := Enums.BoardType.keys()[next_tier.board_type].capitalize()
+		var adv_name: String = Enums.BoardType.keys()[next_tier.board_type].capitalize()
 		data.message = "A %s coin will be dropped!" % adv_name
 		data.rewards = [_drop_coins(1, next_tier.primary_currency, 3, board_type)]
 	else:
@@ -211,7 +211,7 @@ func get_total_levels() -> int:
 
 func get_tier_for_level(level: int) -> Enums.BoardType:
 	var tier_index := (level - 1) / LEVELS_PER_TIER
-	var tier := TierRegistry.get_tier_by_index(tier_index)
+	var tier: TierData = TierRegistry.get_tier_by_index(tier_index)
 	return tier.board_type if tier else Enums.BoardType.GOLD
 
 
