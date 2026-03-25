@@ -108,7 +108,7 @@ func _update_bar(bar, type: Enums.CurrencyType, balance: int, cap: int) -> void:
 
 
 func _get_currency_name(type: int) -> String:
-	return Enums.CurrencyType.keys()[type].to_lower().replace("_", " ").replace(" coin", "")
+	return Enums.CurrencyType.keys()[type].to_lower().replace("_", " ").replace(" coin", "").capitalize()
 
 
 func _on_cap_hover(type: Enums.CurrencyType) -> void:
@@ -135,6 +135,8 @@ func refresh_visible_currencies() -> void:
 	if changed:
 		_visible_currencies.sort()
 		_update_currencies()
+	else:
+		_update_all_bars()
 
 
 func _on_cap_raise_unlocked(_board_type: Enums.BoardType) -> void:

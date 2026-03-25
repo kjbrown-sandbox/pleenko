@@ -25,7 +25,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.85613, 3.95506)
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=83467021]
 
 [node name="CoinValues" type="VBoxContainer" parent="CanvasLayer" unique_id=1316177757]
-offset_right = 40.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 370.0
 offset_bottom = 40.0
 script = ExtResource("2_dn64k")
 
