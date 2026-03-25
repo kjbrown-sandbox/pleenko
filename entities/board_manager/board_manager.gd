@@ -160,7 +160,7 @@ func _get_camera_target(board: PlinkoBoard) -> Vector3:
 
 func _get_camera_size_for_board(board: PlinkoBoard) -> float:
 	var bounds := board.get_bounds()
-	var height := bounds.size.y + 2.0  # Add some padding so the top row isn't cut off
+	var height := bounds.size.y + 5.0  # Add some padding so the top row isn't cut off
 	var width := bounds.size.x
 	return max(height, width)
 
