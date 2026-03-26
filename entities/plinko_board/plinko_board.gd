@@ -82,6 +82,7 @@ func _setup_drop_bars() -> void:
 	key_event.action = "drop_coin"
 	shortcut.events = [key_event]
 	_drop_main.main_button.shortcut = shortcut
+	_drop_main.main_button.shortcut_in_tooltip = false
 
 	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[board_type])
 	_drop_buttons[normal_id] = _drop_main
@@ -89,7 +90,8 @@ func _setup_drop_bars() -> void:
 	# Advanced drop bar — hidden until earned
 	_drop_advanced.visible = false
 
-	# Hover label — appears above the drop buttons
+	# Hover label — positioned above the drop buttons, outside the VBox so it
+	# doesn't affect button sizing.
 	_drop_hover_label = Label.new()
 	_drop_hover_label.visible = false
 	_drop_hover_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -98,8 +100,7 @@ func _setup_drop_bars() -> void:
 	var font: Font = t.button_font if t.button_font else t.label_font
 	if font:
 		_drop_hover_label.add_theme_font_override("font", font)
-	_drop_buttons_container.add_child(_drop_hover_label)
-	_drop_buttons_container.move_child(_drop_hover_label, 0)
+	drop_section.add_child(_drop_hover_label)
 
 
 func _format_cost_text(costs: Array) -> String:
@@ -111,26 +112,41 @@ func _format_cost_text(costs: Array) -> String:
 
 func _on_drop_main_hover() -> void:
 	_drop_main.pulse_main(1.005)
-	_drop_hover_label.text = "Cost: %s | Hotkey: SPACE" % _format_cost_text(_get_drop_costs())
-	_drop_hover_label.visible = true
+	_show_drop_hover("Cost: %s\nHotkey: SPACE" % _format_cost_text(_get_drop_costs()))
 
 
 func _on_drop_advanced_hover() -> void:
 	_drop_advanced.pulse_main(1.005)
-	_drop_hover_label.text = "Cost: %s" % _format_cost_text(_get_advanced_drop_costs())
-	_drop_hover_label.visible = true
+	_show_drop_hover("Cost: %s" % _format_cost_text(_get_advanced_drop_costs()))
 
 
 func _on_drop_hover_exit() -> void:
 	_drop_hover_label.visible = false
 
 
+func _show_drop_hover(text: String) -> void:
+	_drop_hover_label.text = text
+	_drop_hover_label.size = Vector2.ZERO  # Reset so it auto-sizes to text
+	_drop_hover_label.visible = true
+	# Position centered above the drop buttons container (deferred so size is computed)
+	_position_drop_hover.call_deferred()
+
+
+func _position_drop_hover() -> void:
+	var container_pos: Vector2 = _drop_buttons_container.global_position
+	var container_size: Vector2 = _drop_buttons_container.size
+	var label_size: Vector2 = _drop_hover_label.size
+	_drop_hover_label.global_position = Vector2(
+		container_pos.x + (container_size.x - label_size.x) / 2.0,
+		container_pos.y - label_size.y
+	)
+
+
 func _on_drop_side_hover(text: String) -> void:
 	if text.is_empty():
 		_drop_hover_label.visible = false
 	else:
-		_drop_hover_label.text = text
-		_drop_hover_label.visible = true
+		_show_drop_hover(text)
 
 
 func _process(delta: float) -> void:
@@ -462,14 +478,14 @@ func _setup_autodropper_buttons(bid: StringName) -> void:
 		func(): autodropper_adjust_requested.emit(captured_bid, -1),
 		func() -> String:
 			var total := UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
-			return "Decrease autodropper for %s | Total autodroppers: %d" % [currency_name, total],
+			return "Decrease autodropper for %s\nTotal autodroppers: %d" % [currency_name, total],
 	)
 
 	bar.setup_plus(
 		func(): autodropper_adjust_requested.emit(captured_bid, 1),
 		func() -> String:
 			var total := UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
-			return "Increase autodropper for %s | Total autodroppers: %d" % [currency_name, total],
+			return "Increase autodropper for %s\nTotal autodroppers: %d" % [currency_name, total],
 	)
 
 

@@ -74,7 +74,7 @@ func _setup_cap_raise_if_needed(row, upgrade_type: Enums.UpgradeType) -> void:
 			var cap_cost := UpgradeManager.get_cap_raise_cost(bt, ut)
 			var cap_currency: int = Enums.cap_raise_currency_for_board(bt)
 			var currency_name := Enums.currency_name(cap_currency, false)
-			return "Cost: %d %s  |  Cap %d → %d" % [cap_cost, currency_name, s.current_cap, s.current_cap + 1],
+			return "Cost: %d %s\nCap %d → %d" % [cap_cost, currency_name, s.current_cap, s.current_cap + 1],
 		func(): # on_update
 			var can_raise := UpgradeManager.can_buy_cap_raise(bt, ut)
 			r.fill_bar.set_plus_disabled(not can_raise)
