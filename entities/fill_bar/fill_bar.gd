@@ -129,8 +129,8 @@ func _apply_outline_style(button: Button, border_col: Color, disabled_border: Co
 
 	var base_bg := t.bg_shade_1
 	var normal_style := t._make_stylebox(base_bg, border_col)
-	var hover_style := t._make_stylebox(base_bg, Color.WHITE)
-	var pressed_style := t._make_stylebox(base_bg, Color.WHITE)
+	var hover_style := t._make_stylebox(base_bg, t.normal_text_color)
+	var pressed_style := t._make_stylebox(base_bg, t.normal_text_color)
 	var disabled_style := t._make_stylebox(base_bg, disabled_border)
 
 	button.add_theme_stylebox_override("normal", normal_style)

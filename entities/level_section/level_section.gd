@@ -42,7 +42,10 @@ var value: int = 0
 # 	_fill_label.add_theme_color_override("font_color", text_color)
 
 func _ready() -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	progress_bar.setup(t.button_enabled_color, t.button_disabled_color)
 	progress_bar.set_main_disabled(true)
+	progress_bar.main_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	LevelManager.level_changed.connect(_on_level_changed)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
