@@ -110,7 +110,7 @@ func _on_cap_raise_mouse_exited() -> void:
 	hover_info_changed.emit("")
 
 func _get_currency_name(currency_type: int) -> String:
-	return Enums.CurrencyType.keys()[currency_type].to_lower().replace("_", " ").replace(" coin", "")
+	return Enums.currency_name(currency_type, false)
 
 func _get_purchase_hover_text() -> String:
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)

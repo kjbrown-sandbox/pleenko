@@ -1,0 +1,38 @@
+[gd_scene format=3 uid="uid://cmlfyxevj4i6g"]
+
+[ext_resource type="Script" uid="uid://dlbx71vkkmqf7" path="res://entities/level_section/level_section.gd" id="1_6pg8t"]
+[ext_resource type="PackedScene" uid="uid://b6gbfhxvkrhth" path="res://entities/fill_bar/fill_bar.tscn" id="1_fe074"]
+[ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_nl6kw"]
+
+[node name="LevelSection" type="Control" unique_id=261552603]
+layout_mode = 3
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("1_6pg8t")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=1358289427]
+custom_minimum_size = Vector2(1000, 0)
+layout_mode = 1
+anchors_preset = 14
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_top = -16.5
+offset_bottom = 16.5
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LevelLabel" type="Label" parent="HBoxContainer" unique_id=298306794]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("1_nl6kw")
+text = "LVL 3/30"
+
+[node name="ProgressBar" parent="HBoxContainer" unique_id=1268010706 instance=ExtResource("1_fe074")]
+layout_mode = 2
+alignment = 1
