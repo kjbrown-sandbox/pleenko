@@ -232,10 +232,4 @@ func _sync_fill_label_size() -> void:
 func _pulse_button(button: Button, scale_override: float = 0.0) -> void:
 	if button.disabled:
 		return
-	var t: VisualTheme = ThemeProvider.theme
-	var s: float = scale_override if scale_override > 0.0 else t.button_pulse_scale
-	var tween := create_tween()
-	tween.tween_property(button, "scale", Vector2.ONE * s, t.button_pulse_duration * 0.4) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	tween.tween_property(button, "scale", Vector2.ONE, t.button_pulse_duration * 0.6) \
-		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)
+	ThemeProvider.theme.pulse_control(button, scale_override)

@@ -12,3 +12,8 @@ func _ready() -> void:
 	mat.shader = IconTintShader
 	mat.set_shader_parameter("tint_color", ThemeProvider.theme._resolve(color_source))
 	material = mat
+	mouse_entered.connect(_on_mouse_entered)
+
+
+func _on_mouse_entered() -> void:
+	ThemeProvider.theme.pulse_control(self)

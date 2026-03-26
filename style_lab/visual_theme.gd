@@ -363,3 +363,12 @@ func make_bucket_mesh() -> Mesh:
 	var m := BoxMesh.new()
 	m.size = Vector3(bucket_width, bucket_height, bucket_depth)
 	return m
+
+
+func pulse_control(control: Control, scale_override: float = 0.0) -> void:
+	var s: float = scale_override if scale_override > 0.0 else button_pulse_scale
+	var tween := control.create_tween()
+	tween.tween_property(control, "scale", Vector2.ONE * s, button_pulse_duration * 0.4) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(control, "scale", Vector2.ONE, button_pulse_duration * 0.6) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)
