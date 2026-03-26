@@ -1,23 +1,28 @@
 extends HBoxContainer
 
-## A reusable row with a fill-bar button and an optional "+" cap button.
+## A reusable row with a fill-bar button and optional "-" / "+" side buttons.
 ## Both upgrade rows and currency bars use this component.
 ##
 ## Usage:
 ##   fill_bar.setup(fill_color, disabled_color)
 ##   fill_bar.update_text("Add rows")
 ##   fill_bar.set_fill(0.6)
-##   fill_bar.show_cap_button(true)
+##   fill_bar.show_plus_button(true)
 
 signal main_pressed
 signal main_mouse_entered
 signal main_mouse_exited
-signal cap_pressed
-signal cap_mouse_entered
-signal cap_mouse_exited
+signal plus_pressed
+signal plus_mouse_entered
+signal plus_mouse_exited
+signal minus_pressed
+signal minus_mouse_entered
+signal minus_mouse_exited
+signal side_button_hover(text: String)
 
+@onready var minus_button: Button = $MinusButton
 @onready var main_button: Button = $MainButton
-@onready var cap_button: Button = $CapButton
+@onready var plus_button: Button = $PlusButton
 
 var _fill_color: Color
 var _disabled_color: Color
@@ -27,7 +32,15 @@ var _fill_rect: ColorRect
 var _fill_label: Label
 var _base_label: Label
 var _main_styles: Array[StyleBoxFlat] = []
-var _cap_styles: Array[StyleBoxFlat] = []
+var _plus_styles: Array[StyleBoxFlat] = []
+var _minus_styles: Array[StyleBoxFlat] = []
+
+var _plus_callback: Callable
+var _plus_hover_callback: Callable
+var _plus_update_callback: Callable
+var _minus_callback: Callable
+var _minus_hover_callback: Callable
+var _minus_update_callback: Callable
 
 
 func setup(fill_color: Color, disabled_color: Color) -> void:
@@ -103,23 +116,34 @@ func _build() -> void:
 	_base_label.resized.connect(_sync_fill_label_size)
 	_sync_fill_label_size.call_deferred()
 
-	# Style cap button (same outline style, with visible text)
-	_cap_styles = _apply_outline_style(cap_button, _fill_color, _disabled_color)
-	cap_button.add_theme_color_override("font_color", t.normal_text_color)
-	cap_button.add_theme_color_override("font_hover_color", t.normal_text_color)
-	cap_button.add_theme_color_override("font_pressed_color", t.normal_text_color)
-	cap_button.add_theme_color_override("font_disabled_color", t._resolve(VisualTheme.Palette.BG_5))
+	# Style plus button (same outline style, with visible text)
+	_plus_styles = _apply_outline_style(plus_button, _fill_color, _disabled_color)
+	plus_button.add_theme_color_override("font_color", t.normal_text_color)
+	plus_button.add_theme_color_override("font_hover_color", t.normal_text_color)
+	plus_button.add_theme_color_override("font_pressed_color", t.normal_text_color)
+	plus_button.add_theme_color_override("font_disabled_color", t._resolve(VisualTheme.Palette.BG_5))
+
+	# Style minus button (same outline style, with visible text)
+	_minus_styles = _apply_outline_style(minus_button, _fill_color, _disabled_color)
+	minus_button.add_theme_color_override("font_color", t.normal_text_color)
+	minus_button.add_theme_color_override("font_hover_color", t.normal_text_color)
+	minus_button.add_theme_color_override("font_pressed_color", t.normal_text_color)
+	minus_button.add_theme_color_override("font_disabled_color", t._resolve(VisualTheme.Palette.BG_5))
 
 	main_button.focus_mode = Control.FOCUS_NONE
-	cap_button.focus_mode = Control.FOCUS_NONE
+	plus_button.focus_mode = Control.FOCUS_NONE
+	minus_button.focus_mode = Control.FOCUS_NONE
 
 	# Wire signals
 	main_button.pressed.connect(func(): main_pressed.emit())
 	main_button.mouse_entered.connect(func(): main_mouse_entered.emit())
 	main_button.mouse_exited.connect(func(): main_mouse_exited.emit())
-	cap_button.pressed.connect(func(): cap_pressed.emit())
-	cap_button.mouse_entered.connect(func(): cap_mouse_entered.emit())
-	cap_button.mouse_exited.connect(func(): cap_mouse_exited.emit())
+	plus_button.pressed.connect(_on_plus_pressed)
+	plus_button.mouse_entered.connect(_on_plus_mouse_entered)
+	plus_button.mouse_exited.connect(_on_plus_mouse_exited)
+	minus_button.pressed.connect(_on_minus_pressed)
+	minus_button.mouse_entered.connect(_on_minus_mouse_entered)
+	minus_button.mouse_exited.connect(_on_minus_mouse_exited)
 
 	_update_corner_radii()
 
@@ -182,41 +206,127 @@ func apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 	_fill_label.add_theme_color_override("font_color", text_color)
 
 
-func show_cap_button(visible: bool) -> void:
-	cap_button.visible = visible
+func setup_plus(on_pressed: Callable, on_hover: Callable = Callable(), on_update: Callable = Callable()) -> void:
+	_plus_callback = on_pressed
+	_plus_hover_callback = on_hover
+	_plus_update_callback = on_update
+	show_plus_button(true)
+
+
+func setup_minus(on_pressed: Callable, on_hover: Callable = Callable(), on_update: Callable = Callable()) -> void:
+	_minus_callback = on_pressed
+	_minus_hover_callback = on_hover
+	_minus_update_callback = on_update
+	show_minus_button(true)
+
+
+func show_plus_button(visible: bool) -> void:
+	plus_button.visible = visible
 	_update_corner_radii()
 
 
-func set_cap_disabled(is_disabled: bool) -> void:
-	cap_button.disabled = is_disabled
+func set_plus_disabled(is_disabled: bool) -> void:
+	plus_button.disabled = is_disabled
 
 
-func set_cap_filled(can_afford: bool) -> void:
+func set_plus_filled(can_afford: bool) -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	var cap_bg: Color = _fill_color if can_afford else t.bg_shade_1
-	for style in _cap_styles:
-		style.bg_color = cap_bg
+	var bg: Color = _fill_color if can_afford else t.bg_shade_1
+	for style in _plus_styles:
+		style.bg_color = bg
+
+
+func update_plus() -> void:
+	if _plus_update_callback.is_valid():
+		_plus_update_callback.call()
+
+
+func show_minus_button(visible: bool) -> void:
+	minus_button.visible = visible
+	_update_corner_radii()
+
+
+func set_minus_disabled(is_disabled: bool) -> void:
+	minus_button.disabled = is_disabled
+
+
+func set_minus_filled(active: bool) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var bg: Color = _fill_color if active else t.bg_shade_1
+	for style in _minus_styles:
+		style.bg_color = bg
+
+
+func update_minus() -> void:
+	if _minus_update_callback.is_valid():
+		_minus_update_callback.call()
 
 
 func pulse_main(scale_override: float = 0.0) -> void:
 	_pulse_button(main_button, scale_override)
 
 
-func pulse_cap() -> void:
-	_pulse_button(cap_button)
+func pulse_plus() -> void:
+	_pulse_button(plus_button)
+
+
+func pulse_minus() -> void:
+	_pulse_button(minus_button)
 
 
 # ── Internal ────────────────────────────────────────────────────────
 
+func _on_plus_pressed() -> void:
+	if _plus_callback.is_valid():
+		_plus_callback.call()
+	plus_pressed.emit()
+
+
+func _on_plus_mouse_entered() -> void:
+	pulse_plus()
+	if _plus_hover_callback.is_valid():
+		side_button_hover.emit(_plus_hover_callback.call())
+	plus_mouse_entered.emit()
+
+
+func _on_plus_mouse_exited() -> void:
+	side_button_hover.emit("")
+	plus_mouse_exited.emit()
+
+
+func _on_minus_pressed() -> void:
+	if _minus_callback.is_valid():
+		_minus_callback.call()
+	minus_pressed.emit()
+
+
+func _on_minus_mouse_entered() -> void:
+	pulse_minus()
+	if _minus_hover_callback.is_valid():
+		side_button_hover.emit(_minus_hover_callback.call())
+	minus_mouse_entered.emit()
+
+
+func _on_minus_mouse_exited() -> void:
+	side_button_hover.emit("")
+	minus_mouse_exited.emit()
+
+
 func _update_corner_radii() -> void:
 	var r: int = ThemeProvider.theme.button_border_radius
-	var joined := cap_button.visible
+	var right_joined := plus_button.visible
+	var left_joined := minus_button.visible
 	for style in _main_styles:
-		style.corner_radius_top_right = 0 if joined else r
-		style.corner_radius_bottom_right = 0 if joined else r
-	for style in _cap_styles:
+		style.corner_radius_top_right = 0 if right_joined else r
+		style.corner_radius_bottom_right = 0 if right_joined else r
+		style.corner_radius_top_left = 0 if left_joined else r
+		style.corner_radius_bottom_left = 0 if left_joined else r
+	for style in _plus_styles:
 		style.corner_radius_top_left = 0
 		style.corner_radius_bottom_left = 0
+	for style in _minus_styles:
+		style.corner_radius_top_right = 0
+		style.corner_radius_bottom_right = 0
 
 
 func _sync_fill_label_size() -> void:

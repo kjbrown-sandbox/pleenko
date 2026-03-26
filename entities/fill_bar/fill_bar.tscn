@@ -8,6 +8,14 @@ size_flags_horizontal = 3
 theme_override_constants/separation = 6
 script = ExtResource("1_fill")
 
+[node name="MinusButton" type="Button" parent="." unique_id=435915686]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+focus_mode = 0
+theme_override_fonts/font = ExtResource("2_font")
+text = "-"
+
 [node name="MainButton" type="Button" parent="." unique_id=1759501505]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -15,7 +23,7 @@ focus_mode = 0
 theme_override_fonts/font = ExtResource("2_font")
 text = "Fill Bar"
 
-[node name="CapButton" type="Button" parent="." unique_id=1978433370]
+[node name="PlusButton" type="Button" parent="." unique_id=1978433370]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3

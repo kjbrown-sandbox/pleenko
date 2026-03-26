@@ -74,9 +74,9 @@ func _update_currencies() -> void:
 		# Main bar is not clickable
 		bar.main_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-		bar.cap_pressed.connect(_on_cap_raise_pressed.bind(currency_type))
-		bar.cap_mouse_entered.connect(_on_cap_hover.bind(currency_type))
-		bar.cap_mouse_exited.connect(_on_cap_unhover)
+		bar.plus_pressed.connect(_on_cap_raise_pressed.bind(currency_type))
+		bar.plus_mouse_entered.connect(_on_cap_hover.bind(currency_type))
+		bar.plus_mouse_exited.connect(_on_cap_unhover)
 
 		_bars[currency_type] = bar
 
@@ -169,8 +169,8 @@ func _update_all_cap_buttons() -> void:
 		var bar = _bars[currency_type]
 		var board: int = CurrencyManager.cap_raise_board(currency_type)
 		var show := board != -1 and UpgradeManager.is_cap_raise_available(board)
-		bar.show_cap_button(show)
+		bar.show_plus_button(show)
 		if show:
 			var can_afford := CurrencyManager.can_buy_cap_raise(currency_type)
-			bar.set_cap_disabled(not can_afford)
-			bar.set_cap_filled(can_afford)
+			bar.set_plus_disabled(not can_afford)
+			bar.set_plus_filled(can_afford)

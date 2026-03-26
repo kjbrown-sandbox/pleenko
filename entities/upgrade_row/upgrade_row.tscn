@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://b7g4wiwy64dus"]
 
 [ext_resource type="Script" uid="uid://djwgl6f0kkda0" path="res://entities/upgrade_row/upgrade_row.gd" id="1_aqdia"]
-[ext_resource type="PackedScene" path="res://entities/fill_bar/fill_bar.tscn" id="2_fill"]
+[ext_resource type="PackedScene" uid="uid://b6gbfhxvkrhth" path="res://entities/fill_bar/fill_bar.tscn" id="2_fill"]
 
 [node name="UpgradeRow" type="MarginContainer" unique_id=371831000]
 size_flags_horizontal = 3
 script = ExtResource("1_aqdia")
 
-[node name="FillBar" parent="." instance=ExtResource("2_fill")]
+[node name="FillBar" parent="." unique_id=95355707 instance=ExtResource("2_fill")]
 layout_mode = 2
