@@ -248,11 +248,7 @@ func _find_board_for_button(button_id: StringName) -> PlinkoBoard:
 func _update_all_button_displays() -> void:
 	var free_count := get_free_autodroppers()
 	for board in _boards:
-		for bid in board._drop_buttons:
-			var button = board._drop_buttons[bid]
-			if button.has_method("update_autodropper_state"):
-				var assigned: int = _assignments.get(bid, 0)
-				button.update_autodropper_state(assigned, free_count)
+		board.update_autodropper_buttons(_assignments, free_count)
 
 
 func serialize() -> Dictionary:
