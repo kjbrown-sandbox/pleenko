@@ -72,7 +72,6 @@ func _update_currencies() -> void:
 		_update_bar(bar, currency_type, amount, cap)
 
 		# Main bar is not clickable
-		bar.main_button.disabled = true
 		bar.main_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 		bar.cap_pressed.connect(_on_cap_raise_pressed.bind(currency_type))

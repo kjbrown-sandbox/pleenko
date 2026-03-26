@@ -44,8 +44,8 @@ var value: int = 0
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	progress_bar.setup(t.button_enabled_color, t.button_disabled_color)
-	progress_bar.set_main_disabled(true)
 	progress_bar.main_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	progress_bar.apply_fill_colors(false)
 
 	LevelManager.level_changed.connect(_on_level_changed)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
