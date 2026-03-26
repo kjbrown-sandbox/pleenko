@@ -102,11 +102,13 @@ func _update_bar(bar, type: Enums.CurrencyType, balance: int, cap: int) -> void:
 	if at_cap:
 		bar.update_text("%s %d/%d (MAX)" % [coin_name, balance, cap])
 		bar.set_fill(1.0)
+		bar.set_main_disabled(true)
 		bar.apply_fill_colors(true, true)
 	else:
 		bar.update_text("%s %d/%d" % [coin_name, balance, cap])
 		var fill_pct := clampf(float(balance) / float(cap), 0.0, 1.0) if cap > 0 else 0.0
 		bar.set_fill(fill_pct)
+		bar.set_main_disabled(false)
 		bar.apply_fill_colors(false)
 
 
