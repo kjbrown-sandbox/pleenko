@@ -6,41 +6,6 @@ extends Control
 var max_value: int = 0
 var value: int = 0
 
-# func update_text(new_text: String) -> void:
-# 	main_button.text = new_text
-# 	if _base_label:
-# 		_base_label.text = new_text
-# 	if _fill_label:
-# 		_fill_label.text = new_text
-
-
-# func set_fill(percent: float) -> void:
-# 	if not _fill_clip:
-# 		return
-# 	percent = clampf(percent, 0.0, 1.0)
-# 	_fill_clip.anchor_right = percent
-# 	var fill_inset: float = ThemeProvider.theme.button_border_width - 0.5
-# 	_fill_clip.offset_right = -fill_inset if percent > 0.99 else 0.0
-
-
-# func set_main_disabled(is_disabled: bool) -> void:
-# 	main_button.disabled = is_disabled
-
-
-# func apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
-# 	if not _fill_rect:
-# 		return
-# 	var t: VisualTheme = ThemeProvider.theme
-# 	var text_color: Color
-# 	if is_disabled or at_max:
-# 		text_color = t._resolve(VisualTheme.Palette.BG_5)
-# 		_fill_rect.color = _disabled_color
-# 	else:
-# 		text_color = t.normal_text_color
-# 		_fill_rect.color = _fill_color
-# 	_base_label.add_theme_color_override("font_color", text_color)
-# 	_fill_label.add_theme_color_override("font_color", text_color)
-
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	progress_bar.setup(t.button_enabled_color, t.button_disabled_color)
