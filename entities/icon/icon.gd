@@ -13,7 +13,13 @@ func _ready() -> void:
 	mat.set_shader_parameter("tint_color", ThemeProvider.theme._resolve(color_source))
 	material = mat
 	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
 
 
 func _on_mouse_entered() -> void:
 	ThemeProvider.theme.pulse_control(self)
+	(material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme.normal_text_color)
+
+
+func _on_mouse_exited() -> void:
+	(material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme._resolve(color_source))
