@@ -96,6 +96,7 @@ func _setup_drop_bars() -> void:
 	_drop_hover_label.visible = false
 	_drop_hover_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_drop_hover_label.add_theme_font_size_override("font_size", int(t.button_font_size))
+	_drop_hover_label.add_theme_constant_override("line_spacing", -int(t.button_font_size) / 3)
 	_drop_hover_label.add_theme_color_override("font_color", t._resolve(VisualTheme.Palette.BG_5))
 	var font: Font = t.button_font if t.button_font else t.label_font
 	if font:
@@ -138,7 +139,7 @@ func _position_drop_hover() -> void:
 	var label_size: Vector2 = _drop_hover_label.size
 	_drop_hover_label.global_position = Vector2(
 		container_pos.x + (container_size.x - label_size.x) / 2.0,
-		container_pos.y - label_size.y
+		container_pos.y - label_size.y - 10.0
 	)
 
 
