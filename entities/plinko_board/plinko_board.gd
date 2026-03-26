@@ -11,23 +11,24 @@ var vertical_spacing: float
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
-const DropButtonScene := preload("res://entities/drop_section/drop_button.tscn")
 
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 @onready var upgrade_section = $UpgradeSection
 @onready var drop_section = $DropSection
 @onready var coin_queue: CoinQueue = $CoinQueue
-@onready var drop_status_label: Label = $DropSection/VBoxContainer/StatusLabel
-@onready var drop_region_buttons: HBoxContainer = $DropSection/VBoxContainer/HBoxContainer
+@onready var _drop_main = $DropSection/DropButtons/DropMain
+@onready var _drop_advanced = $DropSection/DropButtons/DropAdvanced
+@onready var _drop_buttons_container = $DropSection/DropButtons
 
 var board_type: Enums.BoardType
 var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
 var should_show_advanced_buckets: bool = false
-var _advanced_drop_button: DropButton
-var _drop_buttons: Dictionary = {}  # StringName -> DropButton
+var _has_advanced_drop: bool = false
+var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
+var _drop_hover_label: Label
 var multi_drop_count: int = -1
 
 signal board_rebuilt
@@ -46,37 +47,86 @@ func _ready() -> void:
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
 
-	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[board_type])
-	var drop_button = _create_drop_button(normal_id, _get_drop_costs())
-	drop_button.drop_pressed.connect(func(): request_drop())
-	# Assign spacebar shortcut so the button visually reacts to the key
-	var shortcut := Shortcut.new()
-	var key_event := InputEventAction.new()
-	key_event.action = "drop_coin"
-	shortcut.events = [key_event]
-	drop_button.set_shortcut(shortcut)
-	drop_region_buttons.add_child(drop_button)
-	_update_drop_status()
+	drop_delay = TierRegistry.get_base_drop_delay(board_type)
+	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
+	if adv >= 0:
+		advanced_bucket_type = adv
+
+	_setup_drop_bars()
+	_update_drop_fill()
 	upgrade_section.setup(self, type)
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
-	drop_delay = TierRegistry.get_base_drop_delay(board_type)
-	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
-	if adv >= 0:
-		advanced_bucket_type = adv
 
-	# Position the label above the drop point
-	# drop_status_label.position = Vector3(0, vertical_spacing + 0.7, 0)
+func _setup_drop_bars() -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var currency_type: Enums.CurrencyType = Enums.currency_for_board(board_type)
+	var coin_color: Color = t.get_coin_color(currency_type)
+	var coin_color_dark: Color = t.get_coin_color_dark(currency_type)
 
+	# Main drop bar
+	_drop_main.setup(coin_color, coin_color_dark)
+	_drop_main.update_text("Drop %s" % Enums.currency_name(currency_type))
+	_drop_main.main_pressed.connect(func(): request_drop())
+	_drop_main.main_mouse_entered.connect(_on_drop_main_hover)
+	_drop_main.main_mouse_exited.connect(_on_drop_hover_exit)
+
+	# Spacebar shortcut
+	var shortcut := Shortcut.new()
+	var key_event := InputEventAction.new()
+	key_event.action = "drop_coin"
+	shortcut.events = [key_event]
+	_drop_main.main_button.shortcut = shortcut
+
+	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[board_type])
+	_drop_buttons[normal_id] = _drop_main
+
+	# Advanced drop bar — hidden until earned
+	_drop_advanced.visible = false
+
+	# Hover label — appears above the drop buttons
+	_drop_hover_label = Label.new()
+	_drop_hover_label.visible = false
+	_drop_hover_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_drop_hover_label.add_theme_font_size_override("font_size", int(t.button_font_size))
+	_drop_hover_label.add_theme_color_override("font_color", t._resolve(VisualTheme.Palette.BG_5))
+	var font: Font = t.button_font if t.button_font else t.label_font
+	if font:
+		_drop_hover_label.add_theme_font_override("font", font)
+	_drop_buttons_container.add_child(_drop_hover_label)
+	_drop_buttons_container.move_child(_drop_hover_label, 0)
+
+
+func _format_cost_text(costs: Array) -> String:
+	var parts: PackedStringArray = []
+	for cost in costs:
+		parts.append("%d %s" % [cost[1], Enums.currency_name(cost[0], false)])
+	return ", ".join(parts)
+
+
+func _on_drop_main_hover() -> void:
+	_drop_main.pulse_main(1.005)
+	_drop_hover_label.text = "Cost: %s | Hotkey: SPACE" % _format_cost_text(_get_drop_costs())
+	_drop_hover_label.visible = true
+
+
+func _on_drop_advanced_hover() -> void:
+	_drop_advanced.pulse_main(1.005)
+	_drop_hover_label.text = "Cost: %s" % _format_cost_text(_get_advanced_drop_costs())
+	_drop_hover_label.visible = true
+
+
+func _on_drop_hover_exit() -> void:
+	_drop_hover_label.visible = false
 
 
 func _process(delta: float) -> void:
 	if is_waiting:
 		_drop_timer_remaining = maxf(0.0, _drop_timer_remaining - delta)
-		_update_drop_status()
+		_update_drop_fill()
 
 
 func request_drop(costs: Array = [], coin_type: int = -1) -> void:
@@ -169,33 +219,38 @@ func _start_drop_timer() -> void:
 func _on_drop_timer_done() -> void:
 	is_waiting = false
 	_drop_timer_remaining = 0.0
-	_update_drop_status()
+	_update_drop_fill()
 	if coin_queue.has_queue() and not coin_queue.is_empty():
 		_drop_from_queue()
 
+
 func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
-	if not _advanced_drop_button and TierRegistry.has_next_tier(board_type) \
+	if not _has_advanced_drop and TierRegistry.has_next_tier(board_type) \
 			and _type == advanced_bucket_type and _new_balance > 0:
-		_spawn_advanced_drop_button()
-	if not is_waiting:
-		_update_drop_status()
+		_show_advanced_drop_bar()
+	_update_drop_fill()
 
 
-func _update_drop_status() -> void:
-	var text: String
+func _update_drop_fill() -> void:
+	var fill_pct: float
 	if is_waiting:
-		text = "%.1fs" % _drop_timer_remaining
+		fill_pct = 1.0 - (_drop_timer_remaining / drop_delay) if drop_delay > 0 else 1.0
 	else:
-		var parts: PackedStringArray = []
-		for cost in _get_drop_costs():
-			var currency_name: String = Enums.CurrencyType.keys()[cost[0]].to_lower().replace("_", " ")
-			parts.append("%d %s" % [cost[1], currency_name])
-		text = "Need " + ", ".join(parts)
+		fill_pct = 1.0
 
-	if coin_queue.has_queue():
-		text += " [%d/%d]" % [coin_queue.count, coin_queue._capacity]
+	# Normal drop bar
+	_drop_main.set_fill(fill_pct)
+	var can_queue := coin_queue.has_queue() and not coin_queue.is_full()
+	var can_drop_normal := _can_afford(_get_drop_costs()) and (not is_waiting or can_queue)
+	_drop_main.set_main_disabled(not can_drop_normal)
+	_drop_main.apply_fill_colors(not can_drop_normal)
 
-	drop_status_label.text = text
+	# Advanced drop bar
+	if _drop_advanced.visible:
+		_drop_advanced.set_fill(fill_pct)
+		var can_drop_advanced := _can_afford(_get_advanced_drop_costs()) and (not is_waiting or can_queue)
+		_drop_advanced.set_main_disabled(not can_drop_advanced)
+		_drop_advanced.apply_fill_colors(not can_drop_advanced)
 
 
 func on_coin_landed(coin: Coin) -> void:
@@ -234,14 +289,21 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 			should_show_advanced_buckets = true
 			build_board()
 
-func _spawn_advanced_drop_button() -> void:
-	if _advanced_drop_button:
+func _show_advanced_drop_bar() -> void:
+	if _has_advanced_drop:
 		return
+	_has_advanced_drop = true
+	var t: VisualTheme = ThemeProvider.theme
+	var adv_color: Color = t.get_coin_color(advanced_bucket_type)
+	var adv_color_dark: Color = t.get_coin_color_dark(advanced_bucket_type)
+	_drop_advanced.setup(adv_color, adv_color_dark)
+	_drop_advanced.update_text("Drop %s" % Enums.currency_name(advanced_bucket_type))
+	_drop_advanced.main_pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
+	_drop_advanced.main_mouse_entered.connect(_on_drop_advanced_hover)
+	_drop_advanced.main_mouse_exited.connect(_on_drop_hover_exit)
+	_drop_advanced.visible = true
 	var adv_id := StringName("%s_ADVANCED" % Enums.BoardType.keys()[board_type])
-	var adv_button = _create_drop_button(adv_id, _get_advanced_drop_costs())
-	adv_button.drop_pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
-	drop_region_buttons.add_child(adv_button)
-	_advanced_drop_button = adv_button
+	_drop_buttons[adv_id] = _drop_advanced
 
 
 func get_nearest_bucket(x_position: float) -> Bucket:
@@ -362,23 +424,6 @@ func increase_queue_capacity() -> void:
 	coin_queue.set_capacity(coin_queue._capacity + 1)
 
 
-func _create_drop_button(btn_id: StringName, costs: Array) -> DropButton:
-	var button = DropButtonScene.instantiate()
-	var currencies_needed: Array[DropButton.CurrencyNeeded] = []
-	var label_parts: PackedStringArray = []
-	for cost in costs:
-		currencies_needed.append(DropButton.CurrencyNeeded.new(cost[0], cost[1]))
-		label_parts.append("%d %s" % [cost[1], Enums.CurrencyType.keys()[cost[0]].to_lower().replace("_", " ")])
-	var cost_str := ", ".join(label_parts)
-	var coin_name: String = Enums.CurrencyType.keys()[costs[0][0]].to_lower().replace("_", " ")
-	button.setup(currencies_needed, "Drop %s (%s)" % [coin_name, cost_str], btn_id)
-	button.autodropper_adjust_requested.connect(
-		func(bid: StringName, delta: int): autodropper_adjust_requested.emit(bid, delta)
-	)
-	_drop_buttons[btn_id] = button
-	return button
-
-
 func try_autodrop(is_advanced: bool) -> void:
 	var costs: Array = _get_advanced_drop_costs() if is_advanced else _get_drop_costs()
 	var coin_type: int = advanced_bucket_type if is_advanced else -1
@@ -388,12 +433,11 @@ func try_autodrop(is_advanced: bool) -> void:
 		autodrop_failed.emit(board_type)
 
 
-func set_autodroppers_visible(vis: bool) -> void:
-	for button in _drop_buttons.values():
-		button.show_autodropper_controls(vis)
+func set_autodroppers_visible(_vis: bool) -> void:
+	pass  # TODO: wire autodropper +/- buttons on fill bars
 
 
-func get_drop_button(btn_id: StringName) -> DropButton:
+func get_drop_button(btn_id: StringName):
 	return _drop_buttons.get(btn_id)
 
 
@@ -413,6 +457,6 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 
 	if upgrade_state.get("show_advanced_buckets", false):
 		should_show_advanced_buckets = true
-		_spawn_advanced_drop_button()
+		_show_advanced_drop_bar()
 
 	build_board()

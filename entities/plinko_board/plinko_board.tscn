@@ -18,3 +18,9 @@ script = ExtResource("3_coinqueue")
 [node name="UpgradeSection" parent="." unique_id=453723975 instance=ExtResource("2_upgrade")]
 
 [node name="DropSection" parent="." unique_id=40893427 instance=ExtResource("4_drop")]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_top = 173.0
+offset_bottom = 173.0
+grow_horizontal = 2

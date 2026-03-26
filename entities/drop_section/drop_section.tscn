@@ -1,8 +1,14 @@
 [gd_scene format=3 uid="uid://h4rwxjeyfqx"]
 
-[node name="DropSection" type="CanvasLayer" unique_id=40893427]
+[ext_resource type="PackedScene" uid="uid://b6gbfhxvkrhth" path="res://entities/fill_bar/fill_bar.tscn" id="1_ddiwm"]
+
+[node name="DropSection" type="Control" unique_id=540970006]
+layout_mode = 3
+anchors_preset = 0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=1059968091]
+visible = false
+layout_mode = 1
 anchors_preset = 7
 anchor_left = 0.5
 anchor_top = 1.0
@@ -21,4 +27,24 @@ text = "Ready"
 horizontal_alignment = 1
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer" unique_id=1095684869]
+layout_mode = 2
+
+[node name="DropButtons" type="VBoxContainer" parent="." unique_id=1280341268]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -100.0
+offset_top = -70.0
+offset_right = 100.0
+grow_horizontal = 2
+grow_vertical = 0
+alignment = 2
+
+[node name="DropMain" parent="DropButtons" unique_id=1268010706 instance=ExtResource("1_ddiwm")]
+layout_mode = 2
+
+[node name="DropAdvanced" parent="DropButtons" unique_id=1659889309 instance=ExtResource("1_ddiwm")]
 layout_mode = 2
