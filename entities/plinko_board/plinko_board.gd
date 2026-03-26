@@ -259,23 +259,25 @@ func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap
 
 
 func _update_drop_fill() -> void:
+	var can_queue := coin_queue.has_queue() and not coin_queue.is_full()
+	var show_cooldown := is_waiting and not can_queue
+
 	var fill_pct: float
-	if is_waiting:
+	if show_cooldown:
 		fill_pct = 1.0 - (_drop_timer_remaining / drop_delay) if drop_delay > 0 else 1.0
 	else:
 		fill_pct = 1.0
 
 	# Normal drop bar
 	_drop_main.set_fill(fill_pct)
-	var can_queue := coin_queue.has_queue() and not coin_queue.is_full()
-	var can_drop_normal := _can_afford(_get_drop_costs()) and (not is_waiting or can_queue)
+	var can_drop_normal := _can_afford(_get_drop_costs()) and not show_cooldown
 	_drop_main.set_main_disabled(not can_drop_normal)
 	_drop_main.apply_fill_colors(not can_drop_normal)
 
 	# Advanced drop bar
 	if _drop_advanced.visible:
 		_drop_advanced.set_fill(fill_pct)
-		var can_drop_advanced := _can_afford(_get_advanced_drop_costs()) and (not is_waiting or can_queue)
+		var can_drop_advanced := _can_afford(_get_advanced_drop_costs()) and not show_cooldown
 		_drop_advanced.set_main_disabled(not can_drop_advanced)
 		_drop_advanced.apply_fill_colors(not can_drop_advanced)
 
