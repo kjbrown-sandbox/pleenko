@@ -1,13 +1,13 @@
 [gd_scene format=3 uid="uid://bnr48yvvij4ge"]
 
+[ext_resource type="Texture2D" uid="uid://dboc8e28bl3x0" path="res://assets/icons/setting.png" id="1_24bdt"]
 [ext_resource type="Script" uid="uid://dljp650pd0a87" path="res://entities/icon/icon.gd" id="1_oqyie"]
-[ext_resource type="Texture2D" uid="uid://cctj08765bmkt" path="res://assets/icons/gear.png" id="2_24bdt"]
 
 [node name="Icon" type="TextureButton" unique_id=824553164]
 texture_filter = 1
 custom_minimum_size = Vector2(32, 32)
-texture_normal = ExtResource("2_24bdt")
+texture_normal = ExtResource("1_24bdt")
 ignore_texture_size = true
 stretch_mode = 0
 script = ExtResource("1_oqyie")
-icon_texture = ExtResource("2_24bdt")
+icon_texture = ExtResource("1_24bdt")
