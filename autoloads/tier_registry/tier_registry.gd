@@ -135,7 +135,8 @@ func get_drop_costs(board_type: Enums.BoardType) -> Array:
 
 func get_base_drop_delay(board_type: Enums.BoardType) -> float:
 	var idx: int = _index_of.get(board_type, 0)
-	return BASE_DROP_DELAY * pow(2, idx)
+	return BASE_DROP_DELAY + 1
+	
 
 
 # ── Colors ──────────────────────────────────────────────────────────
