@@ -6,6 +6,8 @@ const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
 
 @export var icon_texture: Texture2D
 @export var color_source: VisualTheme.Palette = VisualTheme.Palette.BG_5
+## Rotation in radians applied to the button. 0 = right, PI/2 = down, -PI/2 = up, PI = left.
+@export var rotation_angle: float = 0.0
 
 
 func _ready() -> void:
@@ -14,6 +16,10 @@ func _ready() -> void:
 	add_theme_constant_override("margin_right", t.hud_margin)
 	add_theme_constant_override("margin_top", t.hud_margin)
 	add_theme_constant_override("margin_bottom", t.hud_margin)
+
+	if rotation_angle != 0.0:
+		button.pivot_offset = button.custom_minimum_size / 2.0
+		button.rotation = rotation_angle
 
 	button.texture_normal = icon_texture
 	var mat := ShaderMaterial.new()

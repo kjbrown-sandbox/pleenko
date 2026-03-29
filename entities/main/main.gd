@@ -9,8 +9,9 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 @onready var game_timer: Label = $CanvasLayer/GameTimer
 @onready var options_icon: TextureButton = $CanvasLayer/OptionsIcon
 @onready var level_section = $CanvasLayer/LevelSection
-@onready var challenges_down_icon: TextureButton = $CanvasLayer/ChallengesDownIcon
-@onready var challenges_up_icon: TextureButton = $CanvasLayer/ChallengesUpIcon
+@onready var challenges_down_icon: MarginContainer = $CanvasLayer/ChallengesDownIcon
+@onready var challenges_up_icon: MarginContainer = $CanvasLayer/ChallengesUpIcon
+@onready var board_left_icon: MarginContainer = $CanvasLayer/BoardLeftIcon
 @onready var board_right_icon: MarginContainer = $CanvasLayer/BoardRightIcon
 @onready var challenge_info_panel: ChallengeInfoPanel = $ChallengeInfoPanel
 
@@ -20,7 +21,10 @@ var _options_dialog: CanvasLayer
 var _challenge_buttons: Array[ChallengeButton] = []
 var _down_tooltip: Label
 var _up_tooltip: Label
+var _left_tooltip: Label
 var _right_tooltip: Label
+var _sorted_challenge_buttons: Array[ChallengeButton] = []
+var _challenge_nav_index: int = 0
 
 func _ready() -> void:
 	_setup_environment()
@@ -64,7 +68,7 @@ func _ready() -> void:
 
 	# Show down-arrow only after save is loaded (prestige state is available)
 	challenges_down_icon.visible = ModeManager.are_challenges_unlocked()
-	_update_board_right_icon()
+	_update_nav_arrows()
 
 
 func _setup_environment() -> void:
@@ -225,6 +229,7 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		challenges_up_icon.visible = true
 		challenge_info_panel.visible = true
 		challenge_info_panel.show_default(_challenge_buttons)
+		_setup_challenge_nav()
 		_go_to_default_challenge()
 	else:
 		coin_values.visible = true
@@ -234,7 +239,7 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		board_manager.set_active_board_ui_visible(true)
 		challenges_up_icon.visible = false
 		challenge_info_panel.visible = false
-		_update_board_right_icon()
+		_update_nav_arrows()
 		_go_back_to_board()
 
 
@@ -243,31 +248,70 @@ func _on_prestige_claimed(_board_type: Enums.BoardType) -> void:
 
 
 func _on_board_switched(_board: PlinkoBoard) -> void:
-	_update_board_right_icon()
+	_update_nav_arrows()
 
 
 func _on_board_unlocked(_board_type: Enums.BoardType) -> void:
-	_update_board_right_icon()
+	_update_nav_arrows()
 
 
-func _update_board_right_icon() -> void:
-	board_right_icon.visible = ModeManager.is_main() and board_manager._active_index + 1 < board_manager._boards.size()
+func _update_nav_arrows() -> void:
+	if ModeManager.is_main():
+		board_left_icon.visible = board_manager._active_index > 0
+		board_right_icon.visible = board_manager._active_index + 1 < board_manager._boards.size()
+	elif ModeManager.is_challenges():
+		board_left_icon.visible = _challenge_nav_index > 0
+		board_right_icon.visible = false
+
+
+func _setup_challenge_nav() -> void:
+	_sorted_challenge_buttons = _challenge_buttons.duplicate()
+	_sorted_challenge_buttons.sort_custom(func(a: ChallengeButton, b: ChallengeButton) -> bool:
+		return a.position.x < b.position.x
+	)
+	# Start at the earliest incomplete challenge
+	var target := ChallengeProgressManager.get_earliest_incomplete(_challenge_buttons)
+	_challenge_nav_index = 0
+	if target:
+		for i in _sorted_challenge_buttons.size():
+			if _sorted_challenge_buttons[i] == target:
+				_challenge_nav_index = i
+				break
+	_update_nav_arrows()
+
+
+func _on_left_arrow_pressed() -> void:
+	if ModeManager.is_main():
+		board_manager.switch_board(board_manager._active_index - 1)
+	elif ModeManager.is_challenges():
+		if _challenge_nav_index > 0:
+			_challenge_nav_index -= 1
+			_tween_camera_to_challenge(_sorted_challenge_buttons[_challenge_nav_index])
+			_update_nav_arrows()
 
 
 func _setup_nav_icons() -> void:
-	challenges_down_icon.pressed.connect(func(): ModeManager.switch_to_challenges())
-	challenges_up_icon.pressed.connect(func(): ModeManager.switch_to_main())
-
 	var t: VisualTheme = ThemeProvider.theme
 	_down_tooltip = _create_tooltip("Hotkey: Down arrow")
 	_up_tooltip = _create_tooltip("Hotkey: Up arrow")
+	_left_tooltip = _create_tooltip("Hotkey: Left arrow")
 	_right_tooltip = _create_tooltip("Hotkey: Right arrow")
 
-	# Position tooltips to the right of each icon
-	challenges_down_icon.mouse_entered.connect(func(): _show_tooltip(_down_tooltip, challenges_down_icon))
-	challenges_down_icon.mouse_exited.connect(func(): _down_tooltip.visible = false)
-	challenges_up_icon.mouse_entered.connect(func(): _show_tooltip(_up_tooltip, challenges_up_icon))
-	challenges_up_icon.mouse_exited.connect(func(): _up_tooltip.visible = false)
+	var down_button: TextureButton = challenges_down_icon.button
+	down_button.pressed.connect(func(): ModeManager.switch_to_challenges())
+	down_button.mouse_entered.connect(func(): _show_tooltip(_down_tooltip, down_button))
+	down_button.mouse_exited.connect(func(): _down_tooltip.visible = false)
+
+	var up_button: TextureButton = challenges_up_icon.button
+	up_button.pressed.connect(func(): ModeManager.switch_to_main())
+	up_button.mouse_entered.connect(func(): _show_tooltip(_up_tooltip, up_button))
+	up_button.mouse_exited.connect(func(): _up_tooltip.visible = false)
+
+	var left_button: TextureButton = board_left_icon.button
+	left_button.pressed.connect(_on_left_arrow_pressed)
+	left_button.mouse_entered.connect(func(): _show_tooltip(_left_tooltip, left_button))
+	left_button.mouse_exited.connect(func(): _left_tooltip.visible = false)
+
 	var right_button: TextureButton = board_right_icon.button
 	right_button.pressed.connect(func(): board_manager.switch_board(board_manager._active_index + 1))
 	right_button.mouse_entered.connect(func(): _show_tooltip(_right_tooltip, right_button))
