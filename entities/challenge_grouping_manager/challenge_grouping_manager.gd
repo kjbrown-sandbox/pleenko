@@ -10,9 +10,9 @@ const GroupScenes: Array[PackedScene] = [
 ]
 
 @export var group_spacing: float = 15.0
-@export var camera_tween_duration: float = 4.0
 @export var challenge_y_offset: float = -17.0
 
+var camera_tween_duration: float
 var _groups: Array[ChallengeGrouping] = []
 var _active_index: int = 0
 var _camera: Camera3D
@@ -22,6 +22,7 @@ var _challenge_info_panel: ChallengeInfoPanel
 func setup(camera: Camera3D, info_panel: ChallengeInfoPanel) -> void:
 	_camera = camera
 	_challenge_info_panel = info_panel
+	camera_tween_duration = ThemeProvider.theme.camera_tween_duration
 
 	for i in GroupScenes.size():
 		var group: ChallengeGrouping = GroupScenes[i].instantiate()

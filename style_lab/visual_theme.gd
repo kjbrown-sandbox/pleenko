@@ -125,6 +125,7 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var space_between_pegs := 1.0
 @export var board_rows := 6                                       # demo row count
 @export var board_spacing := 20.0											# space between boards in multi-board setups
+@export var camera_tween_duration := 0.4                            # seconds for camera movement
 
 # ── VFX ──────────────────────────────────────────────────────────────
 @export_group("VFX")

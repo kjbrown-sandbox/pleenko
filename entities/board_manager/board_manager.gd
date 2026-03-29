@@ -7,8 +7,7 @@ signal board_unlocked(board_type: Enums.BoardType)
 const BoardScene: PackedScene = preload("res://entities/plinko_board/plinko_board.tscn")
 
 var board_spacing: float
-## How long the camera tween takes
-@export var camera_tween_duration: float = 0.4
+var camera_tween_duration: float
 
 var _boards: Array[PlinkoBoard] = []
 var _active_index: int = 0
@@ -28,6 +27,7 @@ const MIN_CAMERA_Z := 6.0
 func setup(camera: Camera3D) -> void:
 	_camera = camera
 	board_spacing = ThemeProvider.theme.board_spacing
+	camera_tween_duration = ThemeProvider.theme.camera_tween_duration
 	# Start with the first tier's board
 	_spawn_board(TierRegistry.get_tier_by_index(0).board_type)
 	# Frame the camera on the initial board immediately (no tween)
