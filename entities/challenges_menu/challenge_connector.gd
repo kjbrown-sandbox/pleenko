@@ -1,23 +1,29 @@
 extends MeshInstance3D
 
+@export var thickness := 0.05
+
 var start_challenge: ChallengeButton
 var end_challenge: ChallengeButton
 
 func setup(start: ChallengeButton, end: ChallengeButton) -> void:
-   start_challenge = start
-   end_challenge = end
+	start_challenge = start
+	end_challenge = end
 
 func _ready() -> void:
-   var immediate_mesh: ImmediateMesh = mesh
+	var start_pos = start_challenge.global_position
+	var end_pos = end_challenge.global_position
+	var length = start_pos.distance_to(end_pos)
 
-   immediate_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
-   immediate_mesh.surface_add_vertex(start_challenge.global_position)
-   immediate_mesh.surface_add_vertex(end_challenge.global_position)
-   immediate_mesh.surface_end()
+	var box = BoxMesh.new()
+	box.size = Vector3(thickness, thickness, length)
+	mesh = box
 
-   var mat := StandardMaterial3D.new()
-   mat.albedo_color = ThemeProvider.theme.resolve(end_challenge.color_source)
-   mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-   material_override = mat
+	global_position = (start_pos + end_pos) / 2.0
+	look_at(end_pos)
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = ThemeProvider.theme.resolve(end_challenge.color_source)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material_override = mat
 
 

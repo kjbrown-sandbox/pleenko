@@ -10,6 +10,7 @@
 
 - When I propose a feature or approach, validate it against Godot best practices and game industry conventions before implementing. If my suggestion conflicts with established patterns, flag it and explain the recommended alternative.
 - Prefer idiomatic Godot solutions (e.g., using signals over polling, scene composition over deep inheritance, built-in nodes over custom reimplementations).
+- When making modifications, make as many edits to the .tscn file as possible before relying on .gd for functionality.
 
 ## Game Description
 

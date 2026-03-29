@@ -2,8 +2,5 @@
 
 [ext_resource type="Script" uid="uid://2hutqg232iyq" path="res://entities/challenges_menu/challenge_connector.gd" id="1_0qmom"]
 
-[sub_resource type="ImmediateMesh" id="ImmediateMesh_b8m15"]
-
 [node name="ChallengeConnector" type="MeshInstance3D" unique_id=999350209]
-mesh = SubResource("ImmediateMesh_b8m15")
 script = ExtResource("1_0qmom")
