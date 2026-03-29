@@ -48,6 +48,8 @@ func _ready() -> void:
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
+	advanced_coin_multiplier = 2.0 + ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board_type)
+	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
 
 	drop_delay = TierRegistry.get_base_drop_delay(board_type)
 	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
@@ -300,7 +302,7 @@ func _get_bucket_index(bucket: Bucket) -> int:
 	return children.find(bucket)
 
 
-func force_drop_coin(type: Enums.CurrencyType, mult: int = 1) -> void:
+func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0) -> void:
 	var coin = CoinScene.instantiate()
 	coin.board = self
 	coin.coin_type = type
@@ -426,10 +428,13 @@ func increase_bucket_values() -> void:
 func decrease_drop_delay() -> void:
 	drop_delay *= drop_delay_reduction_factor
 
-func _show_floating_text(pos: Vector3, multiplier: int, total: int) -> void:
+func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var label := Label3D.new()
-	label.text = "x%d = %d" % [multiplier, total]
+	if multiplier == floorf(multiplier):
+		label.text = "x%d = %d" % [int(multiplier), total]
+	else:
+		label.text = "x%.1f = %d" % [multiplier, total]
 	label.font_size = t.floating_text_font_size
 	label.outline_size = t.label_outline_size
 	if t.label_font:
@@ -527,7 +532,10 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 	num_rows = 2 + add_row_level * 2
 
 	bucket_value_multiplier = 1 + upgrade_state.get("BUCKET_VALUE", 0)
-	advanced_coin_multiplier = upgrade_state.get("advanced_coin_multiplier", 2.0) + ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board_type)
+	var base_acm: float = upgrade_state.get("advanced_coin_multiplier", 2.0)
+	var bonus_acm: float = ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board_type)
+	advanced_coin_multiplier = base_acm + bonus_acm
+	print("[PlinkoBoard] advanced_coin_multiplier: base=%.1f bonus=%.1f total=%.1f" % [base_acm, bonus_acm, advanced_coin_multiplier])
 
 	var drop_rate_level: int = upgrade_state.get("DROP_RATE", 0)
 	for i in drop_rate_level:
