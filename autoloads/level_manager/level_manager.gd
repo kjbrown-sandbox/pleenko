@@ -97,7 +97,7 @@ func _set_advanced_drop(data: LevelData, next_tier: TierData, board_type: Enums.
 	if next_tier:
 		var adv_name: String = Enums.BoardType.keys()[next_tier.board_type].capitalize()
 		data.message = "A %s coin will be dropped!" % adv_name
-		data.rewards = [_drop_coins(1, next_tier.primary_currency, 1, board_type)]
+		data.rewards = [_drop_coins(1, next_tier.raw_currency, board_type)]
 	else:
 		data.message = "Keep going!"
 		data.rewards = []
@@ -132,12 +132,11 @@ func _unlock_upgrade(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardTyp
 
 
 ## Helper to create a DROP_COINS reward.
-func _drop_coins(count: int, coin_type: Enums.CurrencyType, mult: int, target: Enums.BoardType) -> RewardData:
+func _drop_coins(count: int, coin_type: Enums.CurrencyType, target: Enums.BoardType) -> RewardData:
 	var r := RewardData.new()
 	r.type = RewardData.RewardType.DROP_COINS
 	r.coin_count = count
 	r.coin_type = coin_type
-	r.coin_multiplier = mult
 	r.target_board = target
 	return r
 

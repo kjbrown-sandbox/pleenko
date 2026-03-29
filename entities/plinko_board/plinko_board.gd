@@ -315,9 +315,7 @@ func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0) -> void:
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 	for reward in rewards:
 		if reward.type == RewardData.RewardType.DROP_COINS and reward.target_board == board_type:
-			var mult := reward.coin_multiplier
-			if reward.coin_type == advanced_bucket_type and mult <= 1:
-				mult = advanced_coin_multiplier
+			var mult: float = advanced_coin_multiplier if reward.coin_type == advanced_bucket_type else 1.0
 			for i in reward.coin_count:
 				force_drop_coin(reward.coin_type, mult)
 		elif reward.type == RewardData.RewardType.UNLOCK_UPGRADE and reward.board_type == board_type:
