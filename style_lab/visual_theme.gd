@@ -121,6 +121,7 @@ enum CoinShape { SPHERE, CYLINDER }
 
 # ── Spacing / Layout ────────────────────────────────────────────────
 @export_group("Spacing")
+@export var hud_margin := 20                                       # margin for HUD panels
 @export var space_between_pegs := 1.0
 @export var board_rows := 6                                       # demo row count
 @export var board_spacing := 20.0											# space between boards in multi-board setups

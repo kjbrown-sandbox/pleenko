@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="ChallengeData" format=3 uid="uid://wwkfw24prf1u"]
+
+[ext_resource type="Script" uid="uid://co7w0klc1bfgq" path="res://autoloads/challenge_manager/challenge_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://cprkqdv24lv2s" path="res://autoloads/challenge_manager/challenge_constraint.gd" id="1_oe7mq"]
+[ext_resource type="Script" uid="uid://u0aimm0ql1ts" path="res://autoloads/challenge_manager/objectives/coin_goal.gd" id="2_obj"]
+[ext_resource type="Script" uid="uid://d2im52kpqsq1i" path="res://autoloads/challenge_manager/constraints/upgrades_limited.gd" id="3_con"]
+[ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="3_geyrc"]
+[ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="4_reward"]
+[ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="7_nr1yh"]
+
+[sub_resource type="Resource" id="constraint_1"]
+script = ExtResource("3_con")
+all_upgrades = true
+
+[sub_resource type="Resource" id="objective_1"]
+script = ExtResource("2_obj")
+amount = 50
+
+[sub_resource type="Resource" id="reward_1"]
+script = ExtResource("4_reward")
+type = 1
+modifier_type = 2
+description = "+1 multi-ball to gold"
+
+[resource]
+script = ExtResource("1_data")
+id = "gold_2"
+display_name = "No Upgrades"
+time_limit_seconds = 90.0
+objectives = Array[ExtResource("3_geyrc")]([SubResource("objective_1")])
+constraints = Array[ExtResource("1_oe7mq")]([SubResource("constraint_1")])
+rewards = Array[ExtResource("4_reward")]([SubResource("reward_1")])

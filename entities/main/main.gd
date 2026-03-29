@@ -11,6 +11,7 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 @onready var level_section = $CanvasLayer/LevelSection
 @onready var challenges_down_icon: TextureButton = $CanvasLayer/ChallengesDownIcon
 @onready var challenges_up_icon: TextureButton = $CanvasLayer/ChallengesUpIcon
+@onready var challenge_info_panel: ChallengeInfoPanel = $ChallengeInfoPanel
 
 var ChallengeConnector: PackedScene = preload("res://entities/challenges_menu/challenge_connector.tscn")
 
@@ -83,6 +84,9 @@ func _setup_normal() -> void:
 		SaveManager.load_game()
 		coin_values.refresh_visible_currencies()
 
+	ChallengeProgressManager.initialize(_challenge_buttons)
+	_connect_challenge_buttons()
+
 
 func _setup_challenge() -> void:
 	challenge_hud.visible = true
@@ -100,7 +104,16 @@ func _setup_challenge() -> void:
 
 func _on_challenge_completed() -> void:
 	challenge_hud.show_result("Challenge Complete!")
-	# Return to main after a brief delay
+	var challenge := ChallengeManager.get_challenge()
+	# Find the button to get next_challenges
+	var next_ids: Array[String] = []
+	for btn in _challenge_buttons:
+		if btn.challenge == challenge:
+			next_ids = btn.next_challenges
+			break
+	ChallengeProgressManager.complete_challenge(challenge.id, next_ids, challenge.rewards)
+	# Save challenge progress into existing save (board_manager not available during challenges)
+	SaveManager.save_challenge_progress()
 	await get_tree().create_timer(2.0).timeout
 	ChallengeManager.clear_challenge()
 	SaveManager.reset_state()
@@ -158,19 +171,43 @@ func _collect_challenge_buttons() -> void:
 			_challenge_buttons.append(child)
 
 
-func _go_to_random_challenge() -> void:
-	if _challenge_buttons.is_empty():
-		return
-	var button: ChallengeButton = _challenge_buttons.pick_random()
-	var target := Vector3(button.position.x, button.position.y, camera.position.z)
+func _go_to_default_challenge() -> void:
+	var btn := ChallengeProgressManager.get_earliest_incomplete(_challenge_buttons)
+	if btn:
+		_tween_camera_to_challenge(btn)
+
+
+func _go_back_to_board() -> void:
+	board_manager._tween_camera_to_active_board()
+
+
+func _tween_camera_to_challenge(btn: ChallengeButton) -> void:
+	var target := Vector3(btn.position.x, btn.position.y, camera.position.z)
 	var tween := create_tween()
 	tween.tween_property(camera, "position", target, board_manager.camera_tween_duration) \
 		.set_ease(Tween.EASE_IN_OUT) \
 		.set_trans(Tween.TRANS_CUBIC)
 
 
-func _go_back_to_board() -> void:
-	board_manager._tween_camera_to_active_board()
+func _connect_challenge_buttons() -> void:
+	for btn in _challenge_buttons:
+		btn.hovered.connect(_on_challenge_hovered)
+		btn.pressed.connect(_on_challenge_pressed.bind(btn))
+
+
+func _on_challenge_hovered(btn: ChallengeButton) -> void:
+	if btn.challenge:
+		challenge_info_panel.show_challenge(btn.challenge)
+
+
+func _on_challenge_pressed(btn: ChallengeButton) -> void:
+	if not btn.challenge:
+		return
+	var state := ChallengeProgressManager.get_state(btn.challenge_ui_name)
+	if state == ChallengeProgressManager.ChallengeState.LOCKED:
+		return
+	ChallengeManager.set_challenge(btn.challenge)
+	get_tree().reload_current_scene.call_deferred()
 
 
 func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
@@ -181,7 +218,9 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		challenges_down_icon.visible = false
 		board_manager.set_active_board_ui_visible(false)
 		challenges_up_icon.visible = true
-		_go_to_random_challenge()
+		challenge_info_panel.visible = true
+		challenge_info_panel.show_default(_challenge_buttons)
+		_go_to_default_challenge()
 	else:
 		coin_values.visible = true
 		level_section.visible = true
@@ -189,6 +228,7 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		challenges_down_icon.visible = ModeManager.are_challenges_unlocked()
 		board_manager.set_active_board_ui_visible(true)
 		challenges_up_icon.visible = false
+		challenge_info_panel.visible = false
 		_go_back_to_board()
 
 

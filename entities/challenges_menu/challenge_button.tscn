@@ -2,17 +2,24 @@
 
 [ext_resource type="Script" uid="uid://rt86i7vy1e1x" path="res://entities/challenges_menu/challenge_button.gd" id="1_script"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_diamond"]
-size = Vector3(0.6, 0.6, 0.1)
+[sub_resource type="BoxMesh" id="BoxMesh_outer"]
+size = Vector3(0.65, 0.65, 0.1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_inner"]
+size = Vector3(0.48, 0.48, 0.1)
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_812wr"]
 
 [node name="ChallengeButton" type="Node3D" unique_id=1781855903]
 script = ExtResource("1_script")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=2142155426]
+[node name="OuterMesh" type="MeshInstance3D" parent="." unique_id=608802383]
 transform = Transform3D(0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0, 0, 1, 0, 0, 0)
-mesh = SubResource("BoxMesh_diamond")
+mesh = SubResource("BoxMesh_outer")
+
+[node name="InnerMesh" type="MeshInstance3D" parent="." unique_id=2139916039]
+transform = Transform3D(0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("BoxMesh_inner")
 
 [node name="Area3D" type="Area3D" parent="." unique_id=279396125]
 

@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://dpc8x2qr1k5v0"]
+
+[ext_resource type="Script" path="res://entities/challenge_info_panel/challenge_info_panel.gd" id="1_script"]
+
+[node name="ChallengeInfoPanel" type="CanvasLayer"]
+visible = false
+script = ExtResource("1_script")

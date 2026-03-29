@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 const AUTO_SAVE_INTERVAL := 30.0
 
 var _auto_save_timer: Timer
@@ -34,6 +34,7 @@ func save_game() -> void:
 		"upgrades": UpgradeManager.serialize(),
 		"boards": _board_manager.serialize(),
 		"prestige": PrestigeManager.serialize(),
+		"challenges": ChallengeProgressManager.serialize(),
 	}
 
 	var json_string := JSON.stringify(data, "\t")
@@ -80,6 +81,7 @@ func load_game() -> bool:
 
 	# Deserialize prestige first — BoardManager queries it during deserialize
 	PrestigeManager.deserialize(data.get("prestige", {}))
+	ChallengeProgressManager.deserialize(data.get("challenges", {}))
 	# LevelManager before CurrencyManager so current_level is correct
 	# when currency_changed signals fire during currency restore
 	LevelManager.deserialize(data.get("level", {}))
@@ -89,6 +91,38 @@ func load_game() -> bool:
 
 	print("[SaveManager] Game loaded.")
 	return true
+
+
+func save_challenge_progress() -> void:
+	if not FileAccess.file_exists(SAVE_PATH):
+		# No existing save — write a minimal one with challenge + prestige data
+		var data := {
+			"version": SAVE_VERSION,
+			"prestige": PrestigeManager.serialize(),
+			"challenges": ChallengeProgressManager.serialize(),
+		}
+		var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+		if file:
+			file.store_string(JSON.stringify(data, "\t"))
+			file.close()
+		return
+
+	# Update challenges key in existing save
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if not file:
+		return
+	var json := JSON.new()
+	if json.parse(file.get_as_text()) != OK:
+		return
+	file.close()
+
+	var data: Dictionary = json.data
+	data["challenges"] = ChallengeProgressManager.serialize()
+	var write_file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if write_file:
+		write_file.store_string(JSON.stringify(data, "\t"))
+		write_file.close()
+	print("[SaveManager] Challenge progress saved.")
 
 
 func has_save() -> bool:
@@ -107,19 +141,22 @@ func load_prestige_only() -> void:
 	file.close()
 	var data: Dictionary = json.data
 	PrestigeManager.deserialize(data.get("prestige", {}))
+	ChallengeProgressManager.deserialize(data.get("challenges", {}))
 
 
 func reset_game() -> void:
-	# Capture prestige data before wiping the save — prestige survives resets
+	# Capture persistent data before wiping the save — prestige + challenges survive resets
 	var prestige_data := PrestigeManager.serialize()
+	var challenge_data := ChallengeProgressManager.serialize()
 
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
 
-	# Write a minimal save containing only prestige + version so it persists
+	# Write a minimal save containing persistent data so it survives reset
 	var minimal_save := {
 		"version": SAVE_VERSION,
 		"prestige": prestige_data,
+		"challenges": challenge_data,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -133,6 +170,7 @@ func reset_state() -> void:
 	CurrencyManager.reset()
 	LevelManager.reset()
 	UpgradeManager.reset()
+	toggle_auto_save(false)
 	_board_manager = null
 	print("[SaveManager] Game reset (prestige preserved). Reloading scene.")
 
@@ -144,6 +182,9 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 		# No-op: old saves just won't have save_timestamp.
 		# load_game() defaults to 0.0, so offline calculator will skip.
 		print("[SaveManager] Migrated save v%d -> v3" % version)
+	if version < 4:
+		data["challenges"] = {}
+		print("[SaveManager] Migrated save v%d -> v4" % version)
 	data["version"] = SAVE_VERSION
 	return data
 

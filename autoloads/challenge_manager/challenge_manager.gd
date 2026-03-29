@@ -56,7 +56,7 @@ func setup(board_manager: BoardManager) -> void:
 
 	# Force-start autodroppers for Survive objectives
 	for objective in _challenge.objectives:
-		if objective is ChallengeObjective.Survive:
+		if objective is Survive:
 			_setup_survive(objective)
 
 
@@ -110,7 +110,7 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 
 	# Check drop-limit failures
 	for objective in _challenge.objectives:
-		if objective is ChallengeObjective.EarnWithinXDrops and _total_drops > objective.max_drops:
+		if objective is EarnWithinXDrops and _total_drops > objective.max_drops:
 			var balance := CurrencyManager.get_balance(objective.currency_type)
 			if balance < objective.amount:
 				challenge_failed.emit("Ran out of drops!")
@@ -122,11 +122,11 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 
 func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
 	for constraint in _challenge.constraints:
-		if constraint is ChallengeConstraint.NeverMoreThanXCoins:
+		if constraint is NeverMoreThanXCoins:
 			if type == constraint.currency_type and new_balance > constraint.amount:
 				challenge_failed.emit("Exceeded %d %s!" % [constraint.amount, Enums.CurrencyType.keys()[type]])
 				return
-		elif constraint is ChallengeConstraint.NeverLessThanXCoins:
+		elif constraint is NeverLessThanXCoins:
 			if type == constraint.currency_type and new_balance < constraint.amount:
 				challenge_failed.emit("Dropped below %d %s!" % [constraint.amount, Enums.CurrencyType.keys()[type]])
 				return
@@ -134,7 +134,7 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 
 func _check_bucket_constraints(board_type: Enums.BoardType, bucket_index: int) -> void:
 	for constraint in _challenge.constraints:
-		if constraint is ChallengeConstraint.NeverTouchBucket:
+		if constraint is NeverTouchBucket:
 			if board_type == constraint.board_type and bucket_index == constraint.bucket_index:
 				challenge_failed.emit("Landed in forbidden bucket!")
 				return
@@ -153,19 +153,19 @@ func _check_all_objectives_met() -> bool:
 
 
 func _is_objective_met(objective: ChallengeObjective) -> bool:
-	if objective is ChallengeObjective.CoinGoal:
+	if objective is CoinGoal:
 		var balance := CurrencyManager.get_balance(objective.currency_type)
 		if objective.exact:
 			return balance == objective.amount
 		return balance >= objective.amount
 
-	elif objective is ChallengeObjective.BoardGoal:
+	elif objective is BoardGoal:
 		return _board_manager.is_board_unlocked(objective.board_type)
 
-	elif objective is ChallengeObjective.Survive:
+	elif objective is Survive:
 		return _survive_passed
 
-	elif objective is ChallengeObjective.GetSameBucketXTimes:
+	elif objective is GetSameBucketXTimes:
 		if objective.in_a_row:
 			return _same_bucket_streak.get(objective.board_type, 0) >= objective.times
 		else:
@@ -176,7 +176,7 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 						return true
 			return false
 
-	elif objective is ChallengeObjective.LandInEveryBucket:
+	elif objective is LandInEveryBucket:
 		var board := _get_board(objective.board_type)
 		if not board:
 			return false
@@ -187,7 +187,7 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 				return false
 		return true
 
-	elif objective is ChallengeObjective.EarnWithinXDrops:
+	elif objective is EarnWithinXDrops:
 		if _total_drops > objective.max_drops:
 			# This is handled as a failure, not just "not met"
 			return false
@@ -199,19 +199,19 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 
 func _on_autodrop_failed(board_type: Enums.BoardType) -> void:
 	for objective in _challenge.objectives:
-		if objective is ChallengeObjective.Survive and objective.board_type == board_type:
+		if objective is Survive and objective.board_type == board_type:
 			challenge_failed.emit("Autodropper can't afford to drop!")
 			return
 
 
 func _apply_starting_conditions() -> void:
 	for condition in _challenge.starting_conditions:
-		if condition is ChallengeStartingCondition.StartingCoins:
+		if condition is StartingCoins:
 			CurrencyManager.add(condition.currency_type, condition.amount)
-		elif condition is ChallengeStartingCondition.StartingUpgrades:
+		elif condition is StartingUpgrades:
 			for i in condition.level:
 				UpgradeManager.force_apply(condition.board_type, condition.upgrade_type)
-		elif condition is ChallengeStartingCondition.StartingBoards:
+		elif condition is StartingBoards:
 			_board_manager.unlock_board(condition.board_type)
 			var board := _get_board(condition.board_type)
 			if board:
@@ -220,7 +220,7 @@ func _apply_starting_conditions() -> void:
 					board.add_two_rows()
 
 
-func _setup_survive(objective: ChallengeObjective.Survive) -> void:
+func _setup_survive(objective: Survive) -> void:
 	# Force-assign autodroppers to the specified board
 	var board := _get_board(objective.board_type)
 	if not board:
@@ -241,7 +241,7 @@ func is_upgrade_allowed(upgrade_type: Enums.UpgradeType) -> bool:
 	if not is_active_challenge:
 		return true
 	for constraint in _challenge.constraints:
-		if constraint is ChallengeConstraint.UpgradesLimited:
+		if constraint is UpgradesLimited:
 			if constraint.all_upgrades:
 				return false
 			if upgrade_type in constraint.blocked_upgrades:
@@ -253,7 +253,7 @@ func is_board_allowed(board_type: Enums.BoardType) -> bool:
 	if not is_active_challenge:
 		return true
 	for constraint in _challenge.constraints:
-		if constraint is ChallengeConstraint.OnlyOneBoard:
+		if constraint is OnlyOneBoard:
 			return board_type == constraint.board_type
 	return true
 
@@ -261,25 +261,79 @@ func is_board_allowed(board_type: Enums.BoardType) -> bool:
 func get_objective_text() -> String:
 	var parts: PackedStringArray = []
 	for objective in _challenge.objectives:
-		if objective is ChallengeObjective.CoinGoal:
+		if objective is CoinGoal:
 			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
 			if objective.exact:
 				parts.append("Get exactly %d %s" % [objective.amount, currency_name])
 			else:
 				parts.append("Earn %d %s" % [objective.amount, currency_name])
-		elif objective is ChallengeObjective.BoardGoal:
+		elif objective is BoardGoal:
 			var board_name: String = Enums.BoardType.keys()[objective.board_type].to_lower()
 			parts.append("Unlock the %s board" % board_name)
-		elif objective is ChallengeObjective.Survive:
+		elif objective is Survive:
 			parts.append("Survive with %d autodropper(s)" % objective.autodropper_count)
-		elif objective is ChallengeObjective.GetSameBucketXTimes:
+		elif objective is GetSameBucketXTimes:
 			if objective.in_a_row:
 				parts.append("Hit the same bucket %d times in a row" % objective.times)
 			else:
 				parts.append("Hit the same bucket %d times" % objective.times)
-		elif objective is ChallengeObjective.LandInEveryBucket:
+		elif objective is LandInEveryBucket:
 			parts.append("Land in every bucket")
-		elif objective is ChallengeObjective.EarnWithinXDrops:
+		elif objective is EarnWithinXDrops:
+			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
+			parts.append("Earn %d %s in %d drops" % [objective.amount, currency_name, objective.max_drops])
+	return "\n".join(parts)
+
+
+static func get_constraint_text(challenge: ChallengeData) -> String:
+	var parts: PackedStringArray = []
+	for constraint in challenge.constraints:
+		if constraint is NeverMoreThanXCoins:
+			var currency_name: String = Enums.CurrencyType.keys()[constraint.currency_type].to_lower().replace("_", " ")
+			parts.append("Never have more than %d %s" % [constraint.amount, currency_name])
+		elif constraint is NeverLessThanXCoins:
+			var currency_name: String = Enums.CurrencyType.keys()[constraint.currency_type].to_lower().replace("_", " ")
+			parts.append("Never have less than %d %s" % [constraint.amount, currency_name])
+		elif constraint is NeverTouchBucket:
+			parts.append("Never land in bucket %d" % constraint.bucket_index)
+		elif constraint is UpgradesLimited:
+			if constraint.all_upgrades:
+				parts.append("No upgrades")
+			else:
+				var names: PackedStringArray = []
+				for ut in constraint.blocked_upgrades:
+					names.append(Enums.UpgradeType.keys()[ut].to_lower().replace("_", " "))
+				parts.append("No %s upgrades" % ", ".join(names))
+		elif constraint is OnlyOneBoard:
+			var board_name: String = Enums.BoardType.keys()[constraint.board_type].to_lower()
+			parts.append("Only %s board" % board_name)
+	if parts.is_empty():
+		return "None"
+	return "\n".join(parts)
+
+
+static func get_objective_text_for(challenge: ChallengeData) -> String:
+	var parts: PackedStringArray = []
+	for objective in challenge.objectives:
+		if objective is CoinGoal:
+			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
+			if objective.exact:
+				parts.append("Get exactly %d %s" % [objective.amount, currency_name])
+			else:
+				parts.append("Earn %d %s" % [objective.amount, currency_name])
+		elif objective is BoardGoal:
+			var board_name: String = Enums.BoardType.keys()[objective.board_type].to_lower()
+			parts.append("Unlock the %s board" % board_name)
+		elif objective is Survive:
+			parts.append("Survive with %d autodropper(s)" % objective.autodropper_count)
+		elif objective is GetSameBucketXTimes:
+			if objective.in_a_row:
+				parts.append("Hit the same bucket %d times in a row" % objective.times)
+			else:
+				parts.append("Hit the same bucket %d times" % objective.times)
+		elif objective is LandInEveryBucket:
+			parts.append("Land in every bucket")
+		elif objective is EarnWithinXDrops:
 			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
 			parts.append("Earn %d %s in %d drops" % [objective.amount, currency_name, objective.max_drops])
 	return "\n".join(parts)

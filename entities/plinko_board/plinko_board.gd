@@ -42,7 +42,7 @@ var _drop_timer_remaining: float = 0.0
 func _ready() -> void:
 	space_between_pegs = ThemeProvider.theme.space_between_pegs
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
-	multi_drop_count = PrestigeManager.get_multi_drop(board_type)
+	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -164,7 +164,7 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	if not _can_afford(costs):
 		return
 
-	multi_drop_count = PrestigeManager.get_multi_drop(board_type)
+	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
 
 	# First coin — normal queue/immediate path (pays cost once)
 	var coin: Coin = CoinScene.instantiate()

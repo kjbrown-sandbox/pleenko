@@ -19,12 +19,12 @@ func _on_challenge_one_pressed() -> void:
 	challenge.display_name = "Gold Rush"
 	challenge.time_limit_seconds = 60.0
 
-	var goal := ChallengeObjective.CoinGoal.new()
+	var goal := CoinGoal.new()
 	goal.currency_type = Enums.CurrencyType.GOLD_COIN
 	goal.amount = 50
 	challenge.objectives.append(goal)
 
-	var no_upgrades := ChallengeConstraint.UpgradesLimited.new()
+	var no_upgrades := UpgradesLimited.new()
 	no_upgrades.all_upgrades = true
 	challenge.constraints.append(no_upgrades)
 
