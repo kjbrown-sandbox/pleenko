@@ -46,10 +46,17 @@ func setup(camera: Camera3D) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if ModeManager.is_challenges():
+		return
 	if event.is_action_pressed("board_left"):
 		switch_board(_active_index - 1)
 	elif event.is_action_pressed("board_right"):
 		switch_board(_active_index + 1)
+
+
+func set_active_board_ui_visible(visible: bool) -> void:
+	_boards[_active_index].upgrade_section.visible = visible
+	_boards[_active_index].drop_section.visible = visible
 
 
 func get_active_board() -> PlinkoBoard:

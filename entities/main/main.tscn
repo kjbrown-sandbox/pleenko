@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://byxgr86jpb1oy" path="res://entities/main/challenge_hud.gd" id="6_chalhud"]
 [ext_resource type="PackedScene" uid="uid://bnr48yvvij4ge" path="res://entities/icon/icon.tscn" id="6_kg4ji"]
 [ext_resource type="PackedScene" uid="uid://fbw6oy2vcypq" path="res://entities/challenges_menu/challenge_button.tscn" id="9_wdeyu"]
+[ext_resource type="Texture2D" uid="uid://fe1xvs0f4sc0" path="res://assets/icons/right-arrow.png" id="10_arrow"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
@@ -27,8 +28,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.85613, 3.95506)
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=83467021]
 
 [node name="LevelSection" parent="CanvasLayer" unique_id=525858184 instance=ExtResource("3_kg4ji")]
-offset_top = -39.0
-offset_bottom = -39.0
+offset_top = -124.0
+offset_bottom = -124.0
 
 [node name="CoinValues" type="VBoxContainer" parent="CanvasLayer" unique_id=1316177757]
 offset_left = 20.0
@@ -81,6 +82,37 @@ offset_right = -17.0
 offset_bottom = -14.0
 grow_horizontal = 0
 grow_vertical = 0
+
+[node name="ChallengesDownIcon" parent="CanvasLayer" instance=ExtResource("6_kg4ji")]
+visible = false
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -32.0
+offset_top = -78.0
+offset_right = 32.0
+offset_bottom = -14.0
+grow_horizontal = 2
+grow_vertical = 0
+pivot_offset = Vector2(32, 32)
+rotation = 1.5708
+icon_texture = ExtResource("10_arrow")
+
+[node name="ChallengesUpIcon" parent="CanvasLayer" instance=ExtResource("6_kg4ji")]
+visible = false
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -32.0
+offset_top = 14.0
+offset_right = 32.0
+offset_bottom = 78.0
+grow_horizontal = 2
+pivot_offset = Vector2(32, 32)
+rotation = -1.5708
+icon_texture = ExtResource("10_arrow")
 
 [node name="LevelUpDialog" parent="." unique_id=1315791600 instance=ExtResource("3_levelup")]
 
