@@ -58,7 +58,7 @@ func _on_side_button_hover(text: String) -> void:
 func _update_button() -> void:
 	var data: BaseUpgradeData = UpgradeManager.get_upgrade(_upgrade_type)
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
-	var at_max := state.current_cap > 0 and state.level >= state.current_cap
+	var at_max: bool = state.current_cap > 0 and state.level >= state.current_cap
 
 	var display_text: String
 	if at_max:
@@ -77,7 +77,7 @@ func _update_button() -> void:
 	else:
 		fill_bar.set_fill(0.0)
 
-	var is_disabled := not UpgradeManager.can_buy(_board_type, _upgrade_type)
+	var is_disabled: bool = not UpgradeManager.can_buy(_board_type, _upgrade_type)
 	fill_bar.set_main_disabled(is_disabled)
 	fill_bar.apply_fill_colors(is_disabled, at_max)
 
@@ -102,8 +102,8 @@ func _get_currency_name(currency_type: int) -> String:
 
 func _get_purchase_hover_text() -> String:
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
-	var at_max := state.current_cap > 0 and state.level >= state.current_cap
+	var at_max: bool = state.current_cap > 0 and state.level >= state.current_cap
 	if at_max:
 		return ""
-	var currency_name := _get_currency_name(Enums.currency_for_board(_board_type))
+	var currency_name: String = _get_currency_name(Enums.currency_for_board(_board_type))
 	return "Cost: %d %s" % [state.cost, currency_name]

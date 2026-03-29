@@ -2,6 +2,7 @@ class_name BoardManager
 extends Node3D
 
 signal board_switched(board: PlinkoBoard)
+signal board_unlocked(board_type: Enums.BoardType)
 
 const BoardScene: PackedScene = preload("res://entities/plinko_board/plinko_board.tscn")
 
@@ -76,6 +77,7 @@ func unlock_board(type: Enums.BoardType) -> void:
 		if board.board_type == type:
 			return
 	_spawn_board(type)
+	board_unlocked.emit(type)
 
 
 func switch_board(index: int) -> void:

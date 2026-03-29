@@ -11,6 +11,7 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 @onready var level_section = $CanvasLayer/LevelSection
 @onready var challenges_down_icon: TextureButton = $CanvasLayer/ChallengesDownIcon
 @onready var challenges_up_icon: TextureButton = $CanvasLayer/ChallengesUpIcon
+@onready var board_right_icon: MarginContainer = $CanvasLayer/BoardRightIcon
 @onready var challenge_info_panel: ChallengeInfoPanel = $ChallengeInfoPanel
 
 var ChallengeConnector: PackedScene = preload("res://entities/challenges_menu/challenge_connector.tscn")
@@ -19,6 +20,7 @@ var _options_dialog: CanvasLayer
 var _challenge_buttons: Array[ChallengeButton] = []
 var _down_tooltip: Label
 var _up_tooltip: Label
+var _right_tooltip: Label
 
 func _ready() -> void:
 	_setup_environment()
@@ -52,6 +54,8 @@ func _ready() -> void:
 	_setup_nav_icons()
 	ModeManager.mode_changed.connect(_on_mode_changed)
 	PrestigeManager.prestige_claimed.connect(_on_prestige_claimed)
+	board_manager.board_switched.connect(_on_board_switched)
+	board_manager.board_unlocked.connect(_on_board_unlocked)
 
 	if ChallengeManager.is_active_challenge:
 		_setup_challenge()
@@ -60,6 +64,7 @@ func _ready() -> void:
 
 	# Show down-arrow only after save is loaded (prestige state is available)
 	challenges_down_icon.visible = ModeManager.are_challenges_unlocked()
+	_update_board_right_icon()
 
 
 func _setup_environment() -> void:
@@ -215,6 +220,7 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		level_section.visible = false
 		game_timer.visible = false
 		challenges_down_icon.visible = false
+		board_right_icon.visible = false
 		board_manager.set_active_board_ui_visible(false)
 		challenges_up_icon.visible = true
 		challenge_info_panel.visible = true
@@ -228,11 +234,24 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		board_manager.set_active_board_ui_visible(true)
 		challenges_up_icon.visible = false
 		challenge_info_panel.visible = false
+		_update_board_right_icon()
 		_go_back_to_board()
 
 
 func _on_prestige_claimed(_board_type: Enums.BoardType) -> void:
 	challenges_down_icon.visible = true
+
+
+func _on_board_switched(_board: PlinkoBoard) -> void:
+	_update_board_right_icon()
+
+
+func _on_board_unlocked(_board_type: Enums.BoardType) -> void:
+	_update_board_right_icon()
+
+
+func _update_board_right_icon() -> void:
+	board_right_icon.visible = ModeManager.is_main() and board_manager._active_index + 1 < board_manager._boards.size()
 
 
 func _setup_nav_icons() -> void:
@@ -242,12 +261,17 @@ func _setup_nav_icons() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	_down_tooltip = _create_tooltip("Hotkey: Down arrow")
 	_up_tooltip = _create_tooltip("Hotkey: Up arrow")
+	_right_tooltip = _create_tooltip("Hotkey: Right arrow")
 
 	# Position tooltips to the right of each icon
 	challenges_down_icon.mouse_entered.connect(func(): _show_tooltip(_down_tooltip, challenges_down_icon))
 	challenges_down_icon.mouse_exited.connect(func(): _down_tooltip.visible = false)
 	challenges_up_icon.mouse_entered.connect(func(): _show_tooltip(_up_tooltip, challenges_up_icon))
 	challenges_up_icon.mouse_exited.connect(func(): _up_tooltip.visible = false)
+	var right_button: TextureButton = board_right_icon.button
+	right_button.pressed.connect(func(): board_manager.switch_board(board_manager._active_index + 1))
+	right_button.mouse_entered.connect(func(): _show_tooltip(_right_tooltip, right_button))
+	right_button.mouse_exited.connect(func(): _right_tooltip.visible = false)
 
 
 func _create_tooltip(text: String) -> Label:

@@ -259,8 +259,8 @@ func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap
 
 
 func _update_drop_fill() -> void:
-	var can_queue := coin_queue.has_queue() and not coin_queue.is_full()
-	var show_cooldown := is_waiting and not can_queue
+	var can_queue: bool = coin_queue.has_queue() and not coin_queue.is_full()
+	var show_cooldown: bool = is_waiting and not can_queue
 
 	var fill_pct: float
 	if show_cooldown:
@@ -270,14 +270,14 @@ func _update_drop_fill() -> void:
 
 	# Normal drop bar
 	_drop_main.set_fill(fill_pct)
-	var can_drop_normal := _can_afford(_get_drop_costs()) and not show_cooldown
+	var can_drop_normal: bool = _can_afford(_get_drop_costs()) and not show_cooldown
 	_drop_main.set_main_disabled(not can_drop_normal)
 	_drop_main.apply_fill_colors(not can_drop_normal)
 
 	# Advanced drop bar
 	if _drop_advanced.visible:
 		_drop_advanced.set_fill(fill_pct)
-		var can_drop_advanced := _can_afford(_get_advanced_drop_costs()) and not show_cooldown
+		var can_drop_advanced: bool = _can_afford(_get_advanced_drop_costs()) and not show_cooldown
 		_drop_advanced.set_main_disabled(not can_drop_advanced)
 		_drop_advanced.apply_fill_colors(not can_drop_advanced)
 
@@ -481,20 +481,20 @@ func set_autodroppers_visible(vis: bool) -> void:
 
 func _setup_autodropper_buttons(bid: StringName) -> void:
 	var bar = _drop_buttons[bid]
-	var currency_name := _get_currency_name_for_button(bid)
-	var captured_bid := bid
+	var currency_name: String = _get_currency_name_for_button(bid)
+	var captured_bid: StringName = bid
 
 	bar.setup_minus(
 		func(): autodropper_adjust_requested.emit(captured_bid, -1),
 		func() -> String:
-			var total := UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
+			var total: int = UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
 			return "Decrease autodropper for %s\nTotal autodroppers: %d" % [currency_name, total],
 	)
 
 	bar.setup_plus(
 		func(): autodropper_adjust_requested.emit(captured_bid, 1),
 		func() -> String:
-			var total := UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
+			var total: int = UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
 			return "Increase autodropper for %s\nTotal autodroppers: %d" % [currency_name, total],
 	)
 
