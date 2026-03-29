@@ -148,7 +148,7 @@ enum CoinShape { SPHERE, CYLINDER }
 
 # ── Palette resolver ─────────────────────────────────────────────────
 
-func _resolve(source: Palette) -> Color:
+func resolve(source: Palette) -> Color:
 	match source:
 		Palette.BG_1: return bg_shade_1
 		Palette.BG_2: return bg_shade_2
@@ -172,29 +172,29 @@ func _resolve(source: Palette) -> Color:
 # ── Derived colors (resolved from palette assignments) ───────────────
 
 var background_color: Color:
-	get: return _resolve(background_source)
+	get: return resolve(background_source)
 var ambient_light_color: Color:
-	get: return _resolve(ambient_light_source)
+	get: return resolve(ambient_light_source)
 var directional_light_color: Color:
-	get: return _resolve(directional_light_source)
+	get: return resolve(directional_light_source)
 var peg_color: Color:
-	get: return _resolve(peg_color_source)
+	get: return resolve(peg_color_source)
 var high_multiplier_color: Color:
-	get: return _resolve(high_multiplier_source)
+	get: return resolve(high_multiplier_source)
 var normal_text_color: Color:
-	get: return _resolve(normal_text_source)
+	get: return resolve(normal_text_source)
 var at_cap_text_color: Color:
-	get: return _resolve(at_cap_text_source)
+	get: return resolve(at_cap_text_source)
 var button_enabled_color: Color:
-	get: return _resolve(button_enabled_source)
+	get: return resolve(button_enabled_source)
 var button_disabled_color: Color:
-	get: return _resolve(button_disabled_source)
+	get: return resolve(button_disabled_source)
 var button_hovered_color: Color:
-	get: return _resolve(button_hovered_source)
+	get: return resolve(button_hovered_source)
 var button_text_color: Color:
-	get: return _resolve(button_text_source)
+	get: return resolve(button_text_source)
 var button_border_color: Color:
-	get: return _resolve(button_border_source)
+	get: return resolve(button_border_source)
 
 
 # ── Button style helpers ─────────────────────────────────────────────

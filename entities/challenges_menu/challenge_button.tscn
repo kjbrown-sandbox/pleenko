@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://fbw6oy2vcypq"]
+
+[ext_resource type="Script" uid="uid://rt86i7vy1e1x" path="res://entities/challenges_menu/challenge_button.gd" id="1_script"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_diamond"]
+size = Vector3(0.6, 0.6, 0.1)
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_812wr"]
+
+[node name="ChallengeButton" type="Node3D" unique_id=1781855903]
+script = ExtResource("1_script")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=2142155426]
+transform = Transform3D(0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("BoxMesh_diamond")
+
+[node name="Area3D" type="Area3D" parent="." unique_id=279396125]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D" unique_id=1429501701]
+transform = Transform3D(0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0, 0, 1, 0, 0, 0)
+shape = SubResource("SphereShape3D_812wr")

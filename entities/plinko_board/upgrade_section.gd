@@ -16,7 +16,7 @@ func setup(board: PlinkoBoard, board_type: Enums.BoardType) -> void:
 	# Style the hover info label
 	var t: VisualTheme = ThemeProvider.theme
 	hover_info_label.add_theme_font_size_override("font_size", int(t.button_font_size))
-	hover_info_label.add_theme_color_override("font_color", t._resolve(VisualTheme.Palette.BG_5))
+	hover_info_label.add_theme_color_override("font_color", t.resolve(VisualTheme.Palette.BG_5))
 	var font: Font = t.button_font if t.button_font else t.label_font
 	if font:
 		hover_info_label.add_theme_font_override("font", font)

@@ -10,7 +10,7 @@ func _ready() -> void:
 	texture_normal = icon_texture
 	var mat := ShaderMaterial.new()
 	mat.shader = IconTintShader
-	mat.set_shader_parameter("tint_color", ThemeProvider.theme._resolve(color_source))
+	mat.set_shader_parameter("tint_color", ThemeProvider.theme.resolve(color_source))
 	material = mat
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
@@ -22,4 +22,4 @@ func _on_mouse_entered() -> void:
 
 
 func _on_mouse_exited() -> void:
-	(material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme._resolve(color_source))
+	(material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme.resolve(color_source))

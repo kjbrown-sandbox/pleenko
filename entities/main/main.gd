@@ -10,6 +10,8 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 @onready var options_icon: TextureButton = $CanvasLayer/OptionsIcon
 
 var _options_dialog: CanvasLayer
+var _challenge_buttons: Array[ChallengeButton] = []
+var _viewing_challenges := false
 
 func _ready() -> void:
 	_setup_environment()
@@ -17,6 +19,7 @@ func _ready() -> void:
 	coin_values.setup(board_manager)
 	_setup_gear_button()
 	_setup_options_dialog()
+	_collect_challenge_buttons()
 
 	if ChallengeManager.is_active_challenge:
 		_setup_challenge()
@@ -87,7 +90,11 @@ func _on_challenge_failed(reason: String) -> void:
 func _input(event: InputEvent) -> void:
 	if ChallengeManager.is_active_challenge:
 		return
-	if event.is_action_pressed("quicksave"):
+	if event.is_action_pressed("challenges_down") and not _viewing_challenges:
+		_go_to_random_challenge()
+	elif event.is_action_pressed("challenges_up") and _viewing_challenges:
+		_go_back_to_board()
+	elif event.is_action_pressed("quicksave"):
 		SaveManager.save_game()
 	elif event.is_action_pressed("reset_game"):
 		SaveManager.reset_game()
@@ -115,3 +122,26 @@ func _process(_delta: float) -> void:
 	var mins := int(seconds) / 60
 	var secs := int(seconds) % 60
 	game_timer.text = "%d:%02d" % [mins, secs]
+
+
+func _collect_challenge_buttons() -> void:
+	for child in get_children():
+		if child is ChallengeButton:
+			_challenge_buttons.append(child)
+
+
+func _go_to_random_challenge() -> void:
+	if _challenge_buttons.is_empty():
+		return
+	_viewing_challenges = true
+	var button: ChallengeButton = _challenge_buttons.pick_random()
+	var target := Vector3(button.position.x, button.position.y, camera.position.z)
+	var tween := create_tween()
+	tween.tween_property(camera, "position", target, board_manager.camera_tween_duration) \
+		.set_ease(Tween.EASE_IN_OUT) \
+		.set_trans(Tween.TRANS_CUBIC)
+
+
+func _go_back_to_board() -> void:
+	_viewing_challenges = false
+	board_manager._tween_camera_to_active_board()

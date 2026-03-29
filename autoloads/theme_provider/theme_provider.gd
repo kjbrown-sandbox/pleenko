@@ -7,4 +7,5 @@ signal theme_changed
 		if value == null:
 			value = VisualTheme.new()
 		theme = value
+		RenderingServer.set_default_clear_color(theme.background_color)
 		theme_changed.emit()
