@@ -22,6 +22,14 @@ var _up_tooltip: Label
 
 func _ready() -> void:
 	_setup_environment()
+	ModeManager.current_mode = ModeManager.Mode.MAIN
+
+	# Reset state BEFORE board setup so challenges start clean
+	if ChallengeManager.is_active_challenge:
+		SaveManager.reset_state()
+		if SaveManager.has_save():
+			SaveManager.load_prestige_only()
+
 	board_manager.setup(camera)
 	coin_values.setup(board_manager)
 	_setup_gear_button()
@@ -40,8 +48,6 @@ func _ready() -> void:
 			var connector = ChallengeConnector.instantiate()
 			connector.setup(challenge, end)
 			add_child(connector)
-
-
 
 	_setup_nav_icons()
 	ModeManager.mode_changed.connect(_on_mode_changed)
@@ -90,12 +96,6 @@ func _setup_normal() -> void:
 
 func _setup_challenge() -> void:
 	challenge_hud.visible = true
-	SaveManager.reset_state()
-
-	# Load prestige data from save so it carries into challenges
-	if SaveManager.has_save():
-		SaveManager.load_prestige_only()
-
 	ChallengeManager.setup(board_manager)
 	ChallengeManager.challenge_completed.connect(_on_challenge_completed)
 	ChallengeManager.challenge_failed.connect(_on_challenge_failed)
@@ -103,7 +103,6 @@ func _setup_challenge() -> void:
 
 
 func _on_challenge_completed() -> void:
-	challenge_hud.show_result("Challenge Complete!")
 	var challenge := ChallengeManager.get_challenge()
 	# Find the button to get next_challenges
 	var next_ids: Array[String] = []
@@ -112,10 +111,10 @@ func _on_challenge_completed() -> void:
 			next_ids = btn.next_challenges
 			break
 	ChallengeProgressManager.complete_challenge(challenge.id, next_ids, challenge.rewards)
-	# Save challenge progress into existing save (board_manager not available during challenges)
 	SaveManager.save_challenge_progress()
-	await get_tree().create_timer(2.0).timeout
 	ChallengeManager.clear_challenge()
+	challenge_hud.show_result("Challenge Complete!")
+	await get_tree().create_timer(2.0).timeout
 	SaveManager.reset_state()
 	get_tree().reload_current_scene()
 

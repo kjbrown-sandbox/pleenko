@@ -231,6 +231,8 @@ func _setup_survive(objective: Survive) -> void:
 
 
 func _get_board(board_type: Enums.BoardType) -> PlinkoBoard:
+	if not _board_manager:
+		return null
 	for board in _board_manager.get_boards():
 		if board.board_type == board_type:
 			return board

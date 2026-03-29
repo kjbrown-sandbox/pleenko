@@ -314,6 +314,13 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 		if reward.type == RewardData.RewardType.DROP_COINS and reward.target_board == board_type:
 			for i in reward.coin_count:
 				force_drop_coin(reward.coin_type, reward.coin_multiplier)
+		elif reward.type == RewardData.RewardType.UNLOCK_UPGRADE and reward.board_type == board_type:
+			if ChallengeManager.is_active_challenge and not ChallengeManager.is_upgrade_allowed(reward.upgrade_type):
+				# Drop an advanced coin instead of unlocking a blocked upgrade
+				if advanced_bucket_type >= 0:
+					force_drop_coin(advanced_bucket_type, 3)
+				else:
+					force_drop_coin(Enums.currency_for_board(board_type), 3)
 		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET and reward.target_board == board_type:
 			should_show_advanced_buckets = true
 			build_board()

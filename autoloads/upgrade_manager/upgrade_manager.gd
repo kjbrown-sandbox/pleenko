@@ -151,6 +151,8 @@ func force_apply(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 	for reward in rewards:
 		if reward.type == RewardData.RewardType.UNLOCK_UPGRADE:
+			if ChallengeManager.is_active_challenge and not ChallengeManager.is_upgrade_allowed(reward.upgrade_type):
+				continue
 			unlock(reward.board_type, reward.upgrade_type)
 		elif reward.type == RewardData.RewardType.UNLOCK_AUTODROPPER:
 			autodropper_unlocked.emit()
