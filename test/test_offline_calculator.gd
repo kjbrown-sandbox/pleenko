@@ -60,6 +60,7 @@ func _default_board_state(board_type: String, overrides: Dictionary = {}) -> Dic
 		"num_rows": 2,
 		"drop_delay": base_delay,
 		"bucket_value_multiplier": 1,
+		"advanced_coin_multiplier": 2,
 		"distance_for_advanced_buckets": 3,
 		"multi_drop_count": 1,
 	}
@@ -261,26 +262,26 @@ func test_insufficient_currency_limits_drops() -> void:
 
 func test_advanced_drops_earn_advanced_currency() -> void:
 	print("test_advanced_drops_earn_advanced_currency")
-	# GOLD_ADVANCED, 8 rows, advanced buckets visible, coin multiplier = 3
+	# GOLD_ADVANCED, 8 rows, advanced buckets visible, coin multiplier = 2
 	# 9 buckets, distances [4,3,2,1,0,1,2,3,4], advanced_distance=3
 	# Bucket layout: [2 RAW_O, 1 RAW_O, 3 GOLD, 2 GOLD, 1 GOLD, 2 GOLD, 3 GOLD, 1 RAW_O, 2 RAW_O]
 	# Pascal row 8: [1, 8, 28, 56, 70, 56, 28, 8, 1] / 256
 	#
-	# Per-bucket RAW_ORANGE earnings (x3 coin mult):
-	#   b0: (1/256)*2*3=0.0234, b1: (8/256)*1*3=0.0938
-	#   b7: (8/256)*1*3=0.0938, b8: (1/256)*2*3=0.0234
-	#   Total RAW_ORANGE per drop = 0.234375
+	# Per-bucket RAW_ORANGE earnings (x2 coin mult):
+	#   b0: (1/256)*2*2=0.01563, b1: (8/256)*1*2=0.0625
+	#   b7: (8/256)*1*2=0.0625, b8: (1/256)*2*2=0.01563
+	#   Total RAW_ORANGE per drop = 0.15625
 	#
-	# Per-bucket GOLD_COIN earnings (x3 coin mult):
-	#   b2: (28/256)*3*3=0.984, b3: (56/256)*2*3=1.3125, b4: (70/256)*1*3=0.8203
-	#   b5: (56/256)*2*3=1.3125, b6: (28/256)*3*3=0.984
-	#   Total GOLD_COIN per drop = 5.4141
+	# Per-bucket GOLD_COIN earnings (x2 coin mult):
+	#   b2: (28/256)*3*2=0.65625, b3: (56/256)*2*2=0.875, b4: (70/256)*1*2=0.546875
+	#   b5: (56/256)*2*2=0.875, b6: (28/256)*3*2=0.65625
+	#   Total GOLD_COIN per drop = 3.609375
 	#
 	# Cost: 1 RAW_ORANGE per drop (gross). drop_delay=2.0, 1 autodropper, 60s
-	# Batched (10s each, 5 drops/batch): each batch spends up to 5 RAW_ORANGE,
-	# earns some back. Over 6 batches: 5+5+5+5+4+1 = 25 total drops.
-	# RAW_ORANGE: 20 spent, 6 earned back partially across batches → 0
-	# GOLD: 100 + earnings from 25 advanced drops = 235
+	# Batched (10s each, 5 drops/batch): each batch spends up to 5 RAW_ORANGE.
+	# Over 5 batches: 5+5+5+5+3 = 23 total drops (RAW_O runs out in batch 5).
+	# RAW_ORANGE: 20 spent → 0
+	# GOLD: 100 + earnings from 23 advanced drops = 183
 	var state := _make_state({
 		"currency": {
 			"RAW_ORANGE": {"balance": 20, "cap": 50, "cap_raise_level": 0},
@@ -295,7 +296,7 @@ func test_advanced_drops_earn_advanced_currency() -> void:
 	})
 	var result := OfflineCalculator.calculate(state, 60.0)
 	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 0, "raw_orange spent")
-	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 235, "gold earned from advanced")
+	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 183, "gold earned from advanced")
 
 
 func test_input_not_mutated() -> void:
@@ -329,21 +330,10 @@ func test_normal_and_advanced_on_same_board() -> void:
 	# Layout: [2 RAW_O, 1 RAW_O, 3 GOLD, 2 GOLD, 1 GOLD, 2 GOLD, 3 GOLD, 1 RAW_O, 2 RAW_O]
 	# Pascal row 8: [1, 8, 28, 56, 70, 56, 28, 8, 1] / 256
 	#
-	# NORMAL processed first (coin_mult=1):
-	#   30 drops, cost 1 GOLD each
-	#   GOLD per drop: (28*3+56*2+70*1+56*2+28*3)/256 = 462/256 = 1.8047
-	#   RAW_ORANGE per drop: (1*2+8*1+8*1+1*2)/256 = 20/256 = 0.078125
-	#   Net GOLD cost = 1 - 1.8047 < 0 → all affordable, actual=30
-	#   GOLD: 100 - 30 + int(30*1.8047) = 100 - 30 + 54 = 124
-	#   RAW_ORANGE: 0 + int(30*0.078125) = 2
-	#
-	# ADVANCED processed second (coin_mult=3):
-	#   30 potential drops, cost 1 RAW_ORANGE each
-	#   RAW_ORANGE per drop: 0.234375, net cost = 1 - 0.234375 = 0.765625
-	#   max_affordable = floor(2/0.765625) = 2
-	#   actual = min(30, 2) = 2
-	#   RAW_ORANGE: 2 - 2 + int(2*0.234375) = 0
-	#   GOLD: 124 + int(2*5.4141) = 124 + 10 = 134
+	# Both NORMAL and ADVANCED interleave per batch (10s each, 6 batches).
+	# NORMAL: coin_mult=1, cost 1 GOLD. ADVANCED: coin_mult=2, cost 1 RAW_ORANGE.
+	# NORMAL earns RAW_O at 0.078125/drop, giving ADVANCED fuel in later batches.
+	# After all batches: GOLD=131, RAW_ORANGE=0
 	var state := _make_state({
 		"currency": {
 			"RAW_ORANGE": {"balance": 0, "cap": 50, "cap_raise_level": 0},
@@ -357,7 +347,7 @@ func test_normal_and_advanced_on_same_board() -> void:
 		},
 	})
 	var result := OfflineCalculator.calculate(state, 60.0)
-	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 134, "gold from both normal+advanced")
+	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 131, "gold from both normal+advanced")
 	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 0, "raw_orange spent by advanced")
 
 
@@ -365,7 +355,7 @@ func test_normal_drops_earn_advanced_currency() -> void:
 	print("test_normal_drops_earn_advanced_currency")
 	# GOLD_NORMAL on gold board with 8 rows and advanced buckets visible
 	# Same bucket layout as test_normal_and_advanced_on_same_board
-	# coin_multiplier=1 (normal), so RAW_ORANGE earned at 1x not 3x
+	# coin_multiplier=1 (normal), so RAW_ORANGE earned at 1x not 2x
 	# 30 drops, cost 1 GOLD each
 	# GOLD per drop: 462/256 = 1.8047 (net positive, all affordable)
 	# RAW_ORANGE per drop: 20/256 = 0.078125

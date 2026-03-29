@@ -69,6 +69,7 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 
 		var num_rows: int = bs.get("num_rows", 2)
 		var bucket_value_multiplier: int = bs.get("bucket_value_multiplier", 1)
+		var advanced_coin_multiplier: int = bs.get("advanced_coin_multiplier", 2)
 		var distance_for_advanced: int = bs.get("distance_for_advanced_buckets", 3)
 		var multi_drop: int = bs.get("multi_drop_count", 1)
 		var show_advanced: bool = advanced_buckets.get(board_str, false)
@@ -88,7 +89,7 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 			if assignment_type == "ADVANCED" and adv_currency_key == "":
 				continue
 
-			var coin_multiplier: int = 3 if assignment_type == "ADVANCED" else 1
+			var coin_multiplier: int = advanced_coin_multiplier if assignment_type == "ADVANCED" else 1
 			var costs: Array = _get_drop_costs(board_type, assignment_type)
 
 			var earnings_per_drop: Dictionary = {}

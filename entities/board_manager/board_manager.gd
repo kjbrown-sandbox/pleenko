@@ -285,6 +285,7 @@ func serialize() -> Dictionary:
 			"num_rows": board.num_rows,
 			"drop_delay": board.drop_delay,
 			"bucket_value_multiplier": board.bucket_value_multiplier,
+			"advanced_coin_multiplier": board.advanced_coin_multiplier,
 			"distance_for_advanced_buckets": board.distance_for_advanced_buckets,
 			"multi_drop_count": board.multi_drop_count,
 		}
@@ -308,13 +309,16 @@ func deserialize(data: Dictionary) -> void:
 
 	# Build per-board upgrade state for apply_saved_state
 	var advanced_buckets: Dictionary = data.get("advanced_buckets", {})
+	var board_state: Dictionary = data.get("board_state", {})
 	for board in _boards:
 		var board_key: String = Enums.BoardType.keys()[board.board_type]
+		var bs: Dictionary = board_state.get(board_key, {})
 		var upgrade_state := {}
 		for upgrade_type in Enums.UpgradeType.values():
 			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
 			upgrade_state[upgrade_key] = UpgradeManager.get_level(board.board_type, upgrade_type)
 		upgrade_state["show_advanced_buckets"] = advanced_buckets.get(board_key, false)
+		upgrade_state["advanced_coin_multiplier"] = bs.get("advanced_coin_multiplier", 2)
 		board.apply_saved_state(upgrade_state)
 
 	# Restore autodropper state

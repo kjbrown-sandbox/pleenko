@@ -25,6 +25,7 @@ var board_type: Enums.BoardType
 var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
+var advanced_coin_multiplier: int = 2
 var should_show_advanced_buckets: bool = false
 var _has_advanced_drop: bool = false
 var _autodroppers_visible: bool = false
@@ -170,7 +171,7 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	var coin: Coin = CoinScene.instantiate()
 	coin.coin_type = drop_coin_type
 	if drop_coin_type == advanced_bucket_type:
-		coin.multiplier = 3
+		coin.multiplier = advanced_coin_multiplier
 
 	if coin_queue.has_queue() and not coin_queue.is_full():
 		_spend(costs)
@@ -184,7 +185,7 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 		return  # Can't drop right now
 
 	# Extra coins — staggered, bypass queue and cost
-	var mult := 3 if drop_coin_type == advanced_bucket_type else 1
+	var mult := advanced_coin_multiplier if drop_coin_type == advanced_bucket_type else 1
 	for i in range(1, multi_drop_count):
 		get_tree().create_timer(i * 0.15).timeout.connect(
 			force_drop_coin.bind(drop_coin_type, mult)
@@ -312,15 +313,18 @@ func force_drop_coin(type: Enums.CurrencyType, mult: int = 1) -> void:
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 	for reward in rewards:
 		if reward.type == RewardData.RewardType.DROP_COINS and reward.target_board == board_type:
+			var mult := reward.coin_multiplier
+			if reward.coin_type == advanced_bucket_type and mult <= 1:
+				mult = advanced_coin_multiplier
 			for i in reward.coin_count:
-				force_drop_coin(reward.coin_type, reward.coin_multiplier)
+				force_drop_coin(reward.coin_type, mult)
 		elif reward.type == RewardData.RewardType.UNLOCK_UPGRADE and reward.board_type == board_type:
 			if ChallengeManager.is_active_challenge and not ChallengeManager.is_upgrade_allowed(reward.upgrade_type):
 				# Drop an advanced coin instead of unlocking a blocked upgrade
 				if advanced_bucket_type >= 0:
-					force_drop_coin(advanced_bucket_type, 3)
+					force_drop_coin(advanced_bucket_type, advanced_coin_multiplier)
 				else:
-					force_drop_coin(Enums.currency_for_board(board_type), 3)
+					force_drop_coin(Enums.currency_for_board(board_type), advanced_coin_multiplier)
 		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET and reward.target_board == board_type:
 			should_show_advanced_buckets = true
 			build_board()
@@ -523,6 +527,7 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 	num_rows = 2 + add_row_level * 2
 
 	bucket_value_multiplier = 1 + upgrade_state.get("BUCKET_VALUE", 0)
+	advanced_coin_multiplier = upgrade_state.get("advanced_coin_multiplier", 2)
 
 	var drop_rate_level: int = upgrade_state.get("DROP_RATE", 0)
 	for i in drop_rate_level:
