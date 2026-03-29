@@ -9,6 +9,8 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 @onready var game_timer: Label = $CanvasLayer/GameTimer
 @onready var options_icon: TextureButton = $CanvasLayer/OptionsIcon
 
+var ChallengeConnector: PackedScene = preload("res://entities/challenges_menu/challenge_connector.tscn")
+
 var _options_dialog: CanvasLayer
 var _challenge_buttons: Array[ChallengeButton] = []
 var _viewing_challenges := false
@@ -20,6 +22,21 @@ func _ready() -> void:
 	_setup_gear_button()
 	_setup_options_dialog()
 	_collect_challenge_buttons()
+
+	for challenge in _challenge_buttons:
+		for challenge_id in challenge.next_challenges:
+			var end: ChallengeButton = null
+			for c in _challenge_buttons:
+				if c.challenge_ui_name == challenge_id:
+					end = c
+					break
+			if not end:
+				continue
+			var connector = ChallengeConnector.instantiate()
+			connector.setup(challenge, end)
+			add_child(connector)
+
+
 
 	if ChallengeManager.is_active_challenge:
 		_setup_challenge()
