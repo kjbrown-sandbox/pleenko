@@ -95,15 +95,16 @@ func has_prev_group() -> bool:
 	return false
 
 
+@export var challenge_camera_size: float = 9.0
+
 func go_to_default_challenge() -> void:
 	var group := get_active_group()
 	if not group:
 		return
+	_tween_camera_to_group(group)
 	var btn := group.get_earliest_incomplete()
-	if btn:
-		_tween_camera_to_challenge(btn)
-		if _challenge_info_panel and btn.challenge:
-			_challenge_info_panel.show_challenge(btn.challenge)
+	if btn and _challenge_info_panel and btn.challenge:
+		_challenge_info_panel.show_challenge(btn.challenge)
 
 
 func enter_challenges_mode() -> void:
@@ -115,10 +116,8 @@ func enter_challenges_mode() -> void:
 	go_to_default_challenge()
 
 
-@export var challenge_camera_size: float = 6.0
-
-func _tween_camera_to_challenge(btn: ChallengeButton) -> void:
-	var target := Vector3(btn.global_position.x, btn.global_position.y, _camera.position.z)
+func _tween_camera_to_group(group: ChallengeGrouping) -> void:
+	var target := Vector3(group.global_position.x, group.global_position.y, _camera.position.z)
 	var tween := create_tween()
 	tween.tween_property(_camera, "position", target, camera_tween_duration) \
 		.set_ease(Tween.EASE_IN_OUT) \
