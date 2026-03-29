@@ -3,6 +3,7 @@ extends Node3D
 const OptionsDialogScript := preload("res://entities/options_dialog/options_dialog.gd")
 
 @onready var board_manager: BoardManager = $BoardManager
+@onready var challenge_grouping_manager: ChallengeGroupingManager = $ChallengeGroupingManager
 @onready var camera: Camera3D = $Camera3D
 @onready var coin_values = $CanvasLayer/CoinValues
 @onready var challenge_hud = $CanvasLayer/ChallengeHUD
@@ -15,16 +16,11 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 @onready var board_right_icon: MarginContainer = $CanvasLayer/BoardRightIcon
 @onready var challenge_info_panel: ChallengeInfoPanel = $ChallengeInfoPanel
 
-var ChallengeConnector: PackedScene = preload("res://entities/challenges_menu/challenge_connector.tscn")
-
 var _options_dialog: CanvasLayer
-var _challenge_buttons: Array[ChallengeButton] = []
 var _down_tooltip: Label
 var _up_tooltip: Label
 var _left_tooltip: Label
 var _right_tooltip: Label
-var _sorted_challenge_buttons: Array[ChallengeButton] = []
-var _challenge_nav_index: int = 0
 
 func _ready() -> void:
 	_setup_environment()
@@ -37,29 +33,17 @@ func _ready() -> void:
 			SaveManager.load_prestige_only()
 
 	board_manager.setup(camera)
+	challenge_grouping_manager.setup(camera, challenge_info_panel)
 	coin_values.setup(board_manager)
 	_setup_gear_button()
 	_setup_options_dialog()
-	_collect_challenge_buttons()
-
-	for challenge in _challenge_buttons:
-		for challenge_id in challenge.next_challenges:
-			var end: ChallengeButton = null
-			for c in _challenge_buttons:
-				if c.challenge_ui_name == challenge_id:
-					end = c
-					break
-			if not end:
-				continue
-			var connector = ChallengeConnector.instantiate()
-			connector.setup(challenge, end)
-			add_child(connector)
 
 	_setup_nav_icons()
 	ModeManager.mode_changed.connect(_on_mode_changed)
 	PrestigeManager.prestige_claimed.connect(_on_prestige_claimed)
 	board_manager.board_switched.connect(_on_board_switched)
 	board_manager.board_unlocked.connect(_on_board_unlocked)
+	challenge_grouping_manager.group_switched.connect(_on_group_switched)
 
 	if ChallengeManager.is_active_challenge:
 		_setup_challenge()
@@ -99,8 +83,7 @@ func _setup_normal() -> void:
 		SaveManager.load_game()
 		coin_values.refresh_visible_currencies()
 
-	ChallengeProgressManager.initialize(_challenge_buttons)
-	_connect_challenge_buttons()
+	challenge_grouping_manager.update_group_visibility()
 
 
 func _setup_challenge() -> void:
@@ -115,7 +98,7 @@ func _on_challenge_completed() -> void:
 	var challenge := ChallengeManager.get_challenge()
 	# Find the button to get next_challenges
 	var next_ids: Array[String] = []
-	for btn in _challenge_buttons:
+	for btn in challenge_grouping_manager.get_all_challenge_buttons():
 		if btn.challenge == challenge:
 			next_ids = btn.next_challenges
 			break
@@ -173,49 +156,8 @@ func _process(_delta: float) -> void:
 	game_timer.text = "%d:%02d" % [mins, secs]
 
 
-func _collect_challenge_buttons() -> void:
-	for child in get_children():
-		if child is ChallengeButton:
-			_challenge_buttons.append(child)
-
-
-func _go_to_default_challenge() -> void:
-	var btn := ChallengeProgressManager.get_earliest_incomplete(_challenge_buttons)
-	if btn:
-		_tween_camera_to_challenge(btn)
-
-
 func _go_back_to_board() -> void:
 	board_manager._tween_camera_to_active_board()
-
-
-func _tween_camera_to_challenge(btn: ChallengeButton) -> void:
-	var target := Vector3(btn.position.x, btn.position.y, camera.position.z)
-	var tween := create_tween()
-	tween.tween_property(camera, "position", target, board_manager.camera_tween_duration) \
-		.set_ease(Tween.EASE_IN_OUT) \
-		.set_trans(Tween.TRANS_CUBIC)
-
-
-func _connect_challenge_buttons() -> void:
-	for btn in _challenge_buttons:
-		btn.hovered.connect(_on_challenge_hovered)
-		btn.pressed.connect(_on_challenge_pressed.bind(btn))
-
-
-func _on_challenge_hovered(btn: ChallengeButton) -> void:
-	if btn.challenge:
-		challenge_info_panel.show_challenge(btn.challenge)
-
-
-func _on_challenge_pressed(btn: ChallengeButton) -> void:
-	if not btn.challenge:
-		return
-	var state := ChallengeProgressManager.get_state(btn.challenge_ui_name)
-	if state == ChallengeProgressManager.ChallengeState.LOCKED:
-		return
-	ChallengeManager.set_challenge(btn.challenge)
-	get_tree().reload_current_scene.call_deferred()
 
 
 func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
@@ -224,13 +166,11 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		level_section.visible = false
 		game_timer.visible = false
 		challenges_down_icon.visible = false
-		board_right_icon.visible = false
 		board_manager.set_active_board_ui_visible(false)
 		challenges_up_icon.visible = true
 		challenge_info_panel.visible = true
-		challenge_info_panel.show_default(_challenge_buttons)
-		_setup_challenge_nav()
-		_go_to_default_challenge()
+		challenge_grouping_manager.enter_challenges_mode()
+		_update_nav_arrows()
 	else:
 		coin_values.visible = true
 		level_section.visible = true
@@ -245,6 +185,7 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 
 func _on_prestige_claimed(_board_type: Enums.BoardType) -> void:
 	challenges_down_icon.visible = true
+	challenge_grouping_manager.update_group_visibility()
 
 
 func _on_board_switched(_board: PlinkoBoard) -> void:
@@ -255,39 +196,31 @@ func _on_board_unlocked(_board_type: Enums.BoardType) -> void:
 	_update_nav_arrows()
 
 
+func _on_group_switched(_group: ChallengeGrouping) -> void:
+	_update_nav_arrows()
+
+
 func _update_nav_arrows() -> void:
 	if ModeManager.is_main():
 		board_left_icon.visible = board_manager._active_index > 0
 		board_right_icon.visible = board_manager._active_index + 1 < board_manager._boards.size()
 	elif ModeManager.is_challenges():
-		board_left_icon.visible = _challenge_nav_index > 0
-		board_right_icon.visible = false
-
-
-func _setup_challenge_nav() -> void:
-	_sorted_challenge_buttons = _challenge_buttons.duplicate()
-	_sorted_challenge_buttons.sort_custom(func(a: ChallengeButton, b: ChallengeButton) -> bool:
-		return a.position.x < b.position.x
-	)
-	# Start at the earliest incomplete challenge
-	var target := ChallengeProgressManager.get_earliest_incomplete(_challenge_buttons)
-	_challenge_nav_index = 0
-	if target:
-		for i in _sorted_challenge_buttons.size():
-			if _sorted_challenge_buttons[i] == target:
-				_challenge_nav_index = i
-				break
-	_update_nav_arrows()
+		board_left_icon.visible = challenge_grouping_manager.has_prev_group()
+		board_right_icon.visible = challenge_grouping_manager.has_next_group()
 
 
 func _on_left_arrow_pressed() -> void:
 	if ModeManager.is_main():
 		board_manager.switch_board(board_manager._active_index - 1)
 	elif ModeManager.is_challenges():
-		if _challenge_nav_index > 0:
-			_challenge_nav_index -= 1
-			_tween_camera_to_challenge(_sorted_challenge_buttons[_challenge_nav_index])
-			_update_nav_arrows()
+		challenge_grouping_manager.switch_to_prev_group()
+
+
+func _on_right_arrow_pressed() -> void:
+	if ModeManager.is_main():
+		board_manager.switch_board(board_manager._active_index + 1)
+	elif ModeManager.is_challenges():
+		challenge_grouping_manager.switch_to_next_group()
 
 
 func _setup_nav_icons() -> void:
@@ -313,7 +246,7 @@ func _setup_nav_icons() -> void:
 	left_button.mouse_exited.connect(func(): _left_tooltip.visible = false)
 
 	var right_button: TextureButton = board_right_icon.button
-	right_button.pressed.connect(func(): board_manager.switch_board(board_manager._active_index + 1))
+	right_button.pressed.connect(_on_right_arrow_pressed)
 	right_button.mouse_entered.connect(func(): _show_tooltip(_right_tooltip, right_button))
 	right_button.mouse_exited.connect(func(): _right_tooltip.visible = false)
 

@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://b5red_group_00001"]
+
+[ext_resource type="Script" path="res://entities/challenge_grouping/challenge_grouping.gd" id="1_grouping"]
+
+[node name="ChallengeGroupRed" type="Node3D"]
+script = ExtResource("1_grouping")
+board_type = 2
