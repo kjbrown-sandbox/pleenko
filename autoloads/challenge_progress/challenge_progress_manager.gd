@@ -51,6 +51,14 @@ func get_bonus_multi_drop(board_type: Enums.BoardType) -> int:
 	return bonus
 
 
+func get_advanced_coin_multiplier_bonus(board_type: Enums.BoardType) -> float:
+	var bonus := 0.0
+	for mod in _starting_modifiers:
+		if mod.modifier_type == ChallengeRewardData.ModifierType.ADVANCED_COIN_MULTIPLIER and mod.board_type == board_type:
+			bonus += mod.modifier_amount
+	return bonus
+
+
 func get_earliest_incomplete(buttons: Array[ChallengeButton]) -> ChallengeButton:
 	for btn in buttons:
 		var state := get_state(btn.challenge_ui_name)
@@ -108,7 +116,7 @@ func serialize() -> Dictionary:
 		modifiers_data.append({
 			"type": mod.type,
 			"modifier_type": mod.modifier_type,
-			"modifier_amount": mod.modifier_amount,
+			"modifier_amount": float(mod.modifier_amount),
 			"currency_type": mod.currency_type,
 			"board_type": mod.board_type,
 		})

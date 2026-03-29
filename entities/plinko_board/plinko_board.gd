@@ -25,7 +25,7 @@ var board_type: Enums.BoardType
 var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
-var advanced_coin_multiplier: int = 2
+var advanced_coin_multiplier: float = 2.0
 var should_show_advanced_buckets: bool = false
 var _has_advanced_drop: bool = false
 var _autodroppers_visible: bool = false
@@ -185,7 +185,7 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 		return  # Can't drop right now
 
 	# Extra coins — staggered, bypass queue and cost
-	var mult := advanced_coin_multiplier if drop_coin_type == advanced_bucket_type else 1
+	var mult: float = advanced_coin_multiplier if drop_coin_type == advanced_bucket_type else 1.0
 	for i in range(1, multi_drop_count):
 		get_tree().create_timer(i * 0.15).timeout.connect(
 			force_drop_coin.bind(drop_coin_type, mult)
@@ -286,7 +286,7 @@ func _update_drop_fill() -> void:
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
 	var bucket_idx := _get_bucket_index(bucket)
-	var amount = bucket.value * coin.multiplier
+	var amount: int = roundi(bucket.value * coin.multiplier)
 	CurrencyManager.add(bucket.currency_type, amount)
 	coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount)
 	bucket.pulse()
@@ -527,7 +527,7 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 	num_rows = 2 + add_row_level * 2
 
 	bucket_value_multiplier = 1 + upgrade_state.get("BUCKET_VALUE", 0)
-	advanced_coin_multiplier = upgrade_state.get("advanced_coin_multiplier", 2)
+	advanced_coin_multiplier = upgrade_state.get("advanced_coin_multiplier", 2.0) + ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board_type)
 
 	var drop_rate_level: int = upgrade_state.get("DROP_RATE", 0)
 	for i in drop_rate_level:

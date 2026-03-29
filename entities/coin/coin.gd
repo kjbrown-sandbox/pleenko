@@ -7,7 +7,7 @@ var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
 		coin_type = value
 		if is_node_ready():
 			_apply_visuals()
-var multiplier: int = 1
+var multiplier: float = 1.0
 
 func _ready() -> void:
 	_apply_visuals()
