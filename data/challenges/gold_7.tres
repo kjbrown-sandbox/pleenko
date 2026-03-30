@@ -1,16 +1,15 @@
-[gd_resource type="Resource" script_class="ChallengeData" format=3 uid="uid://dvdgjv1yxr0dg"]
+[gd_resource type="Resource" script_class="ChallengeData" format=3 uid="uid://crdaxtxdqmc14"]
 
-[ext_resource type="Script" uid="uid://cprkqdv24lv2s" path="res://autoloads/challenge_manager/challenge_constraint.gd" id="1_2r86p"]
+[ext_resource type="Script" uid="uid://cprkqdv24lv2s" path="res://autoloads/challenge_manager/challenge_constraint.gd" id="1_con"]
 [ext_resource type="Script" uid="uid://co7w0klc1bfgq" path="res://autoloads/challenge_manager/challenge_data.gd" id="1_data"]
 [ext_resource type="Script" uid="uid://u0aimm0ql1ts" path="res://autoloads/challenge_manager/objectives/coin_goal.gd" id="2_obj"]
-[ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_uuavm"]
+[ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_obj_base"]
 [ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
-[ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_g5f6t"]
+[ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_start"]
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
-amount = 50
-exact = true
+amount = 100
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
@@ -21,8 +20,8 @@ description = "+0.5 advanced coin multiplier to gold"
 
 [resource]
 script = ExtResource("1_data")
-id = "gold_4"
-display_name = "Precision Drop"
-time_limit_seconds = 90.0
-objectives = Array[ExtResource("2_uuavm")]([SubResource("objective_1")])
+id = "gold_7"
+display_name = "Gold Hoarder"
+time_limit_seconds = 60.0
+objectives = Array[ExtResource("2_obj_base")]([SubResource("objective_1")])
 rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])

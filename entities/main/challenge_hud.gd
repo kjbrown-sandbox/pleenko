@@ -6,6 +6,7 @@ var _is_running: bool = false
 @onready var _timer_label: Label = $TimerLabel
 @onready var _objective_label: Label = $ObjectiveLabel
 @onready var _result_label: Label = $ResultLabel
+var _progress_label: Label
 
 
 func start(challenge: ChallengeData) -> void:
@@ -13,7 +14,18 @@ func start(challenge: ChallengeData) -> void:
 	_result_label.visible = false
 	_objective_label.text = ChallengeManager.get_objective_text()
 	_time_remaining = challenge.time_limit_seconds
+
+	# Create progress label between objective and result
+	if not _progress_label:
+		_progress_label = Label.new()
+		_progress_label.name = "ProgressLabel"
+		_progress_label.add_theme_font_size_override("font_size", 24)
+		_progress_label.visible = false
+		add_child(_progress_label)
+		move_child(_progress_label, _objective_label.get_index() + 1)
+
 	_update_timer_display()
+	_update_progress()
 
 
 func _process(_delta: float) -> void:
@@ -21,12 +33,19 @@ func _process(_delta: float) -> void:
 		return
 	_time_remaining = ChallengeManager.get_time_remaining()
 	_update_timer_display()
+	_update_progress()
 
 
 func _update_timer_display() -> void:
 	var minutes := int(_time_remaining) / 60
 	var seconds := int(_time_remaining) % 60
 	_timer_label.text = "%d:%02d" % [minutes, seconds]
+
+
+func _update_progress() -> void:
+	var progress := ChallengeManager.get_objective_progress()
+	_progress_label.text = progress
+	_progress_label.visible = progress != ""
 
 
 func show_result(text: String) -> void:

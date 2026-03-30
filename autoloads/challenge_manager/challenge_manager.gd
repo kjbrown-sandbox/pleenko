@@ -187,6 +187,8 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 		return balance >= objective.amount
 
 	elif objective is BoardGoal:
+		if not _board_manager:
+			return false
 		return _board_manager.is_board_unlocked(objective.board_type)
 
 	elif objective is Survive:
@@ -311,6 +313,20 @@ func get_objective_text() -> String:
 		elif objective is EarnWithinXDrops:
 			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
 			parts.append("Earn %d %s in %d drops" % [objective.amount, currency_name, objective.max_drops])
+	return "\n".join(parts)
+
+
+func get_objective_progress() -> String:
+	if not is_active_challenge:
+		return ""
+	var parts: PackedStringArray = []
+	for objective in _challenge.objectives:
+		if objective is GetSameBucketXTimes:
+			var best: int = 0
+			for key in _bucket_hits:
+				if key.begins_with("%d_" % objective.board_type):
+					best = maxi(best, _bucket_hits[key])
+			parts.append("%d / %d" % [best, objective.times])
 	return "\n".join(parts)
 
 
