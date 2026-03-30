@@ -54,6 +54,11 @@ func setup(board_manager: BoardManager) -> void:
 	# Apply starting conditions
 	_apply_starting_conditions()
 
+	# Mark target buckets for HitXBucketYTimes objectives
+	for objective in _challenge.objectives:
+		if objective is HitXBucketYTimes:
+			_mark_target_bucket(objective)
+
 	# Force-start autodroppers for Survive objectives
 	for objective in _challenge.objectives:
 		if objective is Survive:
@@ -135,8 +140,8 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 func _on_board_rebuilt(board: PlinkoBoard) -> void:
 	if not is_active_challenge:
 		return
-	# Re-mark hit buckets after board rebuild (e.g. buying bucket value)
 	for objective in _challenge.objectives:
+		# Re-mark hit buckets after board rebuild (e.g. buying bucket value)
 		if objective is LandInEveryBucket and objective.board_type == board.board_type:
 			var bucket_count: int = board.num_rows + 1
 			for i in bucket_count:
@@ -145,6 +150,17 @@ func _on_board_rebuilt(board: PlinkoBoard) -> void:
 					var bucket := board.get_bucket(i)
 					if bucket:
 						bucket.mark_hit()
+		# Re-mark target bucket for HitXBucketYTimes
+		elif objective is HitXBucketYTimes and objective.board_type == board.board_type:
+			_mark_target_bucket(objective)
+
+
+func _mark_target_bucket(objective: HitXBucketYTimes) -> void:
+	var board := _get_board(objective.board_type)
+	if board:
+		var bucket := board.get_bucket(objective.bucket_index)
+		if bucket:
+			bucket.mark_hit()
 
 
 func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
@@ -204,6 +220,10 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 					if _bucket_hits[key] >= objective.times:
 						return true
 			return false
+
+	elif objective is HitXBucketYTimes:
+		var key := "%d_%d" % [objective.board_type, objective.bucket_index]
+		return _bucket_hits.get(key, 0) >= objective.times
 
 	elif objective is LandInEveryBucket:
 		var board := _get_board(objective.board_type)
@@ -295,9 +315,9 @@ func get_objective_text() -> String:
 		if objective is CoinGoal:
 			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
 			if objective.exact:
-				parts.append("Get exactly %d %s" % [objective.amount, currency_name])
+				parts.append("Get exactly %d %ss" % [objective.amount, currency_name])
 			else:
-				parts.append("Earn %d %s" % [objective.amount, currency_name])
+				parts.append("Earn %d %ss" % [objective.amount, currency_name])
 		elif objective is BoardGoal:
 			var board_name: String = Enums.BoardType.keys()[objective.board_type].to_lower()
 			parts.append("Unlock the %s board" % board_name)
@@ -308,6 +328,8 @@ func get_objective_text() -> String:
 				parts.append("Hit the same bucket %d times in a row" % objective.times)
 			else:
 				parts.append("Hit the same bucket %d times" % objective.times)
+		elif objective is HitXBucketYTimes:
+			parts.append("Land a coin in the target bucket %d times" % objective.times)
 		elif objective is LandInEveryBucket:
 			parts.append("Land in every bucket")
 		elif objective is EarnWithinXDrops:
@@ -327,6 +349,10 @@ func get_objective_progress() -> String:
 				if key.begins_with("%d_" % objective.board_type):
 					best = maxi(best, _bucket_hits[key])
 			parts.append("%d / %d" % [best, objective.times])
+		elif objective is HitXBucketYTimes:
+			var key := "%d_%d" % [objective.board_type, objective.bucket_index]
+			var hits: int = _bucket_hits.get(key, 0)
+			parts.append("%d / %d" % [hits, objective.times])
 	return "\n".join(parts)
 
 
@@ -376,6 +402,8 @@ static func get_objective_text_for(challenge: ChallengeData) -> String:
 				parts.append("Hit the same bucket %d times in a row" % objective.times)
 			else:
 				parts.append("Hit the same bucket %d times" % objective.times)
+		elif objective is HitXBucketYTimes:
+			parts.append("Land a coin in the target bucket %d times" % objective.times)
 		elif objective is LandInEveryBucket:
 			parts.append("Land in every bucket")
 		elif objective is EarnWithinXDrops:

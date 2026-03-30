@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://co7w0klc1bfgq" path="res://autoloads/challenge_manager/challenge_data.gd" id="1_data"]
 [ext_resource type="Script" uid="uid://cprkqdv24lv2s" path="res://autoloads/challenge_manager/challenge_constraint.gd" id="1_htccn"]
 [ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_m6c1v"]
-[ext_resource type="Script" uid="uid://b4bitxegl3hb" path="res://autoloads/challenge_manager/objectives/get_same_bucket_x_times.gd" id="2_obj"]
+[ext_resource type="Script" uid="uid://yx435vkk7ost" path="res://autoloads/challenge_manager/objectives/hit_x_bucket_y_times.gd" id="2_obj"]
 [ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
 [ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_rs48w"]
 [ext_resource type="Script" uid="uid://d2im52kpqsq1i" path="res://autoloads/challenge_manager/constraints/upgrades_limited.gd" id="7_con"]
@@ -15,7 +15,8 @@ blocked_upgrades = Array[int]([0])
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
-times = 30
+bucket_index = 3
+times = 15
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
