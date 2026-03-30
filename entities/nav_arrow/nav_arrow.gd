@@ -24,8 +24,12 @@ func setup(_rotation_angle: float) -> void:
 
 
 func _apply_rotation() -> void:
-	if rotation_angle != 0.0:
-		pivot_offset = size / 2.0
+	if rotation_angle == 0.0:
+		return
+	pivot_offset = size / 2.0
+	if absf(rotation_angle - PI) < 0.01 or absf(rotation_angle + PI) < 0.01:
+		flip_h = true
+	else:
 		rotation = rotation_angle
 
 

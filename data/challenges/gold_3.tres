@@ -6,6 +6,12 @@
 [ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_of83a"]
 [ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
 [ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_dovvo"]
+[ext_resource type="Script" uid="uid://d2im52kpqsq1i" path="res://autoloads/challenge_manager/constraints/upgrades_limited.gd" id="7_con"]
+[ext_resource type="Script" uid="uid://ck6ikghmwasmr" path="res://autoloads/challenge_manager/starting_conditions/starting_boards.gd" id="8_start"]
+
+[sub_resource type="Resource" id="constraint_1"]
+script = ExtResource("7_con")
+blocked_upgrades = Array[int]([0])
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
@@ -17,10 +23,16 @@ modifier_type = 3
 modifier_amount = 0.5
 description = "+0.5 advanced coin multiplier to gold"
 
+[sub_resource type="Resource" id="starting_1"]
+script = ExtResource("8_start")
+rows = 6
+
 [resource]
 script = ExtResource("1_data")
 id = "gold_3"
 display_name = "Bucket Hunter"
 time_limit_seconds = 120.0
 objectives = Array[ExtResource("2_of83a")]([SubResource("objective_1")])
+constraints = Array[ExtResource("1_nw500")]([SubResource("constraint_1")])
+starting_conditions = Array[ExtResource("6_dovvo")]([SubResource("starting_1")])
 rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])
