@@ -82,6 +82,7 @@ func _setup_normal() -> void:
 	if SaveManager.has_save():
 		SaveManager.load_game()
 		coin_values.refresh_visible_currencies()
+		challenge_grouping_manager.refresh_challenge_progress()
 
 	challenge_grouping_manager.update_group_visibility()
 

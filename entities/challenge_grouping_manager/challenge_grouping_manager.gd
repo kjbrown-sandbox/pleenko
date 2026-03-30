@@ -151,6 +151,11 @@ func _on_challenge_pressed(btn: ChallengeButton) -> void:
 	get_tree().reload_current_scene.call_deferred()
 
 
+func refresh_challenge_progress() -> void:
+	for group in _groups:
+		group.initialize_progress()
+
+
 func update_group_visibility() -> void:
 	for i in _groups.size():
 		_groups[i].visible = _is_group_unlocked(i)
