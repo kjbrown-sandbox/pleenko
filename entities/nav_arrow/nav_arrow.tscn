@@ -1,18 +1,12 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://x8pe2anpsxj2"]
 
-[ext_resource type="Script" path="res://entities/nav_arrow/nav_arrow.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://dn6hn8umf544s" path="res://entities/nav_arrow/nav_arrow.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://fe1xvs0f4sc0" path="res://assets/icons/right-arrow.png" id="2_arrow"]
 
-[node name="NavArrow" type="MarginContainer"]
-script = ExtResource("1_script")
-icon_texture = ExtResource("2_arrow")
-
-[node name="Button" type="TextureButton" parent="."]
+[node name="NavArrow" type="TextureButton" unique_id=990876469]
 texture_filter = 1
-layout_mode = 2
 custom_minimum_size = Vector2(32, 32)
-size_flags_horizontal = 8
-size_flags_vertical = 4
+script = ExtResource("1_script")
 texture_normal = ExtResource("2_arrow")
 ignore_texture_size = true
 stretch_mode = 0

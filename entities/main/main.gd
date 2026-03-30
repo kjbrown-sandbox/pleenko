@@ -10,10 +10,10 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 @onready var game_timer: Label = $CanvasLayer/GameTimer
 @onready var options_icon: TextureButton = $CanvasLayer/OptionsIcon
 @onready var level_section = $CanvasLayer/LevelSection
-@onready var challenges_down_icon: MarginContainer = $CanvasLayer/ChallengesDownIcon
-@onready var challenges_up_icon: MarginContainer = $CanvasLayer/ChallengesUpIcon
-@onready var board_left_icon: MarginContainer = $CanvasLayer/BoardLeftIcon
-@onready var board_right_icon: MarginContainer = $CanvasLayer/BoardRightIcon
+@onready var challenges_down_icon: TextureButton = $CanvasLayer/ChallengesDownIcon
+@onready var challenges_up_icon: TextureButton = $CanvasLayer/ChallengesUpIcon
+@onready var board_left_icon: TextureButton = $CanvasLayer/BoardLeftIcon
+@onready var board_right_icon: TextureButton = $CanvasLayer/BoardRightIcon
 @onready var challenge_info_panel: ChallengeInfoPanel = $ChallengeInfoPanel
 
 var _options_dialog: CanvasLayer
@@ -231,25 +231,26 @@ func _setup_nav_icons() -> void:
 	_left_tooltip = _create_tooltip("Hotkey: Left arrow")
 	_right_tooltip = _create_tooltip("Hotkey: Right arrow")
 
-	var down_button: TextureButton = challenges_down_icon.button
-	down_button.pressed.connect(func(): ModeManager.switch_to_challenges())
-	down_button.mouse_entered.connect(func(): _show_tooltip(_down_tooltip, down_button))
-	down_button.mouse_exited.connect(func(): _down_tooltip.visible = false)
+	challenges_down_icon.setup(PI / 2.0)
+	challenges_up_icon.setup(-PI / 2.0)
+	board_left_icon.setup(PI)
+	board_right_icon.setup(0.0)
 
-	var up_button: TextureButton = challenges_up_icon.button
-	up_button.pressed.connect(func(): ModeManager.switch_to_main())
-	up_button.mouse_entered.connect(func(): _show_tooltip(_up_tooltip, up_button))
-	up_button.mouse_exited.connect(func(): _up_tooltip.visible = false)
+	challenges_down_icon.pressed.connect(func(): ModeManager.switch_to_challenges())
+	challenges_down_icon.mouse_entered.connect(func(): _show_tooltip(_down_tooltip, challenges_down_icon))
+	challenges_down_icon.mouse_exited.connect(func(): _down_tooltip.visible = false)
 
-	var left_button: TextureButton = board_left_icon.button
-	left_button.pressed.connect(_on_left_arrow_pressed)
-	left_button.mouse_entered.connect(func(): _show_tooltip(_left_tooltip, left_button))
-	left_button.mouse_exited.connect(func(): _left_tooltip.visible = false)
+	challenges_up_icon.pressed.connect(func(): ModeManager.switch_to_main())
+	challenges_up_icon.mouse_entered.connect(func(): _show_tooltip(_up_tooltip, challenges_up_icon))
+	challenges_up_icon.mouse_exited.connect(func(): _up_tooltip.visible = false)
 
-	var right_button: TextureButton = board_right_icon.button
-	right_button.pressed.connect(_on_right_arrow_pressed)
-	right_button.mouse_entered.connect(func(): _show_tooltip(_right_tooltip, right_button))
-	right_button.mouse_exited.connect(func(): _right_tooltip.visible = false)
+	board_left_icon.pressed.connect(_on_left_arrow_pressed)
+	board_left_icon.mouse_entered.connect(func(): _show_tooltip(_left_tooltip, board_left_icon))
+	board_left_icon.mouse_exited.connect(func(): _left_tooltip.visible = false)
+
+	board_right_icon.pressed.connect(_on_right_arrow_pressed)
+	board_right_icon.mouse_entered.connect(func(): _show_tooltip(_right_tooltip, board_right_icon))
+	board_right_icon.mouse_exited.connect(func(): _right_tooltip.visible = false)
 
 
 func _create_tooltip(text: String) -> Label:

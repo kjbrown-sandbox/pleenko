@@ -1,39 +1,38 @@
-extends MarginContainer
+extends TextureButton
 
 const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
 
-@onready var button: TextureButton = $Button
-
-@export var icon_texture: Texture2D
 @export var color_source: VisualTheme.Palette = VisualTheme.Palette.BG_5
-## Rotation in radians applied to the button. 0 = right, PI/2 = down, -PI/2 = up, PI = left.
+## Rotation in radians applied to the icon. 0 = right, PI/2 = down, -PI/2 = up, PI = left.
 @export var rotation_angle: float = 0.0
 
 
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	add_theme_constant_override("margin_left", t.hud_margin)
-	add_theme_constant_override("margin_right", t.hud_margin)
-	add_theme_constant_override("margin_top", t.hud_margin)
-	add_theme_constant_override("margin_bottom", t.hud_margin)
-
-	if rotation_angle != 0.0:
-		button.pivot_offset = button.custom_minimum_size / 2.0
-		button.rotation = rotation_angle
-
-	button.texture_normal = icon_texture
 	var mat := ShaderMaterial.new()
 	mat.shader = IconTintShader
 	mat.set_shader_parameter("tint_color", t.resolve(color_source))
-	button.material = mat
-	button.mouse_entered.connect(_on_mouse_entered)
-	button.mouse_exited.connect(_on_mouse_exited)
+	material = mat
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
+	_apply_rotation.call_deferred()
+
+
+func setup(_rotation_angle: float) -> void:
+	rotation_angle = _rotation_angle
+	_apply_rotation.call_deferred()
+
+
+func _apply_rotation() -> void:
+	if rotation_angle != 0.0:
+		pivot_offset = size / 2.0
+		rotation = rotation_angle
 
 
 func _on_mouse_entered() -> void:
-	ThemeProvider.theme.pulse_control(button)
-	(button.material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme.normal_text_color)
+	ThemeProvider.theme.pulse_control(self)
+	(material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme.normal_text_color)
 
 
 func _on_mouse_exited() -> void:
-	(button.material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme.resolve(color_source))
+	(material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme.resolve(color_source))
