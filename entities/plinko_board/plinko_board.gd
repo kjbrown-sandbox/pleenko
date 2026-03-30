@@ -302,6 +302,13 @@ func _get_bucket_index(bucket: Bucket) -> int:
 	return children.find(bucket)
 
 
+func get_bucket(index: int) -> Bucket:
+	var children := buckets_container.get_children()
+	if index >= 0 and index < children.size():
+		return children[index]
+	return null
+
+
 func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0) -> void:
 	var coin = CoinScene.instantiate()
 	coin.board = self
@@ -360,6 +367,7 @@ func build_board() -> void:
 		child.queue_free()
 
 	for child in buckets_container.get_children():
+		buckets_container.remove_child(child)
 		child.queue_free()
 
 	var t: VisualTheme = ThemeProvider.theme

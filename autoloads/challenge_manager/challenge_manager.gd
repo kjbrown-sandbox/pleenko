@@ -63,6 +63,7 @@ func setup(board_manager: BoardManager) -> void:
 func _connect_board(board: PlinkoBoard) -> void:
 	board.coin_landed.connect(_on_coin_landed)
 	board.autodrop_failed.connect(_on_autodrop_failed)
+	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 
 
 func _on_board_switched(_board: PlinkoBoard) -> void:
@@ -95,7 +96,18 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 
 	# Track bucket hits
 	var key := "%d_%d" % [board_type, bucket_index]
+	var first_hit := not _bucket_hits.has(key)
 	_bucket_hits[key] = _bucket_hits.get(key, 0) + 1
+
+	# Mark bucket visually for LandInEveryBucket objectives
+	if first_hit:
+		for objective in _challenge.objectives:
+			if objective is LandInEveryBucket and objective.board_type == board_type:
+				var board := _get_board(board_type)
+				if board:
+					var bucket := board.get_bucket(bucket_index)
+					if bucket:
+						bucket.mark_hit()
 
 	# Track streaks
 	var last: int = _last_bucket.get(board_type, -1)
@@ -118,6 +130,21 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 
 	# Check objectives
 	_check_objectives()
+
+
+func _on_board_rebuilt(board: PlinkoBoard) -> void:
+	if not is_active_challenge:
+		return
+	# Re-mark hit buckets after board rebuild (e.g. buying bucket value)
+	for objective in _challenge.objectives:
+		if objective is LandInEveryBucket and objective.board_type == board.board_type:
+			var bucket_count: int = board.num_rows + 1
+			for i in bucket_count:
+				var key := "%d_%d" % [board.board_type, i]
+				if _bucket_hits.has(key):
+					var bucket := board.get_bucket(i)
+					if bucket:
+						bucket.mark_hit()
 
 
 func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
@@ -367,4 +394,7 @@ func clear_challenge() -> void:
 				board.coin_landed.disconnect(_on_coin_landed)
 			if board.autodrop_failed.is_connected(_on_autodrop_failed):
 				board.autodrop_failed.disconnect(_on_autodrop_failed)
+			for conn in board.board_rebuilt.get_connections():
+				if conn["callable"].get_method() == "_on_board_rebuilt":
+					board.board_rebuilt.disconnect(conn["callable"])
 	_board_manager = null

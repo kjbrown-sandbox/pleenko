@@ -9,6 +9,7 @@ extends Node3D
 
 var currency_type: Enums.CurrencyType
 var _base_material: StandardMaterial3D
+var _is_hit: bool = false
 
 func _ready() -> void:
 	$BucketValue.text = str(value)
@@ -35,6 +36,17 @@ func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) ->
 			label.font = t.label_font
 
 
+func mark_hit() -> void:
+	_is_hit = true
+	var t: VisualTheme = ThemeProvider.theme
+	var hit_color := t.resolve(VisualTheme.Palette.BG_6)
+	if _base_material:
+		_base_material.albedo_color = hit_color
+	var label := get_node_or_null("BucketValue") as Label3D
+	if label:
+		label.modulate = hit_color
+
+
 func pulse() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 
@@ -42,9 +54,10 @@ func pulse() -> void:
 	if _base_material:
 		var flash_color := t.get_coin_color_light(currency_type)
 		_base_material.albedo_color = flash_color
+		var rest_color: Color = t.resolve(VisualTheme.Palette.BG_6) if _is_hit else t.get_bucket_color(currency_type)
 		var color_tween := create_tween()
 		color_tween.tween_property(_base_material, "albedo_color",
-			t.get_bucket_color(currency_type), t.bucket_pulse_duration) \
+			rest_color, t.bucket_pulse_duration) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 
 	# Scale pop
