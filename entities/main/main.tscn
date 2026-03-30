@@ -88,6 +88,7 @@ grow_horizontal = 0
 grow_vertical = 0
 
 [node name="ChallengesDownIcon" parent="CanvasLayer" unique_id=1543464600 instance=ExtResource("17_navarrow")]
+visible = false
 texture_filter = 0
 custom_minimum_size = Vector2(0, 0)
 anchors_preset = 7
@@ -96,14 +97,14 @@ anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
 offset_left = -16.0
-offset_top = -16.0
+offset_top = -32.0
 offset_right = 16.0
-offset_bottom = 16.0
 grow_horizontal = 2
 grow_vertical = 0
 rotation_angle = 3.0
 
 [node name="ChallengesUpIcon" parent="CanvasLayer" unique_id=2081979746 instance=ExtResource("17_navarrow")]
+visible = false
 texture_filter = 0
 custom_minimum_size = Vector2(0, 0)
 anchors_preset = 5
@@ -116,6 +117,7 @@ grow_horizontal = 2
 rotation_angle = -1.5708
 
 [node name="BoardLeftIcon" parent="CanvasLayer" unique_id=1333567701 instance=ExtResource("17_navarrow")]
+visible = false
 texture_filter = 0
 custom_minimum_size = Vector2(0, 0)
 anchors_preset = 4
@@ -128,6 +130,7 @@ grow_vertical = 2
 rotation_angle = 3.14159
 
 [node name="BoardRightIcon" parent="CanvasLayer" unique_id=383221458 instance=ExtResource("17_navarrow")]
+visible = false
 texture_filter = 0
 custom_minimum_size = Vector2(0, 0)
 anchors_preset = 6
@@ -135,9 +138,8 @@ anchor_left = 1.0
 anchor_top = 0.5
 anchor_right = 1.0
 anchor_bottom = 0.5
-offset_left = -16.0
+offset_left = -32.0
 offset_top = -16.0
-offset_right = 16.0
 offset_bottom = 16.0
 grow_horizontal = 0
 grow_vertical = 2

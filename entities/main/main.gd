@@ -236,6 +236,16 @@ func _setup_nav_icons() -> void:
 	board_left_icon.setup(PI)
 	board_right_icon.setup(0.0)
 
+	var m := t.hud_margin
+	challenges_down_icon.offset_top -= m
+	challenges_down_icon.offset_bottom -= m
+	challenges_up_icon.offset_top += m
+	challenges_up_icon.offset_bottom += m
+	board_left_icon.offset_left += m
+	board_left_icon.offset_right += m
+	board_right_icon.offset_left -= m
+	board_right_icon.offset_right -= m
+
 	challenges_down_icon.pressed.connect(func(): ModeManager.switch_to_challenges())
 	challenges_down_icon.mouse_entered.connect(func(): _show_tooltip(_down_tooltip, challenges_down_icon))
 	challenges_down_icon.mouse_exited.connect(func(): _down_tooltip.visible = false)
