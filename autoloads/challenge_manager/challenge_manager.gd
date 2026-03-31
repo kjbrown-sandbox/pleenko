@@ -409,34 +409,7 @@ func is_board_allowed(board_type: Enums.BoardType) -> bool:
 
 
 func get_objective_text() -> String:
-	var parts: PackedStringArray = []
-	for objective in _challenge.objectives:
-		if objective is CoinGoal:
-			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
-			if objective.exact:
-				parts.append("Get exactly %d %ss" % [objective.amount, currency_name])
-			else:
-				parts.append("Earn %d %ss" % [objective.amount, currency_name])
-		elif objective is BoardGoal:
-			var board_name: String = Enums.BoardType.keys()[objective.board_type].to_lower()
-			parts.append("Unlock the %s board" % board_name)
-		elif objective is Survive:
-			parts.append("Survive with %d autodropper(s)" % objective.autodropper_count)
-		elif objective is GetSameBucketXTimes:
-			if objective.in_a_row:
-				parts.append("Hit the same bucket %d times in a row" % objective.times)
-			else:
-				parts.append("Hit the same bucket %d times" % objective.times)
-		elif objective is HitXBucketYTimes:
-			parts.append("Land a coin in the target bucket %d times" % objective.times)
-		elif objective is HitBucketsInOrder:
-			parts.append("Hit all target buckets in order")
-		elif objective is LandInEveryBucket:
-			parts.append("Land in every bucket")
-		elif objective is EarnWithinXDrops:
-			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
-			parts.append("Earn %d %s in %d drops" % [objective.amount, currency_name, objective.max_drops])
-	return "\n".join(parts)
+	return get_objective_text_for(_challenge)
 
 
 func get_objective_progress() -> String:
@@ -463,11 +436,9 @@ static func get_constraint_text(challenge: ChallengeData) -> String:
 	var parts: PackedStringArray = []
 	for constraint in challenge.constraints:
 		if constraint is NeverMoreThanXCoins:
-			var currency_name: String = Enums.CurrencyType.keys()[constraint.currency_type].to_lower().replace("_", " ")
-			parts.append("Never have more than %d %s" % [constraint.amount, currency_name])
+			parts.append("Never have more than %d %s" % [constraint.amount, Enums.currency_name(constraint.currency_type, false)])
 		elif constraint is NeverLessThanXCoins:
-			var currency_name: String = Enums.CurrencyType.keys()[constraint.currency_type].to_lower().replace("_", " ")
-			parts.append("Never have less than %d %s" % [constraint.amount, currency_name])
+			parts.append("Never have less than %d %s" % [constraint.amount, Enums.currency_name(constraint.currency_type, false)])
 		elif constraint is NeverTouchBucket:
 			parts.append("Never land in bucket %d" % constraint.bucket_index)
 		elif constraint is UpgradesLimited:
@@ -476,11 +447,10 @@ static func get_constraint_text(challenge: ChallengeData) -> String:
 			else:
 				var names: PackedStringArray = []
 				for ut in constraint.blocked_upgrades:
-					names.append(Enums.UpgradeType.keys()[ut].to_lower().replace("_", " "))
+					names.append(Enums.upgrade_name(ut))
 				parts.append("No %s upgrades" % ", ".join(names))
 		elif constraint is OnlyOneBoard:
-			var board_name: String = Enums.BoardType.keys()[constraint.board_type].to_lower()
-			parts.append("Only %s board" % board_name)
+			parts.append("Only %s board" % Enums.board_name(constraint.board_type, false))
 	if parts.is_empty():
 		return "None"
 	return "\n".join(parts)
@@ -490,14 +460,13 @@ static func get_objective_text_for(challenge: ChallengeData) -> String:
 	var parts: PackedStringArray = []
 	for objective in challenge.objectives:
 		if objective is CoinGoal:
-			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
+			var cn: String = Enums.currency_name(objective.currency_type, false)
 			if objective.exact:
-				parts.append("Get exactly %d %s" % [objective.amount, currency_name])
+				parts.append("Get exactly %d %s" % [objective.amount, cn])
 			else:
-				parts.append("Earn %d %s" % [objective.amount, currency_name])
+				parts.append("Earn %d %s" % [objective.amount, cn])
 		elif objective is BoardGoal:
-			var board_name: String = Enums.BoardType.keys()[objective.board_type].to_lower()
-			parts.append("Unlock the %s board" % board_name)
+			parts.append("Unlock the %s board" % Enums.board_name(objective.board_type, false))
 		elif objective is Survive:
 			parts.append("Survive with %d autodropper(s)" % objective.autodropper_count)
 		elif objective is GetSameBucketXTimes:
@@ -512,8 +481,8 @@ static func get_objective_text_for(challenge: ChallengeData) -> String:
 		elif objective is LandInEveryBucket:
 			parts.append("Land in every bucket")
 		elif objective is EarnWithinXDrops:
-			var currency_name: String = Enums.CurrencyType.keys()[objective.currency_type].to_lower().replace("_", " ")
-			parts.append("Earn %d %s in %d drops" % [objective.amount, currency_name, objective.max_drops])
+			var cn: String = Enums.currency_name(objective.currency_type, false)
+			parts.append("Earn %d %s in %d drops" % [objective.amount, cn, objective.max_drops])
 	return "\n".join(parts)
 
 
