@@ -35,3 +35,12 @@ static func cap_raise_currency_for_board(board_type: BoardType) -> CurrencyType:
 static func currency_name(type: CurrencyType, capital: bool = true) -> String:
 	var name: String = CurrencyType.keys()[type].to_lower().replace("_", " ").replace(" coin", "")
 	return name.capitalize() if capital else name
+
+
+static func board_name(type: BoardType, capital: bool = true) -> String:
+	var name: String = BoardType.keys()[type].to_lower()
+	return name.capitalize() if capital else name
+
+
+static func upgrade_name(type: UpgradeType) -> String:
+	return UpgradeType.keys()[type].to_lower().replace("_", " ")
