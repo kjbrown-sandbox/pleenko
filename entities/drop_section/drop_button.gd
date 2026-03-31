@@ -23,7 +23,7 @@ var assigned_count: int = 0
 var _autodropper_controls_visible: bool = false
 
 
-func _ready():
+func _ready() -> void:
    CurrencyManager.currency_changed.connect(_on_currency_changed)
    _main_button.pressed.connect(func(): drop_pressed.emit())
    _minus_button.pressed.connect(func(): autodropper_adjust_requested.emit(button_id, -1))

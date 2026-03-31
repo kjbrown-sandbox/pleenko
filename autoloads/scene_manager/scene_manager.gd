@@ -1,8 +1,5 @@
 extends Node
 
-# signal upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, new_level: int)
-# signal 
-
 
 func set_new_scene(new_scene: PackedScene) -> void:
 	var current_scene = get_tree().current_scene
@@ -36,8 +33,4 @@ func set_new_scene(new_scene: PackedScene) -> void:
 			
 			canvas_layer.queue_free()
 		))
-
-
-
-
 

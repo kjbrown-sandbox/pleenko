@@ -7,8 +7,7 @@ extends Node3D
 @export var coin_spacing: float = 0.20 
 ## How long it takes a coin to tween to its new slot.
 @export var slide_time: float = 0.15
-## Tilt coins 45° so their face is visible.
-# @export var coin_rotation: Vector3 = Vector3(0, PI / 4, 0)
+## Tilt coins so their face is visible.
 @export var coin_rotation: Vector3 = Vector3(0, 0, 0)
 
 var _capacity: int = 0
