@@ -14,6 +14,7 @@ var _bucket_hits: Dictionary = {}  # "BoardType_BucketIndex" -> int
 var _last_bucket: Dictionary = {}  # BoardType -> int (last bucket index hit)
 var _same_bucket_streak: Dictionary = {}  # BoardType -> int
 var _survive_passed: bool = false
+var _current_bucket_group: int = 0  # For HitBucketsInOrder tracking
 
 
 func set_challenge(challenge: ChallengeData) -> void:
@@ -36,6 +37,7 @@ func setup(board_manager: BoardManager) -> void:
 	_bucket_hits.clear()
 	_last_bucket.clear()
 	_same_bucket_streak.clear()
+	_current_bucket_group = 0
 
 	# Reset currency to starting state
 	CurrencyManager.reset()
@@ -61,6 +63,17 @@ func setup(board_manager: BoardManager) -> void:
 	for objective in _challenge.objectives:
 		if objective is HitXBucketYTimes:
 			_mark_target_bucket(objective)
+
+	# Mark forbidden buckets for NeverTouchBucket constraints
+	for constraint in _challenge.constraints:
+		if constraint is NeverTouchBucket:
+			_mark_forbidden_bucket(constraint)
+
+	# Mark initial bucket targets for HitBucketsInOrder objectives
+	_current_bucket_group = 0
+	for objective in _challenge.objectives:
+		if objective is HitBucketsInOrder:
+			_mark_bucket_group(objective, 0)
 
 	# Force-start autodroppers for Survive objectives
 	for objective in _challenge.objectives:
@@ -117,6 +130,22 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 					if bucket:
 						bucket.mark_hit()
 
+	# Check HitBucketsInOrder progress
+	for objective in _challenge.objectives:
+		if objective is HitBucketsInOrder and objective.board_type == board_type:
+			if _current_bucket_group < objective.bucket_groups.size():
+				var current_group: PackedInt32Array = objective.bucket_groups[_current_bucket_group]
+				var group_complete := true
+				for bi in current_group:
+					var gkey := "%d_%d" % [board_type, bi]
+					if not _bucket_hits.has(gkey):
+						group_complete = false
+						break
+				if group_complete:
+					_current_bucket_group += 1
+					if _current_bucket_group < objective.bucket_groups.size():
+						_mark_bucket_group(objective, _current_bucket_group)
+
 	# Track streaks
 	var last: int = _last_bucket.get(board_type, -1)
 	if bucket_index == last:
@@ -156,6 +185,29 @@ func _on_board_rebuilt(board: PlinkoBoard) -> void:
 		# Re-mark target bucket for HitXBucketYTimes
 		elif objective is HitXBucketYTimes and objective.board_type == board.board_type:
 			_mark_target_bucket(objective)
+		# Re-mark current bucket group for HitBucketsInOrder
+		elif objective is HitBucketsInOrder and objective.board_type == board.board_type:
+			# Re-mark all completed groups and current group
+			for gi in range(_current_bucket_group + 1):
+				_mark_bucket_group(objective, gi)
+
+	# Re-mark forbidden buckets
+	for constraint in _challenge.constraints:
+		if constraint is NeverTouchBucket and constraint.board_type == board.board_type:
+			_mark_forbidden_bucket(constraint)
+
+
+func _mark_bucket_group(objective: HitBucketsInOrder, group_index: int) -> void:
+	if group_index >= objective.bucket_groups.size():
+		return
+	var board := _get_board(objective.board_type)
+	if not board:
+		return
+	var group: PackedInt32Array = objective.bucket_groups[group_index]
+	for bi in group:
+		var bucket := board.get_bucket(bi)
+		if bucket:
+			bucket.mark_hit()
 
 
 func _mark_target_bucket(objective: HitXBucketYTimes) -> void:
@@ -164,6 +216,14 @@ func _mark_target_bucket(objective: HitXBucketYTimes) -> void:
 		var bucket := board.get_bucket(objective.bucket_index)
 		if bucket:
 			bucket.mark_hit()
+
+
+func _mark_forbidden_bucket(constraint: NeverTouchBucket) -> void:
+	var board := _get_board(constraint.board_type)
+	if board:
+		var bucket := board.get_bucket(constraint.bucket_index)
+		if bucket:
+			bucket.mark_forbidden()
 
 
 func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
@@ -228,6 +288,9 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 		var key := "%d_%d" % [objective.board_type, objective.bucket_index]
 		return _bucket_hits.get(key, 0) >= objective.times
 
+	elif objective is HitBucketsInOrder:
+		return _current_bucket_group >= objective.bucket_groups.size()
+
 	elif objective is LandInEveryBucket:
 		var board := _get_board(objective.board_type)
 		if not board:
@@ -270,6 +333,10 @@ func _apply_starting_conditions() -> void:
 				var rows_to_add: int = (condition.rows - 2) / 2
 				for i in rows_to_add:
 					board.add_two_rows()
+		elif condition is StartingDropDelay:
+			var board := _get_board(condition.board_type)
+			if board:
+				board.drop_delay = condition.drop_delay
 
 
 func _setup_survive(objective: Survive) -> void:
@@ -333,6 +400,8 @@ func get_objective_text() -> String:
 				parts.append("Hit the same bucket %d times" % objective.times)
 		elif objective is HitXBucketYTimes:
 			parts.append("Land a coin in the target bucket %d times" % objective.times)
+		elif objective is HitBucketsInOrder:
+			parts.append("Hit all target buckets in order")
 		elif objective is LandInEveryBucket:
 			parts.append("Land in every bucket")
 		elif objective is EarnWithinXDrops:
@@ -356,6 +425,8 @@ func get_objective_progress() -> String:
 			var key := "%d_%d" % [objective.board_type, objective.bucket_index]
 			var hits: int = _bucket_hits.get(key, 0)
 			parts.append("%d / %d" % [hits, objective.times])
+		elif objective is HitBucketsInOrder:
+			parts.append("%d / %d" % [_current_bucket_group, objective.bucket_groups.size()])
 	return "\n".join(parts)
 
 
@@ -407,6 +478,8 @@ static func get_objective_text_for(challenge: ChallengeData) -> String:
 				parts.append("Hit the same bucket %d times" % objective.times)
 		elif objective is HitXBucketYTimes:
 			parts.append("Land a coin in the target bucket %d times" % objective.times)
+		elif objective is HitBucketsInOrder:
+			parts.append("Hit all target buckets in order")
 		elif objective is LandInEveryBucket:
 			parts.append("Land in every bucket")
 		elif objective is EarnWithinXDrops:
@@ -424,6 +497,7 @@ func clear_challenge() -> void:
 	_last_bucket.clear()
 	_same_bucket_streak.clear()
 	_survive_passed = false
+	_current_bucket_group = 0
 
 	# Clear gates
 	UpgradeManager.upgrade_gate = Callable()
