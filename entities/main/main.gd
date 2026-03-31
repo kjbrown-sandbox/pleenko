@@ -246,21 +246,21 @@ func _setup_nav_icons() -> void:
 	board_right_icon.offset_left -= m
 	board_right_icon.offset_right -= m
 
-	challenges_down_icon.pressed.connect(func(): ModeManager.switch_to_challenges())
-	challenges_down_icon.mouse_entered.connect(func(): _show_tooltip(_down_tooltip, challenges_down_icon))
-	challenges_down_icon.mouse_exited.connect(func(): _down_tooltip.visible = false)
+	challenges_down_icon.pressed.connect(_on_challenges_down_pressed)
+	challenges_down_icon.mouse_entered.connect(_on_challenges_down_hover)
+	challenges_down_icon.mouse_exited.connect(_on_challenges_down_exit)
 
-	challenges_up_icon.pressed.connect(func(): ModeManager.switch_to_main())
-	challenges_up_icon.mouse_entered.connect(func(): _show_tooltip(_up_tooltip, challenges_up_icon))
-	challenges_up_icon.mouse_exited.connect(func(): _up_tooltip.visible = false)
+	challenges_up_icon.pressed.connect(_on_challenges_up_pressed)
+	challenges_up_icon.mouse_entered.connect(_on_challenges_up_hover)
+	challenges_up_icon.mouse_exited.connect(_on_challenges_up_exit)
 
 	board_left_icon.pressed.connect(_on_left_arrow_pressed)
-	board_left_icon.mouse_entered.connect(func(): _show_tooltip(_left_tooltip, board_left_icon))
-	board_left_icon.mouse_exited.connect(func(): _left_tooltip.visible = false)
+	board_left_icon.mouse_entered.connect(_on_left_arrow_hover)
+	board_left_icon.mouse_exited.connect(_on_left_arrow_exit)
 
 	board_right_icon.pressed.connect(_on_right_arrow_pressed)
-	board_right_icon.mouse_entered.connect(func(): _show_tooltip(_right_tooltip, board_right_icon))
-	board_right_icon.mouse_exited.connect(func(): _right_tooltip.visible = false)
+	board_right_icon.mouse_entered.connect(_on_right_arrow_hover)
+	board_right_icon.mouse_exited.connect(_on_right_arrow_exit)
 
 
 func _create_tooltip(text: String) -> Label:
@@ -290,3 +290,34 @@ func _position_tooltip(tooltip: Label, icon: TextureButton) -> void:
 		icon_pos.x + icon_size.x + 8.0,
 		icon_pos.y + (icon_size.y - tooltip.size.y) / 2.0
 	)
+
+
+func _on_challenges_down_pressed() -> void:
+	ModeManager.switch_to_challenges()
+
+func _on_challenges_down_hover() -> void:
+	_show_tooltip(_down_tooltip, challenges_down_icon)
+
+func _on_challenges_down_exit() -> void:
+	_down_tooltip.visible = false
+
+func _on_challenges_up_pressed() -> void:
+	ModeManager.switch_to_main()
+
+func _on_challenges_up_hover() -> void:
+	_show_tooltip(_up_tooltip, challenges_up_icon)
+
+func _on_challenges_up_exit() -> void:
+	_up_tooltip.visible = false
+
+func _on_left_arrow_hover() -> void:
+	_show_tooltip(_left_tooltip, board_left_icon)
+
+func _on_left_arrow_exit() -> void:
+	_left_tooltip.visible = false
+
+func _on_right_arrow_hover() -> void:
+	_show_tooltip(_right_tooltip, board_right_icon)
+
+func _on_right_arrow_exit() -> void:
+	_right_tooltip.visible = false
