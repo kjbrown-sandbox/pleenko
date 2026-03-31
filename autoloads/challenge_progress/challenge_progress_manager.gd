@@ -30,6 +30,16 @@ func initialize(buttons: Array[ChallengeButton]) -> void:
 			_states[id] = ChallengeState.UNLOCKED
 		btn.set_state(_states[id])
 
+	# Propagate unlocks from completed challenges to their next challenges.
+	# This handles new challenges added after a save was created.
+	for btn in buttons:
+		if _states.get(btn.challenge_ui_name, ChallengeState.LOCKED) == ChallengeState.COMPLETED:
+			for next_id in btn.next_challenges:
+				if _states.get(next_id, ChallengeState.LOCKED) == ChallengeState.LOCKED:
+					_states[next_id] = ChallengeState.UNLOCKED
+	for btn in buttons:
+		btn.set_state(_states.get(btn.challenge_ui_name, ChallengeState.LOCKED))
+
 
 func get_state(challenge_id: String) -> ChallengeState:
 	return _states.get(challenge_id, ChallengeState.LOCKED)
