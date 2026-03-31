@@ -60,6 +60,11 @@ func setup(board_manager: BoardManager) -> void:
 	# Apply starting conditions
 	_apply_starting_conditions()
 
+	# Connect any boards created by starting conditions
+	for board in _board_manager.get_boards():
+		if not board.coin_landed.is_connected(_on_coin_landed):
+			_connect_board(board)
+
 	# Mark target buckets for HitXBucketYTimes objectives
 	for objective in _challenge.objectives:
 		if objective is HitXBucketYTimes:
@@ -338,13 +343,23 @@ func _apply_starting_conditions() -> void:
 			var board := _get_board(condition.board_type)
 			if board:
 				board.drop_delay = condition.drop_delay
+		elif condition is StartingCap:
+			CurrencyManager.caps[condition.currency_type] = condition.cap
 
 
 func _setup_survive(objective: Survive) -> void:
-	# Force-assign autodroppers to the specified board
 	var board := _get_board(objective.board_type)
 	if not board:
 		return
+
+	# Ensure enough autodroppers exist in the pool
+	var current_pool: int = _board_manager.get_autodropper_pool()
+	var needed: int = objective.autodropper_count - _board_manager.get_free_autodroppers()
+	for i in needed:
+		UpgradeManager.force_apply(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
+
+	# Unlock autodropper UI and assign
+	_board_manager._on_autodropper_unlocked()
 	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[objective.board_type])
 	for i in objective.autodropper_count:
 		_board_manager._on_autodropper_adjust(normal_id, 1)

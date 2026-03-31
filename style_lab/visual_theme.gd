@@ -83,7 +83,7 @@ enum PegShape { SPHERE, CYLINDER }
 @export var bucket_roughness := 0.8
 @export var bucket_metallic := 0.0
 @export var bucket_label_font_size := 48
-@export var bucket_label_offset := -0.15                          # vertical distance below bucket
+@export var bucket_label_offset := -0.3                           # vertical distance below bucket
 
 # ── Text ─────────────────────────────────────────────────────────────
 @export_group("Text")
