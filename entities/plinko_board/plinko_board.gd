@@ -206,7 +206,6 @@ func _drop_from_queue() -> void:
 		return
 
 	var coin: Coin = coin_queue.dequeue()
-	coin.rotation = Vector3.ZERO
 	_launch_coin(coin)
 	_start_drop_timer()
 
