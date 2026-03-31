@@ -54,7 +54,6 @@ func dequeue() -> Coin:
 
 	var coin: Coin = _coins.pop_front()
 	remove_child(coin)
-	# Slide remaining coins forward
 	_slide_coins_forward()
 	return coin
 

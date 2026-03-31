@@ -10,11 +10,18 @@ var _time_remaining: float = 0.0
 var _total_drops: int = 0
 
 # Tracking state for objectives
-var _bucket_hits: Dictionary = {}  # "BoardType_BucketIndex" -> int
+var _bucket_hits: Dictionary = {}  # _bucket_key() -> int
 var _last_bucket: Dictionary = {}  # BoardType -> int (last bucket index hit)
 var _same_bucket_streak: Dictionary = {}  # BoardType -> int
 var _survive_passed: bool = false
 var _current_bucket_group: int = 0  # For HitBucketsInOrder tracking
+
+
+static func _bucket_key(board_type: Enums.BoardType, bucket_index: int) -> String:
+	return "%d_%d" % [board_type, bucket_index]
+
+static func _bucket_key_prefix(board_type: Enums.BoardType) -> String:
+	return "%d_" % board_type
 
 
 func set_challenge(challenge: ChallengeData) -> void:
@@ -122,7 +129,7 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 	_total_drops += 1
 
 	# Track bucket hits
-	var key := "%d_%d" % [board_type, bucket_index]
+	var key := _bucket_key(board_type, bucket_index)
 	var first_hit := not _bucket_hits.has(key)
 	_bucket_hits[key] = _bucket_hits.get(key, 0) + 1
 
@@ -143,7 +150,7 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 				var current_group: PackedInt32Array = objective.bucket_groups[_current_bucket_group]
 				var group_complete := true
 				for bi in current_group:
-					var gkey := "%d_%d" % [board_type, bi]
+					var gkey := _bucket_key(board_type, bi)
 					if not _bucket_hits.has(gkey):
 						group_complete = false
 						break
@@ -183,7 +190,7 @@ func _on_board_rebuilt(board: PlinkoBoard) -> void:
 		if objective is LandInEveryBucket and objective.board_type == board.board_type:
 			var bucket_count: int = board.num_rows + 1
 			for i in bucket_count:
-				var key := "%d_%d" % [board.board_type, i]
+				var key := _bucket_key(board.board_type, i)
 				if _bucket_hits.has(key):
 					var bucket := board.get_bucket(i)
 					if bucket:
@@ -285,13 +292,13 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 		else:
 			# Check if any bucket on this board has been hit enough times
 			for key in _bucket_hits:
-				if key.begins_with("%d_" % objective.board_type):
+				if key.begins_with(_bucket_key_prefix(objective.board_type)):
 					if _bucket_hits[key] >= objective.times:
 						return true
 			return false
 
 	elif objective is HitXBucketYTimes:
-		var key := "%d_%d" % [objective.board_type, objective.bucket_index]
+		var key := _bucket_key(objective.board_type, objective.bucket_index)
 		return _bucket_hits.get(key, 0) >= objective.times
 
 	elif objective is HitBucketsInOrder:
@@ -303,7 +310,7 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 			return false
 		var bucket_count: int = board.num_rows + 1
 		for i in bucket_count:
-			var key := "%d_%d" % [objective.board_type, i]
+			var key := _bucket_key(objective.board_type, i)
 			if not _bucket_hits.has(key):
 				return false
 		return true
@@ -421,11 +428,11 @@ func get_objective_progress() -> String:
 		if objective is GetSameBucketXTimes:
 			var best: int = 0
 			for key in _bucket_hits:
-				if key.begins_with("%d_" % objective.board_type):
+				if key.begins_with(_bucket_key_prefix(objective.board_type)):
 					best = maxi(best, _bucket_hits[key])
 			parts.append("%d / %d" % [best, objective.times])
 		elif objective is HitXBucketYTimes:
-			var key := "%d_%d" % [objective.board_type, objective.bucket_index]
+			var key := _bucket_key(objective.board_type, objective.bucket_index)
 			var hits: int = _bucket_hits.get(key, 0)
 			parts.append("%d / %d" % [hits, objective.times])
 		elif objective is HitBucketsInOrder:
