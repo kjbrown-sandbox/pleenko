@@ -1,4 +1,7 @@
 extends Node
+## Manages the challenge lifecycle: setting up conditions, providing text for
+## the HUD, and gating upgrades/boards. Delegates active challenge tracking
+## to a ChallengeTracker child node.
 
 signal challenge_completed
 signal challenge_failed(reason: String)
@@ -6,22 +9,7 @@ signal challenge_failed(reason: String)
 var is_active_challenge: bool = false
 var _challenge: ChallengeData
 var _board_manager: BoardManager
-var _time_remaining: float = 0.0
-var _total_drops: int = 0
-
-# Tracking state for objectives
-var _bucket_hits: Dictionary = {}  # _bucket_key() -> int
-var _last_bucket: Dictionary = {}  # BoardType -> int (last bucket index hit)
-var _same_bucket_streak: Dictionary = {}  # BoardType -> int
-var _survive_passed: bool = false
-var _current_bucket_group: int = 0  # For HitBucketsInOrder tracking
-
-
-static func _bucket_key(board_type: Enums.BoardType, bucket_index: int) -> String:
-	return "%d_%d" % [board_type, bucket_index]
-
-static func _bucket_key_prefix(board_type: Enums.BoardType) -> String:
-	return "%d_" % board_type
+var _tracker: ChallengeTracker
 
 
 func set_challenge(challenge: ChallengeData) -> void:
@@ -34,18 +22,13 @@ func get_challenge() -> ChallengeData:
 
 
 func get_time_remaining() -> float:
-	return _time_remaining
+	return _tracker.time_remaining if _tracker else 0.0
 
+
+# ── Setup ─────────────────────────────────────────────────────────
 
 func setup(board_manager: BoardManager) -> void:
 	_board_manager = board_manager
-	_time_remaining = _challenge.time_limit_seconds
-	_total_drops = 0
-	_bucket_hits.clear()
-	_last_bucket.clear()
-	_same_bucket_streak.clear()
-	_current_bucket_group = 0
-	_survive_passed = false
 
 	# Reset currency to starting state
 	CurrencyManager.reset()
@@ -54,39 +37,19 @@ func setup(board_manager: BoardManager) -> void:
 	UpgradeManager.upgrade_gate = is_upgrade_allowed
 	_board_manager.board_gate = is_board_allowed
 
-	# Connect to board signals
-	for board in _board_manager.get_boards():
-		_connect_board(board)
-
-	# Connect to currency changes for constraint checking
-	CurrencyManager.currency_changed.connect(_on_currency_changed)
-
-	# Listen for new boards being unlocked
-	_board_manager.board_switched.connect(_on_board_switched)
-
-	# Apply starting conditions
+	# Apply starting conditions before tracker connects
 	_apply_starting_conditions()
 
-	# Connect any boards created by starting conditions
-	for board in _board_manager.get_boards():
-		if not board.coin_landed.is_connected(_on_coin_landed):
-			_connect_board(board)
+	# Create and start the tracker
+	_tracker = ChallengeTracker.new()
+	_tracker.setup(_challenge, _board_manager)
+	_tracker.completed.connect(func(): challenge_completed.emit())
+	_tracker.failed.connect(func(reason: String): challenge_failed.emit(reason))
+	add_child(_tracker)
 
-	# Mark target buckets for HitXBucketYTimes objectives
-	for objective in _challenge.objectives:
-		if objective is HitXBucketYTimes:
-			_mark_target_bucket(objective)
-
-	# Mark forbidden buckets for NeverTouchBucket constraints
-	for constraint in _challenge.constraints:
-		if constraint is NeverTouchBucket:
-			_mark_forbidden_bucket(constraint)
-
-	# Mark initial bucket targets for HitBucketsInOrder objectives
-	_current_bucket_group = 0
-	for objective in _challenge.objectives:
-		if objective is HitBucketsInOrder:
-			_mark_bucket_group(objective, 0)
+	# Connect tracker to all boards (including any created by starting conditions)
+	_tracker.connect_to_boards()
+	_tracker.mark_initial_visuals()
 
 	# Force-start autodroppers for Survive objectives
 	for objective in _challenge.objectives:
@@ -94,243 +57,7 @@ func setup(board_manager: BoardManager) -> void:
 			_setup_survive(objective)
 
 
-func _connect_board(board: PlinkoBoard) -> void:
-	board.coin_landed.connect(_on_coin_landed)
-	board.autodrop_failed.connect(_on_autodrop_failed)
-	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
-
-
-func _on_board_switched(_board: PlinkoBoard) -> void:
-	# Connect new boards that may not have been connected yet
-	for board in _board_manager.get_boards():
-		if not board.coin_landed.is_connected(_on_coin_landed):
-			_connect_board(board)
-
-
-func _process(delta: float) -> void:
-	if not is_active_challenge:
-		return
-
-	_time_remaining -= delta
-	if _time_remaining <= 0.0:
-		_time_remaining = 0.0
-		_on_time_up()
-
-
-func _on_time_up() -> void:
-	_survive_passed = true
-	if _check_all_objectives_met():
-		challenge_completed.emit()
-	else:
-		challenge_failed.emit("Time's up!")
-
-
-func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_type: Enums.CurrencyType, _amount: int) -> void:
-	_total_drops += 1
-
-	# Track bucket hits
-	var key := _bucket_key(board_type, bucket_index)
-	var first_hit := not _bucket_hits.has(key)
-	_bucket_hits[key] = _bucket_hits.get(key, 0) + 1
-
-	# Mark bucket visually for LandInEveryBucket objectives
-	if first_hit:
-		for objective in _challenge.objectives:
-			if objective is LandInEveryBucket and objective.board_type == board_type:
-				var board := _get_board(board_type)
-				if board:
-					var bucket := board.get_bucket(bucket_index)
-					if bucket:
-						bucket.mark_hit()
-
-	# Check HitBucketsInOrder progress
-	for objective in _challenge.objectives:
-		if objective is HitBucketsInOrder and objective.board_type == board_type:
-			if _current_bucket_group < objective.bucket_groups.size():
-				var current_group: PackedInt32Array = objective.bucket_groups[_current_bucket_group]
-				var group_complete := true
-				for bi in current_group:
-					var gkey := _bucket_key(board_type, bi)
-					if not _bucket_hits.has(gkey):
-						group_complete = false
-						break
-				if group_complete:
-					_current_bucket_group += 1
-					if _current_bucket_group < objective.bucket_groups.size():
-						_mark_bucket_group(objective, _current_bucket_group)
-
-	# Track streaks
-	var last: int = _last_bucket.get(board_type, -1)
-	if bucket_index == last:
-		_same_bucket_streak[board_type] = _same_bucket_streak.get(board_type, 0) + 1
-	else:
-		_same_bucket_streak[board_type] = 1
-	_last_bucket[board_type] = bucket_index
-
-	# Check constraints
-	_check_bucket_constraints(board_type, bucket_index)
-
-	# Check drop-limit failures
-	for objective in _challenge.objectives:
-		if objective is EarnWithinXDrops and _total_drops > objective.max_drops:
-			var balance := CurrencyManager.get_balance(objective.currency_type)
-			if balance < objective.amount:
-				challenge_failed.emit("Ran out of drops!")
-				return
-
-	# Check objectives
-	_check_objectives()
-
-
-func _on_board_rebuilt(board: PlinkoBoard) -> void:
-	if not is_active_challenge:
-		return
-	for objective in _challenge.objectives:
-		# Re-mark hit buckets after board rebuild (e.g. buying bucket value)
-		if objective is LandInEveryBucket and objective.board_type == board.board_type:
-			var bucket_count: int = board.num_rows + 1
-			for i in bucket_count:
-				var key := _bucket_key(board.board_type, i)
-				if _bucket_hits.has(key):
-					var bucket := board.get_bucket(i)
-					if bucket:
-						bucket.mark_hit()
-		# Re-mark target bucket for HitXBucketYTimes
-		elif objective is HitXBucketYTimes and objective.board_type == board.board_type:
-			_mark_target_bucket(objective)
-		# Re-mark current bucket group for HitBucketsInOrder
-		elif objective is HitBucketsInOrder and objective.board_type == board.board_type:
-			# Re-mark all completed groups and current group
-			for gi in range(_current_bucket_group + 1):
-				_mark_bucket_group(objective, gi)
-
-	# Re-mark forbidden buckets
-	for constraint in _challenge.constraints:
-		if constraint is NeverTouchBucket and constraint.board_type == board.board_type:
-			_mark_forbidden_bucket(constraint)
-
-
-func _mark_bucket_group(objective: HitBucketsInOrder, group_index: int) -> void:
-	if group_index >= objective.bucket_groups.size():
-		return
-	var board := _get_board(objective.board_type)
-	if not board:
-		return
-	var group: PackedInt32Array = objective.bucket_groups[group_index]
-	for bi in group:
-		var bucket := board.get_bucket(bi)
-		if bucket:
-			bucket.mark_hit()
-
-
-func _mark_target_bucket(objective: HitXBucketYTimes) -> void:
-	var board := _get_board(objective.board_type)
-	if board:
-		var bucket := board.get_bucket(objective.bucket_index)
-		if bucket:
-			bucket.mark_hit()
-
-
-func _mark_forbidden_bucket(constraint: NeverTouchBucket) -> void:
-	var board := _get_board(constraint.board_type)
-	if board:
-		var bucket := board.get_bucket(constraint.bucket_index)
-		if bucket:
-			bucket.mark_forbidden()
-
-
-func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
-	for constraint in _challenge.constraints:
-		if constraint is NeverMoreThanXCoins:
-			if type == constraint.currency_type and new_balance > constraint.amount:
-				challenge_failed.emit("Exceeded %d %s!" % [constraint.amount, Enums.CurrencyType.keys()[type]])
-				return
-		elif constraint is NeverLessThanXCoins:
-			if type == constraint.currency_type and new_balance < constraint.amount:
-				challenge_failed.emit("Dropped below %d %s!" % [constraint.amount, Enums.CurrencyType.keys()[type]])
-				return
-
-
-func _check_bucket_constraints(board_type: Enums.BoardType, bucket_index: int) -> void:
-	for constraint in _challenge.constraints:
-		if constraint is NeverTouchBucket:
-			if board_type == constraint.board_type and bucket_index == constraint.bucket_index:
-				challenge_failed.emit("Landed in forbidden bucket!")
-				return
-
-
-func _check_objectives() -> void:
-	if _check_all_objectives_met():
-		challenge_completed.emit()
-
-
-func _check_all_objectives_met() -> bool:
-	for objective in _challenge.objectives:
-		if not _is_objective_met(objective):
-			return false
-	return true
-
-
-func _is_objective_met(objective: ChallengeObjective) -> bool:
-	if objective is CoinGoal:
-		var balance := CurrencyManager.get_balance(objective.currency_type)
-		if objective.exact:
-			return balance == objective.amount
-		return balance >= objective.amount
-
-	elif objective is BoardGoal:
-		if not _board_manager:
-			return false
-		return _board_manager.is_board_unlocked(objective.board_type)
-
-	elif objective is Survive:
-		return _survive_passed
-
-	elif objective is GetSameBucketXTimes:
-		if objective.in_a_row:
-			return _same_bucket_streak.get(objective.board_type, 0) >= objective.times
-		else:
-			# Check if any bucket on this board has been hit enough times
-			for key in _bucket_hits:
-				if key.begins_with(_bucket_key_prefix(objective.board_type)):
-					if _bucket_hits[key] >= objective.times:
-						return true
-			return false
-
-	elif objective is HitXBucketYTimes:
-		var key := _bucket_key(objective.board_type, objective.bucket_index)
-		return _bucket_hits.get(key, 0) >= objective.times
-
-	elif objective is HitBucketsInOrder:
-		return _current_bucket_group >= objective.bucket_groups.size()
-
-	elif objective is LandInEveryBucket:
-		var board := _get_board(objective.board_type)
-		if not board:
-			return false
-		var bucket_count: int = board.num_rows + 1
-		for i in bucket_count:
-			var key := _bucket_key(objective.board_type, i)
-			if not _bucket_hits.has(key):
-				return false
-		return true
-
-	elif objective is EarnWithinXDrops:
-		if _total_drops > objective.max_drops:
-			# This is handled as a failure, not just "not met"
-			return false
-		var balance := CurrencyManager.get_balance(objective.currency_type)
-		return balance >= objective.amount
-
-	return false
-
-
-func _on_autodrop_failed(board_type: Enums.BoardType) -> void:
-	for objective in _challenge.objectives:
-		if objective is Survive and objective.board_type == board_type:
-			challenge_failed.emit("Autodropper can't afford to drop!")
-			return
-
+# ── Starting conditions ──────────────────────────────────────────
 
 func _apply_starting_conditions() -> void:
 	# Apply caps first so coins aren't truncated
@@ -362,12 +89,10 @@ func _setup_survive(objective: Survive) -> void:
 	if not board:
 		return
 
-	# Ensure enough autodroppers exist in the pool
 	var needed: int = objective.autodropper_count - _board_manager.get_free_autodroppers()
 	for i in needed:
 		UpgradeManager.force_apply(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
 
-	# Unlock autodropper UI
 	_board_manager._on_autodropper_unlocked()
 
 	if objective.start_delay > 0.0:
@@ -386,14 +111,7 @@ func _activate_autodroppers(objective: Survive) -> void:
 		_board_manager._on_autodropper_adjust(normal_id, 1)
 
 
-func _get_board(board_type: Enums.BoardType) -> PlinkoBoard:
-	if not _board_manager:
-		return null
-	for board in _board_manager.get_boards():
-		if board.board_type == board_type:
-			return board
-	return null
-
+# ── Gates ─────────────────────────────────────────────────────────
 
 func is_upgrade_allowed(upgrade_type: Enums.UpgradeType) -> bool:
 	if not is_active_challenge:
@@ -416,28 +134,16 @@ func is_board_allowed(board_type: Enums.BoardType) -> bool:
 	return true
 
 
+# ── Text for HUD ──────────────────────────────────────────────────
+
 func get_objective_text() -> String:
 	return get_objective_text_for(_challenge)
 
 
 func get_objective_progress() -> String:
-	if not is_active_challenge:
+	if not is_active_challenge or not _tracker:
 		return ""
-	var parts: PackedStringArray = []
-	for objective in _challenge.objectives:
-		if objective is GetSameBucketXTimes:
-			var best: int = 0
-			for key in _bucket_hits:
-				if key.begins_with(_bucket_key_prefix(objective.board_type)):
-					best = maxi(best, _bucket_hits[key])
-			parts.append("%d / %d" % [best, objective.times])
-		elif objective is HitXBucketYTimes:
-			var key := _bucket_key(objective.board_type, objective.bucket_index)
-			var hits: int = _bucket_hits.get(key, 0)
-			parts.append("%d / %d" % [hits, objective.times])
-		elif objective is HitBucketsInOrder:
-			parts.append("%d / %d" % [_current_bucket_group, objective.bucket_groups.size()])
-	return "\n".join(parts)
+	return _tracker.get_progress_text()
 
 
 static func get_constraint_text(challenge: ChallengeData) -> String:
@@ -456,34 +162,32 @@ static func get_objective_text_for(challenge: ChallengeData) -> String:
 	return "\n".join(parts)
 
 
+# ── Teardown ──────────────────────────────────────────────────────
+
 func clear_challenge() -> void:
 	is_active_challenge = false
 	_challenge = null
-	_time_remaining = 0.0
-	_total_drops = 0
-	_bucket_hits.clear()
-	_last_bucket.clear()
-	_same_bucket_streak.clear()
-	_survive_passed = false
-	_current_bucket_group = 0
 
 	# Clear gates
 	UpgradeManager.upgrade_gate = Callable()
 	if _board_manager:
 		_board_manager.board_gate = Callable()
 
-	# Disconnect signals
-	if CurrencyManager.currency_changed.is_connected(_on_currency_changed):
-		CurrencyManager.currency_changed.disconnect(_on_currency_changed)
-	if _board_manager:
-		if _board_manager.board_switched.is_connected(_on_board_switched):
-			_board_manager.board_switched.disconnect(_on_board_switched)
-		for board in _board_manager.get_boards():
-			if board.coin_landed.is_connected(_on_coin_landed):
-				board.coin_landed.disconnect(_on_coin_landed)
-			if board.autodrop_failed.is_connected(_on_autodrop_failed):
-				board.autodrop_failed.disconnect(_on_autodrop_failed)
-			for conn in board.board_rebuilt.get_connections():
-				if conn["callable"].get_method() == "_on_board_rebuilt":
-					board.board_rebuilt.disconnect(conn["callable"])
+	# Clean up tracker
+	if _tracker:
+		_tracker.disconnect_all()
+		_tracker.queue_free()
+		_tracker = null
+
 	_board_manager = null
+
+
+# ── Utilities ─────────────────────────────────────────────────────
+
+func _get_board(board_type: Enums.BoardType) -> PlinkoBoard:
+	if not _board_manager:
+		return null
+	for board in _board_manager.get_boards():
+		if board.board_type == board_type:
+			return board
+	return null
