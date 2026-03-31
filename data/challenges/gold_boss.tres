@@ -14,7 +14,7 @@
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
 board_type = 1
-start_delay = 60.0
+start_delay = 90.0
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
