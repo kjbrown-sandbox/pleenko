@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="ChallengeData" format=3 uid="uid://dp3vtarsocxv4"]
+
+[ext_resource type="Script" uid="uid://cprkqdv24lv2s" path="res://autoloads/challenge_manager/challenge_constraint.gd" id="1_con"]
+[ext_resource type="Script" uid="uid://co7w0klc1bfgq" path="res://autoloads/challenge_manager/challenge_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://dy743tjls7kg8" path="res://autoloads/challenge_manager/objectives/hit_buckets_in_order.gd" id="2_obj"]
+[ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_obj_base"]
+[ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
+[ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_start"]
+[ext_resource type="Script" uid="uid://d2im52kpqsq1i" path="res://autoloads/challenge_manager/constraints/upgrades_limited.gd" id="7_con"]
+[ext_resource type="Script" uid="uid://ck6ikghmwasmr" path="res://autoloads/challenge_manager/starting_conditions/starting_boards.gd" id="8_start"]
+
+[sub_resource type="Resource" id="constraint_1"]
+script = ExtResource("7_con")
+blocked_upgrades = Array[int]([0])
+
+[sub_resource type="Resource" id="objective_1"]
+script = ExtResource("2_obj")
+bucket_groups = Array[PackedInt32Array]([PackedInt32Array(3), PackedInt32Array(2, 4), PackedInt32Array(1, 5), PackedInt32Array(0, 6)])
+
+[sub_resource type="Resource" id="reward_1"]
+script = ExtResource("3_reward")
+type = 1
+modifier_type = 3
+modifier_amount = 0.5
+description = "+0.5 advanced coin multiplier to gold"
+
+[sub_resource type="Resource" id="starting_1"]
+script = ExtResource("8_start")
+rows = 6
+
+[resource]
+script = ExtResource("1_data")
+id = "gold_10"
+display_name = "Ripple"
+time_limit_seconds = 90.0
+objectives = Array[ExtResource("2_obj_base")]([SubResource("objective_1")])
+constraints = Array[ExtResource("1_con")]([SubResource("constraint_1")])
+starting_conditions = Array[ExtResource("6_start")]([SubResource("starting_1")])
+rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])
