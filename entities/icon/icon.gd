@@ -8,14 +8,19 @@ const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
 # Icon from: <a href="https://www.flaticon.com/free-icons/configure" title="configure icons">Configure icons created by logisstudio - Flaticon</a>
 # Arrow icon: <a href="https://www.flaticon.com/free-icons/next" title="next icons">Next icons created by Roundicons - Flaticon</a>
 # Skull: <a href="https://www.flaticon.com/free-icons/skull" title="skull icons">Skull icons created by meaicon - Flaticon</a>
+@export var interactive: bool = true
+
 func _ready() -> void:
 	texture_normal = icon_texture
 	var mat := ShaderMaterial.new()
 	mat.shader = IconTintShader
 	mat.set_shader_parameter("tint_color", ThemeProvider.theme.resolve(color_source))
 	material = mat
-	mouse_entered.connect(_on_mouse_entered)
-	mouse_exited.connect(_on_mouse_exited)
+	if interactive:
+		mouse_entered.connect(_on_mouse_entered)
+		mouse_exited.connect(_on_mouse_exited)
+	else:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 func _on_mouse_entered() -> void:
