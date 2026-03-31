@@ -7,87 +7,87 @@
 [ext_resource type="Resource" uid="uid://h82qhjqorfsd" path="res://data/challenges/gold_3.tres" id="5_ch3"]
 [ext_resource type="Resource" uid="uid://dvdgjv1yxr0dg" path="res://data/challenges/gold_4.tres" id="6_ch4"]
 [ext_resource type="Resource" uid="uid://cckyqivkfrh40" path="res://data/challenges/gold_5.tres" id="7_ch5"]
-[ext_resource type="Resource" path="res://data/challenges/gold_6.tres" id="8_ch6"]
-[ext_resource type="Resource" path="res://data/challenges/gold_7.tres" id="9_ch7"]
-[ext_resource type="Resource" path="res://data/challenges/gold_8.tres" id="10_ch8"]
-[ext_resource type="Resource" path="res://data/challenges/gold_9.tres" id="11_ch9"]
-[ext_resource type="Resource" path="res://data/challenges/gold_10.tres" id="12_ch10"]
-[ext_resource type="Resource" path="res://data/challenges/gold_boss.tres" id="13_boss"]
+[ext_resource type="Resource" uid="uid://b7bmhnsxytxf4" path="res://data/challenges/gold_6.tres" id="8_ch6"]
+[ext_resource type="Resource" uid="uid://crdaxtxdqmc14" path="res://data/challenges/gold_7.tres" id="9_ch7"]
+[ext_resource type="Resource" uid="uid://ba4d7ugmh5gix" path="res://data/challenges/gold_8.tres" id="10_ch8"]
+[ext_resource type="Resource" uid="uid://0pyqnpb6skv6" path="res://data/challenges/gold_9.tres" id="11_ch9"]
+[ext_resource type="Resource" uid="uid://dp3vtarsocxv4" path="res://data/challenges/gold_10.tres" id="12_ch10"]
+[ext_resource type="Resource" uid="uid://blry535dwk8ds" path="res://data/challenges/gold_boss.tres" id="13_boss"]
 
 [node name="ChallengeGroupGold" type="Node3D" unique_id=1343845307]
 script = ExtResource("1_grouping")
 
 [node name="gold_1" parent="." unique_id=1571959423 instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.4, 0.4, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.4, 0.8561994, 0)
 color_source = null
 challenge = ExtResource("3_ch1")
 challenge_ui_name = "gold_1"
 next_challenges = Array[String](["gold_2", "gold_3"])
 
 [node name="gold_2" parent="." unique_id=333373741 instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, 1.9, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, 1.8034962, 0)
 color_source = null
 challenge = ExtResource("4_ch2")
 challenge_ui_name = "gold_2"
 
 [node name="gold_3" parent="." unique_id=1629685724 instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.40356076, -0.3, 0)
 color_source = null
 challenge = ExtResource("5_ch3")
 challenge_ui_name = "gold_3"
 next_challenges = Array[String](["gold_4", "gold_5"])
 
 [node name="gold_4" parent="." unique_id=571569712 instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, -1.9, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12618983, -1.9, 0)
 color_source = null
 challenge = ExtResource("6_ch4")
 challenge_ui_name = "gold_4"
 next_challenges = Array[String](["gold_6"])
 
 [node name="gold_5" parent="." unique_id=736963975 instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, -0.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0437365, 0.24214986, 0)
 color_source = null
 challenge = ExtResource("7_ch5")
 challenge_ui_name = "gold_5"
 next_challenges = Array[String](["gold_7"])
 
-[node name="gold_6" parent="." instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, -1.5, 0)
+[node name="gold_6" parent="." unique_id=1076019847 instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8840411, -1.5, 0)
 color_source = null
 challenge = ExtResource("8_ch6")
 challenge_ui_name = "gold_6"
 next_challenges = Array[String](["gold_8"])
 
-[node name="gold_7" parent="." instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.8, 0.5, 0)
+[node name="gold_7" parent="." unique_id=1471733168 instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0981548, 1.6054063, 0)
 color_source = null
 challenge = ExtResource("9_ch7")
 challenge_ui_name = "gold_7"
 next_challenges = Array[String](["gold_9"])
 
-[node name="gold_8" parent="." instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.0, -2.5, 0)
+[node name="gold_8" parent="." unique_id=175012868 instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.6050825, -2.5, 0)
 color_source = null
 challenge = ExtResource("10_ch8")
 challenge_ui_name = "gold_8"
 next_challenges = Array[String](["gold_10"])
 
-[node name="gold_9" parent="." instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0.0, 0)
+[node name="gold_9" parent="." unique_id=1243699019 instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2629976, 0, 0)
 color_source = null
 challenge = ExtResource("11_ch9")
 challenge_ui_name = "gold_9"
 next_challenges = Array[String](["gold_10"])
 
-[node name="gold_10" parent="." instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.0, -1.2, 0)
+[node name="gold_10" parent="." unique_id=59627874 instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.412074, -1.2, 0)
 color_source = null
 challenge = ExtResource("12_ch10")
 challenge_ui_name = "gold_10"
 next_challenges = Array[String](["gold_boss"])
 
-[node name="gold_boss" parent="." instance=ExtResource("2_btn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.0, -1.2, 0)
+[node name="gold_boss" parent="." unique_id=1808322712 instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.9032364, -1.2, 0)
 color_source = null
 challenge = ExtResource("13_boss")
 challenge_ui_name = "gold_boss"
