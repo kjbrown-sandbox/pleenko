@@ -1,20 +1,12 @@
-extends TextureButton
+class_name NavArrow
+extends TintedIcon
 
-const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
-
-@export var color_source: VisualTheme.Palette = VisualTheme.Palette.BG_5
 ## Rotation in radians applied to the icon. 0 = right, PI/2 = down, -PI/2 = up, PI = left.
 @export var rotation_angle: float = 0.0
 
 
 func _ready() -> void:
-	var t: VisualTheme = ThemeProvider.theme
-	var mat := ShaderMaterial.new()
-	mat.shader = IconTintShader
-	mat.set_shader_parameter("tint_color", t.resolve(color_source))
-	material = mat
-	mouse_entered.connect(_on_mouse_entered)
-	mouse_exited.connect(_on_mouse_exited)
+	super._ready()
 	_apply_rotation.call_deferred()
 
 
@@ -31,12 +23,3 @@ func _apply_rotation() -> void:
 		flip_h = true
 	else:
 		rotation = rotation_angle
-
-
-func _on_mouse_entered() -> void:
-	ThemeProvider.theme.pulse_control(self)
-	(material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme.normal_text_color)
-
-
-func _on_mouse_exited() -> void:
-	(material as ShaderMaterial).set_shader_parameter("tint_color", ThemeProvider.theme.resolve(color_source))

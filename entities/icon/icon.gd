@@ -1,3 +1,4 @@
+class_name TintedIcon
 extends TextureButton
 
 const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
