@@ -374,3 +374,25 @@ func pulse_control(control: Control, scale_override: float = 0.0) -> void:
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tween.tween_property(control, "scale", Vector2.ONE, button_pulse_duration * 0.6) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)
+
+
+func pulse_node3d(node: Node3D, flash_white: bool = false,
+		material: StandardMaterial3D = null,
+		currency: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN,
+		is_hit: bool = false) -> void:
+	# Scale pop
+	var scale_tween := node.create_tween()
+	var target_scale := Vector3.ONE * bucket_pulse_scale
+	scale_tween.tween_property(node, "scale", target_scale, bucket_pulse_duration * 0.4) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	scale_tween.tween_property(node, "scale", Vector3.ONE, bucket_pulse_duration * 0.6) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)
+
+	# Color flash
+	if flash_white and material:
+		var flash_color := get_coin_color_light(currency)
+		material.albedo_color = flash_color
+		var rest_color: Color = resolve(Palette.BG_6) if is_hit else get_bucket_color(currency)
+		var color_tween := node.create_tween()
+		color_tween.tween_property(material, "albedo_color", rest_color, bucket_pulse_duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
