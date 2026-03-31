@@ -33,6 +33,7 @@ var should_show_advanced_buckets: bool = false
 var _has_advanced_drop: bool = false
 var _autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
+var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
 var multi_drop_count: int = -1
 
 signal board_rebuilt
@@ -281,6 +282,42 @@ func get_bucket(index: int) -> Bucket:
 	return null
 
 
+func mark_bucket_hit(index: int) -> void:
+	_bucket_markings[index] = &"hit"
+	var bucket := get_bucket(index)
+	if bucket:
+		bucket.mark_hit()
+
+
+func mark_bucket_target(index: int) -> void:
+	_bucket_markings[index] = &"target"
+	var bucket := get_bucket(index)
+	if bucket:
+		bucket.mark_target()
+
+
+func mark_bucket_forbidden(index: int) -> void:
+	_bucket_markings[index] = &"forbidden"
+	var bucket := get_bucket(index)
+	if bucket:
+		bucket.mark_forbidden()
+
+
+func unmark_bucket(index: int) -> void:
+	_bucket_markings.erase(index)
+	var bucket := get_bucket(index)
+	if bucket:
+		bucket.mark_unhit()
+
+
+func clear_all_markings() -> void:
+	for index in _bucket_markings:
+		var bucket := get_bucket(index)
+		if bucket:
+			bucket.mark_unhit()
+	_bucket_markings.clear()
+
+
 func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0) -> void:
 	var coin = CoinScene.instantiate()
 	coin.coin_type = type
@@ -377,8 +414,17 @@ func build_board() -> void:
 			distance_from_center -= distance_for_advanced_buckets
 
 		value += distance_from_center * bucket_value_multiplier
-		bucket.setup(bucket_currency, Vector3(i * space_between_pegs, 0, 0), value)
 		buckets_container.add_child(bucket)
+		bucket.setup(bucket_currency, Vector3(i * space_between_pegs, 0, 0), value)
+
+	# Re-apply stored markings after rebuild
+	for index in _bucket_markings:
+		var bucket := get_bucket(index)
+		if bucket:
+			match _bucket_markings[index]:
+				&"hit": bucket.mark_hit()
+				&"target": bucket.mark_target()
+				&"forbidden": bucket.mark_forbidden()
 
 	board_rebuilt.emit()
 

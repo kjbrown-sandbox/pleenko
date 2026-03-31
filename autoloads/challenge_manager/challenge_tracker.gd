@@ -1,7 +1,8 @@
 class_name ChallengeTracker
 extends Node
 ## Runs a single active challenge: tracks coin landings, checks constraints
-## and objectives, manages the timer, and marks buckets visually.
+## and objectives, and manages the timer. Uses the board's marking API for
+## bucket visuals rather than reaching into bucket nodes directly.
 
 signal completed
 signal failed(reason: String)
@@ -43,7 +44,6 @@ func _connect_board(board: PlinkoBoard) -> void:
 		return
 	board.coin_landed.connect(_on_coin_landed)
 	board.autodrop_failed.connect(_on_autodrop_failed)
-	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 
 
 func _on_board_switched(_board: PlinkoBoard) -> void:
@@ -85,16 +85,31 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 			if objective is LandInEveryBucket and objective.board_type == board_type:
 				var board := _get_board(board_type)
 				if board:
-					var bucket := board.get_bucket(bucket_index)
-					if bucket:
-						bucket.mark_hit()
+					board.mark_bucket_hit(bucket_index)
 
 	# Check HitBucketsInOrder progress
 	for objective in challenge.objectives:
 		if objective is HitBucketsInOrder and objective.board_type == board_type:
+			var board := _get_board(board_type)
+			if not board:
+				continue
+
+			# Unmark this individual target if it's in the current group
+			if _current_bucket_group < objective.bucket_groups.size():
+				var current_group: PackedInt32Array = objective.bucket_groups[_current_bucket_group]
+				if bucket_index in current_group:
+					board.unmark_bucket(bucket_index)
+
+			# Try to advance to next group
 			if _try_advance_bucket_group(objective):
+				# Unmark any remaining buckets from completed group
+				var completed_group: PackedInt32Array = objective.bucket_groups[_current_bucket_group - 1]
+				for bi in completed_group:
+					board.unmark_bucket(bi)
+				# Mark next group as targets
 				if _current_bucket_group < objective.bucket_groups.size():
-					_mark_bucket_group(objective, _current_bucket_group)
+					for bi in objective.bucket_groups[_current_bucket_group]:
+						board.mark_bucket_target(bi)
 
 	# Track streaks
 	var prev: int = _last_bucket.get(board_type, -1)
@@ -147,68 +162,25 @@ func _on_autodrop_failed(board_type: Enums.BoardType) -> void:
 			return
 
 
-# ── Board rebuilt — re-mark visuals ───────────────────────────────
-
-func _on_board_rebuilt(board: PlinkoBoard) -> void:
-	for objective in challenge.objectives:
-		if objective is LandInEveryBucket and objective.board_type == board.board_type:
-			var bucket_count: int = board.num_rows + 1
-			for i in bucket_count:
-				if _bucket_hits.has(_bucket_key(board.board_type, i)):
-					var bucket := board.get_bucket(i)
-					if bucket:
-						bucket.mark_hit()
-		elif objective is HitXBucketYTimes and objective.board_type == board.board_type:
-			_mark_target_bucket(objective)
-		elif objective is HitBucketsInOrder and objective.board_type == board.board_type:
-			for gi in range(_current_bucket_group + 1):
-				_mark_bucket_group(objective, gi)
-
-	for constraint in challenge.constraints:
-		if constraint is NeverTouchBucket and constraint.board_type == board.board_type:
-			_mark_forbidden_bucket(constraint)
-
-
-# ── Visual marking ────────────────────────────────────────────────
+# ── Visual marking (via board API) ────────────────────────────────
 
 func mark_initial_visuals() -> void:
 	for objective in challenge.objectives:
 		if objective is HitXBucketYTimes:
-			_mark_target_bucket(objective)
+			var board := _get_board(objective.board_type)
+			if board:
+				board.mark_bucket_target(objective.bucket_index)
 		elif objective is HitBucketsInOrder:
-			_mark_bucket_group(objective, 0)
+			var board := _get_board(objective.board_type)
+			if board and not objective.bucket_groups.is_empty():
+				for bi in objective.bucket_groups[0]:
+					board.mark_bucket_target(bi)
 
 	for constraint in challenge.constraints:
 		if constraint is NeverTouchBucket:
-			_mark_forbidden_bucket(constraint)
-
-
-func _mark_bucket_group(objective: HitBucketsInOrder, group_index: int) -> void:
-	if group_index >= objective.bucket_groups.size():
-		return
-	var board := _get_board(objective.board_type)
-	if not board:
-		return
-	for bi in objective.bucket_groups[group_index]:
-		var bucket := board.get_bucket(bi)
-		if bucket:
-			bucket.mark_hit()
-
-
-func _mark_target_bucket(objective: HitXBucketYTimes) -> void:
-	var board := _get_board(objective.board_type)
-	if board:
-		var bucket := board.get_bucket(objective.bucket_index)
-		if bucket:
-			bucket.mark_hit()
-
-
-func _mark_forbidden_bucket(constraint: NeverTouchBucket) -> void:
-	var board := _get_board(constraint.board_type)
-	if board:
-		var bucket := board.get_bucket(constraint.bucket_index)
-		if bucket:
-			bucket.mark_forbidden()
+			var board := _get_board(constraint.board_type)
+			if board:
+				board.mark_bucket_forbidden(constraint.bucket_index)
 
 
 # ── Objective validation ──────────────────────────────────────────
@@ -325,6 +297,4 @@ func disconnect_all() -> void:
 				board.coin_landed.disconnect(_on_coin_landed)
 			if board.autodrop_failed.is_connected(_on_autodrop_failed):
 				board.autodrop_failed.disconnect(_on_autodrop_failed)
-			for conn in board.board_rebuilt.get_connections():
-				if conn["callable"].get_method() == "_on_board_rebuilt":
-					board.board_rebuilt.disconnect(conn["callable"])
+			board.clear_all_markings()
