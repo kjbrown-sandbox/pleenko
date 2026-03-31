@@ -7,6 +7,9 @@ extends Node3D
 		if is_node_ready():
 			$BucketValue.text = str(value)
 
+const SkullTexture := preload("res://assets/icons/skull.png")
+const SpriteTintShader := preload("res://entities/bucket/sprite_tint.gdshader")
+
 var currency_type: Enums.CurrencyType
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
@@ -45,6 +48,29 @@ func mark_hit() -> void:
 	var label := get_node_or_null("BucketValue") as Label3D
 	if label:
 		label.modulate = hit_color
+
+
+func mark_forbidden() -> void:
+	mark_hit()
+	var label := get_node_or_null("BucketValue") as Label3D
+	if label:
+		label.visible = false
+	# Add skull icon with spatial tint shader
+	var t: VisualTheme = ThemeProvider.theme
+	var skull := Sprite3D.new()
+	skull.name = "SkullIcon"
+	skull.texture = SkullTexture
+	skull.pixel_size = 0.0006
+	# Label3D also has a -29px offset in the .tscn; approximate in world units
+	skull.position = Vector3(0, t.bucket_label_offset, 0.05)
+	skull.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	skull.transparent = true
+	var mat := ShaderMaterial.new()
+	mat.shader = SpriteTintShader
+	mat.set_shader_parameter("tint_color", t.resolve(VisualTheme.Palette.BG_6))
+	mat.set_shader_parameter("icon_texture", SkullTexture)
+	skull.material_override = mat
+	add_child(skull)
 
 
 func pulse() -> void:

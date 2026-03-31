@@ -12,5 +12,4 @@ script = ExtResource("1_wnq05")
 mesh = SubResource("BoxMesh_avjfo")
 
 [node name="BucketValue" type="Label3D" parent="." unique_id=2013189851]
-offset = Vector2(2.08165e-12, -29)
 text = "5"
