@@ -28,7 +28,7 @@ func setup(camera: Camera3D, info_panel: ChallengeInfoPanel) -> void:
 		var group: ChallengeGrouping = GroupScenes[i].instantiate()
 		group.position = Vector3(i * group_spacing, challenge_y_offset, 0)
 		add_child(group)
-		group.initialize()
+		group.setup()
 		group.initialize_progress()
 		group.connect_signals(_on_challenge_hovered, _on_challenge_pressed)
 		group.visible = _is_group_unlocked(i)

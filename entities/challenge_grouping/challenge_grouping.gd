@@ -8,7 +8,7 @@ var ChallengeConnectorScene: PackedScene = preload("res://entities/challenges_me
 var _challenge_buttons: Array[ChallengeButton] = []
 
 
-func initialize() -> void:
+func setup() -> void:
 	_collect_buttons()
 	_create_connectors()
 
