@@ -121,7 +121,7 @@ func can_buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bo
 	if state.current_cap > 0 and state.level >= state.current_cap:
 		return false
 
-	var currency := Enums.currency_for_board(board_type)
+	var currency := TierRegistry.primary_currency(board_type)
 	return CurrencyManager.can_afford(currency, state.cost)
 
 
@@ -131,7 +131,7 @@ func buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
 
 	var state: UpgradeState = _state[board_type][upgrade_type]
 
-	var currency := Enums.currency_for_board(board_type)
+	var currency := TierRegistry.primary_currency(board_type)
 	CurrencyManager.spend(currency, state.cost)
 
 	state.level += 1
@@ -174,7 +174,7 @@ func can_buy_cap_raise(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeT
 	# Can't raise cap on uncapped upgrades
 	if state.base_cap == 0:
 		return false
-	var currency: int = Enums.cap_raise_currency_for_board(board_type)
+	var currency: int = TierRegistry.cap_raise_currency(board_type)
 	if currency == -1:
 		return false
 	return CurrencyManager.can_afford(currency, get_cap_raise_cost(board_type, upgrade_type))
@@ -184,7 +184,7 @@ func buy_cap_raise(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType)
 	if not can_buy_cap_raise(board_type, upgrade_type):
 		return false
 	var state: UpgradeState = _state[board_type][upgrade_type]
-	var currency: int = Enums.cap_raise_currency_for_board(board_type)
+	var currency: int = TierRegistry.cap_raise_currency(board_type)
 	CurrencyManager.spend(currency, get_cap_raise_cost(board_type, upgrade_type))
 	state.current_cap += 1
 	state.cap_level += 1

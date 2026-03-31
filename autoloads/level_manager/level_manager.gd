@@ -51,7 +51,7 @@ func _build_level_table() -> void:
 func _build_tier_levels(board_type: Enums.BoardType) -> void:
 	var next_tier: TierData = TierRegistry.get_next_tier(board_type)
 	var currency_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
-	var tier_name: String = Enums.board_name(board_type)
+	var tier_name: String = FormatUtils.board_name(board_type)
 
 	for slot in LEVELS_PER_TIER:
 		var data := LevelData.new()
@@ -83,7 +83,7 @@ func _build_tier_levels(board_type: Enums.BoardType) -> void:
 				_set_special_slot(data, board_type, next_tier)
 			9:  # Unlock advanced buckets
 				if next_tier:
-					var adv_name: String = Enums.board_name(next_tier.board_type)
+					var adv_name: String = FormatUtils.board_name(next_tier.board_type)
 					data.message = "You have unlocked %s Buckets!" % adv_name
 					data.rewards = [_unlock_advanced_bucket(board_type)]
 				else:
@@ -95,7 +95,7 @@ func _build_tier_levels(board_type: Enums.BoardType) -> void:
 
 func _set_advanced_drop(data: LevelData, next_tier: TierData, board_type: Enums.BoardType) -> void:
 	if next_tier:
-		var adv_name: String = Enums.board_name(next_tier.board_type)
+		var adv_name: String = FormatUtils.board_name(next_tier.board_type)
 		data.message = "A %s coin will be dropped!" % adv_name
 		data.rewards = [_drop_coins(1, next_tier.raw_currency, board_type)]
 	else:

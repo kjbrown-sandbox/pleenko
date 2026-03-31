@@ -39,4 +39,4 @@ func _update_display() -> void:
 		max_value = threshold
 		value = mini(balance, threshold)
 		progress_bar.set_fill(float(value) / float(threshold))
-		progress_bar.update_text("%d/%d %s" % [balance, threshold, Enums.currency_name(currency)])
+		progress_bar.update_text("%d/%d %s" % [balance, threshold, FormatUtils.currency_name(currency)])

@@ -25,7 +25,7 @@ static func _currency_key(currency_type: Enums.CurrencyType) -> String:
 	return Enums.CurrencyType.keys()[currency_type]
 
 static func _primary_currency_key(board_type: Enums.BoardType) -> String:
-	return _currency_key(Enums.currency_for_board(board_type))
+	return _currency_key(TierRegistry.primary_currency(board_type))
 
 static func _advanced_currency_key(board_type: Enums.BoardType) -> String:
 	var adv: int = TierRegistry.advanced_bucket_currency(board_type)

@@ -70,13 +70,13 @@ func setup(type: Enums.BoardType) -> void:
 
 func _setup_drop_bars() -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	var currency_type: Enums.CurrencyType = Enums.currency_for_board(board_type)
+	var currency_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
 	var coin_color: Color = t.get_coin_color(currency_type)
 	var coin_color_dark: Color = t.get_coin_color_dark(currency_type)
 
 	# Main drop bar
 	_drop_main.setup(coin_color, coin_color_dark)
-	_drop_main.update_text("Drop %s" % Enums.currency_name(currency_type))
+	_drop_main.update_text("Drop %s" % FormatUtils.currency_name(currency_type))
 	_drop_main.main_pressed.connect(func(): request_drop())
 	_drop_main.main_mouse_entered.connect(_on_drop_main_hover)
 	_drop_main.main_mouse_exited.connect(_on_drop_hover_exit)
@@ -113,7 +113,7 @@ func _setup_drop_bars() -> void:
 func _format_cost_text(costs: Array) -> String:
 	var parts: PackedStringArray = []
 	for cost in costs:
-		parts.append("%d %s" % [cost[1], Enums.currency_name(cost[0], false)])
+		parts.append("%d %s" % [cost[1], FormatUtils.currency_name(cost[0], false)])
 	return ", ".join(parts)
 
 
@@ -165,7 +165,7 @@ func _process(delta: float) -> void:
 func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	if costs.is_empty():
 		costs = _get_drop_costs()
-	var drop_coin_type: Enums.CurrencyType = (coin_type as Enums.CurrencyType) if coin_type != -1 else Enums.currency_for_board(board_type)
+	var drop_coin_type: Enums.CurrencyType = (coin_type as Enums.CurrencyType) if coin_type != -1 else TierRegistry.primary_currency(board_type)
 
 	if not _can_afford(costs):
 		return
@@ -335,7 +335,7 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 				if advanced_bucket_type >= 0:
 					force_drop_coin(advanced_bucket_type, advanced_coin_multiplier)
 				else:
-					force_drop_coin(Enums.currency_for_board(board_type), advanced_coin_multiplier)
+					force_drop_coin(TierRegistry.primary_currency(board_type), advanced_coin_multiplier)
 		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET and reward.target_board == board_type:
 			should_show_advanced_buckets = true
 			build_board()
@@ -348,7 +348,7 @@ func _show_advanced_drop_bar() -> void:
 	var adv_color: Color = t.get_coin_color(advanced_bucket_type)
 	var adv_color_dark: Color = t.get_coin_color_dark(advanced_bucket_type)
 	_drop_advanced.setup(adv_color, adv_color_dark)
-	_drop_advanced.update_text("Drop %s" % Enums.currency_name(advanced_bucket_type))
+	_drop_advanced.update_text("Drop %s" % FormatUtils.currency_name(advanced_bucket_type))
 	_drop_advanced.main_pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
 	_drop_advanced.main_mouse_entered.connect(_on_drop_advanced_hover)
 	_drop_advanced.main_mouse_exited.connect(_on_drop_hover_exit)
@@ -406,7 +406,7 @@ func build_board() -> void:
 		var distance_from_center = (abs(i - floor(num_buckets / 2))) 
 
 		var value = 1
-		var bucket_currency: Enums.CurrencyType = Enums.currency_for_board(board_type)
+		var bucket_currency: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
 		if distance_from_center >= distance_for_advanced_buckets and should_show_advanced_buckets:
 			bucket_currency = advanced_bucket_type
 			distance_from_center -= distance_for_advanced_buckets
@@ -520,8 +520,8 @@ func _setup_autodropper_buttons(bid: StringName) -> void:
 
 func _get_currency_name_for_button(bid: StringName) -> String:
 	if (bid as String).ends_with("_ADVANCED"):
-		return Enums.currency_name(advanced_bucket_type, false)
-	return Enums.currency_name(Enums.currency_for_board(board_type), false)
+		return FormatUtils.currency_name(advanced_bucket_type, false)
+	return FormatUtils.currency_name(TierRegistry.primary_currency(board_type), false)
 
 
 func update_autodropper_buttons(assignments: Dictionary, free_count: int) -> void:

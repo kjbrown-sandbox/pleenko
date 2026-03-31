@@ -113,7 +113,7 @@ func _update_bar(bar, type: Enums.CurrencyType, balance: int, cap: int) -> void:
 
 
 func _get_currency_name(type: int) -> String:
-	return Enums.currency_name(type)
+	return FormatUtils.currency_name(type)
 
 
 func _on_cap_hover(type: Enums.CurrencyType) -> void:

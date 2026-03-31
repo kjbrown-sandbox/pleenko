@@ -13,7 +13,7 @@ func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgr
 	_board_type = board_type
 	_upgrade_type = upgrade_type
 	_callback = on_upgrade
-	_currency_type = Enums.currency_for_board(_board_type)
+	_currency_type = TierRegistry.primary_currency(_board_type)
 
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
@@ -72,7 +72,7 @@ func _update_button() -> void:
 	if at_max:
 		fill_bar.set_fill(1.0)
 	elif state.cost > 0:
-		var balance: int = CurrencyManager.get_balance(Enums.currency_for_board(_board_type))
+		var balance: int = CurrencyManager.get_balance(TierRegistry.primary_currency(_board_type))
 		fill_bar.set_fill(clampf(float(balance) / float(state.cost), 0.0, 1.0))
 	else:
 		fill_bar.set_fill(0.0)
@@ -98,12 +98,12 @@ func _on_mouse_exited() -> void:
 
 
 func _get_currency_name(currency_type: int) -> String:
-	return Enums.currency_name(currency_type, false)
+	return FormatUtils.currency_name(currency_type, false)
 
 func _get_purchase_hover_text() -> String:
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
 	var at_max: bool = state.current_cap > 0 and state.level >= state.current_cap
 	if at_max:
 		return ""
-	var currency_name: String = _get_currency_name(Enums.currency_for_board(_board_type))
+	var currency_name: String = _get_currency_name(TierRegistry.primary_currency(_board_type))
 	return "Cost: %d %s" % [state.cost, currency_name]
