@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://h4rwxjeyfqx"]
 
 [ext_resource type="PackedScene" uid="uid://b6gbfhxvkrhth" path="res://entities/fill_bar/fill_bar.tscn" id="1_ddiwm"]
+[ext_resource type="PackedScene" path="res://entities/tooltip/tooltip.tscn" id="2_tooltip"]
 
 [node name="DropSection" type="Control" unique_id=540970006]
 layout_mode = 3
@@ -48,3 +49,8 @@ layout_mode = 2
 
 [node name="DropAdvanced" parent="DropButtons" unique_id=1659889309 instance=ExtResource("1_ddiwm")]
 layout_mode = 2
+
+[node name="DropTooltip" parent="." instance=ExtResource("2_tooltip")]
+use_parent_signals = false
+anchor_node_path = NodePath("../DropButtons")
+horizontal_alignment = 1

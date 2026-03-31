@@ -22,7 +22,7 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var coin_queue: CoinQueue = $CoinQueue
 @onready var _drop_main = $DropSection/DropButtons/DropMain
 @onready var _drop_advanced = $DropSection/DropButtons/DropAdvanced
-@onready var _drop_buttons_container = $DropSection/DropButtons
+@onready var _drop_tooltip: Tooltip = $DropSection/DropTooltip
 
 var board_type: Enums.BoardType
 var advanced_bucket_type: Enums.CurrencyType
@@ -33,7 +33,6 @@ var should_show_advanced_buckets: bool = false
 var _has_advanced_drop: bool = false
 var _autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
-var _drop_hover_label: Label
 var multi_drop_count: int = -1
 
 signal board_rebuilt
@@ -96,19 +95,6 @@ func _setup_drop_bars() -> void:
 	# Advanced drop bar — hidden until earned
 	_drop_advanced.visible = false
 
-	# Hover label — positioned above the drop buttons, outside the VBox so it
-	# doesn't affect button sizing.
-	_drop_hover_label = Label.new()
-	_drop_hover_label.visible = false
-	_drop_hover_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_drop_hover_label.add_theme_font_size_override("font_size", int(t.button_font_size))
-	_drop_hover_label.add_theme_constant_override("line_spacing", -int(t.button_font_size) / 3)
-	_drop_hover_label.add_theme_color_override("font_color", t.resolve(VisualTheme.Palette.BG_5))
-	var font: Font = t.button_font if t.button_font else t.label_font
-	if font:
-		_drop_hover_label.add_theme_font_override("font", font)
-	drop_section.add_child(_drop_hover_label)
-
 
 func _format_cost_text(costs: Array) -> String:
 	var parts: PackedStringArray = []
@@ -119,41 +105,20 @@ func _format_cost_text(costs: Array) -> String:
 
 func _on_drop_main_hover() -> void:
 	_drop_main.pulse_main(1.005)
-	_show_drop_hover("Cost: %s\nHotkey: SPACE" % _format_cost_text(_get_drop_costs()))
+	_drop_tooltip.update_and_show("Cost: %s\nHotkey: SPACE" % _format_cost_text(_get_drop_costs()))
 
 
 func _on_drop_advanced_hover() -> void:
 	_drop_advanced.pulse_main(1.005)
-	_show_drop_hover("Cost: %s" % _format_cost_text(_get_advanced_drop_costs()))
+	_drop_tooltip.update_and_show("Cost: %s" % _format_cost_text(_get_advanced_drop_costs()))
 
 
 func _on_drop_hover_exit() -> void:
-	_drop_hover_label.visible = false
-
-
-func _show_drop_hover(text: String) -> void:
-	_drop_hover_label.text = text
-	_drop_hover_label.size = Vector2.ZERO  # Reset so it auto-sizes to text
-	_drop_hover_label.visible = true
-	# Position centered above the drop buttons container (deferred so size is computed)
-	_position_drop_hover.call_deferred()
-
-
-func _position_drop_hover() -> void:
-	var container_pos: Vector2 = _drop_buttons_container.global_position
-	var container_size: Vector2 = _drop_buttons_container.size
-	var label_size: Vector2 = _drop_hover_label.size
-	_drop_hover_label.global_position = Vector2(
-		container_pos.x + (container_size.x - label_size.x) / 2.0,
-		container_pos.y - label_size.y - 10.0
-	)
+	_drop_tooltip.hide_tooltip()
 
 
 func _on_drop_side_hover(text: String) -> void:
-	if text.is_empty():
-		_drop_hover_label.visible = false
-	else:
-		_show_drop_hover(text)
+	_drop_tooltip.show_or_hide(text)
 
 
 func _process(delta: float) -> void:

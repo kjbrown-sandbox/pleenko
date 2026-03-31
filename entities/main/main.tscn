@@ -11,6 +11,7 @@
 [ext_resource type="PackedScene" uid="uid://dpc8x2qr1k5v0" path="res://entities/challenge_info_panel/challenge_info_panel.tscn" id="11_infopanel"]
 [ext_resource type="PackedScene" uid="uid://x8pe2anpsxj2" path="res://entities/nav_arrow/nav_arrow.tscn" id="17_navarrow"]
 [ext_resource type="Script" uid="uid://1wujxqybenxn" path="res://entities/challenge_grouping_manager/challenge_grouping_manager.gd" id="18_cgm"]
+[ext_resource type="PackedScene" path="res://entities/tooltip/tooltip.tscn" id="19_tooltip"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
@@ -103,6 +104,11 @@ grow_horizontal = 2
 grow_vertical = 0
 rotation_angle = 3.0
 
+[node name="Tooltip" parent="CanvasLayer/ChallengesDownIcon" instance=ExtResource("19_tooltip")]
+text = "Hotkey: Down arrow"
+position_side = 0
+offset = 4.0
+
 [node name="ChallengesUpIcon" parent="CanvasLayer" unique_id=2081979746 instance=ExtResource("17_navarrow")]
 visible = false
 texture_filter = 0
@@ -116,6 +122,11 @@ offset_bottom = 32.0
 grow_horizontal = 2
 rotation_angle = -1.5708
 
+[node name="Tooltip" parent="CanvasLayer/ChallengesUpIcon" instance=ExtResource("19_tooltip")]
+text = "Hotkey: Up arrow"
+position_side = 2
+offset = 4.0
+
 [node name="BoardLeftIcon" parent="CanvasLayer" unique_id=1333567701 instance=ExtResource("17_navarrow")]
 visible = false
 texture_filter = 0
@@ -128,6 +139,11 @@ offset_right = 32.0
 offset_bottom = 16.0
 grow_vertical = 2
 rotation_angle = 3.14159
+
+[node name="Tooltip" parent="CanvasLayer/BoardLeftIcon" instance=ExtResource("19_tooltip")]
+text = "Hotkey: Left arrow"
+position_side = 1
+offset = 4.0
 
 [node name="BoardRightIcon" parent="CanvasLayer" unique_id=383221458 instance=ExtResource("17_navarrow")]
 visible = false
@@ -143,6 +159,11 @@ offset_top = -16.0
 offset_bottom = 16.0
 grow_horizontal = 0
 grow_vertical = 2
+
+[node name="Tooltip" parent="CanvasLayer/BoardRightIcon" instance=ExtResource("19_tooltip")]
+text = "Hotkey: Right arrow"
+position_side = 3
+offset = 4.0
 
 [node name="ChallengeInfoPanel" parent="." unique_id=809409958 instance=ExtResource("11_infopanel")]
 

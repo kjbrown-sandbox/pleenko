@@ -1,10 +1,11 @@
 extends VBoxContainer
 
 const FillBarScene := preload("res://entities/fill_bar/fill_bar.tscn")
+const TooltipScene := preload("res://entities/tooltip/tooltip.tscn")
 
 var _bars: Dictionary = {}  # CurrencyType -> FillBar node
 var _visible_currencies: Array[Enums.CurrencyType] = [Enums.CurrencyType.GOLD_COIN]
-var _hover_info_label: Label
+var _hover_tooltip: Tooltip
 
 var _board_manager: BoardManager
 
@@ -55,7 +56,7 @@ func _update_currencies() -> void:
 	for child in get_children():
 		child.queue_free()
 	_bars.clear()
-	_hover_info_label = null
+	_hover_tooltip = null
 
 	for currency_type in _visible_currencies:
 		var bar = FillBarScene.instantiate()
@@ -80,17 +81,12 @@ func _update_currencies() -> void:
 
 		_bars[currency_type] = bar
 
-	# Hover info label at the bottom
-	_hover_info_label = Label.new()
-	_hover_info_label.visible = false
-	_hover_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var t: VisualTheme = ThemeProvider.theme
-	_hover_info_label.add_theme_font_size_override("font_size", int(t.button_font_size))
-	_hover_info_label.add_theme_color_override("font_color", t.resolve(VisualTheme.Palette.BG_5))
-	var font: Font = t.button_font if t.button_font else t.label_font
-	if font:
-		_hover_info_label.add_theme_font_override("font", font)
-	add_child(_hover_info_label)
+	# Hover tooltip at the bottom
+	_hover_tooltip = TooltipScene.instantiate()
+	_hover_tooltip.use_parent_signals = false
+	_hover_tooltip.position_side = Tooltip.Placement.INLINE
+	_hover_tooltip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(_hover_tooltip)
 
 	_update_all_cap_buttons()
 
@@ -117,18 +113,17 @@ func _get_currency_name(type: int) -> String:
 
 
 func _on_cap_hover(type: Enums.CurrencyType) -> void:
-	if not _hover_info_label:
+	if not _hover_tooltip:
 		return
 	var cost := CurrencyManager.get_cap_raise_cost(type)
 	var cap_currency: int = CurrencyManager.cap_raise_currency(type)
 	var currency_name := _get_currency_name(cap_currency)
-	_hover_info_label.text = "Cost: %d %s" % [cost, currency_name]
-	_hover_info_label.visible = true
+	_hover_tooltip.update_and_show("Cost: %d %s" % [cost, currency_name])
 
 
 func _on_cap_unhover() -> void:
-	if _hover_info_label:
-		_hover_info_label.visible = false
+	if _hover_tooltip:
+		_hover_tooltip.hide_tooltip()
 
 
 func refresh_visible_currencies() -> void:
@@ -151,7 +146,7 @@ func _on_cap_raise_unlocked(_board_type: Enums.BoardType) -> void:
 func _on_cap_raise_pressed(type: Enums.CurrencyType) -> void:
 	CurrencyManager.buy_cap_raise(type)
 	_update_all_cap_buttons()
-	if _hover_info_label and _hover_info_label.visible:
+	if _hover_tooltip and _hover_tooltip.visible:
 		_on_cap_hover(type)
 
 

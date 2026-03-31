@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dwssqmgrhvooe"]
 
 [ext_resource type="Script" uid="uid://dramu0pxg8kuh" path="res://entities/plinko_board/upgrade_section.gd" id="1_lrn56"]
+[ext_resource type="PackedScene" path="res://entities/tooltip/tooltip.tscn" id="2_tooltip"]
 
 [node name="UpgradeSection" type="CanvasLayer" unique_id=1448500383]
 script = ExtResource("1_lrn56")
@@ -24,7 +25,8 @@ theme_override_constants/separation = 10
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="HoverInfo" type="Label" parent="MarginContainer/OuterVBox" unique_id=74694662]
-visible = false
+[node name="HoverInfo" parent="MarginContainer/OuterVBox" unique_id=74694662 instance=ExtResource("2_tooltip")]
 layout_mode = 2
+use_parent_signals = false
+position_side = 4
 horizontal_alignment = 1
