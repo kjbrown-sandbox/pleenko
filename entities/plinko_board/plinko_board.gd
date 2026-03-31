@@ -8,6 +8,9 @@ var vertical_spacing: float
 @export var drop_delay_reduction_factor: float = 0.75
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
+## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
+const MULTI_DROP_STAGGER := 0.15
+
 const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
@@ -186,10 +189,11 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	else:
 		return  # Can't drop right now
 
-	# Extra coins — staggered, bypass queue and cost
+	# Multi-drop: first coin pays the cost (above). Bonus coins from prestige/challenges
+	# are free and staggered so they don't all land in the same bucket simultaneously.
 	var mult: float = advanced_coin_multiplier if drop_coin_type == advanced_bucket_type else 1.0
 	for i in range(1, multi_drop_count):
-		get_tree().create_timer(i * 0.15).timeout.connect(
+		get_tree().create_timer(i * MULTI_DROP_STAGGER).timeout.connect(
 			force_drop_coin.bind(drop_coin_type, mult)
 		)
 
