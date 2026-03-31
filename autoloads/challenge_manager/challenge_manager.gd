@@ -38,6 +38,7 @@ func setup(board_manager: BoardManager) -> void:
 	_last_bucket.clear()
 	_same_bucket_streak.clear()
 	_current_bucket_group = 0
+	_survive_passed = false
 
 	# Reset currency to starting state
 	CurrencyManager.reset()
