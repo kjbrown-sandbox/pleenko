@@ -364,8 +364,9 @@ func _setup_survive(objective: Survive) -> void:
 	_board_manager._on_autodropper_unlocked()
 
 	if objective.start_delay > 0.0:
-		get_tree().create_timer(objective.start_delay).timeout.connect(
-			_activate_autodroppers.bind(objective))
+		var tween := create_tween()
+		tween.tween_interval(objective.start_delay)
+		tween.tween_callback(_activate_autodroppers.bind(objective))
 	else:
 		_activate_autodroppers(objective)
 

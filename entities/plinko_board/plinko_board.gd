@@ -193,9 +193,9 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	# are free and staggered so they don't all land in the same bucket simultaneously.
 	var mult: float = advanced_coin_multiplier if drop_coin_type == advanced_bucket_type else 1.0
 	for i in range(1, multi_drop_count):
-		get_tree().create_timer(i * MULTI_DROP_STAGGER).timeout.connect(
-			force_drop_coin.bind(drop_coin_type, mult)
-		)
+		var tween := create_tween()
+		tween.tween_interval(i * MULTI_DROP_STAGGER)
+		tween.tween_callback(force_drop_coin.bind(drop_coin_type, mult))
 
 	if multi_drop_count > 1:
 		_show_multi_drop_label(multi_drop_count)
@@ -247,7 +247,9 @@ func _drop_from_queue() -> void:
 func _start_drop_timer() -> void:
 	is_waiting = true
 	_drop_timer_remaining = drop_delay
-	get_tree().create_timer(drop_delay).timeout.connect(_on_drop_timer_done)
+	var tween := create_tween()
+	tween.tween_interval(drop_delay)
+	tween.tween_callback(_on_drop_timer_done)
 
 
 func _on_drop_timer_done() -> void:
