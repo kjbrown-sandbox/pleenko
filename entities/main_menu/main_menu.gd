@@ -1,19 +1,14 @@
 extends Node3D
 
 const MainScene := preload("res://entities/main/main.tscn")
-const ChallengesMenuScene := preload("res://entities/challenges_menu/challenges_menu.tscn")
 
 @onready var play_button: Button = $CanvasLayer/HBoxContainer/PlayButton
-@onready var challenges_button: Button = $CanvasLayer/HBoxContainer/ChallengesButton
 
 func _ready() -> void:
 	_setup_environment()
 	var t: VisualTheme = ThemeProvider.theme
 	t.apply_button_theme(play_button)
-	t.apply_button_theme(challenges_button)
 	play_button.pressed.connect(_on_play_pressed)
-	challenges_button.pressed.connect(_on_challenges_pressed)
-	print("Main menu ready")
 
 func _setup_environment() -> void:
 	var t: VisualTheme = ThemeProvider.theme
@@ -30,6 +25,3 @@ func _setup_environment() -> void:
 
 func _on_play_pressed() -> void:
 	SceneManager.set_new_scene(MainScene)
-
-func _on_challenges_pressed() -> void:
-	SceneManager.set_new_scene(ChallengesMenuScene)

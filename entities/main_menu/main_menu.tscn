@@ -19,13 +19,6 @@ size_flags_vertical = 3
 [node name="PlayButton" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=1475028527]
 layout_mode = 2
 size_flags_horizontal = 6
-size_flags_vertical = 10
+size_flags_vertical = 6
 text = "Campaign
-"
-
-[node name="ChallengesButton" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=1386039177]
-layout_mode = 2
-size_flags_horizontal = 6
-size_flags_vertical = 2
-text = "Challenges
 "
