@@ -1,3 +1,4 @@
+class_name OptionsDialog
 extends CanvasLayer
 
 const MAIN_MENU_PATH := "res://entities/main_menu/main_menu.tscn"

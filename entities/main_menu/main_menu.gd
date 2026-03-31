@@ -1,3 +1,4 @@
+class_name MainMenu
 extends Node3D
 
 const MainScene := preload("res://entities/main/main.tscn")

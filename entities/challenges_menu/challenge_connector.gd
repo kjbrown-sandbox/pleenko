@@ -1,3 +1,4 @@
+class_name ChallengeConnector
 extends MeshInstance3D
 
 @export var thickness := 0.05

@@ -1,3 +1,4 @@
+class_name UpgradeRow
 extends MarginContainer
 
 signal hover_info_changed(text: String)

@@ -1,3 +1,4 @@
+class_name FillBar
 extends HBoxContainer
 
 ## A reusable row with a fill-bar button and optional "-" / "+" side buttons.

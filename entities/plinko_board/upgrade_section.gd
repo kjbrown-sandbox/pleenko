@@ -1,3 +1,4 @@
+class_name UpgradeSection
 extends CanvasLayer
 
 const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
