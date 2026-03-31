@@ -37,6 +37,9 @@ func setup(board_manager: BoardManager) -> void:
 	_last_bucket.clear()
 	_same_bucket_streak.clear()
 
+	# Reset currency to starting state
+	CurrencyManager.reset()
+
 	# Set gates on other managers
 	UpgradeManager.upgrade_gate = is_upgrade_allowed
 	_board_manager.board_gate = is_board_allowed
