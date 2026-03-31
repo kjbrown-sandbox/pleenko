@@ -3,3 +3,4 @@ extends ChallengeObjective
 
 @export var board_type: Enums.BoardType
 @export var autodropper_count: int = 1
+@export var start_delay: float = 0.0

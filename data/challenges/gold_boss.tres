@@ -1,0 +1,55 @@
+[gd_resource type="Resource" script_class="ChallengeData" format=3 uid="uid://blry535dwk8ds"]
+
+[ext_resource type="Script" uid="uid://cprkqdv24lv2s" path="res://autoloads/challenge_manager/challenge_constraint.gd" id="1_con"]
+[ext_resource type="Script" uid="uid://co7w0klc1bfgq" path="res://autoloads/challenge_manager/challenge_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://dkvm8ypb1v37o" path="res://autoloads/challenge_manager/objectives/survive.gd" id="2_obj"]
+[ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_obj_base"]
+[ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
+[ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_start_base"]
+[ext_resource type="Script" uid="uid://ck6ikghmwasmr" path="res://autoloads/challenge_manager/starting_conditions/starting_boards.gd" id="7_start_board"]
+[ext_resource type="Script" uid="uid://b6uhmhq6a211h" path="res://autoloads/challenge_manager/starting_conditions/starting_coins.gd" id="8_start_coins"]
+[ext_resource type="Script" uid="uid://jgy103i1yua6" path="res://autoloads/challenge_manager/starting_conditions/starting_drop_delay.gd" id="9_start_delay"]
+[ext_resource type="Script" uid="uid://l8dbur8qgyhb" path="res://autoloads/challenge_manager/starting_conditions/starting_cap.gd" id="10_start_cap"]
+
+[sub_resource type="Resource" id="objective_1"]
+script = ExtResource("2_obj")
+board_type = 1
+start_delay = 60.0
+
+[sub_resource type="Resource" id="reward_1"]
+script = ExtResource("3_reward")
+type = 1
+modifier_type = 3
+description = "+1.0 advanced coin multiplier to gold"
+
+[sub_resource type="Resource" id="starting_1"]
+script = ExtResource("7_start_board")
+board_type = 1
+rows = 2
+
+[sub_resource type="Resource" id="starting_2"]
+script = ExtResource("8_start_coins")
+currency_type = 1
+amount = 30
+
+[sub_resource type="Resource" id="starting_3"]
+script = ExtResource("9_start_delay")
+board_type = 1
+drop_delay = 1.0
+
+[sub_resource type="Resource" id="starting_4"]
+script = ExtResource("8_start_coins")
+amount = 1
+
+[sub_resource type="Resource" id="starting_5"]
+script = ExtResource("10_start_cap")
+cap = 500
+
+[resource]
+script = ExtResource("1_data")
+id = "gold_boss"
+display_name = "The Gauntlet"
+time_limit_seconds = 180.0
+objectives = Array[ExtResource("2_obj_base")]([SubResource("objective_1")])
+starting_conditions = Array[ExtResource("6_start_base")]([SubResource("starting_1"), SubResource("starting_2"), SubResource("starting_3"), SubResource("starting_4"), SubResource("starting_5")])
+rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])

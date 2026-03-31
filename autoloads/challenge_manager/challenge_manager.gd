@@ -326,6 +326,11 @@ func _on_autodrop_failed(board_type: Enums.BoardType) -> void:
 
 
 func _apply_starting_conditions() -> void:
+	# Apply caps first so coins aren't truncated
+	for condition in _challenge.starting_conditions:
+		if condition is StartingCap:
+			CurrencyManager.caps[condition.currency_type] = condition.cap
+
 	for condition in _challenge.starting_conditions:
 		if condition is StartingCoins:
 			CurrencyManager.add(condition.currency_type, condition.amount)
@@ -343,8 +348,6 @@ func _apply_starting_conditions() -> void:
 			var board := _get_board(condition.board_type)
 			if board:
 				board.drop_delay = condition.drop_delay
-		elif condition is StartingCap:
-			CurrencyManager.caps[condition.currency_type] = condition.cap
 
 
 func _setup_survive(objective: Survive) -> void:
@@ -353,13 +356,23 @@ func _setup_survive(objective: Survive) -> void:
 		return
 
 	# Ensure enough autodroppers exist in the pool
-	var current_pool: int = _board_manager.get_autodropper_pool()
 	var needed: int = objective.autodropper_count - _board_manager.get_free_autodroppers()
 	for i in needed:
 		UpgradeManager.force_apply(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
 
-	# Unlock autodropper UI and assign
+	# Unlock autodropper UI
 	_board_manager._on_autodropper_unlocked()
+
+	if objective.start_delay > 0.0:
+		get_tree().create_timer(objective.start_delay).timeout.connect(
+			_activate_autodroppers.bind(objective))
+	else:
+		_activate_autodroppers(objective)
+
+
+func _activate_autodroppers(objective: Survive) -> void:
+	if not is_active_challenge:
+		return
 	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[objective.board_type])
 	for i in objective.autodropper_count:
 		_board_manager._on_autodropper_adjust(normal_id, 1)
