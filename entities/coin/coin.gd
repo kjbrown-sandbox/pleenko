@@ -1,6 +1,8 @@
 class_name Coin
 extends Node3D
 
+signal landed(coin: Coin)
+
 var board: PlinkoBoard
 var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
 	set(value):
@@ -36,7 +38,7 @@ func start(target: Vector3) -> void:
 
 func _bounce_or_despawn() -> void:
 	if position.y < board.buckets_container.position.y + 0.5:
-		board.on_coin_landed(self)
+		landed.emit(self)
 	else:
 		var t: VisualTheme = ThemeProvider.theme
 		var x_tween: Tween = create_tween()

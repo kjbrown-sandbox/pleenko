@@ -223,11 +223,16 @@ func _spend(costs: Array) -> void:
 		CurrencyManager.spend(cost[0], cost[1])
 
 
-func _drop_immediate_coin(coin: Coin) -> void:
+func _launch_coin(coin: Coin) -> void:
 	coin.board = self
 	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
 	add_child(coin)
+	coin.landed.connect(on_coin_landed)
 	coin.start(Vector3(0, 0.2, 0))
+
+
+func _drop_immediate_coin(coin: Coin) -> void:
+	_launch_coin(coin)
 	_start_drop_timer()
 
 
@@ -236,11 +241,8 @@ func _drop_from_queue() -> void:
 		return
 
 	var coin: Coin = coin_queue.dequeue()
-	coin.board = self
-	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
 	coin.rotation = Vector3.ZERO
-	add_child(coin)
-	coin.start(Vector3(0, 0.2, 0))
+	_launch_coin(coin)
 	_start_drop_timer()
 
 
@@ -317,12 +319,9 @@ func get_bucket(index: int) -> Bucket:
 
 func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0) -> void:
 	var coin = CoinScene.instantiate()
-	coin.board = self
 	coin.coin_type = type
 	coin.multiplier = mult
-	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
-	add_child(coin)
-	coin.start(Vector3(0, 0.2, 0))
+	_launch_coin(coin)
 
 
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
