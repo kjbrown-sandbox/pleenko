@@ -26,6 +26,8 @@ func setup(board_manager: BoardManager, should_autosave: bool) -> void:
 
 
 func save_game() -> void:
+	if not is_instance_valid(_board_manager):
+		return
 	var data := {
 		"version": SAVE_VERSION,
 		"save_timestamp": Time.get_unix_time_from_system(),

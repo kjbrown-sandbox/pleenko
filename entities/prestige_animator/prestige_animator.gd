@@ -116,7 +116,7 @@ func _process_freeze(t: VisualTheme) -> void:
 		PrestigeManager.enter_phase(PrestigeManager.PrestigePhase.EXPAND)
 
 
-func _process_expand(real_delta: float, t: VisualTheme) -> void:
+func _process_expand(_real_delta: float, t: VisualTheme) -> void:
 	if not is_instance_valid(_target_coin):
 		_transition_to_prestige_screen()
 		return
