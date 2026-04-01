@@ -14,7 +14,7 @@
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
 board_type = 1
-start_delay = 90.0
+start_delay = 75.0
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
@@ -49,7 +49,7 @@ cap = 500
 script = ExtResource("1_data")
 id = "gold_boss"
 display_name = "The Gauntlet"
-time_limit_seconds = 180.0
+time_limit_seconds = 135.0
 objectives = Array[ExtResource("2_obj_base")]([SubResource("objective_1")])
 starting_conditions = Array[ExtResource("6_start_base")]([SubResource("starting_1"), SubResource("starting_2"), SubResource("starting_3"), SubResource("starting_4"), SubResource("starting_5")])
 rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])

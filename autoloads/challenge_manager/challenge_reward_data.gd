@@ -4,6 +4,7 @@ extends Resource
 enum RewardType {
 	UNLOCK,
 	STARTING_MODIFIER,
+	PERMANENT_UPGRADE,
 }
 
 enum UnlockType {
@@ -15,6 +16,7 @@ enum ModifierType {
 	STARTING_COINS,
 	MULTI_DROP,
 	ADVANCED_COIN_MULTIPLIER,
+	BUCKET_VALUE_PERCENT,
 }
 
 @export var type: RewardType
@@ -23,4 +25,5 @@ enum ModifierType {
 @export var modifier_amount: float = 1.0
 @export var currency_type: Enums.CurrencyType
 @export var board_type: Enums.BoardType
+@export var upgrade_type: Enums.UpgradeType
 @export var description: String = ""

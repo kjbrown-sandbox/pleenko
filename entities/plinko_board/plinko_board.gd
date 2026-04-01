@@ -60,11 +60,19 @@ func setup(type: Enums.BoardType) -> void:
 	if adv >= 0:
 		advanced_bucket_type = adv
 
+	# Apply permanent upgrade bonuses from challenge rewards
+	bucket_value_multiplier = 1 + ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.BUCKET_VALUE)
+	var perm_drop_rate: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.DROP_RATE)
+	for i in perm_drop_rate:
+		drop_delay *= drop_delay_reduction_factor
+	var perm_queue: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.QUEUE)
+
 	_setup_drop_bars()
 	_update_drop_fill()
 	upgrade_section.setup(self, type)
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
+	coin_queue.set_capacity(perm_queue)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
@@ -423,6 +431,9 @@ func build_board() -> void:
 			distance_from_center -= distance_for_advanced_buckets
 
 		value += distance_from_center * bucket_value_multiplier
+		var pct_bonus := ChallengeProgressManager.get_bucket_value_percent_bonus(board_type)
+		if pct_bonus > 0.0:
+			value = roundi(value * (1.0 + pct_bonus))
 		buckets_container.add_child(bucket)
 		bucket.setup(bucket_currency, Vector3(i * space_between_pegs, 0, 0), value)
 
@@ -571,22 +582,26 @@ func get_drop_button(btn_id: StringName):
 
 
 ## Applies saved upgrade state to this board without going through buy logic.
+## Permanent challenge bonuses are added on top of player-bought upgrade levels.
 func apply_saved_state(upgrade_state: Dictionary) -> void:
 	var add_row_level: int = upgrade_state.get("ADD_ROW", 0)
 	num_rows = 2 + add_row_level * 2
 
-	bucket_value_multiplier = 1 + upgrade_state.get("BUCKET_VALUE", 0)
+	var perm_bv: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.BUCKET_VALUE)
+	bucket_value_multiplier = 1 + upgrade_state.get("BUCKET_VALUE", 0) + perm_bv
+
 	var base_acm: float = upgrade_state.get("advanced_coin_multiplier", 2.0)
 	var bonus_acm: float = ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board_type)
 	advanced_coin_multiplier = base_acm + bonus_acm
-	print("[PlinkoBoard] advanced_coin_multiplier: base=%.1f bonus=%.1f total=%.1f" % [base_acm, bonus_acm, advanced_coin_multiplier])
 
 	var drop_rate_level: int = upgrade_state.get("DROP_RATE", 0)
-	for i in drop_rate_level:
+	var perm_dr: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.DROP_RATE)
+	for i in drop_rate_level + perm_dr:
 		drop_delay *= drop_delay_reduction_factor
 
 	var queue_level: int = upgrade_state.get("QUEUE", 0)
-	coin_queue.set_capacity(queue_level)
+	var perm_q: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.QUEUE)
+	coin_queue.set_capacity(queue_level + perm_q)
 
 	if upgrade_state.get("show_advanced_buckets", false):
 		should_show_advanced_buckets = true

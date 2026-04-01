@@ -21,9 +21,9 @@ times = 30
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
 type = 1
-modifier_type = 3
-modifier_amount = 0.5
-description = "+0.5 advanced coin multiplier to gold"
+modifier_type = 4
+modifier_amount = 0.05
+description = "+5% bucket value (gold)"
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("8_start")

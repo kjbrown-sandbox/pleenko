@@ -14,14 +14,13 @@ all_upgrades = true
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
-amount = 50
+amount = 55
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("4_reward")
-type = 1
-modifier_type = 3
-modifier_amount = 0.5
-description = "+0.5 advanced coin multiplier to gold"
+type = 2
+upgrade_type = 1
+description = "+1 permanent bucket value (gold)"
 
 [resource]
 script = ExtResource("1_data")

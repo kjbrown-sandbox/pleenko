@@ -22,6 +22,6 @@ description = "+0.5 advanced coin multiplier to gold"
 script = ExtResource("1_data")
 id = "gold_6"
 display_name = "Orange Rush"
-time_limit_seconds = 180.0
+time_limit_seconds = 120.0
 objectives = Array[ExtResource("2_obj_base")]([SubResource("objective_1")])
 rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])

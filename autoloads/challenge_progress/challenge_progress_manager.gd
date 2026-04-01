@@ -9,6 +9,7 @@ var _states: Dictionary = {}                          # challenge_id -> Challeng
 var _rewards_claimed: Dictionary = {}                 # challenge_id -> bool
 var _unlocks: Dictionary = {}                         # UnlockType -> bool
 var _starting_modifiers: Array[ChallengeRewardData] = []
+var _permanent_upgrades: Array[ChallengeRewardData] = []
 
 
 func initialize(buttons: Array[ChallengeButton]) -> void:
@@ -69,6 +70,22 @@ func get_advanced_coin_multiplier_bonus(board_type: Enums.BoardType) -> float:
 	return bonus
 
 
+func get_permanent_upgrade_level(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> int:
+	var level := 0
+	for mod in _permanent_upgrades:
+		if mod.board_type == board_type and mod.upgrade_type == upgrade_type:
+			level += int(mod.modifier_amount)
+	return level
+
+
+func get_bucket_value_percent_bonus(board_type: Enums.BoardType) -> float:
+	var bonus := 0.0
+	for mod in _starting_modifiers:
+		if mod.modifier_type == ChallengeRewardData.ModifierType.BUCKET_VALUE_PERCENT and mod.board_type == board_type:
+			bonus += mod.modifier_amount
+	return bonus
+
+
 func get_earliest_incomplete(buttons: Array[ChallengeButton]) -> ChallengeButton:
 	for btn in buttons:
 		var state := get_state(btn.challenge_ui_name)
@@ -105,6 +122,8 @@ func complete_challenge(challenge_id: String, next_ids: Array[String], rewards: 
 				unlock_granted.emit(reward.unlock_type)
 			ChallengeRewardData.RewardType.STARTING_MODIFIER:
 				_starting_modifiers.append(reward)
+			ChallengeRewardData.RewardType.PERMANENT_UPGRADE:
+				_permanent_upgrades.append(reward)
 
 
 func serialize() -> Dictionary:
@@ -131,11 +150,20 @@ func serialize() -> Dictionary:
 			"board_type": mod.board_type,
 		})
 
+	var perm_upgrades_data: Array[Dictionary] = []
+	for mod in _permanent_upgrades:
+		perm_upgrades_data.append({
+			"upgrade_type": mod.upgrade_type,
+			"modifier_amount": float(mod.modifier_amount),
+			"board_type": mod.board_type,
+		})
+
 	return {
 		"states": states_data,
 		"rewards_claimed": claimed_data,
 		"unlocks": unlocks_data,
 		"modifiers": modifiers_data,
+		"permanent_upgrades": perm_upgrades_data,
 	}
 
 
@@ -144,6 +172,7 @@ func deserialize(data: Dictionary) -> void:
 	_rewards_claimed.clear()
 	_unlocks.clear()
 	_starting_modifiers.clear()
+	_permanent_upgrades.clear()
 
 	var states_data: Dictionary = data.get("states", {})
 	for id in states_data:
@@ -166,3 +195,12 @@ func deserialize(data: Dictionary) -> void:
 		mod.currency_type = mod_dict.get("currency_type", 0)
 		mod.board_type = mod_dict.get("board_type", 0)
 		_starting_modifiers.append(mod)
+
+	var perm_data: Array = data.get("permanent_upgrades", [])
+	for mod_dict in perm_data:
+		var mod := ChallengeRewardData.new()
+		mod.type = ChallengeRewardData.RewardType.PERMANENT_UPGRADE
+		mod.upgrade_type = mod_dict.get("upgrade_type", 0)
+		mod.modifier_amount = mod_dict.get("modifier_amount", 1)
+		mod.board_type = mod_dict.get("board_type", 0)
+		_permanent_upgrades.append(mod)
