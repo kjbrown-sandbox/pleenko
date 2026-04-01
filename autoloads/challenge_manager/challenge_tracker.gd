@@ -12,7 +12,8 @@ var board_manager: BoardManager
 var time_remaining: float = 0.0
 
 # Tracking state
-var _bucket_hits: Dictionary = {}  # _bucket_key() -> int
+var _bucket_hits: Dictionary = {}  # _bucket_key() -> int (lifetime hits, for LandInEveryBucket etc.)
+var _group_hits: Dictionary = {}   # _bucket_key() -> bool (hits within current bucket group only)
 var _last_bucket: Dictionary = {}  # BoardType -> int
 var _same_bucket_streak: Dictionary = {}  # BoardType -> int
 var _survive_passed: bool = false
@@ -25,6 +26,7 @@ func setup(_challenge: ChallengeData, _board_manager: BoardManager) -> void:
 	board_manager = _board_manager
 	time_remaining = challenge.time_limit_seconds
 	_bucket_hits.clear()
+	_group_hits.clear()
 	_last_bucket.clear()
 	_same_bucket_streak.clear()
 	_survive_passed = false
@@ -78,6 +80,7 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 	var key := _bucket_key(board_type, bucket_index)
 	var first_hit := not _bucket_hits.has(key)
 	_bucket_hits[key] = _bucket_hits.get(key, 0) + 1
+	_group_hits[key] = true
 
 	# Mark bucket visually for LandInEveryBucket objectives
 	if first_hit:
@@ -100,12 +103,14 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 				if bucket_index in current_group:
 					board.unmark_bucket(bucket_index)
 
-			# Try to advance to next group
+			# Try to advance to next group (uses _group_hits, not lifetime _bucket_hits)
 			if _try_advance_bucket_group(objective):
 				# Unmark any remaining buckets from completed group
 				var completed_group: PackedInt32Array = objective.bucket_groups[_current_bucket_group - 1]
 				for bi in completed_group:
 					board.unmark_bucket(bi)
+				# Reset group hits for the new group
+				_group_hits.clear()
 				# Mark next group as targets
 				if _current_bucket_group < objective.bucket_groups.size():
 					for bi in objective.bucket_groups[_current_bucket_group]:
@@ -240,9 +245,10 @@ func _is_objective_met(objective: ChallengeObjective) -> bool:
 func _try_advance_bucket_group(objective: HitBucketsInOrder) -> bool:
 	if _current_bucket_group >= objective.bucket_groups.size():
 		return false
+	# Only count hits that occurred AFTER this group became active
 	var group: PackedInt32Array = objective.bucket_groups[_current_bucket_group]
 	for bi in group:
-		if not _bucket_hits.has(_bucket_key(objective.board_type, bi)):
+		if not _group_hits.has(_bucket_key(objective.board_type, bi)):
 			return false
 	_current_bucket_group += 1
 	return true
