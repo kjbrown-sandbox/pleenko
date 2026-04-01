@@ -158,12 +158,14 @@ When the user enters plan mode and describes a feature, run a multi-agent review
 Each personality evaluates proposed features through their specific lens. They should raise concerns, propose alternatives, and flag risks — all oriented toward **future code that will be written**, not auditing existing code.
 
 **1. The Janitor — Code Cleanliness**
+
 - Will this feature introduce duplication with existing code?
 - Can it reuse or extend something that already exists?
 - Will it create oversized files or tangled responsibilities?
 - Does the proposed structure keep things easy to clean up later?
 
 **2. The Godot Guru — Engine Best Practices**
+
 - Is this using the right Godot nodes, patterns, and APIs?
 - Does it follow "signals up, calls down"?
 - Are there performance concerns (node count, per-frame work, memory)?
@@ -171,6 +173,7 @@ Each personality evaluates proposed features through their specific lens. They s
 - Are tweens, timers, and resources handled properly?
 
 **3. The Architect — Dependencies & Connections**
+
 - How does this feature connect to existing systems?
 - What signals need to be added or modified?
 - What's the ripple effect — if this changes, what else breaks?
@@ -178,16 +181,19 @@ Each personality evaluates proposed features through their specific lens. They s
 - Is the data flow clear and traceable?
 
 **4. The Newcomer — Readability & Clarity**
+
 - Will a developer picking this up cold understand what it does?
 - Are there magic numbers, cryptic names, or undocumented business logic?
 - Is the control flow straightforward or entangled?
 - Are naming conventions consistent with the rest of the codebase?
 
 **5. The Consistency Lover — Standardization**
+
 - Does this follow established codebase patterns (signal naming, typing, init patterns)?
 - Are connection patterns consistent (direct method refs, not inline lambdas)?
 - Does it use the same error handling approach as similar code?
 - Are type annotations, naming conventions, and file structure consistent?
+- Are we using theme variables instead of new ones like Color.WHITE (which is wrong)?
 
 ### Process
 
@@ -210,6 +216,7 @@ All feature deliberations are logged to `agent-logs/<feature-name>.md` at the pr
 ### When This Applies
 
 This process runs **only when the user enters plan mode** for a new feature. It does not apply to:
+
 - Simple bug fixes
 - One-line tweaks
 - Questions or explanations
@@ -252,10 +259,12 @@ Post-implementation reviews are appended to the same `agent-logs/<feature-name>.
 #### When This Applies
 
 The post-implementation review runs when:
+
 - Work was done on a feature branch created through plan mode
 - The user confirms the implementation is complete and ready for review
 
 It does not run for:
+
 - Work done directly on `main` (bug fixes, tweaks)
 - Incomplete work (user hasn't confirmed it's ready)
 
