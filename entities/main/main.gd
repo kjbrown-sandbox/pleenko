@@ -15,10 +15,15 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 @onready var board_left_icon: TextureButton = $CanvasLayer/BoardLeftIcon
 @onready var board_right_icon: TextureButton = $CanvasLayer/BoardRightIcon
 @onready var challenge_info_panel: ChallengeInfoPanel = $ChallengeInfoPanel
+@onready var prestige_animator: PrestigeAnimator = $PrestigeAnimator
 
 var _options_dialog: CanvasLayer
 
 func _ready() -> void:
+	# Safety net: ensure time_scale is normal when main scene loads
+	# (in case prestige animation was interrupted)
+	PrestigeManager.reset_time_scale()
+
 	_setup_environment()
 	ModeManager.current_mode = ModeManager.Mode.MAIN
 
@@ -33,6 +38,7 @@ func _ready() -> void:
 	coin_values.setup(board_manager)
 	_setup_gear_button()
 	_setup_options_dialog()
+	_setup_prestige_animator()
 
 	_setup_nav_icons()
 	ModeManager.mode_changed.connect(_on_mode_changed)
@@ -180,6 +186,13 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		_go_back_to_board()
 
 
+func _setup_prestige_animator() -> void:
+	prestige_animator.setup(camera)
+	# Connect all existing boards
+	for board in board_manager.get_boards():
+		prestige_animator.connect_board(board)
+
+
 func _on_prestige_claimed(_board_type: Enums.BoardType) -> void:
 	challenges_down_icon.visible = true
 	challenge_grouping_manager.update_group_visibility()
@@ -190,6 +203,11 @@ func _on_board_switched(_board: PlinkoBoard) -> void:
 
 
 func _on_board_unlocked(_board_type: Enums.BoardType) -> void:
+	# Connect the newly unlocked board to the prestige animator
+	for board in board_manager.get_boards():
+		if board.board_type == _board_type:
+			prestige_animator.connect_board(board)
+			break
 	_update_nav_arrows()
 
 

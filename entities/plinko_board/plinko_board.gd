@@ -41,6 +41,7 @@ signal board_rebuilt
 signal autodropper_adjust_requested(button_id: StringName, delta: int)
 signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type: Enums.CurrencyType, amount: int)
 signal autodrop_failed(board_type: Enums.BoardType)
+signal prestige_coin_landed(coin: Coin, bucket: Bucket)
 
 var _drop_timer_remaining: float = 0.0
 
@@ -211,6 +212,7 @@ func _launch_coin(coin: Coin) -> void:
 	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
 	add_child(coin)
 	coin.landed.connect(on_coin_landed)
+	coin.final_bounce_started.connect(_on_final_bounce_started)
 	coin.start(Vector3(0, 0.2, 0))
 
 
@@ -277,14 +279,38 @@ func _update_drop_fill() -> void:
 
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
+	finalize_coin_landing(coin, bucket)
+
+
+## Completes the normal landing flow: adds currency, emits signal, cleans up coin.
+## Prestige coins skip currency add and queue_free — the PrestigeAnimator handles them.
+func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var bucket_idx := _get_bucket_index(bucket)
 	var amount: int = roundi(bucket.value * coin.multiplier)
-	CurrencyManager.add(bucket.currency_type, amount)
-	coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount)
+	if not coin.is_prestige_coin:
+		CurrencyManager.add(bucket.currency_type, amount)
+		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount)
 	bucket.pulse()
-	if coin.multiplier > 1:
+	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
-	coin.queue_free()
+	if not coin.is_prestige_coin:
+		coin.queue_free()
+
+
+## Called when a coin starts its final bounce and we can predict which bucket it will land in.
+## If this landing would trigger a prestige, emit prestige_coin_landed so the animator can take over.
+func _on_final_bounce_started(coin: Coin, predicted_bucket: Bucket) -> void:
+	if _will_trigger_prestige(predicted_bucket.currency_type):
+		prestige_coin_landed.emit(coin, predicted_bucket)
+
+
+## Checks if earning this currency type would trigger a prestige for a new board.
+func _will_trigger_prestige(currency_type: Enums.CurrencyType) -> bool:
+	for i in range(1, TierRegistry.get_tier_count()):
+		var tier := TierRegistry.get_tier_by_index(i)
+		if tier.raw_currency == currency_type:
+			return PrestigeManager.can_prestige(tier.board_type)
+	return false
 
 
 func _get_bucket_index(bucket: Bucket) -> int:

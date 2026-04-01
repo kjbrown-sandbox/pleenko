@@ -2,9 +2,15 @@ extends Node
 
 signal prestige_triggered(board_type: Enums.BoardType)
 signal prestige_claimed(board_type: Enums.BoardType)
+signal prestige_phase_changed(phase: PrestigePhase)
+
+enum PrestigePhase { NONE, SLOW_MO, FREEZE, EXPAND, TRANSITION }
 
 # BoardType -> int: how many times the player has prestiged into this board tier
 var _prestige_counts: Dictionary = {}
+var current_phase: PrestigePhase = PrestigePhase.NONE
+## Set before transitioning to PrestigeScreen so it knows which board was prestiged.
+var pending_board_type: Enums.BoardType
 
 
 func can_prestige(board_type: Enums.BoardType) -> bool:
@@ -34,6 +40,26 @@ func trigger_prestige(board_type: Enums.BoardType) -> void:
 
 func claim_prestige(board_type: Enums.BoardType) -> void:
 	prestige_claimed.emit(board_type)
+
+
+func enter_phase(phase: PrestigePhase) -> void:
+	current_phase = phase
+	var t: VisualTheme = ThemeProvider.theme
+	match phase:
+		PrestigePhase.SLOW_MO:
+			Engine.time_scale = t.prestige_slow_mo_scale
+		PrestigePhase.FREEZE:
+			Engine.time_scale = t.prestige_freeze_scale
+		PrestigePhase.EXPAND, PrestigePhase.TRANSITION:
+			Engine.time_scale = t.prestige_freeze_scale
+		PrestigePhase.NONE:
+			Engine.time_scale = 1.0
+	prestige_phase_changed.emit(phase)
+
+
+func reset_time_scale() -> void:
+	current_phase = PrestigePhase.NONE
+	Engine.time_scale = 1.0
 
 
 func serialize() -> Dictionary:

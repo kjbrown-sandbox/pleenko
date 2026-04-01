@@ -1,8 +1,16 @@
 extends Node
 
 
-func set_new_scene(new_scene: PackedScene) -> void:
+func set_new_scene(new_scene: PackedScene, instant: bool = false) -> void:
 	var current_scene := get_tree().current_scene
+
+	if instant:
+		var instant_scene := new_scene.instantiate()
+		if current_scene:
+			current_scene.queue_free()
+		get_tree().root.add_child(instant_scene)
+		get_tree().current_scene = instant_scene
+		return
 
 	var canvas_layer := CanvasLayer.new()
 	canvas_layer.layer = 100

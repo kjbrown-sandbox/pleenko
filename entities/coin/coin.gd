@@ -2,6 +2,9 @@ class_name Coin
 extends Node3D
 
 signal landed(coin: Coin)
+## Emitted on the final bounce, after the direction is chosen and the landing bucket is known.
+## The coin is still mid-air, bouncing toward the bucket.
+signal final_bounce_started(coin: Coin, predicted_bucket: Bucket)
 
 var board: PlinkoBoard
 var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
@@ -10,6 +13,8 @@ var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
 		if is_node_ready():
 			_apply_visuals()
 var multiplier: float = 1.0
+## When true, the coin won't be freed on landing — the PrestigeAnimator handles its lifecycle.
+var is_prestige_coin: bool = false
 
 func _ready() -> void:
 	_apply_visuals()
@@ -41,15 +46,25 @@ func _bounce_or_despawn() -> void:
 		landed.emit(self)
 	else:
 		var t: VisualTheme = ThemeProvider.theme
-		var x_tween: Tween = create_tween()
 		var direction = 1 if randf() < 0.5 else -1
-		x_tween.tween_property(self, "position:x", position.x + direction * board.space_between_pegs / 2, t.coin_fall_time) \
+		var next_x: float = position.x + direction * board.space_between_pegs / 2.0
+		var next_y: float = position.y - board.vertical_spacing
+
+		# Check if this is the final bounce (next position will be below bucket row)
+		if next_y < board.buckets_container.position.y + 0.5:
+			var predicted_bucket: Bucket = board.get_nearest_bucket(
+				board.global_position.x + next_x)
+			if predicted_bucket:
+				final_bounce_started.emit(self, predicted_bucket)
+
+		var x_tween: Tween = create_tween()
+		x_tween.tween_property(self, "position:x", next_x, t.coin_fall_time) \
 			.set_ease(Tween.EASE_IN_OUT) \
 			.set_trans(Tween.TRANS_LINEAR)
 
 		var y_tween: Tween = create_tween()
 		y_tween.tween_property(self, "position:y", position.y + t.coin_bounce_height, t.coin_fall_time / 3) \
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		y_tween.tween_property(self, "position:y", position.y - board.vertical_spacing, t.coin_fall_time * 2 / 3) \
+		y_tween.tween_property(self, "position:y", next_y, t.coin_fall_time * 2 / 3) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 		y_tween.tween_callback(_bounce_or_despawn)

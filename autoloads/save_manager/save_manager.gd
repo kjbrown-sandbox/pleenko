@@ -166,6 +166,30 @@ func reset_game() -> void:
 	reset_state()
 	get_tree().reload_current_scene()
 
+
+## Performs the same save wipe and state reset as reset_game(), but does NOT reload
+## the current scene. Use this when the caller will handle the scene transition
+## (e.g., transitioning from PrestigeScreen back to Main via SceneManager).
+func reset_game_without_reload() -> void:
+	var prestige_data := PrestigeManager.serialize()
+	var challenge_data := ChallengeProgressManager.serialize()
+
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
+
+	var minimal_save := {
+		"version": SAVE_VERSION,
+		"prestige": prestige_data,
+		"challenges": challenge_data,
+	}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(minimal_save, "\t"))
+		file.close()
+
+	reset_state()
+
+
 func reset_state() -> void:
 	CurrencyManager.reset()
 	LevelManager.reset()

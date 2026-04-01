@@ -147,6 +147,15 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var peg_glow_halo_radius := 1.5
 @export var peg_glow_halo_opacity := 0.06
 
+# ── Prestige Animation ──────────────────────────────────────────────
+@export_group("Prestige Animation")
+@export var prestige_slow_mo_scale := 0.15
+@export var prestige_freeze_scale := 0.05
+@export var prestige_slow_mo_duration := 1.5        ## Real-time seconds in slow-mo before freeze
+@export var prestige_freeze_duration := 0.5          ## Real-time seconds frozen before expand
+@export var prestige_expand_duration := 1.0          ## Real-time seconds for white flash to fill screen
+@export var prestige_camera_zoom_size := 2.0         ## Orthographic size when zoomed on coin
+
 
 # ── Palette resolver ─────────────────────────────────────────────────
 
