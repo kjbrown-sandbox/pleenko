@@ -127,6 +127,14 @@ func _process(delta: float) -> void:
 	if is_waiting:
 		_drop_timer_remaining = maxf(0.0, _drop_timer_remaining - delta)
 		_update_drop_fill()
+	elif _is_hold_to_drop_active():
+		request_drop()
+
+
+func _is_hold_to_drop_active() -> bool:
+	return Input.is_action_pressed("drop_coin") \
+		and ChallengeProgressManager.is_unlocked(ChallengeRewardData.UnlockType.HOLD_TO_DROP) \
+		and drop_section.visible
 
 
 func request_drop(costs: Array = [], coin_type: int = -1) -> void:
