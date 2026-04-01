@@ -269,7 +269,21 @@ func get_progress_text() -> String:
 			var hits: int = _bucket_hits.get(_bucket_key(objective.board_type, objective.bucket_index), 0)
 			parts.append("%d / %d" % [hits, objective.times])
 		elif objective is HitBucketsInOrder:
-			parts.append("%d / %d" % [_current_bucket_group, objective.bucket_groups.size()])
+			# Count total buckets across all groups, and how many have been completed
+			var total_buckets: int = 0
+			var completed_buckets: int = 0
+			for gi in objective.bucket_groups.size():
+				var group: PackedInt32Array = objective.bucket_groups[gi]
+				total_buckets += group.size()
+				if gi < _current_bucket_group:
+					completed_buckets += group.size()
+			# Add any hits in the current active group
+			if _current_bucket_group < objective.bucket_groups.size():
+				var active_group: PackedInt32Array = objective.bucket_groups[_current_bucket_group]
+				for bi in active_group:
+					if _group_hits.has(_bucket_key(objective.board_type, bi)):
+						completed_buckets += 1
+			parts.append("%d / %d" % [completed_buckets, total_buckets])
 	return "\n".join(parts)
 
 
