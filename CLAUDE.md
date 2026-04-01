@@ -215,6 +215,50 @@ This process runs **only when the user enters plan mode** for a new feature. It 
 - Questions or explanations
 - Work that doesn't involve plan mode
 
+## Branch Workflow
+
+### Plan Mode Creates a Branch
+
+When the user enters plan mode for a feature, **create a new git branch** before any implementation begins:
+
+1. **Branch naming:** Use `feature/<kebab-case-feature-name>` (e.g., `feature/juicy-prestige-animation`).
+2. **Create the branch** from `main` after the plan is approved but before writing any code.
+3. **All implementation work** for this feature happens on the feature branch.
+4. **Commit regularly** on the feature branch as work progresses.
+
+### Post-Implementation Review
+
+After the user confirms the implementation looks good, run a **post-implementation review** using the same five personalities before merging to main. This mirrors the pre-implementation plan review but evaluates the actual code changes.
+
+#### Process
+
+1. **Collect the diff:** Run `git diff main...HEAD` to get all changes on the feature branch.
+2. **Parallel review:** Spin up all 5 agents simultaneously. Each receives the full diff and reviews it through their lens:
+   - **The Janitor** — Did the implementation introduce duplication, oversized files, or dead code? Is anything left behind that should be cleaned up?
+   - **The Godot Guru** — Are Godot patterns correct in the actual code? Proper node lifecycle, signal usage, resource handling, performance?
+   - **The Architect** — Do the actual connections match the plan? Any unplanned coupling, missing signal disconnections, or ripple effects?
+   - **The Newcomer** — Is the implemented code readable? Magic numbers, unclear names, confusing control flow?
+   - **The Consistency Lover** — Does the code match existing codebase patterns? Naming, typing, structure?
+3. **Round 1 — Concerns:** Collect and present all concerns, noting which are blocking (must fix before merge) vs. advisory (nice to fix, not required).
+4. **Round 2+ — Resolution:** Same multi-round debate as the planning phase. Agents see each other's concerns and resolve conflicts. Up to 3 rounds.
+5. **Escalation:** Unresolved disagreements after 3 rounds go to the user.
+6. **Fix:** Address all blocking concerns on the feature branch. Advisory concerns are listed but do not block the merge.
+7. **Merge:** Once all blocking concerns are resolved, merge the feature branch into `main` and delete the feature branch.
+
+#### Logging
+
+Post-implementation reviews are appended to the same `agent-logs/<feature-name>.md` file used during planning, under a `## Post-Implementation Review` heading. This keeps the full lifecycle — plan, concerns, implementation review, and merge — in one place.
+
+#### When This Applies
+
+The post-implementation review runs when:
+- Work was done on a feature branch created through plan mode
+- The user confirms the implementation is complete and ready for review
+
+It does not run for:
+- Work done directly on `main` (bug fixes, tweaks)
+- Incomplete work (user hasn't confirmed it's ready)
+
 ## Final notes
 
 The old code from the prototype can be found under `deprecated`. This was how things used to work.
