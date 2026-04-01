@@ -7,7 +7,8 @@
 [ext_resource type="Resource" uid="uid://donkb4g01csbs" path="res://autoloads/upgrade_manager/data/drop_rate.tres" id="4_drop_rate"]
 [ext_resource type="Resource" uid="uid://uvtcpm5fhjis" path="res://autoloads/upgrade_manager/data/queue.tres" id="5_queue"]
 [ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/autodropper.tres" id="6_autodropper"]
+[ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/advanced_autodropper.tres" id="7_adv_autodropper"]
 
 [node name="UpgradeManager" type="Node" unique_id=10539582]
 script = ExtResource("1_bve6i")
-upgrades = Array[ExtResource("2_ro6xb")]([ExtResource("2_add_row"), ExtResource("3_bucket_value"), ExtResource("4_drop_rate"), ExtResource("5_queue"), ExtResource("6_autodropper")])
+upgrades = Array[ExtResource("2_ro6xb")]([ExtResource("2_add_row"), ExtResource("3_bucket_value"), ExtResource("4_drop_rate"), ExtResource("5_queue"), ExtResource("6_autodropper"), ExtResource("7_adv_autodropper")])

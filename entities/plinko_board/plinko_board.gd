@@ -31,7 +31,8 @@ var bucket_value_multiplier: int = 1
 var advanced_coin_multiplier: float = 2.0
 var should_show_advanced_buckets: bool = false
 var _has_advanced_drop: bool = false
-var _autodroppers_visible: bool = false
+var _normal_autodroppers_visible: bool = false
+var _advanced_autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
 var multi_drop_count: int = -1
@@ -358,7 +359,7 @@ func _show_advanced_drop_bar() -> void:
 	_drop_advanced.visible = true
 	var adv_id := StringName("%s_ADVANCED" % Enums.BoardType.keys()[board_type])
 	_drop_buttons[adv_id] = _drop_advanced
-	if _autodroppers_visible:
+	if _advanced_autodroppers_visible:
 		_setup_autodropper_buttons(adv_id)
 
 
@@ -502,30 +503,43 @@ func try_autodrop(is_advanced: bool) -> void:
 		autodrop_failed.emit(board_type)
 
 
-func set_autodroppers_visible(vis: bool) -> void:
-	_autodroppers_visible = vis
+func set_normal_autodroppers_visible(vis: bool) -> void:
+	_normal_autodroppers_visible = vis
 	if vis:
 		for bid in _drop_buttons:
-			_setup_autodropper_buttons(bid)
+			if not (bid as String).ends_with("_ADVANCED"):
+				_setup_autodropper_buttons(bid)
+
+
+func set_advanced_autodroppers_visible(vis: bool) -> void:
+	_advanced_autodroppers_visible = vis
+	if vis:
+		for bid in _drop_buttons:
+			if (bid as String).ends_with("_ADVANCED"):
+				_setup_autodropper_buttons(bid)
 
 
 func _setup_autodropper_buttons(bid: StringName) -> void:
 	var bar = _drop_buttons[bid]
 	var currency_name: String = _get_currency_name_for_button(bid)
 	var captured_bid: StringName = bid
+	var is_adv: bool = (bid as String).ends_with("_ADVANCED")
+	var pool_board: Enums.BoardType = Enums.BoardType.RED if is_adv else Enums.BoardType.ORANGE
+	var pool_type: Enums.UpgradeType = Enums.UpgradeType.ADVANCED_AUTODROPPER if is_adv else Enums.UpgradeType.AUTODROPPER
+	var label: String = "advanced autodropper" if is_adv else "autodropper"
 
 	bar.setup_minus(
 		func(): autodropper_adjust_requested.emit(captured_bid, -1),
 		func() -> String:
-			var total: int = UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
-			return "Decrease autodropper for %s\nTotal autodroppers: %d" % [currency_name, total],
+			var total: int = UpgradeManager.get_level(pool_board, pool_type)
+			return "Decrease %s for %s\nTotal: %d" % [label, currency_name, total],
 	)
 
 	bar.setup_plus(
 		func(): autodropper_adjust_requested.emit(captured_bid, 1),
 		func() -> String:
-			var total: int = UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
-			return "Increase autodropper for %s\nTotal autodroppers: %d" % [currency_name, total],
+			var total: int = UpgradeManager.get_level(pool_board, pool_type)
+			return "Increase %s for %s\nTotal: %d" % [label, currency_name, total],
 	)
 
 
@@ -535,12 +549,13 @@ func _get_currency_name_for_button(bid: StringName) -> String:
 	return FormatUtils.currency_name(TierRegistry.primary_currency(board_type), false)
 
 
-func update_autodropper_buttons(assignments: Dictionary, free_count: int) -> void:
+func update_autodropper_buttons(assignments: Dictionary, normal_free: int, advanced_free: int) -> void:
 	for bid in _drop_buttons:
 		var bar = _drop_buttons[bid]
 		var assigned: int = assignments.get(bid, 0)
+		var free: int = advanced_free if (bid as String).ends_with("_ADVANCED") else normal_free
 		bar.set_minus_disabled(assigned <= 0)
-		bar.set_plus_disabled(free_count <= 0)
+		bar.set_plus_disabled(free <= 0)
 
 
 func get_drop_button(btn_id: StringName):

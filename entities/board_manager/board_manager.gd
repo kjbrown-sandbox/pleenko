@@ -12,7 +12,8 @@ var camera_tween_duration: float
 var _boards: Array[PlinkoBoard] = []
 var _active_index: int = 0
 var _camera: Camera3D
-var _autodroppers_unlocked: bool = false
+var _normal_autodroppers_unlocked: bool = false
+var _advanced_autodroppers_unlocked: bool = false
 var _assignments: Dictionary = {}  # StringName -> int (button_id → assigned count)
 var _autodrop_timer: Timer
 
@@ -43,6 +44,7 @@ func setup(camera: Camera3D) -> void:
 	add_child(_autodrop_timer)
 
 	UpgradeManager.autodropper_unlocked.connect(_on_autodropper_unlocked)
+	UpgradeManager.advanced_autodropper_unlocked.connect(_on_advanced_autodropper_unlocked)
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
 
 
@@ -111,8 +113,10 @@ func _spawn_board(type: Enums.BoardType) -> void:
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
-	if _autodroppers_unlocked:
-		board.set_autodroppers_visible(true)
+	if _normal_autodroppers_unlocked:
+		board.set_normal_autodroppers_visible(true)
+	if _advanced_autodroppers_unlocked:
+		board.set_advanced_autodroppers_visible(true)
 	_boards.append(board)
 
 func is_board_unlocked(type: Enums.BoardType) -> bool:
@@ -189,25 +193,44 @@ func _tween_camera_to_active_board() -> void:
 
 # --- Autodropper ---
 
-func get_autodropper_pool() -> int:
+func _is_advanced_button(button_id: StringName) -> bool:
+	return (button_id as String).ends_with("_ADVANCED")
+
+
+func get_normal_pool() -> int:
 	return UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
 
 
-func get_total_assigned() -> int:
+func get_advanced_pool() -> int:
+	return UpgradeManager.get_level(Enums.BoardType.RED, Enums.UpgradeType.ADVANCED_AUTODROPPER)
+
+
+func _get_assigned_for_pool(advanced: bool) -> int:
 	var total := 0
-	for count in _assignments.values():
-		total += count
+	for bid in _assignments:
+		if _is_advanced_button(bid) == advanced:
+			total += _assignments[bid]
 	return total
 
 
 func get_free_autodroppers() -> int:
-	return get_autodropper_pool() - get_total_assigned()
+	return get_normal_pool() - _get_assigned_for_pool(false)
+
+
+func get_free_advanced_autodroppers() -> int:
+	return get_advanced_pool() - _get_assigned_for_pool(true)
 
 
 func _on_autodropper_unlocked() -> void:
-	_autodroppers_unlocked = true
+	_normal_autodroppers_unlocked = true
 	for board in _boards:
-		board.set_autodroppers_visible(true)
+		board.set_normal_autodroppers_visible(true)
+
+
+func _on_advanced_autodropper_unlocked() -> void:
+	_advanced_autodroppers_unlocked = true
+	for board in _boards:
+		board.set_advanced_autodroppers_visible(true)
 
 
 func _on_autodropper_adjust(button_id: StringName, delta: int) -> void:
@@ -216,16 +239,20 @@ func _on_autodropper_adjust(button_id: StringName, delta: int) -> void:
 
 	if new_count < 0:
 		return
-	if delta > 0 and get_free_autodroppers() <= 0:
+
+	var is_adv := _is_advanced_button(button_id)
+	var free: int = get_free_advanced_autodroppers() if is_adv else get_free_autodroppers()
+	if delta > 0 and free <= 0:
 		return
 
 	_assignments[button_id] = new_count
 	_update_all_button_displays()
 
 	# Start or stop the timer based on whether any autodroppers are assigned
-	if get_total_assigned() > 0 and _autodrop_timer.is_stopped():
+	var total_assigned := _get_assigned_for_pool(false) + _get_assigned_for_pool(true)
+	if total_assigned > 0 and _autodrop_timer.is_stopped():
 		_autodrop_timer.start()
-	elif get_total_assigned() == 0 and not _autodrop_timer.is_stopped():
+	elif total_assigned == 0 and not _autodrop_timer.is_stopped():
 		_autodrop_timer.stop()
 
 
@@ -243,7 +270,7 @@ func _on_autodrop_tick() -> void:
 
 
 func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, _board_type: Enums.BoardType, _new_level: int) -> void:
-	if upgrade_type == Enums.UpgradeType.AUTODROPPER:
+	if upgrade_type == Enums.UpgradeType.AUTODROPPER or upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
 		_update_all_button_displays()
 
 
@@ -255,14 +282,16 @@ func _find_board_for_button(button_id: StringName) -> PlinkoBoard:
 
 
 func _update_all_button_displays() -> void:
-	var free_count := get_free_autodroppers()
+	var normal_free := get_free_autodroppers()
+	var advanced_free := get_free_advanced_autodroppers()
 	for board in _boards:
-		board.update_autodropper_buttons(_assignments, free_count)
+		board.update_autodropper_buttons(_assignments, normal_free, advanced_free)
 
 
 func serialize() -> Dictionary:
 	var data := {}
-	data["autodroppers_unlocked"] = _autodroppers_unlocked
+	data["normal_autodroppers_unlocked"] = _normal_autodroppers_unlocked
+	data["advanced_autodroppers_unlocked"] = _advanced_autodroppers_unlocked
 
 	# Which boards are spawned
 	var board_types: Array[int] = []
@@ -322,16 +351,22 @@ func deserialize(data: Dictionary) -> void:
 		board.apply_saved_state(upgrade_state)
 
 	# Restore autodropper state
-	_autodroppers_unlocked = data.get("autodroppers_unlocked", false)
-	if _autodroppers_unlocked:
+	_normal_autodroppers_unlocked = data.get("normal_autodroppers_unlocked",
+		data.get("autodroppers_unlocked", false))  # backward compat
+	_advanced_autodroppers_unlocked = data.get("advanced_autodroppers_unlocked", false)
+	if _normal_autodroppers_unlocked:
 		for board in _boards:
-			board.set_autodroppers_visible(true)
+			board.set_normal_autodroppers_visible(true)
+	if _advanced_autodroppers_unlocked:
+		for board in _boards:
+			board.set_advanced_autodroppers_visible(true)
 
 	var assignments_data: Dictionary = data.get("assignments", {})
 	for key in assignments_data:
 		_assignments[StringName(key)] = assignments_data[key]
 
-	if get_total_assigned() > 0:
+	var total_assigned := _get_assigned_for_pool(false) + _get_assigned_for_pool(true)
+	if total_assigned > 0:
 		_autodrop_timer.start()
 	_update_all_button_displays()
 

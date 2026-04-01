@@ -92,5 +92,5 @@ func _buy_upgrade(upgrade_type: Enums.UpgradeType) -> void:
 			_board.decrease_drop_delay()
 		Enums.UpgradeType.QUEUE:
 			_board.increase_queue_capacity()
-		Enums.UpgradeType.AUTODROPPER:
+		Enums.UpgradeType.AUTODROPPER, Enums.UpgradeType.ADVANCED_AUTODROPPER:
 			pass  # Pool size is just the upgrade level; BoardManager reads it directly
