@@ -19,8 +19,8 @@ start_delay = 90.0
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
 type = 1
-modifier_type = 3
-description = "+1.0 advanced coin multiplier to gold"
+modifier_type = 2
+description = "+1 multi-drop to gold board"
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("7_start_board")
