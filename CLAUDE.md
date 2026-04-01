@@ -149,6 +149,72 @@ scripts/
 - **Node cleanup.** Always queue_free() nodes when done (coins after landing, old pegs/buckets on rebuild). Nodes that aren't freed are memory leaks.
 - **Save format versioning.** Plan for save format changes from the start. The prototype had to handle migration of old gold_queue format (int vs array of multipliers).
 
+## Feature Planning Process (Plan Mode Only)
+
+When the user enters plan mode and describes a feature, run a multi-agent review before writing any code. Five personalities evaluate the feature in parallel, debate concerns in rounds, and produce a consensus plan.
+
+### The Five Personalities
+
+Each personality evaluates proposed features through their specific lens. They should raise concerns, propose alternatives, and flag risks — all oriented toward **future code that will be written**, not auditing existing code.
+
+**1. The Janitor — Code Cleanliness**
+- Will this feature introduce duplication with existing code?
+- Can it reuse or extend something that already exists?
+- Will it create oversized files or tangled responsibilities?
+- Does the proposed structure keep things easy to clean up later?
+
+**2. The Godot Guru — Engine Best Practices**
+- Is this using the right Godot nodes, patterns, and APIs?
+- Does it follow "signals up, calls down"?
+- Are there performance concerns (node count, per-frame work, memory)?
+- Is the lifecycle correct (ready, enter_tree, exit_tree, queue_free)?
+- Are tweens, timers, and resources handled properly?
+
+**3. The Architect — Dependencies & Connections**
+- How does this feature connect to existing systems?
+- What signals need to be added or modified?
+- What's the ripple effect — if this changes, what else breaks?
+- Does this introduce circular dependencies or tight coupling?
+- Is the data flow clear and traceable?
+
+**4. The Newcomer — Readability & Clarity**
+- Will a developer picking this up cold understand what it does?
+- Are there magic numbers, cryptic names, or undocumented business logic?
+- Is the control flow straightforward or entangled?
+- Are naming conventions consistent with the rest of the codebase?
+
+**5. The Consistency Lover — Standardization**
+- Does this follow established codebase patterns (signal naming, typing, init patterns)?
+- Are connection patterns consistent (direct method refs, not inline lambdas)?
+- Does it use the same error handling approach as similar code?
+- Are type annotations, naming conventions, and file structure consistent?
+
+### Process
+
+1. **Parallel analysis:** Spin up all 5 agents simultaneously. Each receives the feature description and analyzes it through their lens.
+2. **Round 1 — Concerns:** Collect all concerns from the 5 agents. Present a summary to the user showing each personality's key concerns.
+3. **Round 2+ — Resolution:** If there are conflicts between agents, run another round where each agent sees the others' concerns and responds. Continue for up to 3 rounds. Do not ask the user to resolve disagreements during this process — let the agents work it out.
+4. **Escalation:** If no consensus after 3 rounds, present the unresolved disagreements to the user for a decision.
+5. **Approval:** Present the final plan to the user. Only begin implementation after explicit approval.
+
+### Logging
+
+All feature deliberations are logged to `agent-logs/<feature-name>.md` at the project root. Each log contains:
+
+1. **Feature description** — what was proposed
+2. **Round-by-round concerns** — each personality's input per round
+3. **Disagreements** — where personalities conflicted
+4. **Resolutions** — how conflicts were resolved (by consensus or user decision)
+5. **Final plan** — the agreed-upon implementation approach
+
+### When This Applies
+
+This process runs **only when the user enters plan mode** for a new feature. It does not apply to:
+- Simple bug fixes
+- One-line tweaks
+- Questions or explanations
+- Work that doesn't involve plan mode
+
 ## Final notes
 
 The old code from the prototype can be found under `deprecated`. This was how things used to work.
