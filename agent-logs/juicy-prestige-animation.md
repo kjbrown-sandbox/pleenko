@@ -84,3 +84,36 @@ Both positions are compatible. Use phase enum AND enforce 0.05-0.1 floor. Phase 
 8. **Replace existing PrestigeDialog** with new Prestige Screen scene
 9. All animation timing values in ThemeProvider/VisualTheme
 10. Camera work through BoardManager, lerp-tracking in `_process` during slow-mo
+
+---
+
+## Prestige Contact VFX — Agent Debate
+
+### Feature
+Four VFX effects on prestige coin contact: screen shake, particle burst, expanding shockwave ring, background vignette/desaturation.
+
+### Round 1 Consensus
+- All VFX timing/sizing values in VisualTheme as named constants
+- Manual mesh spawning for particles (GPUParticles3D tied to time_scale)
+- Shockwave ring: thin CylinderMesh, unshaded
+- Vignette: 2D CanvasLayer overlay at ~0.4 alpha
+- Fire-and-forget tweens with queue_free callbacks
+- All VFX nodes owned by PrestigeAnimator, freed on scene transition
+
+### Round 1 Disagreements
+
+1. **Code organization** — Janitor (PrestigeVFX sub-scene) vs Newcomer (helper methods in prestige_animator.gd)
+2. **Camera shake** — Architect (h_offset/v_offset) vs Guru (direct position offset)
+3. **Vignette** — Architect (darken materials directly) vs Guru/Consistency (CanvasLayer overlay)
+
+### Round 2 Resolutions
+
+1. **PrestigeVFX sub-scene wins.** At 350-400 lines with 4 VFX inlined, prestige_animator.gd becomes hard to navigate. A sub-scene with play(contact_position) matches Godot composition.
+2. **h_offset/v_offset wins.** BoardManager and PrestigeAnimator already share camera.position. Adding shake to position is a conflict. Screen-space offsets are orthogonal.
+3. **CanvasLayer overlay wins.** Coin/bucket are already lerping to white, so they naturally stand out through a darkened overlay. Darkening 60+ materials individually is unnecessary maintenance burden.
+
+### Final Approach
+- New PrestigeVFX scene/script: owns particles, shockwave ring, vignette overlay
+- PrestigeAnimator instantiates it and calls play(contact_position)
+- Screen shake via camera.h_offset/v_offset with decay
+- VFX constants in VisualTheme @export_group

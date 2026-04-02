@@ -156,6 +156,20 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var prestige_expand_duration := 3.0          ## Real-time seconds for white flash to fill screen
 @export var prestige_camera_zoom_size := 2.0         ## Orthographic size when zoomed on coin
 
+# ── Prestige VFX ────────────────────────────────────────────────────
+@export_group("Prestige VFX")
+@export var prestige_shake_intensity := 0.03         ## Max camera offset in world units
+@export var prestige_shake_duration := 0.2           ## Real-time seconds for shake to decay
+@export var prestige_particle_count := 8             ## Number of burst particles
+@export var prestige_particle_speed := 3.0           ## Outward velocity in units/sec
+@export var prestige_particle_duration := 0.6        ## Real-time seconds before particles fade
+@export var prestige_particle_radius := 0.04         ## Size of each particle sphere
+@export var prestige_ring_duration := 5.0            ## Real-time seconds for ring to expand
+@export var prestige_ring_count := 1                 ## Number of staggered shockwave rings
+@export var prestige_ring_stagger := 0.25             ## Real-time seconds between each ring
+@export var prestige_ring_max_scale := 8.0           ## Final ring scale multiplier
+@export var prestige_desaturation_amount := 0.7           ## How much pegs/buckets fade toward background (0-1)
+
 
 # ── Palette resolver ─────────────────────────────────────────────────
 

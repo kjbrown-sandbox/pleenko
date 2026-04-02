@@ -1,0 +1,184 @@
+class_name PrestigeVFX
+extends Node3D
+
+## Self-contained VFX bundle for the prestige contact moment.
+## Spawns particles, shockwave ring, and desaturates the world.
+## Screen shake is handled via camera h_offset/v_offset.
+## All children are cleaned up automatically when this node is freed.
+
+var _camera: Camera3D
+var _board: PlinkoBoard
+var _target_bucket: Bucket
+## Stores original colors so they can be restored on abort: [[material, original_color], ...]
+var _darkened_materials: Array = []
+## Stores original label modulates: [[Label3D, original_color], ...]
+var _darkened_labels: Array = []
+
+
+func setup(camera: Camera3D, board: PlinkoBoard, target_bucket: Bucket) -> void:
+	_camera = camera
+	_board = board
+	_target_bucket = target_bucket
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_collect_world_materials()
+
+
+## Gathers all peg and non-target-bucket materials so we can desaturate them.
+func _collect_world_materials() -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	# Pegs
+	for peg in _board.pegs_container.get_children():
+		var mesh := peg.get_node_or_null("MeshInstance3D") as MeshInstance3D
+		if mesh and mesh.material_override:
+			_darkened_materials.append([mesh.material_override, mesh.material_override.albedo_color])
+
+	# Non-target buckets (and their labels)
+	for bucket in _board.buckets_container.get_children():
+		if bucket == _target_bucket:
+			continue
+		var b := bucket as Bucket
+		if b and b._base_material:
+			_darkened_materials.append([b._base_material, b._base_material.albedo_color])
+		if b and b._label:
+			_darkened_labels.append([b._label, b._label.modulate])
+
+
+## Called during slow-mo to desaturate the world based on progress (0.0 to 1.0).
+func update_desaturation(progress: float) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var bg: Color = t.background_color
+	var amount: float = clampf(progress, 0.0, 1.0) * t.prestige_desaturation_amount
+
+	for entry in _darkened_materials:
+		var mat: StandardMaterial3D = entry[0]
+		var original: Color = entry[1]
+		mat.albedo_color = original.lerp(bg, amount)
+
+	for entry in _darkened_labels:
+		var label: Label3D = entry[0]
+		var original: Color = entry[1]
+		label.modulate = original.lerp(bg, amount)
+
+
+## Triggers all contact VFX: particles, shockwave, and screen shake.
+func play_contact(contact_position: Vector3) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	_spawn_shockwave_ring(contact_position, t)
+	_start_screen_shake(t)
+
+
+## Cleans up all VFX before scene transition.
+func cleanup() -> void:
+	# Restore original material colors
+	for entry in _darkened_materials:
+		var mat: StandardMaterial3D = entry[0]
+		var original: Color = entry[1]
+		if is_instance_valid(mat):
+			mat.albedo_color = original
+	for entry in _darkened_labels:
+		var label: Label3D = entry[0]
+		var original: Color = entry[1]
+		if is_instance_valid(label):
+			label.modulate = original
+	_darkened_materials.clear()
+	_darkened_labels.clear()
+	# Reset camera shake offsets
+	if _camera:
+		_camera.h_offset = 0.0
+		_camera.v_offset = 0.0
+
+
+func _spawn_particles(contact_pos: Vector3, t: VisualTheme) -> void:
+	var palette_white: Color = t.resolve(VisualTheme.Palette.BG_6)
+	var particle_mesh := SphereMesh.new()
+	particle_mesh.radius = t.prestige_particle_radius
+	particle_mesh.height = t.prestige_particle_radius * 2.0
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = palette_white
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+
+	for i in t.prestige_particle_count:
+		var angle: float = (TAU / t.prestige_particle_count) * i
+		var direction := Vector3(cos(angle), sin(angle), 0.0)
+		var end_pos: Vector3 = contact_pos + direction * t.prestige_particle_speed
+
+		var particle := MeshInstance3D.new()
+		particle.mesh = particle_mesh
+		# Each particle needs its own material for independent alpha fade
+		var particle_mat := mat.duplicate() as StandardMaterial3D
+		particle.material_override = particle_mat
+		particle.position = contact_pos
+		add_child(particle)
+
+		var tween := create_tween()
+		tween.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
+		tween.set_speed_scale(1.0 / maxf(Engine.time_scale, 0.001))
+		tween.tween_property(particle, "position", end_pos, t.prestige_particle_duration) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tween.parallel().tween_property(particle_mat, "albedo_color:a", 0.0, t.prestige_particle_duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.tween_callback(particle.queue_free)
+
+
+func _spawn_shockwave_ring(contact_pos: Vector3, t: VisualTheme) -> void:
+	var screen_center: Vector2 = _camera.unproject_position(contact_pos)
+	var viewport_size: Vector2 = _camera.get_viewport().get_visible_rect().size
+	var uv_center := screen_center / viewport_size
+
+	for i in t.prestige_ring_count:
+		_spawn_single_ring(uv_center, t, i * t.prestige_ring_stagger)
+
+
+func _spawn_single_ring(uv_center: Vector2, t: VisualTheme, delay: float) -> void:
+	var shockwave_shader: Shader = preload("res://entities/prestige_vfx/shockwave.gdshader")
+	var mat := ShaderMaterial.new()
+	mat.shader = shockwave_shader
+	mat.set_shader_parameter("center", uv_center)
+	mat.set_shader_parameter("radius", 0.0)
+	mat.set_shader_parameter("ring_width", 0.06)
+	mat.set_shader_parameter("distortion_strength", 0.008)
+
+	var canvas := CanvasLayer.new()
+	canvas.layer = 90
+	canvas.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(canvas)
+
+	var rect := ColorRect.new()
+	rect.material = mat
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	canvas.add_child(rect)
+
+	var tween := create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
+	tween.set_speed_scale(1.0 / maxf(Engine.time_scale, 0.001))
+	if delay > 0.0:
+		tween.tween_interval(delay)
+	tween.tween_method(func(r: float): mat.set_shader_parameter("radius", r), 0.0, 1.5, t.prestige_ring_duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_callback(canvas.queue_free)
+
+
+func _start_screen_shake(t: VisualTheme) -> void:
+	if not _camera:
+		return
+
+	# Use a tween to drive the shake via method callbacks at each step
+	var tween := create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
+	tween.set_speed_scale(1.0 / maxf(Engine.time_scale, 0.001))
+	tween.tween_method(_apply_shake.bind(t.prestige_shake_intensity), 0.0, 1.0, t.prestige_shake_duration)
+	tween.tween_callback(_reset_shake)
+
+
+func _apply_shake(progress: float, intensity: float) -> void:
+	var decay: float = 1.0 - progress
+	_camera.h_offset = randf_range(-intensity, intensity) * decay
+	_camera.v_offset = randf_range(-intensity, intensity) * decay
+
+
+func _reset_shake() -> void:
+	if _camera:
+		_camera.h_offset = 0.0
+		_camera.v_offset = 0.0

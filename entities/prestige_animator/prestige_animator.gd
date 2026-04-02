@@ -12,6 +12,7 @@ extends Node
 const PrestigeScreenScene: PackedScene = preload("res://entities/prestige_screen/prestige_screen.tscn")
 
 var _camera: Camera3D
+var _vfx: PrestigeVFX
 var _is_animating: bool = false
 var _target_coin: Coin
 var _target_bucket: Bucket
@@ -75,6 +76,11 @@ func _on_prestige_coin_final_bounce(coin: Coin, predicted_bucket: Bucket) -> voi
 			PrestigeManager.pending_board_type = tier.board_type
 			break
 
+	# Spawn VFX handler
+	_vfx = PrestigeVFX.new()
+	add_child(_vfx)
+	_vfx.setup(_camera, coin.board, predicted_bucket)
+
 	# Enter slow-mo — the coin is still mid-bounce, heading toward the bucket
 	PrestigeManager.enter_phase(PrestigeManager.PrestigePhase.SLOW_MO)
 	set_process(true)
@@ -124,17 +130,21 @@ func _process_slow_mo(real_delta: float, t: VisualTheme) -> void:
 
 	_target_coin.set_color(_original_coin_color.lerp(palette_white, y_eased))
 
+	# Desaturate pegs and non-target buckets toward background color
+	_vfx.update_desaturation(y_eased)
+
 	# Lerp bucket mesh and label toward palette white alongside the coin
 	_target_bucket._base_material.albedo_color = _original_bucket_color.lerp(palette_white, y_eased)
 	_target_bucket._label.modulate = _original_bucket_label_color.lerp(palette_white, y_eased)
 
-	# Coin center reached bucket top — freeze it in place
+	# Coin bottom reached bucket top — freeze it and trigger contact VFX
 	if coin_world_pos.y <= _contact_y:
 		_target_coin.kill_tweens()
 		_target_coin.global_position.y = _contact_y
 		_target_coin.set_color(palette_white)
 		_target_bucket._base_material.albedo_color = palette_white
 		_target_bucket._label.modulate = palette_white
+		_vfx.play_contact(_target_coin.global_position)
 		_phase_elapsed = 0.0
 		PrestigeManager.enter_phase(PrestigeManager.PrestigePhase.FREEZE)
 
@@ -182,6 +192,12 @@ func _transition_to_prestige_screen() -> void:
 	_is_animating = false
 	set_process(false)
 
+	# Clean up VFX
+	if _vfx:
+		_vfx.cleanup()
+		_vfx.queue_free()
+		_vfx = null
+
 	# Clean up the coin
 	if is_instance_valid(_target_coin):
 		_target_coin.queue_free()
@@ -198,5 +214,9 @@ func _abort_animation() -> void:
 	_is_animating = false
 	set_process(false)
 	PrestigeManager.reset_time_scale()
+	if _vfx:
+		_vfx.cleanup()
+		_vfx.queue_free()
+		_vfx = null
 	_camera.global_position = _original_camera_pos
 	_camera.size = _original_camera_size
