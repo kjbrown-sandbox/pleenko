@@ -60,12 +60,11 @@ func _on_prestige_coin_final_bounce(coin: Coin, predicted_bucket: Bucket) -> voi
 	_original_camera_pos = _camera.global_position
 	_original_camera_size = _camera.size
 	_coin_start_y = coin.global_position.y
-	# Contact Y: where coin bottom edge meets bucket top edge
+	# Contact Y: coin center sits at the top of the bucket
 	var t: VisualTheme = ThemeProvider.theme
+	# Contact Y: coin bottom edge meets bucket top edge
 	_contact_y = predicted_bucket.global_position.y + t.bucket_height / 2.0 + t.coin_radius
-	var mesh_instance := coin.get_node_or_null("MeshInstance3D")
-	if mesh_instance and mesh_instance.material_override:
-		_original_coin_color = mesh_instance.material_override.albedo_color
+	_original_coin_color = coin.get_color()
 	_original_bucket_color = predicted_bucket._base_material.albedo_color
 	_original_bucket_label_color = predicted_bucket._label.modulate
 
@@ -123,19 +122,17 @@ func _process_slow_mo(real_delta: float, t: VisualTheme) -> void:
 
 	var palette_white: Color = t.resolve(VisualTheme.Palette.BG_6)
 
-	var mesh_instance := _target_coin.get_node("MeshInstance3D")
-	var mat: StandardMaterial3D = mesh_instance.material_override
-	mat.albedo_color = _original_coin_color.lerp(palette_white, y_eased)
+	_target_coin.set_color(_original_coin_color.lerp(palette_white, y_eased))
 
 	# Lerp bucket mesh and label toward palette white alongside the coin
 	_target_bucket._base_material.albedo_color = _original_bucket_color.lerp(palette_white, y_eased)
 	_target_bucket._label.modulate = _original_bucket_label_color.lerp(palette_white, y_eased)
 
-	# Coin bottom touched bucket top — freeze it in place
+	# Coin center reached bucket top — freeze it in place
 	if coin_world_pos.y <= _contact_y:
 		_target_coin.kill_tweens()
 		_target_coin.global_position.y = _contact_y
-		mat.albedo_color = palette_white
+		_target_coin.set_color(palette_white)
 		_target_bucket._base_material.albedo_color = palette_white
 		_target_bucket._label.modulate = palette_white
 		_phase_elapsed = 0.0
@@ -176,15 +173,9 @@ func _start_coin_expand() -> void:
 
 	var t: VisualTheme = ThemeProvider.theme
 
-	# Turn the coin palette-white
-	var mesh_instance := _target_coin.get_node_or_null("MeshInstance3D")
-	if mesh_instance:
-		var white_mat := StandardMaterial3D.new()
-		var palette_white: Color = t.resolve(VisualTheme.Palette.BG_6)
-		white_mat.albedo_color = palette_white
-		if t.unshaded:
-			white_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mesh_instance.material_override = white_mat
+	# Ensure coin is palette-white and remove clip so it can expand freely
+	_target_coin.set_color(t.resolve(VisualTheme.Palette.BG_6))
+	_target_coin.set_clip_y(-9999.0)
 
 
 func _transition_to_prestige_screen() -> void:

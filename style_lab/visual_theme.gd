@@ -299,18 +299,11 @@ func get_bucket_color(currency_type: int) -> Color:
 
 # ── Material / mesh factories ────────────────────────────────────────
 
-func make_coin_material(currency_type: int) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = get_coin_color(currency_type)
-	if unshaded:
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	else:
-		mat.roughness = coin_roughness
-		mat.metallic = coin_metallic
-		if coin_emission_strength > 0:
-			mat.emission_enabled = true
-			mat.emission = get_coin_color(currency_type)
-			mat.emission_energy_multiplier = coin_emission_strength
+func make_coin_material(currency_type: int) -> ShaderMaterial:
+	var coin_shader: Shader = preload("res://entities/coin/coin_clip.gdshader")
+	var mat := ShaderMaterial.new()
+	mat.shader = coin_shader
+	mat.set_shader_parameter("albedo_color", get_coin_color(currency_type))
 	return mat
 
 

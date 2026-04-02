@@ -285,6 +285,10 @@ func on_coin_landed(coin: Coin) -> void:
 ## Completes the normal landing flow: adds currency, emits signal, cleans up coin.
 ## Prestige coins skip currency add and queue_free — the PrestigeAnimator handles them.
 func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
+	# Clip the coin so it doesn't poke through the bottom of the bucket
+	var t: VisualTheme = ThemeProvider.theme
+	coin.set_clip_y(bucket.global_position.y - t.bucket_height / 2.0)
+
 	var bucket_idx := _get_bucket_index(bucket)
 	var amount: int = roundi(bucket.value * coin.multiplier)
 	if not coin.is_prestige_coin:

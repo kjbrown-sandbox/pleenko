@@ -50,6 +50,25 @@ func kill_tweens() -> void:
 			tween.kill()
 	_active_tweens.clear()
 
+
+func get_color() -> Color:
+	var mesh_instance := get_node_or_null("MeshInstance3D")
+	if mesh_instance and mesh_instance.material_override is ShaderMaterial:
+		return mesh_instance.material_override.get_shader_parameter("albedo_color")
+	return Color.WHITE
+
+
+func set_color(color: Color) -> void:
+	var mesh_instance := get_node_or_null("MeshInstance3D")
+	if mesh_instance and mesh_instance.material_override is ShaderMaterial:
+		mesh_instance.material_override.set_shader_parameter("albedo_color", color)
+
+
+func set_clip_y(y: float) -> void:
+	var mesh_instance := get_node_or_null("MeshInstance3D")
+	if mesh_instance and mesh_instance.material_override is ShaderMaterial:
+		mesh_instance.material_override.set_shader_parameter("clip_y", y)
+
 func _bounce_or_despawn() -> void:
 	if position.y < board.buckets_container.position.y + 0.5:
 		landed.emit(self)
