@@ -43,6 +43,7 @@ func _ready() -> void:
 	_setup_nav_icons()
 	ModeManager.mode_changed.connect(_on_mode_changed)
 	PrestigeManager.prestige_claimed.connect(_on_prestige_claimed)
+	PrestigeManager.prestige_phase_changed.connect(_on_prestige_phase_changed)
 	board_manager.board_switched.connect(_on_board_switched)
 	board_manager.board_unlocked.connect(_on_board_unlocked)
 	challenge_grouping_manager.group_switched.connect(_on_group_switched)
@@ -228,6 +229,17 @@ func _setup_prestige_animator() -> void:
 	# Connect all existing boards
 	for board in board_manager.get_boards():
 		prestige_animator.connect_board(board)
+
+
+func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
+	if phase == PrestigeManager.PrestigePhase.SLOW_MO:
+		# Hide all HUD elements when the coin touches the bucket
+		coin_values.visible = false
+		level_section.visible = false
+		game_timer.visible = false
+		options_icon.visible = false
+		challenges_down_icon.visible = false
+		board_manager.set_active_board_ui_visible(false)
 
 
 func _on_prestige_claimed(_board_type: Enums.BoardType) -> void:
