@@ -158,8 +158,8 @@ enum CoinShape { SPHERE, CYLINDER }
 
 # ── Prestige VFX ────────────────────────────────────────────────────
 @export_group("Prestige VFX")
-@export var prestige_shake_intensity := 0.03         ## Max camera offset in world units
-@export var prestige_shake_duration := 0.2           ## Real-time seconds for shake to decay
+@export var prestige_shake_intensity := 0.008         ## Max camera offset in world units
+@export var prestige_shake_duration := 1.5           ## Real-time seconds for shake to decay
 @export var prestige_particle_count := 8             ## Number of burst particles
 @export var prestige_particle_speed := 3.0           ## Outward velocity in units/sec
 @export var prestige_particle_duration := 0.6        ## Real-time seconds before particles fade

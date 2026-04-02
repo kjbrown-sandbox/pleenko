@@ -9,6 +9,10 @@ extends Node3D
 var _camera: Camera3D
 var _board: PlinkoBoard
 var _target_bucket: Bucket
+var _shake_active: bool = false
+var _shake_intensity: float = 0.0
+var _shake_duration: float = 0.0
+var _shake_elapsed: float = 0.0
 ## Stores original colors so they can be restored on abort: [[material, original_color], ...]
 var _darkened_materials: Array = []
 ## Stores original label modulates: [[Label3D, original_color], ...]
@@ -20,6 +24,7 @@ func setup(camera: Camera3D, board: PlinkoBoard, target_bucket: Bucket) -> void:
 	_board = board
 	_target_bucket = target_bucket
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	set_process(false)
 	_collect_world_materials()
 
 
@@ -64,7 +69,7 @@ func update_desaturation(progress: float) -> void:
 func play_contact(contact_position: Vector3) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	_spawn_shockwave_ring(contact_position, t)
-	_start_screen_shake(t)
+	start_shake(t.prestige_shake_intensity, t.prestige_shake_duration)
 
 
 ## Cleans up all VFX before scene transition.
@@ -160,25 +165,37 @@ func _spawn_single_ring(uv_center: Vector2, t: VisualTheme, delay: float) -> voi
 	tween.tween_callback(canvas.queue_free)
 
 
-func _start_screen_shake(t: VisualTheme) -> void:
+## Starts a screen shake that lerps from the given intensity to 0 over duration (real time).
+func start_shake(intensity: float, duration: float) -> void:
 	if not _camera:
 		return
-
-	# Use a tween to drive the shake via method callbacks at each step
-	var tween := create_tween()
-	tween.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
-	tween.set_speed_scale(1.0 / maxf(Engine.time_scale, 0.001))
-	tween.tween_method(_apply_shake.bind(t.prestige_shake_intensity), 0.0, 1.0, t.prestige_shake_duration)
-	tween.tween_callback(_reset_shake)
+	_shake_active = true
+	_shake_intensity = intensity
+	_shake_duration = duration
+	_shake_elapsed = 0.0
+	set_process(true)
 
 
-func _apply_shake(progress: float, intensity: float) -> void:
-	var decay: float = 1.0 - progress
-	_camera.h_offset = randf_range(-intensity, intensity) * decay
-	_camera.v_offset = randf_range(-intensity, intensity) * decay
+func _process(delta: float) -> void:
+	if not _shake_active:
+		set_process(false)
+		return
 
+	# Real-time delta regardless of Engine.time_scale
+	var real_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	_shake_elapsed += real_delta
 
-func _reset_shake() -> void:
-	if _camera:
+	if _shake_elapsed >= _shake_duration:
+		_shake_active = false
 		_camera.h_offset = 0.0
 		_camera.v_offset = 0.0
+		set_process(false)
+		return
+
+	var progress: float = _shake_elapsed / _shake_duration
+	# Exponential decay: drops fast at first, long subtle tail
+	# At progress 0.2 it's already at ~18% intensity, but still gently shaking near the end
+	var decay: float = exp(-4.0 * progress)
+	var current_intensity: float = _shake_intensity * decay
+	_camera.h_offset = randf_range(-current_intensity, current_intensity)
+	_camera.v_offset = randf_range(-current_intensity, current_intensity)
