@@ -165,7 +165,7 @@ func _process_expand(_real_delta: float, t: VisualTheme) -> void:
 	# Scale the coin up over time to fill the screen
 	var progress: float = clampf(_phase_elapsed / t.prestige_expand_duration, 0.0, 1.0)
 	# Cubic ease-in: very slow at start, accelerates dramatically toward the end
-	var eased: float = progress * progress * progress
+	var eased: float = progress * progress * progress * progress
 
 	# Calculate scale needed to fill the orthographic view.
 	# Camera.size is half the vertical extent, coin_radius is the mesh radius.

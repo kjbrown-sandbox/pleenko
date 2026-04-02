@@ -153,7 +153,7 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var prestige_freeze_scale := 0.001
 @export var prestige_slow_mo_duration := 1.5        ## Real-time seconds in slow-mo before freeze
 @export var prestige_freeze_duration := 1.5          ## Real-time seconds frozen before expand
-@export var prestige_expand_duration := 3.0          ## Real-time seconds for white flash to fill screen
+@export var prestige_expand_duration := 2.5          ## Real-time seconds for white flash to fill screen
 @export var prestige_camera_zoom_size := 2.0         ## Orthographic size when zoomed on coin
 
 # ── Prestige VFX ────────────────────────────────────────────────────
