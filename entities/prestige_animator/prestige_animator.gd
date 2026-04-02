@@ -19,6 +19,8 @@ var _original_camera_pos: Vector3
 var _original_camera_size: float
 var _phase_elapsed: float = 0.0
 var _coin_has_landed: bool = false
+var _coin_start_y: float
+var _original_coin_color: Color
 
 
 func _ready() -> void:
@@ -31,11 +33,11 @@ func setup(camera: Camera3D) -> void:
 
 
 func connect_board(board: PlinkoBoard) -> void:
-	if not board.prestige_coin_landed.is_connected(_on_prestige_coin_landed):
-		board.prestige_coin_landed.connect(_on_prestige_coin_landed)
+	if not board.prestige_coin_landed.is_connected(_on_prestige_coin_final_bounce):
+		board.prestige_coin_landed.connect(_on_prestige_coin_final_bounce)
 
 
-func _on_prestige_coin_landed(coin: Coin, predicted_bucket: Bucket) -> void:
+func _on_prestige_coin_final_bounce(coin: Coin, predicted_bucket: Bucket) -> void:
 	if _is_animating:
 		return
 
@@ -54,6 +56,10 @@ func _on_prestige_coin_landed(coin: Coin, predicted_bucket: Bucket) -> void:
 	# Store camera state for restore on abort
 	_original_camera_pos = _camera.global_position
 	_original_camera_size = _camera.size
+	_coin_start_y = coin.global_position.y
+	var mesh_instance := coin.get_node_or_null("MeshInstance3D")
+	if mesh_instance and mesh_instance.material_override:
+		_original_coin_color = mesh_instance.material_override.albedo_color
 
 	# Determine which board type is being prestiged
 	for i in range(1, TierRegistry.get_tier_count()):
@@ -102,6 +108,15 @@ func _process_slow_mo(real_delta: float, t: VisualTheme) -> void:
 	_camera.global_position = _camera.global_position.lerp(target_cam_pos, real_delta * 3.0)
 	_camera.size = lerpf(_camera.size, t.prestige_camera_zoom_size, real_delta * 3.0)
 
+	var y_progress := (_coin_start_y - coin_world_pos.y) / maxf(_coin_start_y - _target_bucket.global_position.y, 0.01)
+	var y_eased := clampf(y_progress, 0.0, 1.0)
+	# y_eased *= y_eased  # Ease in quadratically for more dramatic slow-mo at the end of the bounce
+	Engine.time_scale = lerpf(t.prestige_slow_mo_scale, t.prestige_freeze_scale, y_eased)
+
+	var mesh_instance := _target_coin.get_node("MeshInstance3D")
+	var mat: StandardMaterial3D = mesh_instance.material_override
+	mat.albedo_color = _original_coin_color.lerp(t.resolve(VisualTheme.Palette.BG_6), y_eased)
+
 	# Transition to FREEZE when the coin actually touches the bucket
 	if _coin_has_landed:
 		_phase_elapsed = 0.0
@@ -123,8 +138,8 @@ func _process_expand(_real_delta: float, t: VisualTheme) -> void:
 
 	# Scale the coin up over time to fill the screen
 	var progress: float = clampf(_phase_elapsed / t.prestige_expand_duration, 0.0, 1.0)
-	# Ease in for a smooth acceleration
-	var eased: float = progress * progress
+	# Cubic ease-in: very slow at start, accelerates dramatically toward the end
+	var eased: float = progress * progress * progress
 
 	# Calculate scale needed to fill the orthographic view.
 	# Camera.size is half the vertical extent, coin_radius is the mesh radius.
