@@ -15,6 +15,7 @@ var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
 var multiplier: float = 1.0
 ## When true, the coin won't be freed on landing — the PrestigeAnimator handles its lifecycle.
 var is_prestige_coin: bool = false
+var _active_tweens: Array[Tween] = []
 
 func _ready() -> void:
 	_apply_visuals()
@@ -36,10 +37,18 @@ func _apply_visuals() -> void:
 func start(target: Vector3) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var tween: Tween = create_tween()
+	_active_tweens.append(tween)
 	tween.tween_property(self, "position", target, t.coin_fall_time) \
 		.set_ease(Tween.EASE_IN) \
 		.set_trans(Tween.TRANS_QUAD)
 	tween.tween_callback(_bounce_or_despawn)
+
+
+func kill_tweens() -> void:
+	for tween in _active_tweens:
+		if tween and tween.is_valid():
+			tween.kill()
+	_active_tweens.clear()
 
 func _bounce_or_despawn() -> void:
 	if position.y < board.buckets_container.position.y + 0.5:
@@ -58,11 +67,13 @@ func _bounce_or_despawn() -> void:
 				final_bounce_started.emit(self, predicted_bucket)
 
 		var x_tween: Tween = create_tween()
+		_active_tweens.append(x_tween)
 		x_tween.tween_property(self, "position:x", next_x, t.coin_fall_time) \
 			.set_ease(Tween.EASE_IN_OUT) \
 			.set_trans(Tween.TRANS_LINEAR)
 
 		var y_tween: Tween = create_tween()
+		_active_tweens.append(y_tween)
 		y_tween.tween_property(self, "position:y", position.y + t.coin_bounce_height, t.coin_fall_time / 3) \
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 		y_tween.tween_property(self, "position:y", next_y, t.coin_fall_time * 2 / 3) \

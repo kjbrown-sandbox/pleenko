@@ -20,7 +20,10 @@ var _original_camera_size: float
 var _phase_elapsed: float = 0.0
 var _coin_has_landed: bool = false
 var _coin_start_y: float
+var _contact_y: float  ## Y position where coin bottom touches bucket top
 var _original_coin_color: Color
+var _original_bucket_color: Color
+var _original_bucket_label_color: Color
 
 
 func _ready() -> void:
@@ -57,9 +60,14 @@ func _on_prestige_coin_final_bounce(coin: Coin, predicted_bucket: Bucket) -> voi
 	_original_camera_pos = _camera.global_position
 	_original_camera_size = _camera.size
 	_coin_start_y = coin.global_position.y
+	# Contact Y: where coin bottom edge meets bucket top edge
+	var t: VisualTheme = ThemeProvider.theme
+	_contact_y = predicted_bucket.global_position.y + t.bucket_height / 2.0 + t.coin_radius
 	var mesh_instance := coin.get_node_or_null("MeshInstance3D")
 	if mesh_instance and mesh_instance.material_override:
 		_original_coin_color = mesh_instance.material_override.albedo_color
+	_original_bucket_color = predicted_bucket._base_material.albedo_color
+	_original_bucket_label_color = predicted_bucket._label.modulate
 
 	# Determine which board type is being prestiged
 	for i in range(1, TierRegistry.get_tier_count()):
@@ -108,17 +116,28 @@ func _process_slow_mo(real_delta: float, t: VisualTheme) -> void:
 	_camera.global_position = _camera.global_position.lerp(target_cam_pos, real_delta * 3.0)
 	_camera.size = lerpf(_camera.size, t.prestige_camera_zoom_size, real_delta * 3.0)
 
-	var y_progress := (_coin_start_y - coin_world_pos.y) / maxf(_coin_start_y - _target_bucket.global_position.y, 0.01)
+	# Use contact Y (coin bottom touches bucket top) instead of bucket center
+	var y_progress := (_coin_start_y - coin_world_pos.y) / maxf(_coin_start_y - _contact_y, 0.01)
 	var y_eased := clampf(y_progress, 0.0, 1.0)
-	# y_eased *= y_eased  # Ease in quadratically for more dramatic slow-mo at the end of the bounce
 	Engine.time_scale = lerpf(t.prestige_slow_mo_scale, t.prestige_freeze_scale, y_eased)
+
+	var palette_white: Color = t.resolve(VisualTheme.Palette.BG_6)
 
 	var mesh_instance := _target_coin.get_node("MeshInstance3D")
 	var mat: StandardMaterial3D = mesh_instance.material_override
-	mat.albedo_color = _original_coin_color.lerp(t.resolve(VisualTheme.Palette.BG_6), y_eased)
+	mat.albedo_color = _original_coin_color.lerp(palette_white, y_eased)
 
-	# Transition to FREEZE when the coin actually touches the bucket
-	if _coin_has_landed:
+	# Lerp bucket mesh and label toward palette white alongside the coin
+	_target_bucket._base_material.albedo_color = _original_bucket_color.lerp(palette_white, y_eased)
+	_target_bucket._label.modulate = _original_bucket_label_color.lerp(palette_white, y_eased)
+
+	# Coin bottom touched bucket top — freeze it in place
+	if coin_world_pos.y <= _contact_y:
+		_target_coin.kill_tweens()
+		_target_coin.global_position.y = _contact_y
+		mat.albedo_color = palette_white
+		_target_bucket._base_material.albedo_color = palette_white
+		_target_bucket._label.modulate = palette_white
 		_phase_elapsed = 0.0
 		PrestigeManager.enter_phase(PrestigeManager.PrestigePhase.FREEZE)
 
@@ -166,10 +185,6 @@ func _start_coin_expand() -> void:
 		if t.unshaded:
 			white_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mesh_instance.material_override = white_mat
-
-	# Snap camera to coin position so the coin is centered
-	var coin_pos := _target_coin.global_position
-	_camera.global_position = Vector3(coin_pos.x, coin_pos.y, _camera.global_position.z)
 
 
 func _transition_to_prestige_screen() -> void:
