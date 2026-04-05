@@ -66,6 +66,7 @@ func _update_currencies() -> void:
 		var fill_color: Color = t.get_active_coin_color(currency_type)
 		var disabled_color: Color = t.get_disabled_coin_color(currency_type)
 		bar.setup(fill_color, disabled_color)
+		bar._disabled_text_override = t.resolve(VisualTheme.Palette.BG_6)
 
 		var amount := CurrencyManager.get_balance(currency_type)
 		var cap := CurrencyManager.get_cap(currency_type)

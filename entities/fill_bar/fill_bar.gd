@@ -27,6 +27,7 @@ signal side_button_hover(text: String)
 
 var _fill_color: Color
 var _disabled_color: Color
+var _disabled_text_override: Color = Color(-1, 0, 0)              # sentinel = use theme default
 
 var _fill_clip: Control
 var _fill_rect: ColorRect
@@ -196,15 +197,16 @@ func apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 	if not _fill_rect:
 		return
 	var t: VisualTheme = ThemeProvider.theme
+	var dis_text: Color = _disabled_text_override if _disabled_text_override.r >= 0 else t.button_disabled_text_color
 	if at_max:
 		_fill_rect.color = _disabled_color
-		_base_label.add_theme_color_override("font_color", t.button_disabled_text_color)
-		_fill_label.add_theme_color_override("font_color", t.button_disabled_text_color)
+		_base_label.add_theme_color_override("font_color", dis_text)
+		_fill_label.add_theme_color_override("font_color", dis_text)
 		_main_styles[3].border_color = _disabled_color
 	elif is_disabled:
 		# Can't afford but not maxed — keep fill visible to show progress
 		_fill_rect.color = _fill_color
-		_base_label.add_theme_color_override("font_color", t.button_disabled_text_color)
+		_base_label.add_theme_color_override("font_color", dis_text)
 		_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
 		# Use the active border so the bar looks cohesive with the fill
 		for style in _main_styles:
