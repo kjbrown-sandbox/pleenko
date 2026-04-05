@@ -40,6 +40,7 @@ func _ready() -> void:
 	_setup_options_dialog()
 	_setup_prestige_animator()
 
+	_setup_vignette()
 	_setup_nav_icons()
 	ModeManager.mode_changed.connect(_on_mode_changed)
 	PrestigeManager.prestige_claimed.connect(_on_prestige_claimed)
@@ -171,6 +172,12 @@ func _debug_setup_prestigeable_state() -> void:
 	board.build_board()
 	board_manager._tween_camera_to_active_board()
 	print("[DEBUG] Board set to %d rows with advanced buckets visible. Press P to test prestige." % board.num_rows)
+
+
+func _setup_vignette() -> void:
+	var vignette := CanvasLayer.new()
+	vignette.set_script(preload("res://entities/vignette/vignette.gd"))
+	add_child(vignette)
 
 
 func _setup_gear_button() -> void:

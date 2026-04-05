@@ -38,3 +38,7 @@ button_bg_source = 5
 button_fill_text_source = 5
 button_border_source = 2
 board_glow_opacity = 0.03
+vignette_enabled = true
+vignette_intensity = 0.12
+vignette_radius = 0.7
+vignette_softness = 0.5

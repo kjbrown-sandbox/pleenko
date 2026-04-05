@@ -154,6 +154,14 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var peg_glow_halo_radius := 1.5
 @export var peg_glow_halo_opacity := 0.06
 
+# ── Vignette ─────────────────────────────────────────────────────────
+@export_group("Vignette")
+@export var vignette_enabled := false
+@export var vignette_intensity := 0.15                             # overall opacity of the darkened edges
+@export var vignette_radius := 0.75                                # how far from center the effect starts
+@export var vignette_softness := 0.45                              # how gradually the edge fades in
+@export var vignette_color_source: Palette = Palette.BG_7          # tint color for the vignette
+
 # ── Prestige Animation ──────────────────────────────────────────────
 @export_group("Prestige Animation")
 @export var prestige_slow_mo_scale := 0.15
