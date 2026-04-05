@@ -32,7 +32,10 @@ directional_light_source = 3
 peg_color_source = 3
 high_multiplier_source = 14
 normal_text_source = 5
+body_text_source = 4
 at_cap_text_source = 14
+overlay_source = 15
+overlay_opacity = 0.6
 
 ambient_light_energy = 0.3
 directional_light_energy = 1.0

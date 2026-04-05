@@ -57,7 +57,10 @@ enum Palette {
 @export var peg_color_source: Palette = Palette.BG_4
 @export var high_multiplier_source: Palette = Palette.RED_LIGHT
 @export var normal_text_source: Palette = Palette.BG_6
+@export var body_text_source: Palette = Palette.BG_4
 @export var at_cap_text_source: Palette = Palette.RED_LIGHT
+@export var overlay_source: Palette = Palette.BG_7
+@export var overlay_opacity := 0.6
 
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")
@@ -208,8 +211,14 @@ var high_multiplier_color: Color:
 	get: return resolve(high_multiplier_source)
 var normal_text_color: Color:
 	get: return resolve(normal_text_source)
+var body_text_color: Color:
+	get: return resolve(body_text_source)
 var at_cap_text_color: Color:
 	get: return resolve(at_cap_text_source)
+var overlay_color: Color:
+	get:
+		var c := resolve(overlay_source)
+		return Color(c.r, c.g, c.b, overlay_opacity)
 var button_enabled_color: Color:
 	get: return resolve(button_enabled_source)
 var button_disabled_color: Color:
@@ -267,11 +276,6 @@ func apply_button_theme(button: Button, currency_type: int = -1) -> void:
 # ── Color helpers ────────────────────────────────────────────────────
 
 func get_coin_color(currency_type: int) -> Color:
-	if _has_tier_registry():
-		var tier := TierRegistry.get_tier_for_currency(currency_type)
-		if tier:
-			return tier.color_normal
-	# Fallback for @tool / editor context
 	match currency_type:
 		GOLD_COIN: return gold_normal
 		RAW_ORANGE, ORANGE_COIN: return orange_normal
@@ -280,10 +284,6 @@ func get_coin_color(currency_type: int) -> Color:
 
 
 func get_coin_color_light(currency_type: int) -> Color:
-	if _has_tier_registry():
-		var tier := TierRegistry.get_tier_for_currency(currency_type)
-		if tier:
-			return tier.color_light
 	match currency_type:
 		GOLD_COIN: return gold_light
 		RAW_ORANGE, ORANGE_COIN: return orange_light
@@ -292,19 +292,11 @@ func get_coin_color_light(currency_type: int) -> Color:
 
 
 func get_coin_color_dark(currency_type: int) -> Color:
-	if _has_tier_registry():
-		var tier := TierRegistry.get_tier_for_currency(currency_type)
-		if tier:
-			return tier.color_dark
 	match currency_type:
 		GOLD_COIN: return gold_dark
 		RAW_ORANGE, ORANGE_COIN: return orange_dark
 		RAW_RED, RED_COIN: return red_dark
 		_: return gold_dark
-
-
-func _has_tier_registry() -> bool:
-	return not Engine.is_editor_hint() and is_instance_valid(TierRegistry) and TierRegistry._by_primary.size() > 0
 
 
 func get_bucket_color(currency_type: int) -> Color:

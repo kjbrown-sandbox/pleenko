@@ -17,7 +17,3 @@ extends Resource
 ## Starting cap for the raw currency (0 if none).
 @export var raw_cap: int = 100
 
-@export_group("Colors")
-@export var color_dark: Color
-@export var color_normal: Color
-@export var color_light: Color

@@ -32,7 +32,7 @@ func _ready() -> void:
 	title.text = "Prestige Up!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 48)
-	title.add_theme_color_override("font_color", Color(0.15, 0.12, 0.1))
+	title.add_theme_color_override("font_color", t.normal_text_color)
 	if t.label_font:
 		title.add_theme_font_override("font", t.label_font)
 	vbox.add_child(title)
@@ -43,7 +43,7 @@ func _ready() -> void:
 	rewards_label.text = rewards_text
 	rewards_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rewards_label.add_theme_font_size_override("font_size", 22)
-	rewards_label.add_theme_color_override("font_color", Color(0.3, 0.28, 0.25))
+	rewards_label.add_theme_color_override("font_color", t.body_text_color)
 	if t.label_font:
 		rewards_label.add_theme_font_override("font", t.label_font)
 	rewards_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

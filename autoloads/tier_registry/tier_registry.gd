@@ -137,20 +137,3 @@ func get_base_drop_delay(board_type: Enums.BoardType) -> float:
 	var idx: int = _index_of.get(board_type, 0)
 	return BASE_DROP_DELAY + 1
 	
-
-
-# ── Colors ──────────────────────────────────────────────────────────
-
-func get_color(currency_type: int) -> Color:
-	var tier := get_tier_for_currency(currency_type)
-	return tier.color_normal if tier else Color.WHITE
-
-
-func get_color_dark(currency_type: int) -> Color:
-	var tier := get_tier_for_currency(currency_type)
-	return tier.color_dark if tier else Color.GRAY
-
-
-func get_color_light(currency_type: int) -> Color:
-	var tier := get_tier_for_currency(currency_type)
-	return tier.color_light if tier else Color.WHITE

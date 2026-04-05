@@ -12,7 +12,7 @@ func _ready() -> void:
 
 	# Full-screen semi-transparent overlay
 	_overlay = ColorRect.new()
-	_overlay.color = Color(0, 0, 0, 0.6)
+	_overlay.color = t.overlay_color
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay.gui_input.connect(_on_overlay_input)
 	add_child(_overlay)
