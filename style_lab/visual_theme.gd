@@ -56,6 +56,7 @@ enum Palette {
 @export var directional_light_source: Palette = Palette.BG_6
 @export var peg_color_source: Palette = Palette.BG_4
 @export var high_multiplier_source: Palette = Palette.RED_LIGHT
+@export var hit_bucket_source: Palette = Palette.BG_6            # color for hit/target/forbidden buckets
 @export var normal_text_source: Palette = Palette.BG_6
 @export var body_text_source: Palette = Palette.BG_4
 @export var at_cap_text_source: Palette = Palette.RED_LIGHT
@@ -221,6 +222,8 @@ var peg_color: Color:
 	get: return resolve(peg_color_source)
 var high_multiplier_color: Color:
 	get: return resolve(high_multiplier_source)
+var hit_bucket_color: Color:
+	get: return resolve(hit_bucket_source)
 var normal_text_color: Color:
 	get: return resolve(normal_text_source)
 var body_text_color: Color:
@@ -426,7 +429,7 @@ func pulse_node3d(node: Node3D, flash_white: bool = false,
 	if flash_white and material:
 		var flash_color := get_coin_color_light(currency)
 		material.albedo_color = flash_color
-		var rest_color: Color = resolve(Palette.BG_6) if is_hit else get_bucket_color(currency)
+		var rest_color: Color = hit_bucket_color if is_hit else get_bucket_color(currency)
 		var color_tween := node.create_tween()
 		color_tween.tween_property(material, "albedo_color", rest_color, bucket_pulse_duration) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)

@@ -42,7 +42,7 @@ func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) ->
 
 func mark_hit() -> void:
 	_is_hit = true
-	var hit_color: Color = ThemeProvider.theme.resolve(VisualTheme.Palette.BG_6)
+	var hit_color: Color = ThemeProvider.theme.hit_bucket_color
 	_base_material.albedo_color = hit_color
 	_label.modulate = hit_color
 
@@ -77,7 +77,7 @@ func mark_forbidden() -> void:
 	skull.transparent = true
 	var mat := ShaderMaterial.new()
 	mat.shader = SpriteTintShader
-	mat.set_shader_parameter("tint_color", t.resolve(VisualTheme.Palette.BG_6))
+	mat.set_shader_parameter("tint_color", t.hit_bucket_color)
 	mat.set_shader_parameter("icon_texture", SkullTexture)
 	skull.material_override = mat
 	add_child(skull)
