@@ -105,7 +105,7 @@ func _build() -> void:
 	_fill_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_fill_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_fill_label.add_theme_font_size_override("font_size", t.button_font_size)
-	_fill_label.add_theme_color_override("font_color", t.background_color)
+	_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
 	_fill_label.add_theme_font_override("font", btn_font)
 	_fill_label.anchor_left = 0
 	_fill_label.anchor_top = 0
@@ -122,14 +122,14 @@ func _build() -> void:
 	plus_button.add_theme_color_override("font_color", t.normal_text_color)
 	plus_button.add_theme_color_override("font_hover_color", t.normal_text_color)
 	plus_button.add_theme_color_override("font_pressed_color", t.normal_text_color)
-	plus_button.add_theme_color_override("font_disabled_color", t.resolve(VisualTheme.Palette.BG_5))
+	plus_button.add_theme_color_override("font_disabled_color", t.button_disabled_text_color)
 
 	# Style minus button (same outline style, with visible text)
 	_minus_styles = _apply_outline_style(minus_button, _fill_color, _disabled_color)
 	minus_button.add_theme_color_override("font_color", t.normal_text_color)
 	minus_button.add_theme_color_override("font_hover_color", t.normal_text_color)
 	minus_button.add_theme_color_override("font_pressed_color", t.normal_text_color)
-	minus_button.add_theme_color_override("font_disabled_color", t.resolve(VisualTheme.Palette.BG_5))
+	minus_button.add_theme_color_override("font_disabled_color", t.button_disabled_text_color)
 
 	main_button.focus_mode = Control.FOCUS_NONE
 	plus_button.focus_mode = Control.FOCUS_NONE
@@ -152,7 +152,7 @@ func _build() -> void:
 func _apply_outline_style(button: Button, border_col: Color, disabled_border: Color) -> Array[StyleBoxFlat]:
 	var t: VisualTheme = ThemeProvider.theme
 
-	var base_bg := t.bg_shade_1
+	var base_bg := t.button_bg_color
 	var normal_style := t._make_stylebox(base_bg, border_col)
 	var hover_style := t._make_stylebox(base_bg, t.normal_text_color)
 	var pressed_style := t._make_stylebox(base_bg, t.normal_text_color)
@@ -196,15 +196,14 @@ func apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 	if not _fill_rect:
 		return
 	var t: VisualTheme = ThemeProvider.theme
-	var text_color: Color
 	if is_disabled or at_max:
-		text_color = t.resolve(VisualTheme.Palette.BG_5)
 		_fill_rect.color = _disabled_color
+		_base_label.add_theme_color_override("font_color", t.button_disabled_text_color)
+		_fill_label.add_theme_color_override("font_color", t.button_disabled_text_color)
 	else:
-		text_color = t.normal_text_color
 		_fill_rect.color = _fill_color
-	_base_label.add_theme_color_override("font_color", text_color)
-	_fill_label.add_theme_color_override("font_color", text_color)
+		_base_label.add_theme_color_override("font_color", t.normal_text_color)
+		_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
 
 
 func setup_plus(on_pressed: Callable, on_hover: Callable = Callable(), on_update: Callable = Callable()) -> void:
@@ -232,7 +231,7 @@ func set_plus_disabled(is_disabled: bool) -> void:
 
 func set_plus_filled(can_afford: bool) -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	var bg: Color = _fill_color if can_afford else t.bg_shade_1
+	var bg: Color = _fill_color if can_afford else t.button_bg_color
 	for style in _plus_styles:
 		style.bg_color = bg
 
@@ -253,7 +252,7 @@ func set_minus_disabled(is_disabled: bool) -> void:
 
 func set_minus_filled(active: bool) -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	var bg: Color = _fill_color if active else t.bg_shade_1
+	var bg: Color = _fill_color if active else t.button_bg_color
 	for style in _minus_styles:
 		style.bg_color = bg
 

@@ -8,6 +8,7 @@ var value: int = 0
 
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
+	level_label.add_theme_color_override("font_color", t.normal_text_color)
 	progress_bar.setup(t.button_enabled_color, t.button_disabled_color)
 	progress_bar.main_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	progress_bar.apply_fill_colors(false)

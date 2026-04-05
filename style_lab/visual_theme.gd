@@ -118,6 +118,9 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var button_padding := Vector2(16, 5)                      # horizontal, vertical
 @export var button_border_radius := 4
 @export var button_border_width := 3
+@export var button_bg_source: Palette = Palette.BG_1
+@export var button_fill_text_source: Palette = Palette.BG_7
+@export var button_disabled_text_source: Palette = Palette.BG_3
 @export var button_border_source: Palette = Palette.BG_4
 @export var button_pulse_scale := 1.03
 @export var button_pulse_duration := 0.12
@@ -227,6 +230,12 @@ var button_hovered_color: Color:
 	get: return resolve(button_hovered_source)
 var button_text_color: Color:
 	get: return resolve(button_text_source)
+var button_bg_color: Color:
+	get: return resolve(button_bg_source)
+var button_fill_text_color: Color:
+	get: return resolve(button_fill_text_source)
+var button_disabled_text_color: Color:
+	get: return resolve(button_disabled_text_source)
 var button_border_color: Color:
 	get: return resolve(button_border_source)
 

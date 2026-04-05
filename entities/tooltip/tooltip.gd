@@ -49,7 +49,7 @@ func _ready() -> void:
 func _apply_theme() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	_label.add_theme_font_size_override("font_size", int(t.button_font_size))
-	_label.add_theme_color_override("font_color", t.resolve(VisualTheme.Palette.BG_5))
+	_label.add_theme_color_override("font_color", t.body_text_color)
 	_label.add_theme_constant_override("line_spacing", -int(t.button_font_size) / 3)
 	var font: Font = t.button_font if t.button_font else t.label_font
 	if font:
