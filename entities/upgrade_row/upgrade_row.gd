@@ -107,4 +107,4 @@ func _get_purchase_hover_text() -> String:
 	if at_max:
 		return ""
 	var currency_name: String = _get_currency_name(TierRegistry.primary_currency(_board_type))
-	return "Cost: %d %s" % [state.cost, currency_name]
+	return "Cost: %s %s" % [FormatUtils.format_number(state.cost), currency_name]

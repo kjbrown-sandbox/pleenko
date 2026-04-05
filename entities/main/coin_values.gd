@@ -95,13 +95,15 @@ func _update_bar(bar, type: Enums.CurrencyType, balance: int, cap: int) -> void:
 	var at_cap := cap > 0 and balance >= cap
 	var coin_name := _get_currency_name(type)
 
+	var fmt_balance := FormatUtils.format_number(balance)
+	var fmt_cap := FormatUtils.format_number(cap)
 	if at_cap:
-		bar.update_text("%s %d/%d (MAX)" % [coin_name, balance, cap])
+		bar.update_text("%s %s/%s (MAX)" % [coin_name, fmt_balance, fmt_cap])
 		bar.set_fill(1.0)
 		bar.set_main_disabled(true)
 		bar.apply_fill_colors(true, true)
 	else:
-		bar.update_text("%s %d/%d" % [coin_name, balance, cap])
+		bar.update_text("%s %s/%s" % [coin_name, fmt_balance, fmt_cap])
 		var fill_pct := clampf(float(balance) / float(cap), 0.0, 1.0) if cap > 0 else 0.0
 		bar.set_fill(fill_pct)
 		bar.set_main_disabled(false)
@@ -118,7 +120,7 @@ func _on_cap_hover(type: Enums.CurrencyType) -> void:
 	var cost := CurrencyManager.get_cap_raise_cost(type)
 	var cap_currency: int = CurrencyManager.cap_raise_currency(type)
 	var currency_name := _get_currency_name(cap_currency)
-	_hover_tooltip.update_and_show("Cost: %d %s" % [cost, currency_name])
+	_hover_tooltip.update_and_show("Cost: %s %s" % [FormatUtils.format_number(cost), currency_name])
 
 
 func _on_cap_unhover() -> void:

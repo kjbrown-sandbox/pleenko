@@ -85,16 +85,20 @@ func _bounce_or_despawn() -> void:
 			if predicted_bucket:
 				final_bounce_started.emit(self, predicted_bucket)
 
+		# Add randomness so bounces don't look uniform
+		var bounce_height: float = t.coin_bounce_height * randf_range(0.3, 1.7)
+		var fall_time: float = t.coin_fall_time * randf_range(0.9, 1.1)
+
 		var x_tween: Tween = create_tween()
 		_active_tweens.append(x_tween)
-		x_tween.tween_property(self, "position:x", next_x, t.coin_fall_time) \
+		x_tween.tween_property(self, "position:x", next_x, fall_time) \
 			.set_ease(Tween.EASE_IN_OUT) \
 			.set_trans(Tween.TRANS_LINEAR)
 
 		var y_tween: Tween = create_tween()
 		_active_tweens.append(y_tween)
-		y_tween.tween_property(self, "position:y", position.y + t.coin_bounce_height, t.coin_fall_time / 3) \
+		y_tween.tween_property(self, "position:y", position.y + bounce_height, fall_time / 3) \
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		y_tween.tween_property(self, "position:y", next_y, t.coin_fall_time * 2 / 3) \
+		y_tween.tween_property(self, "position:y", next_y, fall_time * 2 / 3) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 		y_tween.tween_callback(_bounce_or_despawn)

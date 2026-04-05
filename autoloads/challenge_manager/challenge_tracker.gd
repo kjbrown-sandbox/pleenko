@@ -19,6 +19,8 @@ var _same_bucket_streak: Dictionary = {}  # BoardType -> int
 var _survive_passed: bool = false
 var _current_bucket_group: int = 0
 var _total_drops: int = 0
+var _has_failed: bool = false
+var _timer_started: bool = false
 
 
 func setup(_challenge: ChallengeData, _board_manager: BoardManager) -> void:
@@ -32,6 +34,11 @@ func setup(_challenge: ChallengeData, _board_manager: BoardManager) -> void:
 	_survive_passed = false
 	_current_bucket_group = 0
 	_total_drops = 0
+	_timer_started = false
+
+
+func start_timer() -> void:
+	_timer_started = true
 
 
 func connect_to_boards() -> void:
@@ -45,7 +52,13 @@ func _connect_board(board: PlinkoBoard) -> void:
 	if board.coin_landed.is_connected(_on_coin_landed):
 		return
 	board.coin_landed.connect(_on_coin_landed)
+	board.coin_dropped.connect(_on_coin_dropped)
 	board.autodrop_failed.connect(_on_autodrop_failed)
+
+
+func _on_coin_dropped() -> void:
+	if not _timer_started:
+		_timer_started = true
 
 
 func _on_board_switched(_board: PlinkoBoard) -> void:
@@ -56,6 +69,8 @@ func _on_board_switched(_board: PlinkoBoard) -> void:
 # ── Timer ─────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
+	if not _timer_started:
+		return
 	time_remaining -= delta
 	if time_remaining <= 0.0:
 		time_remaining = 0.0
@@ -64,16 +79,21 @@ func _process(delta: float) -> void:
 
 
 func _on_time_up() -> void:
+	if _has_failed:
+		return
 	_survive_passed = true
 	if _are_all_objectives_met():
 		completed.emit()
 	else:
+		_has_failed = true
 		failed.emit("Time's up!")
 
 
 # ── Coin landing ─────────────────────────────────────────────────
 
 func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_type: Enums.CurrencyType, _amount: int) -> void:
+	if _has_failed:
+		return
 	_total_drops += 1
 
 	# Track bucket hits
@@ -128,6 +148,7 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 	for constraint in challenge.constraints:
 		if constraint is NeverTouchBucket:
 			if board_type == constraint.board_type and bucket_index == constraint.bucket_index:
+				_has_failed = true
 				failed.emit("Landed in forbidden bucket!")
 				return
 
@@ -136,6 +157,7 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 		if objective is EarnWithinXDrops and _total_drops > objective.max_drops:
 			var balance := CurrencyManager.get_balance(objective.currency_type)
 			if balance < objective.amount:
+				_has_failed = true
 				failed.emit("Ran out of drops!")
 				return
 
@@ -147,13 +169,17 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 # ── Currency constraints ──────────────────────────────────────────
 
 func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: int) -> void:
+	if _has_failed:
+		return
 	for constraint in challenge.constraints:
 		if constraint is NeverMoreThanXCoins:
 			if type == constraint.currency_type and new_balance > constraint.amount:
+				_has_failed = true
 				failed.emit("Exceeded %d %s!" % [constraint.amount, Enums.CurrencyType.keys()[type]])
 				return
 		elif constraint is NeverLessThanXCoins:
 			if type == constraint.currency_type and new_balance < constraint.amount:
+				_has_failed = true
 				failed.emit("Dropped below %d %s!" % [constraint.amount, Enums.CurrencyType.keys()[type]])
 				return
 
@@ -161,8 +187,11 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 # ── Autodrop failure ──────────────────────────────────────────────
 
 func _on_autodrop_failed(board_type: Enums.BoardType) -> void:
+	if _has_failed:
+		return
 	for objective in challenge.objectives:
 		if objective is Survive and objective.board_type == board_type:
+			_has_failed = true
 			failed.emit("Autodropper can't afford to drop!")
 			return
 
@@ -315,6 +344,8 @@ func disconnect_all() -> void:
 		for board in board_manager.get_boards():
 			if board.coin_landed.is_connected(_on_coin_landed):
 				board.coin_landed.disconnect(_on_coin_landed)
+			if board.coin_dropped.is_connected(_on_coin_dropped):
+				board.coin_dropped.disconnect(_on_coin_dropped)
 			if board.autodrop_failed.is_connected(_on_autodrop_failed):
 				board.autodrop_failed.disconnect(_on_autodrop_failed)
 			board.clear_all_markings()

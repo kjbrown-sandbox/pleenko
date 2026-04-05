@@ -25,6 +25,10 @@ func get_time_remaining() -> float:
 	return _tracker.time_remaining if _tracker else 0.0
 
 
+func has_failed() -> bool:
+	return _tracker._has_failed if _tracker else false
+
+
 # ── Setup ─────────────────────────────────────────────────────────
 
 func setup(board_manager: BoardManager) -> void:
@@ -106,6 +110,8 @@ func _setup_survive(objective: Survive) -> void:
 func _activate_autodroppers(objective: Survive) -> void:
 	if not is_active_challenge:
 		return
+	if _tracker:
+		_tracker.start_timer()
 	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[objective.board_type])
 	for i in objective.autodropper_count:
 		_board_manager._on_autodropper_adjust(normal_id, 1)

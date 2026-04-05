@@ -100,7 +100,7 @@ enum PegShape { SPHERE, CYLINDER }
 # ── Coins ────────────────────────────────────────────────────────────
 @export_group("Coins")
 enum CoinShape { SPHERE, CYLINDER }
-@export var coin_shape: CoinShape = CoinShape.SPHERE
+@export var coin_shape: CoinShape = CoinShape.CYLINDER
 @export var coin_radius := 0.15
 @export var coin_height := 0.05                                   # cylinder only
 @export var coin_roughness := 0.3

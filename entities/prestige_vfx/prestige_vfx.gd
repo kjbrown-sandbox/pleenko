@@ -9,22 +9,26 @@ extends Node3D
 var _camera: Camera3D
 var _board: PlinkoBoard
 var _target_bucket: Bucket
+var _target_coin: Coin
 var _shake_active: bool = false
 var _shake_intensity: float = 0.0
 var _shake_duration: float = 0.0
 var _shake_elapsed: float = 0.0
 ## Stores original colors so they can be restored on abort: [[material, original_color], ...]
 var _darkened_materials: Array = []
+## Stores original coin shader material colors: [[ShaderMaterial, original_color], ...]
+var _darkened_coin_materials: Array = []
 ## Stores original label modulates: [[Label3D, original_color], ...]
 var _darkened_labels: Array = []
 ## Shockwave CanvasLayers added to root (not children of this node) that need manual cleanup.
 var _shockwave_layers: Array[CanvasLayer] = []
 
 
-func setup(camera: Camera3D, board: PlinkoBoard, target_bucket: Bucket) -> void:
+func setup(camera: Camera3D, board: PlinkoBoard, target_bucket: Bucket, target_coin: Coin = null) -> void:
 	_camera = camera
 	_board = board
 	_target_bucket = target_bucket
+	_target_coin = target_coin
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_process(false)
 	_collect_world_materials()
@@ -49,6 +53,15 @@ func _collect_world_materials() -> void:
 		if b and b._label:
 			_darkened_labels.append([b._label, b._label.modulate])
 
+	# Non-prestige coins on the board
+	for child in _board.get_children():
+		if child is Coin and child != _target_coin:
+			var mesh := child.get_node_or_null("MeshInstance3D") as MeshInstance3D
+			if mesh and mesh.material_override is ShaderMaterial:
+				var shader_mat := mesh.material_override as ShaderMaterial
+				var color: Color = shader_mat.get_shader_parameter("albedo_color")
+				_darkened_coin_materials.append([shader_mat, color])
+
 
 ## Called during slow-mo to desaturate the world based on progress (0.0 to 1.0).
 func update_desaturation(progress: float) -> void:
@@ -60,6 +73,11 @@ func update_desaturation(progress: float) -> void:
 		var mat: StandardMaterial3D = entry[0]
 		var original: Color = entry[1]
 		mat.albedo_color = original.lerp(bg, amount)
+
+	for entry in _darkened_coin_materials:
+		var shader_mat: ShaderMaterial = entry[0]
+		var original: Color = entry[1]
+		shader_mat.set_shader_parameter("albedo_color", original.lerp(bg, amount))
 
 	for entry in _darkened_labels:
 		var label: Label3D = entry[0]
@@ -82,12 +100,18 @@ func cleanup() -> void:
 		var original: Color = entry[1]
 		if is_instance_valid(mat):
 			mat.albedo_color = original
+	for entry in _darkened_coin_materials:
+		var shader_mat: ShaderMaterial = entry[0]
+		var original: Color = entry[1]
+		if is_instance_valid(shader_mat):
+			shader_mat.set_shader_parameter("albedo_color", original)
 	for entry in _darkened_labels:
 		var label: Label3D = entry[0]
 		var original: Color = entry[1]
 		if is_instance_valid(label):
 			label.modulate = original
 	_darkened_materials.clear()
+	_darkened_coin_materials.clear()
 	_darkened_labels.clear()
 	# Free shockwave CanvasLayers (added to root, not children of this node)
 	for layer in _shockwave_layers:

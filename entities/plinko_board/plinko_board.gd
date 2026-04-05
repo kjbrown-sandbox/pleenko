@@ -36,11 +36,13 @@ var _advanced_autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
 var multi_drop_count: int = -1
+var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 
 signal board_rebuilt
 signal autodropper_adjust_requested(button_id: StringName, delta: int)
 signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type: Enums.CurrencyType, amount: int)
 signal autodrop_failed(board_type: Enums.BoardType)
+signal coin_dropped
 signal prestige_coin_landed(coin: Coin, bucket: Bucket)
 
 var _drop_timer_remaining: float = 0.0
@@ -110,7 +112,7 @@ func _setup_drop_bars() -> void:
 func _format_cost_text(costs: Array) -> String:
 	var parts: PackedStringArray = []
 	for cost in costs:
-		parts.append("%d %s" % [cost[1], FormatUtils.currency_name(cost[0], false)])
+		parts.append("%s %s" % [FormatUtils.format_number(cost[1]), FormatUtils.currency_name(cost[0], false)])
 	return ", ".join(parts)
 
 
@@ -147,6 +149,9 @@ func _is_hold_to_drop_active() -> bool:
 
 
 func request_drop(costs: Array = [], coin_type: int = -1) -> void:
+	if ChallengeManager.is_active_challenge and ChallengeManager.has_failed():
+		return
+
 	if costs.is_empty():
 		costs = _get_drop_costs()
 	var drop_coin_type: Enums.CurrencyType = (coin_type as Enums.CurrencyType) if coin_type != -1 else TierRegistry.primary_currency(board_type)
@@ -209,11 +214,13 @@ func _spend(costs: Array) -> void:
 
 func _launch_coin(coin: Coin) -> void:
 	coin.board = self
-	coin.position = Vector3(0, vertical_spacing + 0.2, 0)
+	_coin_z_counter += 1
+	coin.position = Vector3(0, vertical_spacing + 0.2, _coin_z_counter * 0.001)
 	add_child(coin)
 	coin.landed.connect(on_coin_landed)
 	coin.final_bounce_started.connect(_on_final_bounce_started)
 	coin.start(Vector3(0, 0.2, 0))
+	coin_dropped.emit()
 
 
 func _drop_immediate_coin(coin: Coin) -> void:
@@ -497,21 +504,27 @@ func increase_bucket_values() -> void:
 	build_board()
 
 func decrease_drop_delay() -> void:
+	var old_delay := drop_delay
 	drop_delay *= drop_delay_reduction_factor
+	# If currently waiting, scale remaining time proportionally so the player
+	# doesn't have to wait the full old duration
+	if is_waiting and old_delay > 0.0:
+		_drop_timer_remaining *= drop_delay / old_delay
 
 func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var label := Label3D.new()
 	if multiplier == floorf(multiplier):
-		label.text = "x%d = %d" % [int(multiplier), total]
+		label.text = "x%d = %s" % [int(multiplier), FormatUtils.format_number(total)]
 	else:
-		label.text = "x%.1f = %d" % [multiplier, total]
+		label.text = "x%.1f = %s" % [multiplier, FormatUtils.format_number(total)]
 	label.font_size = t.floating_text_font_size
 	label.outline_size = t.label_outline_size
 	if t.label_font:
 		label.font = t.label_font
 	label.modulate = t.normal_text_color
-	label.position = Vector3(pos.x, pos.y + 0.3, pos.z + 0.05)
+	var local_pos := to_local(pos)
+	label.position = Vector3(local_pos.x, local_pos.y + 0.3, local_pos.z + 0.05)
 	if multiplier >= 9:
 		label.modulate = t.high_multiplier_color
 	add_child(label)

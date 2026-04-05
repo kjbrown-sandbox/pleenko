@@ -79,7 +79,7 @@ func _on_prestige_coin_final_bounce(coin: Coin, predicted_bucket: Bucket) -> voi
 	# Spawn VFX handler
 	_vfx = PrestigeVFX.new()
 	add_child(_vfx)
-	_vfx.setup(_camera, coin.board, predicted_bucket)
+	_vfx.setup(_camera, coin.board, predicted_bucket, coin)
 
 	# Enter slow-mo — the coin is still mid-bounce, heading toward the bucket
 	PrestigeManager.enter_phase(PrestigeManager.PrestigePhase.SLOW_MO)
