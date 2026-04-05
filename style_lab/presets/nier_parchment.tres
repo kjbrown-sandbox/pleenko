@@ -33,5 +33,6 @@ button_disabled_source = 4
 button_hovered_source = 15
 button_font = ExtResource("1_fbp74")
 button_bg_source = 4
+button_fill_text_source = 5
 button_border_source = 2
 board_glow_opacity = 0.03
