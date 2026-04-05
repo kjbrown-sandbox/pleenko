@@ -242,9 +242,11 @@ func set_plus_disabled(is_disabled: bool) -> void:
 func set_plus_filled(can_afford: bool) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var bg: Color = _fill_color if can_afford else t.button_bg_color
-	var text_col: Color = t.button_fill_text_color if can_afford else t.normal_text_color
+	var border: Color = _fill_color if can_afford else t.button_bg_color
+	var text_col: Color = t.button_fill_text_color if can_afford else t.button_disabled_text_color
 	for style in _plus_styles:
 		style.bg_color = bg
+		style.border_color = border
 	plus_button.add_theme_color_override("font_color", text_col)
 	plus_button.add_theme_color_override("font_hover_color", text_col)
 	plus_button.add_theme_color_override("font_pressed_color", text_col)
@@ -264,12 +266,14 @@ func set_minus_disabled(is_disabled: bool) -> void:
 	minus_button.disabled = is_disabled
 
 
-func set_minus_filled(active: bool) -> void:
+func set_minus_filled(is_active: bool) -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	var bg: Color = _fill_color if active else t.button_bg_color
-	var text_col: Color = t.button_fill_text_color if active else t.normal_text_color
+	var bg: Color = _fill_color if is_active else t.button_bg_color
+	var border: Color = _fill_color if is_active else t.button_bg_color
+	var text_col: Color = t.button_fill_text_color if is_active else t.button_disabled_text_color
 	for style in _minus_styles:
 		style.bg_color = bg
+		style.border_color = border
 	minus_button.add_theme_color_override("font_color", text_col)
 	minus_button.add_theme_color_override("font_hover_color", text_col)
 	minus_button.add_theme_color_override("font_pressed_color", text_col)

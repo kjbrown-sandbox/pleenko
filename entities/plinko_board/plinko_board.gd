@@ -606,7 +606,9 @@ func update_autodropper_buttons(assignments: Dictionary, normal_free: int, advan
 		var assigned: int = assignments.get(bid, 0)
 		var free: int = advanced_free if (bid as String).ends_with("_ADVANCED") else normal_free
 		bar.set_minus_disabled(assigned <= 0)
+		bar.set_minus_filled(assigned > 0)
 		bar.set_plus_disabled(free <= 0)
+		bar.set_plus_filled(free > 0)
 
 
 func get_drop_button(btn_id: StringName):
