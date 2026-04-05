@@ -61,6 +61,7 @@ enum Palette {
 @export var at_cap_text_source: Palette = Palette.RED_LIGHT
 @export var overlay_source: Palette = Palette.BG_7
 @export var overlay_opacity := 0.6
+@export var swap_fill_shading := false                            # true for light themes: active=dark, disabled=light
 
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")
@@ -306,6 +307,14 @@ func get_coin_color_dark(currency_type: int) -> Color:
 		RAW_ORANGE, ORANGE_COIN: return orange_dark
 		RAW_RED, RED_COIN: return red_dark
 		_: return gold_dark
+
+
+func get_active_coin_color(currency_type: int) -> Color:
+	return get_coin_color_dark(currency_type) if swap_fill_shading else get_coin_color(currency_type)
+
+
+func get_disabled_coin_color(currency_type: int) -> Color:
+	return get_coin_color_light(currency_type) if swap_fill_shading else get_coin_color_dark(currency_type)
 
 
 func get_bucket_color(currency_type: int) -> Color:

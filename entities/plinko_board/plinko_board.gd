@@ -81,8 +81,8 @@ func setup(type: Enums.BoardType) -> void:
 func _setup_drop_bars() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var currency_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
-	var coin_color: Color = t.get_coin_color(currency_type)
-	var coin_color_dark: Color = t.get_coin_color_dark(currency_type)
+	var coin_color: Color = t.get_active_coin_color(currency_type)
+	var coin_color_dark: Color = t.get_disabled_coin_color(currency_type)
 
 	# Main drop bar
 	_drop_main.setup(coin_color, coin_color_dark)
@@ -394,8 +394,8 @@ func _show_advanced_drop_bar() -> void:
 		return
 	_has_advanced_drop = true
 	var t: VisualTheme = ThemeProvider.theme
-	var adv_color: Color = t.get_coin_color(advanced_bucket_type)
-	var adv_color_dark: Color = t.get_coin_color_dark(advanced_bucket_type)
+	var adv_color: Color = t.get_active_coin_color(advanced_bucket_type)
+	var adv_color_dark: Color = t.get_disabled_coin_color(advanced_bucket_type)
 	_drop_advanced.setup(adv_color, adv_color_dark)
 	_drop_advanced.update_text("Drop %s" % FormatUtils.currency_name(advanced_bucket_type))
 	_drop_advanced.main_pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))

@@ -15,11 +15,14 @@ func start(challenge: ChallengeData) -> void:
 	_objective_label.text = ChallengeManager.get_objective_text()
 	_time_remaining = challenge.time_limit_seconds
 
+	_apply_theme()
+
 	# Create progress label between objective and result
 	if not _progress_label:
 		_progress_label = Label.new()
 		_progress_label.name = "ProgressLabel"
 		_progress_label.add_theme_font_size_override("font_size", 24)
+		_progress_label.add_theme_color_override("font_color", ThemeProvider.theme.body_text_color)
 		_progress_label.visible = false
 		add_child(_progress_label)
 		move_child(_progress_label, _objective_label.get_index() + 1)
@@ -52,3 +55,10 @@ func show_result(text: String) -> void:
 	_is_running = false
 	_result_label.text = text
 	_result_label.visible = true
+
+
+func _apply_theme() -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	_timer_label.add_theme_color_override("font_color", t.normal_text_color)
+	_objective_label.add_theme_color_override("font_color", t.body_text_color)
+	_result_label.add_theme_color_override("font_color", t.normal_text_color)

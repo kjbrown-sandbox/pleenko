@@ -40,7 +40,7 @@ func _ready() -> void:
 		var tab := Label.new()
 		tab.text = diff_name
 		tab.add_theme_font_size_override("font_size", int(t.button_font_size))
-		tab.add_theme_color_override("font_color", t.resolve(VisualTheme.Palette.BG_4))
+		tab.add_theme_color_override("font_color", t.button_disabled_text_color)
 		_apply_font(tab, t)
 		_difficulty_container.add_child(tab)
 	vbox.add_child(_difficulty_container)
@@ -109,7 +109,7 @@ func _make_section_header(text: String, t: VisualTheme) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", int(t.button_font_size))
-	label.add_theme_color_override("font_color", t.resolve(VisualTheme.Palette.BG_5))
+	label.add_theme_color_override("font_color", t.body_text_color)
 	_apply_font(label, t)
 	return label
 
