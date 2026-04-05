@@ -510,6 +510,7 @@ func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
 	label.outline_size = t.label_outline_size
 	if t.label_font:
 		label.font = t.label_font
+	label.modulate = t.normal_text_color
 	label.position = Vector3(pos.x, pos.y + 0.3, pos.z + 0.05)
 	if multiplier >= 9:
 		label.modulate = t.high_multiplier_color
@@ -530,12 +531,13 @@ func _show_multi_drop_label(count: int) -> void:
 	label.outline_size = t.label_outline_size
 	if t.label_font:
 		label.font = t.label_font
+	label.modulate = t.normal_text_color
 	label.position = Vector3(0, vertical_spacing + 0.5, 0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	add_child(label)
 	var tween := create_tween()
 	tween.tween_property(label, "position:y", label.position.y + 0.5, 0.6)
-	tween.parallel().tween_property(label, "modulate", Color(1, 1, 1, 0), 0.6)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.6)
 	tween.tween_callback(label.queue_free)
 
 

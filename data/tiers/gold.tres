@@ -1,13 +1,9 @@
-[gd_resource type="Resource" script_class="TierData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="TierData" format=3 uid="uid://dtca55ds7ebv4"]
 
-[ext_resource type="Script" path="res://scripts/tier_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://cub60hx042scp" path="res://scripts/tier_data.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
-board_type = 0
 display_name = "Gold"
-primary_currency = 0
-raw_currency = -1
 previous_currency_cost = 0
-primary_cap = 500
 raw_cap = 0

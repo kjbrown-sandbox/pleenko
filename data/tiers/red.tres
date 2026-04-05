@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="TierData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="TierData" format=3 uid="uid://chsc4qorp2v76"]
 
-[ext_resource type="Script" path="res://scripts/tier_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://cub60hx042scp" path="res://scripts/tier_data.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
@@ -8,6 +8,3 @@ board_type = 2
 display_name = "Red"
 primary_currency = 4
 raw_currency = 3
-previous_currency_cost = 100
-primary_cap = 500
-raw_cap = 100
