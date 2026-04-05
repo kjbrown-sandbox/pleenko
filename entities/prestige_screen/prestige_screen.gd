@@ -7,6 +7,7 @@ var _board_type: Enums.BoardType
 
 
 func _ready() -> void:
+	Engine.time_scale = 1.0
 	_board_type = PrestigeManager.pending_board_type
 	var t: VisualTheme = ThemeProvider.theme
 

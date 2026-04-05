@@ -17,6 +17,8 @@ var _shake_elapsed: float = 0.0
 var _darkened_materials: Array = []
 ## Stores original label modulates: [[Label3D, original_color], ...]
 var _darkened_labels: Array = []
+## Shockwave CanvasLayers added to root (not children of this node) that need manual cleanup.
+var _shockwave_layers: Array[CanvasLayer] = []
 
 
 func setup(camera: Camera3D, board: PlinkoBoard, target_bucket: Bucket) -> void:
@@ -87,6 +89,11 @@ func cleanup() -> void:
 			label.modulate = original
 	_darkened_materials.clear()
 	_darkened_labels.clear()
+	# Free shockwave CanvasLayers (added to root, not children of this node)
+	for layer in _shockwave_layers:
+		if is_instance_valid(layer):
+			layer.queue_free()
+	_shockwave_layers.clear()
 	# Reset camera shake offsets
 	if _camera:
 		_camera.h_offset = 0.0
@@ -152,8 +159,10 @@ func _spawn_single_ring(uv_center: Vector2, t: VisualTheme, delay: float) -> voi
 
 	var rect := ColorRect.new()
 	rect.material = mat
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	canvas.add_child(rect)
+	_shockwave_layers.append(canvas)
 
 	var tween := create_tween()
 	tween.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
