@@ -32,6 +32,30 @@ func _apply_visuals() -> void:
 		mesh_instance.rotation = Vector3(PI / 2, 0, 0)
 	else:
 		mesh_instance.rotation = Vector3.ZERO
+	_apply_halo(t)
+
+
+func _apply_halo(t: VisualTheme) -> void:
+	# Remove existing halo if re-applying
+	var old_halo := get_node_or_null("CoinHalo")
+	if old_halo:
+		old_halo.queue_free()
+	if not t.coin_halo_enabled:
+		return
+	var halo_shader: Shader = preload("res://entities/coin/coin_halo.gdshader")
+	var quad := MeshInstance3D.new()
+	quad.name = "CoinHalo"
+	var mesh := QuadMesh.new()
+	var halo_size: float = t.coin_radius * t.coin_halo_radius * 2.0
+	mesh.size = Vector2(halo_size, halo_size)
+	quad.mesh = mesh
+	var mat := ShaderMaterial.new()
+	mat.shader = halo_shader
+	mat.set_shader_parameter("glow_color", t.get_coin_color(coin_type))
+	mat.set_shader_parameter("opacity_mult", t.coin_halo_opacity)
+	quad.material_override = mat
+	quad.position = Vector3(0, 0, -0.02)
+	add_child(quad)
 
 
 func start(target: Vector3) -> void:
@@ -73,6 +97,7 @@ func _bounce_or_despawn() -> void:
 	if position.y < board.buckets_container.position.y + 0.5:
 		landed.emit(self)
 	else:
+		board.flash_nearest_peg(global_position, coin_type)
 		var t: VisualTheme = ThemeProvider.theme
 		var direction = 1 if randf() < 0.5 else -1
 		var next_x: float = position.x + direction * board.space_between_pegs / 2.0

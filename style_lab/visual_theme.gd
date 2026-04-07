@@ -108,6 +108,11 @@ enum CoinShape { SPHERE, CYLINDER }
 @export var coin_emission_strength := 0.15                        # subtle glow
 @export var coin_fall_time := 0.4                                 # seconds per row bounce
 @export var coin_bounce_height := 0.2                             # upward arc between rows
+@export var coin_halo_enabled := false                            # colored glow quad behind coin
+@export var coin_halo_radius := 2.0                               # size relative to coin radius
+@export var coin_halo_opacity := 0.15                             # glow intensity
+@export var coin_silhouette := false                              # near-black coin with glow behind
+@export var coin_silhouette_color := Color(0.06, 0.06, 0.06)
 
 # ── Buttons ──────────────────────────────────────────────────────────
 @export_group("Buttons")
@@ -338,7 +343,8 @@ func make_coin_material(currency_type: int) -> ShaderMaterial:
 	var coin_shader: Shader = preload("res://entities/coin/coin_clip.gdshader")
 	var mat := ShaderMaterial.new()
 	mat.shader = coin_shader
-	mat.set_shader_parameter("albedo_color", get_coin_color(currency_type))
+	var color: Color = coin_silhouette_color if coin_silhouette else get_coin_color(currency_type)
+	mat.set_shader_parameter("albedo_color", color)
 	return mat
 
 

@@ -432,7 +432,8 @@ func build_board() -> void:
 
 	var t: VisualTheme = ThemeProvider.theme
 	var peg_mesh := t.make_peg_mesh()
-	var peg_mat := t.make_peg_material()
+	var shared_peg_mat := t.make_peg_material()
+	var _peg_list: Array[MeshInstance3D] = []
 
 	for i in range(num_rows):
 		var x_offset = -i * space_between_pegs / 2
@@ -442,12 +443,19 @@ func build_board() -> void:
 			peg.position = Vector3(x_offset + (j * space_between_pegs), y, 0)
 			var mesh_instance: MeshInstance3D = peg.get_node("MeshInstance3D")
 			mesh_instance.mesh = peg_mesh
-			mesh_instance.material_override = peg_mat
+			if t.peg_glow_halo_enabled:
+				var own_mat := t.make_peg_material()
+				mesh_instance.material_override = own_mat
+				mesh_instance.set_meta("own_mat", own_mat)
+			else:
+				mesh_instance.material_override = shared_peg_mat
 			if t.peg_shape == VisualTheme.PegShape.CYLINDER:
 				mesh_instance.rotation = Vector3(PI / 2, 0, 0)
 			else:
 				mesh_instance.rotation = Vector3.ZERO
 			pegs_container.add_child(peg)
+			_peg_list.append(mesh_instance)
+	set_meta("pegs", _peg_list)
 
 	var num_buckets = num_rows + 1
 	var bucket_x_offset = -space_between_pegs * (num_buckets - 1) / 2
@@ -552,6 +560,62 @@ func _show_multi_drop_label(count: int) -> void:
 	tween.tween_property(label, "position:y", label.position.y + 0.5, 0.6)
 	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.6)
 	tween.tween_callback(label.queue_free)
+
+
+func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var pegs: Array = get_meta("pegs", [])
+	var closest_peg: MeshInstance3D = null
+	var closest_dist := INF
+
+	for peg: MeshInstance3D in pegs:
+		if not is_instance_valid(peg):
+			continue
+		var dist := coin_pos.distance_to(peg.global_position)
+		if dist < closest_dist and dist < space_between_pegs * 0.8:
+			closest_dist = dist
+			closest_peg = peg
+
+	if not closest_peg:
+		return
+
+	var peg_mat: StandardMaterial3D = closest_peg.get_meta("own_mat", null)
+	if not peg_mat:
+		peg_mat = t.make_peg_material()
+		closest_peg.set_meta("own_mat", peg_mat)
+		closest_peg.material_override = peg_mat
+
+	var glow_color := t.get_coin_color(currency_type)
+	peg_mat.albedo_color = glow_color
+
+	var old_tween: Tween = closest_peg.get_meta("glow_tween", null)
+	if old_tween and old_tween.is_valid():
+		old_tween.kill()
+
+	var glow_tween := create_tween()
+	glow_tween.tween_property(peg_mat, "albedo_color", t.peg_color, t.peg_glow_duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	closest_peg.set_meta("glow_tween", glow_tween)
+
+	if t.peg_glow_halo_enabled:
+		var halo_shader: Shader = preload("res://entities/coin/coin_halo.gdshader")
+		var halo := MeshInstance3D.new()
+		var halo_mesh := QuadMesh.new()
+		halo_mesh.size = Vector2(t.peg_glow_halo_radius, t.peg_glow_halo_radius)
+		halo.mesh = halo_mesh
+		var halo_mat := ShaderMaterial.new()
+		halo_mat.shader = halo_shader
+		var halo_color := glow_color
+		halo_color.a = t.peg_glow_halo_opacity
+		halo_mat.set_shader_parameter("glow_color", halo_color)
+		halo_mat.set_shader_parameter("opacity_mult", 1.0)
+		halo.material_override = halo_mat
+		halo.position = Vector3(closest_peg.global_position.x, closest_peg.global_position.y, closest_peg.global_position.z - 0.05)
+		add_child(halo)
+		var halo_tween := create_tween()
+		halo_tween.tween_property(halo_mat, "shader_parameter/opacity_mult", 0.0, t.peg_glow_duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		halo_tween.tween_callback(halo.queue_free)
 
 
 func increase_queue_capacity() -> void:

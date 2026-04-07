@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="VisualTheme" format=3 uid="uid://cvvqj1e6abhxh"]
+
+[ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_fbp74"]
+[ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
+
+[resource]
+script = ExtResource("1_vt")
+bg_shade_7 = Color(0.02, 0.02, 0.02, 1)
+bg_shade_1 = Color(0.05, 0.05, 0.05, 1)
+bg_shade_2 = Color(0.1, 0.1, 0.1, 1)
+bg_shade_3 = Color(0.18, 0.18, 0.18, 1)
+bg_shade_4 = Color(0.3, 0.3, 0.3, 1)
+bg_shade_5 = Color(0.55, 0.55, 0.55, 1)
+bg_shade_6 = Color(0.85, 0.88, 0.92, 1)
+gold_dark = Color(0.65, 0.55, 0.1, 1)
+gold_normal = Color(1, 0.85, 0.2, 1)
+gold_light = Color(1, 0.95, 0.5, 1)
+orange_dark = Color(0.6, 0.3, 0.08, 1)
+orange_normal = Color(1, 0.5, 0.15, 1)
+orange_light = Color(1, 0.75, 0.4, 1)
+red_dark = Color(0.55, 0.08, 0.06, 1)
+red_normal = Color(1, 0.2, 0.15, 1)
+red_light = Color(1, 0.5, 0.4, 1)
+ambient_light_source = 1
+directional_light_source = 2
+peg_color_source = 2
+body_text_source = 4
+label_font = ExtResource("1_fbp74")
+coin_halo_enabled = true
+coin_halo_radius = 2.5
+coin_halo_opacity = 0.04
+coin_silhouette = true
+button_enabled_source = 2
+button_disabled_source = 1
+button_font = ExtResource("1_fbp74")
+button_bg_source = 15
+button_disabled_text_source = 4
+board_glow_opacity = 0.06
+peg_glow_halo_enabled = true
+peg_glow_halo_radius = 2.0
+peg_glow_halo_opacity = 0.08
+vignette_enabled = true
+vignette_intensity = 0.3
+vignette_radius = 0.65
+vignette_softness = 0.5
