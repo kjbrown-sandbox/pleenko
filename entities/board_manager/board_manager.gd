@@ -101,13 +101,24 @@ func switch_board(index: int) -> void:
 
 func _spawn_board(type: Enums.BoardType) -> void:
 	var board: PlinkoBoard = BoardScene.instantiate()
-	var board_index := _boards.size()
-	board.position = Vector3(board_index * board_spacing, 0, 0)
 	add_child(board)
 	board.setup(type)
 
+	# Insert at correct tier position so board order always matches tier order
+	var tier_index := TierRegistry.get_tier_index(type)
+	var insert_at := _boards.size()
+	for i in _boards.size():
+		if TierRegistry.get_tier_index(_boards[i].board_type) > tier_index:
+			insert_at = i
+			break
+	_boards.insert(insert_at, board)
+
+	# Reposition all boards to reflect new order
+	for i in _boards.size():
+		_boards[i].position = Vector3(i * board_spacing, 0, 0)
+
 	# Only the active board's UI should be visible
-	if board_index != _active_index:
+	if insert_at != _active_index:
 		board.upgrade_section.visible = false
 		board.drop_section.visible = false
 
@@ -117,7 +128,6 @@ func _spawn_board(type: Enums.BoardType) -> void:
 		board.set_normal_autodroppers_visible(true)
 	if _advanced_autodroppers_unlocked:
 		board.set_advanced_autodroppers_visible(true)
-	_boards.append(board)
 
 func is_board_unlocked(type: Enums.BoardType) -> bool:
 	for board in _boards:
