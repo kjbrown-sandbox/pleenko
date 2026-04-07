@@ -27,7 +27,6 @@ bucket_depth = 0.06
 bucket_roughness = 0.6
 bucket_metallic = 0.15
 label_font = ExtResource("1_fbp74")
-coin_shape = 0
 coin_radius = 0.14
 coin_roughness = 0.2
 coin_metallic = 0.6

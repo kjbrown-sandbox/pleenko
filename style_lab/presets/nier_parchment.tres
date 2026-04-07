@@ -26,7 +26,6 @@ normal_text_source = 0
 body_text_source = 2
 overlay_opacity = 0.5
 label_font = ExtResource("1_fbp74")
-coin_shape = 0
 button_enabled_source = 2
 button_disabled_source = 4
 button_hovered_source = 15

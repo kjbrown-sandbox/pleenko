@@ -95,8 +95,8 @@ enum PegShape { SPHERE, CYLINDER }
 
 # ── Coins ────────────────────────────────────────────────────────────
 @export_group("Coins")
-enum CoinShape { SPHERE, CYLINDER }
-@export var coin_shape: CoinShape = CoinShape.CYLINDER
+enum CoinShape { SPHERE, CYLINDER }  # keeping enum for _apply_visuals reference
+const coin_shape := CoinShape.CYLINDER
 @export var coin_radius := 0.15
 @export var coin_height := 0.05                                   # cylinder only
 @export var coin_roughness := 0.3
