@@ -9,6 +9,10 @@ var _hover_tooltip: Tooltip
 
 var _board_manager: BoardManager
 
+# Debounce: collapse multiple currency_changed signals into one deferred update
+var _dirty := false
+var _dirty_types: Array[Enums.CurrencyType] = []
+
 func setup(board_manager: BoardManager) -> void:
 	_board_manager = board_manager
 
@@ -25,17 +29,40 @@ func _ready() -> void:
 	_update_all_bars()
 
 
-func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, cap: int) -> void:
-	if not _visible_currencies.has(type) and _is_board_for_coin_type_unlocked(type):
-		_visible_currencies.append(type)
+func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _cap: int) -> void:
+	if not _dirty_types.has(type):
+		_dirty_types.append(type)
+	if not _dirty:
+		_dirty = true
+		_flush.call_deferred()
+
+
+func _flush() -> void:
+	_dirty = false
+
+	# Check if any new currencies need to become visible
+	var layout_changed := false
+	for type in _dirty_types:
+		if not _visible_currencies.has(type) and _is_board_for_coin_type_unlocked(type):
+			_visible_currencies.append(type)
+			layout_changed = true
+
+	if layout_changed:
 		_visible_currencies.sort()
+		_dirty_types.clear()
 		_update_currencies()
+		return
 
-	var bar = _bars.get(type)
-	if bar:
-		_update_bar(bar, type, new_balance, cap)
+	# Update only the bars that changed
+	for type in _dirty_types:
+		var bar = _bars.get(type)
+		if bar:
+			var amount := CurrencyManager.get_balance(type)
+			var cap := CurrencyManager.get_cap(type)
+			_update_bar(bar, type, amount, cap)
 
-	_update_all_cap_buttons()
+	_dirty_types.clear()
+	_update_cap_button_affordability()
 
 
 func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
@@ -171,3 +198,13 @@ func _update_all_cap_buttons() -> void:
 			var can_afford := CurrencyManager.can_buy_cap_raise(currency_type)
 			bar.set_plus_disabled(not can_afford)
 			bar.set_plus_filled(can_afford)
+
+
+func _update_cap_button_affordability() -> void:
+	for currency_type in _bars:
+		var bar = _bars[currency_type]
+		if not bar.plus_button.visible:
+			continue
+		var can_afford := CurrencyManager.can_buy_cap_raise(currency_type)
+		bar.set_plus_disabled(not can_afford)
+		bar.set_plus_filled(can_afford)

@@ -9,6 +9,7 @@ var _board_type: Enums.BoardType
 var _upgrade_type: Enums.UpgradeType
 var _callback: Callable
 var _currency_type: int = -1
+var _dirty := false
 
 func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgrade: Callable) -> void:
 	_board_type = board_type
@@ -44,7 +45,16 @@ func _on_pressed() -> void:
 	hover_info_changed.emit(_get_purchase_hover_text())
 
 
-func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
+func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
+	if type != _currency_type:
+		return
+	if not _dirty:
+		_dirty = true
+		_deferred_update.call_deferred()
+
+
+func _deferred_update() -> void:
+	_dirty = false
 	_update_button()
 
 

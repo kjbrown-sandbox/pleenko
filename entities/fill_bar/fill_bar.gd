@@ -44,6 +44,12 @@ var _minus_callback: Callable
 var _minus_hover_callback: Callable
 var _minus_update_callback: Callable
 
+# State tracking for guards — skip redundant StyleBox updates
+var _last_fill_disabled := false
+var _last_at_max := false
+var _plus_filled := false
+var _minus_filled := false
+
 
 func setup(fill_color: Color, disabled_color: Color) -> void:
 	_fill_color = fill_color
@@ -196,6 +202,10 @@ func set_main_disabled(is_disabled: bool) -> void:
 func apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 	if not _fill_rect:
 		return
+	if is_disabled == _last_fill_disabled and at_max == _last_at_max:
+		return
+	_last_fill_disabled = is_disabled
+	_last_at_max = at_max
 	var t: VisualTheme = ThemeProvider.theme
 	var dis_text: Color = _disabled_text_override if _disabled_text_override.r >= 0 else t.button_disabled_text_color
 	if at_max:
@@ -232,8 +242,10 @@ func setup_minus(on_pressed: Callable, on_hover: Callable = Callable(), on_updat
 	show_minus_button(true)
 
 
-func show_plus_button(visible: bool) -> void:
-	plus_button.visible = visible
+func show_plus_button(show: bool) -> void:
+	if plus_button.visible == show:
+		return
+	plus_button.visible = show
 	_update_corner_radii()
 
 
@@ -242,6 +254,9 @@ func set_plus_disabled(is_disabled: bool) -> void:
 
 
 func set_plus_filled(can_afford: bool) -> void:
+	if can_afford == _plus_filled:
+		return
+	_plus_filled = can_afford
 	var t: VisualTheme = ThemeProvider.theme
 	var bg: Color = _fill_color if can_afford else t.button_bg_color
 	var border: Color = _fill_color if can_afford else t.button_bg_color
@@ -259,8 +274,10 @@ func update_plus() -> void:
 		_plus_update_callback.call()
 
 
-func show_minus_button(visible: bool) -> void:
-	minus_button.visible = visible
+func show_minus_button(show: bool) -> void:
+	if minus_button.visible == show:
+		return
+	minus_button.visible = show
 	_update_corner_radii()
 
 
@@ -269,6 +286,9 @@ func set_minus_disabled(is_disabled: bool) -> void:
 
 
 func set_minus_filled(is_active: bool) -> void:
+	if is_active == _minus_filled:
+		return
+	_minus_filled = is_active
 	var t: VisualTheme = ThemeProvider.theme
 	var bg: Color = _fill_color if is_active else t.button_bg_color
 	var border: Color = _fill_color if is_active else t.button_bg_color
