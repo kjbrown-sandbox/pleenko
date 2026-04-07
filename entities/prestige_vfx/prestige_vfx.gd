@@ -20,6 +20,8 @@ var _darkened_materials: Array = []
 var _darkened_coin_materials: Array = []
 ## Stores original label modulates: [[Label3D, original_color], ...]
 var _darkened_labels: Array = []
+## Stores original peg instance colors for MultiMesh desaturation: [[MultiMesh, index, original_color], ...]
+var _darkened_peg_instances: Array = []
 ## Shockwave CanvasLayers added to root (not children of this node) that need manual cleanup.
 var _shockwave_layers: Array[CanvasLayer] = []
 
@@ -37,11 +39,12 @@ func setup(camera: Camera3D, board: PlinkoBoard, target_bucket: Bucket, target_c
 ## Gathers all peg and non-target-bucket materials so we can desaturate them.
 func _collect_world_materials() -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	# Pegs
-	for peg in _board.pegs_container.get_children():
-		var mesh := peg.get_node_or_null("MeshInstance3D") as MeshInstance3D
-		if mesh and mesh.material_override:
-			_darkened_materials.append([mesh.material_override, mesh.material_override.albedo_color])
+	# Pegs (MultiMesh — store per-instance colors)
+	if _board._peg_multimesh_instance:
+		var mm := _board._peg_multimesh_instance.multimesh
+		for i in mm.instance_count:
+			var color := mm.get_instance_color(i)
+			_darkened_peg_instances.append([mm, i, color])
 
 	# Non-target buckets (and their labels)
 	for bucket in _board.buckets_container.get_children():
@@ -84,6 +87,12 @@ func update_desaturation(progress: float) -> void:
 		var original: Color = entry[1]
 		label.modulate = original.lerp(bg, amount)
 
+	for entry in _darkened_peg_instances:
+		var mm: MultiMesh = entry[0]
+		var idx: int = entry[1]
+		var original: Color = entry[2]
+		mm.set_instance_color(idx, original.lerp(bg, amount))
+
 
 ## Triggers all contact VFX: particles, shockwave, and screen shake.
 func play_contact(contact_position: Vector3) -> void:
@@ -110,9 +119,15 @@ func cleanup() -> void:
 		var original: Color = entry[1]
 		if is_instance_valid(label):
 			label.modulate = original
+	for entry in _darkened_peg_instances:
+		var mm: MultiMesh = entry[0]
+		var idx: int = entry[1]
+		var original: Color = entry[2]
+		mm.set_instance_color(idx, original)
 	_darkened_materials.clear()
 	_darkened_coin_materials.clear()
 	_darkened_labels.clear()
+	_darkened_peg_instances.clear()
 	# Free shockwave CanvasLayers (added to root, not children of this node)
 	for layer in _shockwave_layers:
 		if is_instance_valid(layer):

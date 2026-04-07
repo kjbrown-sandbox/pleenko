@@ -11,7 +11,6 @@ var vertical_spacing: float
 ## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
 const MULTI_DROP_STAGGER := 0.15
 
-const PegScene := preload("res://entities/peg/peg.tscn")
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
 
@@ -37,6 +36,12 @@ var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
 var multi_drop_count: int = -1
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
+
+# MultiMesh peg state
+var _peg_multimesh_instance: MultiMeshInstance3D
+var _peg_positions: PackedVector3Array
+var _peg_base_color: Color
+var _active_flashes: Dictionary = {}  # peg_index -> { start_color: Color, elapsed: float, duration: float }
 
 signal board_rebuilt
 signal autodropper_adjust_requested(button_id: StringName, delta: int)
@@ -140,6 +145,28 @@ func _process(delta: float) -> void:
 		_update_drop_fill()
 	elif _is_hold_to_drop_active():
 		request_drop()
+
+	if not _active_flashes.is_empty():
+		_update_peg_flashes(delta)
+
+
+func _update_peg_flashes(delta: float) -> void:
+	var mm := _peg_multimesh_instance.multimesh
+	var finished: PackedInt32Array = []
+
+	for idx: int in _active_flashes:
+		var flash: Dictionary = _active_flashes[idx]
+		flash.elapsed += delta
+		var t_ratio: float = clampf(flash.elapsed / flash.duration, 0.0, 1.0)
+		var eased: float = t_ratio * t_ratio  # EASE_IN + TRANS_QUAD
+		var color: Color = flash.start_color.lerp(_peg_base_color, eased)
+		mm.set_instance_color(idx, color)
+
+		if t_ratio >= 1.0:
+			finished.append(idx)
+
+	for idx in finished:
+		_active_flashes.erase(idx)
 
 
 func _is_hold_to_drop_active() -> bool:
@@ -423,6 +450,11 @@ func get_nearest_bucket(x_position: float) -> Bucket:
 	return buckets_container.get_children()[0]
 
 func build_board() -> void:
+	# Clear old pegs (MultiMesh)
+	if _peg_multimesh_instance:
+		_peg_multimesh_instance.queue_free()
+		_peg_multimesh_instance = null
+	_active_flashes.clear()
 	for child in pegs_container.get_children():
 		child.queue_free()
 
@@ -431,31 +463,40 @@ func build_board() -> void:
 		child.queue_free()
 
 	var t: VisualTheme = ThemeProvider.theme
-	var peg_mesh := t.make_peg_mesh()
-	var shared_peg_mat := t.make_peg_material()
-	var _peg_list: Array[MeshInstance3D] = []
+	_peg_base_color = t.peg_color
 
+	# Calculate peg positions
+	var total_pegs: int = num_rows * (num_rows + 1) / 2
+	_peg_positions = PackedVector3Array()
+	_peg_positions.resize(total_pegs)
+
+	var idx := 0
 	for i in range(num_rows):
 		var x_offset = -i * space_between_pegs / 2
 		var y = -vertical_spacing * i
 		for j in range(i + 1):
-			var peg = PegScene.instantiate()
-			peg.position = Vector3(x_offset + (j * space_between_pegs), y, 0)
-			var mesh_instance: MeshInstance3D = peg.get_node("MeshInstance3D")
-			mesh_instance.mesh = peg_mesh
-			if t.peg_glow_halo_enabled:
-				var own_mat := t.make_peg_material()
-				mesh_instance.material_override = own_mat
-				mesh_instance.set_meta("own_mat", own_mat)
-			else:
-				mesh_instance.material_override = shared_peg_mat
-			if t.peg_shape == VisualTheme.PegShape.CYLINDER:
-				mesh_instance.rotation = Vector3(PI / 2, 0, 0)
-			else:
-				mesh_instance.rotation = Vector3.ZERO
-			pegs_container.add_child(peg)
-			_peg_list.append(mesh_instance)
-	set_meta("pegs", _peg_list)
+			_peg_positions[idx] = Vector3(x_offset + (j * space_between_pegs), y, 0)
+			idx += 1
+
+	# Build MultiMesh
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.instance_count = total_pegs
+	mm.mesh = t.make_peg_mesh()
+
+	var peg_basis := Basis.IDENTITY
+	if t.peg_shape == VisualTheme.PegShape.CYLINDER:
+		peg_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
+
+	for i in total_pegs:
+		mm.set_instance_transform(i, Transform3D(peg_basis, _peg_positions[i]))
+		mm.set_instance_color(i, _peg_base_color)
+
+	_peg_multimesh_instance = MultiMeshInstance3D.new()
+	_peg_multimesh_instance.multimesh = mm
+	_peg_multimesh_instance.material_override = t.make_peg_shader_material()
+	pegs_container.add_child(_peg_multimesh_instance)
 
 	var num_buckets = num_rows + 1
 	var bucket_x_offset = -space_between_pegs * (num_buckets - 1) / 2
@@ -563,60 +604,57 @@ func _show_multi_drop_label(count: int) -> void:
 
 
 func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
-	var t: VisualTheme = ThemeProvider.theme
-	var pegs: Array = get_meta("pegs", [])
-	var closest_peg: MeshInstance3D = null
-	var closest_dist := INF
-
-	for peg: MeshInstance3D in pegs:
-		if not is_instance_valid(peg):
-			continue
-		var dist := coin_pos.distance_to(peg.global_position)
-		if dist < closest_dist and dist < space_between_pegs * 0.8:
-			closest_dist = dist
-			closest_peg = peg
-
-	if not closest_peg:
+	if _peg_positions.is_empty():
 		return
 
-	var peg_mat: StandardMaterial3D = closest_peg.get_meta("own_mat", null)
-	if not peg_mat:
-		peg_mat = t.make_peg_material()
-		closest_peg.set_meta("own_mat", peg_mat)
-		closest_peg.material_override = peg_mat
+	var t: VisualTheme = ThemeProvider.theme
+	var local_pos := to_local(coin_pos)
+	var closest_idx := -1
+	var closest_dist := INF
+	var threshold := space_between_pegs * 0.8
+
+	for i in _peg_positions.size():
+		var dist := local_pos.distance_to(_peg_positions[i])
+		if dist < closest_dist and dist < threshold:
+			closest_dist = dist
+			closest_idx = i
+
+	if closest_idx < 0:
+		return
 
 	var glow_color := t.get_coin_color(currency_type)
-	peg_mat.albedo_color = glow_color
 
-	var old_tween: Tween = closest_peg.get_meta("glow_tween", null)
-	if old_tween and old_tween.is_valid():
-		old_tween.kill()
-
-	var glow_tween := create_tween()
-	glow_tween.tween_property(peg_mat, "albedo_color", t.peg_color, t.peg_glow_duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	closest_peg.set_meta("glow_tween", glow_tween)
+	# Set instance color to flash color and register for animated fade-back
+	_peg_multimesh_instance.multimesh.set_instance_color(closest_idx, glow_color)
+	_active_flashes[closest_idx] = {
+		"start_color": glow_color,
+		"elapsed": 0.0,
+		"duration": t.peg_glow_duration,
+	}
 
 	if t.peg_glow_halo_enabled:
-		var halo_shader: Shader = preload("res://entities/coin/coin_halo.gdshader")
-		var halo := MeshInstance3D.new()
-		var halo_mesh := QuadMesh.new()
-		halo_mesh.size = Vector2(t.peg_glow_halo_radius, t.peg_glow_halo_radius)
-		halo.mesh = halo_mesh
-		var halo_mat := ShaderMaterial.new()
-		halo_mat.shader = halo_shader
-		var halo_color := glow_color
-		halo_color.a = t.peg_glow_halo_opacity
-		halo_mat.set_shader_parameter("glow_color", halo_color)
-		halo_mat.set_shader_parameter("opacity_mult", 1.0)
-		halo.material_override = halo_mat
-		var local_pos := to_local(closest_peg.global_position)
-		halo.position = Vector3(local_pos.x, local_pos.y, local_pos.z - 0.05)
-		add_child(halo)
-		var halo_tween := create_tween()
-		halo_tween.tween_property(halo_mat, "shader_parameter/opacity_mult", 0.0, t.peg_glow_duration) \
-			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		halo_tween.tween_callback(halo.queue_free)
+		_spawn_peg_halo(_peg_positions[closest_idx], glow_color, t)
+
+
+func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) -> void:
+	var halo_shader: Shader = preload("res://entities/coin/coin_halo.gdshader")
+	var halo := MeshInstance3D.new()
+	var halo_mesh := QuadMesh.new()
+	halo_mesh.size = Vector2(t.peg_glow_halo_radius, t.peg_glow_halo_radius)
+	halo.mesh = halo_mesh
+	var halo_mat := ShaderMaterial.new()
+	halo_mat.shader = halo_shader
+	var halo_color := glow_color
+	halo_color.a = t.peg_glow_halo_opacity
+	halo_mat.set_shader_parameter("glow_color", halo_color)
+	halo_mat.set_shader_parameter("opacity_mult", 1.0)
+	halo.material_override = halo_mat
+	halo.position = Vector3(peg_local_pos.x, peg_local_pos.y, peg_local_pos.z - 0.05)
+	add_child(halo)
+	var halo_tween := create_tween()
+	halo_tween.tween_property(halo_mat, "shader_parameter/opacity_mult", 0.0, t.peg_glow_duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	halo_tween.tween_callback(halo.queue_free)
 
 
 func increase_queue_capacity() -> void:

@@ -364,6 +364,12 @@ func make_peg_mesh() -> Mesh:
 			return SphereMesh.new()
 
 
+func make_peg_shader_material() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://entities/peg/peg_multimesh.gdshader")
+	return mat
+
+
 func make_coin_mesh() -> Mesh:
 	match coin_shape:
 		CoinShape.SPHERE:
