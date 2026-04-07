@@ -63,10 +63,10 @@ func _update_currencies() -> void:
 		add_child(bar)
 
 		var t: VisualTheme = ThemeProvider.theme
-		var fill_color: Color = t.get_active_coin_color(currency_type)
-		var disabled_color: Color = t.get_disabled_coin_color(currency_type)
+		var fill_color: Color = t.get_coin_color(currency_type)
+		var disabled_color: Color = t.get_coin_color_faded(currency_type)
 		bar.setup(fill_color, disabled_color)
-		bar._disabled_text_override = t.resolve(VisualTheme.Palette.BG_6)
+		bar._disabled_text_override = t.button_fill_text_color
 
 		var amount := CurrencyManager.get_balance(currency_type)
 		var cap := CurrencyManager.get_cap(currency_type)

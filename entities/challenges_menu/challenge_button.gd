@@ -4,7 +4,7 @@ extends Node3D
 signal pressed
 signal hovered(button: ChallengeButton)
 
-@export var color_source: VisualTheme.Palette = VisualTheme.Palette.GOLD_NORMAL
+@export var color_source: VisualTheme.Palette = VisualTheme.Palette.GOLD_MAIN
 @export var challenge: ChallengeData
 @export var challenge_ui_name: String
 @export var next_challenges: Array[String] = []

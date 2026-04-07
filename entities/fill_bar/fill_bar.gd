@@ -206,7 +206,7 @@ func apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 	elif is_disabled:
 		# Can't afford but not maxed — keep fill visible to show progress
 		_fill_rect.color = _fill_color
-		_base_label.add_theme_color_override("font_color", dis_text)
+		_base_label.add_theme_color_override("font_color", t.normal_text_color)
 		_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
 		# Use the active border so the bar looks cohesive with the fill
 		for style in _main_styles:

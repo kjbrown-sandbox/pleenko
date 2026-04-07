@@ -14,26 +14,23 @@ bg_shade_4 = Color(0.45, 0.48, 0.54, 1)
 bg_shade_5 = Color(0.7, 0.75, 0.85, 1)
 bg_shade_6 = Color(0.9, 0.92, 0.96, 1)
 
-gold_dark = Color(0.6, 0.5, 0.12, 1)
-gold_normal = Color(0.95, 0.82, 0.3, 1)
-gold_light = Color(1.0, 0.94, 0.6, 1)
+gold_faded = Color(0.6, 0.5, 0.12, 1)
+gold_main = Color(0.95, 0.82, 0.3, 1)
 
-orange_dark = Color(0.55, 0.28, 0.12, 1)
-orange_normal = Color(0.95, 0.5, 0.25, 1)
-orange_light = Color(1.0, 0.72, 0.5, 1)
+orange_faded = Color(0.55, 0.28, 0.12, 1)
+orange_main = Color(0.95, 0.5, 0.25, 1)
 
-red_dark = Color(0.5, 0.1, 0.08, 1)
-red_normal = Color(0.9, 0.25, 0.2, 1)
-red_light = Color(1.0, 0.5, 0.45, 1)
+red_faded = Color(0.5, 0.1, 0.08, 1)
+red_main = Color(0.9, 0.25, 0.2, 1)
 
 background_source = 15
 ambient_light_source = 2
 directional_light_source = 3
 peg_color_source = 3
-high_multiplier_source = 14
+high_multiplier_source = 13
 normal_text_source = 5
 body_text_source = 4
-at_cap_text_source = 14
+at_cap_text_source = 13
 overlay_source = 15
 overlay_opacity = 0.6
 

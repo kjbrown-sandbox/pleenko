@@ -15,11 +15,11 @@ const RED_COIN := 4
 
 # ── Palette enum ─────────────────────────────────────────────────────
 enum Palette {
-	BG_1, BG_2, BG_3, BG_4, BG_5, BG_6,
-	GOLD_DARK, GOLD_NORMAL, GOLD_LIGHT,
-	ORANGE_DARK, ORANGE_NORMAL, ORANGE_LIGHT,
-	RED_DARK, RED_NORMAL, RED_LIGHT,
-	BG_7,
+	BG_1 = 0, BG_2 = 1, BG_3 = 2, BG_4 = 3, BG_5 = 4, BG_6 = 5,
+	GOLD_FADED = 6, GOLD_MAIN = 7,
+	ORANGE_FADED = 9, ORANGE_MAIN = 10,
+	RED_FADED = 12, RED_MAIN = 13,
+	BG_7 = 15,
 }
 
 # ── Colors (master palette) ──────────────────────────────────────────
@@ -33,21 +33,18 @@ enum Palette {
 @export var bg_shade_5 := Color(0.85, 0.83, 0.80)
 @export var bg_shade_6 := Color(0.96, 0.95, 0.92)                # lightest
 
-# Per-currency colors: dark, normal, light
+# Per-currency colors: main (prominent) and faded (muted/disabled)
 @export_group("Colors – Gold")
-@export var gold_dark := Color(0.55, 0.45, 0.10)
-@export var gold_normal := Color(0.85, 0.75, 0.25)
-@export var gold_light := Color(1.0, 0.94, 0.55)
+@export var gold_main := Color(0.85, 0.75, 0.25)
+@export var gold_faded := Color(0.55, 0.45, 0.10)
 
 @export_group("Colors – Orange")
-@export var orange_dark := Color(0.55, 0.25, 0.12)
-@export var orange_normal := Color(0.85, 0.45, 0.3)
-@export var orange_light := Color(1.0, 0.7, 0.55)
+@export var orange_main := Color(0.85, 0.45, 0.3)
+@export var orange_faded := Color(0.55, 0.25, 0.12)
 
 @export_group("Colors – Red")
-@export var red_dark := Color(0.4, 0.08, 0.1)
-@export var red_normal := Color(0.7, 0.2, 0.25)
-@export var red_light := Color(1.0, 0.45, 0.45)
+@export var red_main := Color(0.7, 0.2, 0.25)
+@export var red_faded := Color(0.4, 0.08, 0.1)
 
 # ── Color assignments (pick from palette via dropdown) ───────────────
 @export_group("Color Assignments")
@@ -55,14 +52,13 @@ enum Palette {
 @export var ambient_light_source: Palette = Palette.BG_5
 @export var directional_light_source: Palette = Palette.BG_6
 @export var peg_color_source: Palette = Palette.BG_4
-@export var high_multiplier_source: Palette = Palette.RED_LIGHT
+@export var high_multiplier_source: Palette = Palette.RED_MAIN
 @export var hit_bucket_source: Palette = Palette.BG_6            # color for hit/target/forbidden buckets
 @export var normal_text_source: Palette = Palette.BG_6
 @export var body_text_source: Palette = Palette.BG_4
-@export var at_cap_text_source: Palette = Palette.RED_LIGHT
+@export var at_cap_text_source: Palette = Palette.RED_MAIN
 @export var overlay_source: Palette = Palette.BG_7
 @export var overlay_opacity := 0.6
-@export var swap_fill_shading := false                            # true for light themes: active=dark, disabled=light
 
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")
@@ -203,15 +199,12 @@ func resolve(source: Palette) -> Color:
 		Palette.BG_5: return bg_shade_5
 		Palette.BG_6: return bg_shade_6
 		Palette.BG_7: return bg_shade_7
-		Palette.GOLD_DARK: return gold_dark
-		Palette.GOLD_NORMAL: return gold_normal
-		Palette.GOLD_LIGHT: return gold_light
-		Palette.ORANGE_DARK: return orange_dark
-		Palette.ORANGE_NORMAL: return orange_normal
-		Palette.ORANGE_LIGHT: return orange_light
-		Palette.RED_DARK: return red_dark
-		Palette.RED_NORMAL: return red_normal
-		Palette.RED_LIGHT: return red_light
+		Palette.GOLD_MAIN: return gold_main
+		Palette.GOLD_FADED: return gold_faded
+		Palette.ORANGE_MAIN: return orange_main
+		Palette.ORANGE_FADED: return orange_faded
+		Palette.RED_MAIN: return red_main
+		Palette.RED_FADED: return red_faded
 		_: return bg_shade_6
 
 
@@ -281,8 +274,8 @@ func _make_stylebox(bg_color: Color, border_col: Color = Color.TRANSPARENT) -> S
 
 func apply_button_theme(button: Button, currency_type: int = -1) -> void:
 	var enabled_col := get_coin_color(currency_type) if currency_type >= 0 else button_enabled_color
-	var hovered_col := get_coin_color_light(currency_type) if currency_type >= 0 else button_hovered_color
-	var disabled_col := get_coin_color_dark(currency_type) if currency_type >= 0 else button_disabled_color
+	var hovered_col := get_coin_color(currency_type).lightened(0.2) if currency_type >= 0 else button_hovered_color
+	var disabled_col := get_coin_color_faded(currency_type) if currency_type >= 0 else button_disabled_color
 	var border_col := get_coin_color(currency_type) if currency_type >= 0 else button_border_color
 	button.add_theme_stylebox_override("normal", _make_stylebox(enabled_col, border_col))
 	button.add_theme_stylebox_override("hover", _make_stylebox(hovered_col, border_col))
@@ -303,34 +296,18 @@ func apply_button_theme(button: Button, currency_type: int = -1) -> void:
 
 func get_coin_color(currency_type: int) -> Color:
 	match currency_type:
-		GOLD_COIN: return gold_normal
-		RAW_ORANGE, ORANGE_COIN: return orange_normal
-		RAW_RED, RED_COIN: return red_normal
-		_: return gold_normal
+		GOLD_COIN: return gold_main
+		RAW_ORANGE, ORANGE_COIN: return orange_main
+		RAW_RED, RED_COIN: return red_main
+		_: return gold_main
 
 
-func get_coin_color_light(currency_type: int) -> Color:
+func get_coin_color_faded(currency_type: int) -> Color:
 	match currency_type:
-		GOLD_COIN: return gold_light
-		RAW_ORANGE, ORANGE_COIN: return orange_light
-		RAW_RED, RED_COIN: return red_light
-		_: return gold_light
-
-
-func get_coin_color_dark(currency_type: int) -> Color:
-	match currency_type:
-		GOLD_COIN: return gold_dark
-		RAW_ORANGE, ORANGE_COIN: return orange_dark
-		RAW_RED, RED_COIN: return red_dark
-		_: return gold_dark
-
-
-func get_active_coin_color(currency_type: int) -> Color:
-	return get_coin_color_dark(currency_type) if swap_fill_shading else get_coin_color(currency_type)
-
-
-func get_disabled_coin_color(currency_type: int) -> Color:
-	return get_coin_color_light(currency_type) if swap_fill_shading else get_coin_color_dark(currency_type)
+		GOLD_COIN: return gold_faded
+		RAW_ORANGE, ORANGE_COIN: return orange_faded
+		RAW_RED, RED_COIN: return red_faded
+		_: return gold_faded
 
 
 func get_bucket_color(currency_type: int) -> Color:
@@ -433,7 +410,7 @@ func pulse_node3d(node: Node3D, flash_white: bool = false,
 
 	# Color flash
 	if flash_white and material:
-		var flash_color := get_coin_color_light(currency)
+		var flash_color := get_coin_color(currency).lightened(0.3)
 		material.albedo_color = flash_color
 		var rest_color: Color = hit_bucket_color if is_hit else get_bucket_color(currency)
 		var color_tween := node.create_tween()

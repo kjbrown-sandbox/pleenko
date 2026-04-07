@@ -79,7 +79,7 @@ func get_color() -> Color:
 	var mesh_instance := get_node_or_null("MeshInstance3D")
 	if mesh_instance and mesh_instance.material_override is ShaderMaterial:
 		return mesh_instance.material_override.get_shader_parameter("albedo_color")
-	return ThemeProvider.theme.gold_normal
+	return ThemeProvider.theme.gold_main
 
 
 func set_color(color: Color) -> void:
