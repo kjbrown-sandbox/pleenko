@@ -53,6 +53,8 @@ func _on_prestige_coin_final_bounce(coin: Coin, predicted_bucket: Bucket) -> voi
 
 	# Mark the coin so PlinkoBoard won't free it or add currency on landing
 	coin.is_prestige_coin = true
+	# Eject from MultiMesh so we can individually scale/color the coin
+	coin.board.eject_coin_from_multimesh(coin)
 
 	# Listen for when the coin actually lands (touches the bucket)
 	coin.landed.connect(_on_prestige_coin_actually_landed, CONNECT_ONE_SHOT)
@@ -183,9 +185,8 @@ func _start_coin_expand() -> void:
 
 	var t: VisualTheme = ThemeProvider.theme
 
-	# Ensure coin is palette-white and remove clip so it can expand freely
+	# Ensure coin is palette-white for expand phase
 	_target_coin.set_color(t.resolve(VisualTheme.Palette.BG_6))
-	_target_coin.set_clip_y(-9999.0)
 
 
 func _transition_to_prestige_screen() -> void:

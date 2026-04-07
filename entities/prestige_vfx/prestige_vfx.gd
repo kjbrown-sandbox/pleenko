@@ -22,6 +22,8 @@ var _darkened_coin_materials: Array = []
 var _darkened_labels: Array = []
 ## Stores original peg instance colors for MultiMesh desaturation: [[MultiMesh, index, original_color], ...]
 var _darkened_peg_instances: Array = []
+## Stores original cached_color for MultiMesh coins: [[Coin, original_color], ...]
+var _darkened_coin_caches: Array = []
 ## Shockwave CanvasLayers added to root (not children of this node) that need manual cleanup.
 var _shockwave_layers: Array[CanvasLayer] = []
 
@@ -56,9 +58,15 @@ func _collect_world_materials() -> void:
 		if b and b._label:
 			_darkened_labels.append([b._label, b._label.modulate])
 
-	# Non-prestige coins on the board
+	# Non-prestige coins — desaturate via cached_color (MultiMesh sync propagates it)
+	for coin: Coin in _board._active_coin_indices:
+		if coin == _target_coin:
+			continue
+		_darkened_coin_caches.append([coin, coin.cached_color])
+
+	# Individually-rendered coins (ejected prestige coin handled by PrestigeAnimator)
 	for child in _board.get_children():
-		if child is Coin and child != _target_coin:
+		if child is Coin and child != _target_coin and child.multimesh_index < 0:
 			var mesh := child.get_node_or_null("MeshInstance3D") as MeshInstance3D
 			if mesh and mesh.material_override is ShaderMaterial:
 				var shader_mat := mesh.material_override as ShaderMaterial
@@ -93,6 +101,12 @@ func update_desaturation(progress: float) -> void:
 		var original: Color = entry[2]
 		mm.set_instance_color(idx, original.lerp(bg, amount))
 
+	for entry in _darkened_coin_caches:
+		var coin: Coin = entry[0]
+		var original: Color = entry[1]
+		if is_instance_valid(coin):
+			coin.cached_color = original.lerp(bg, amount)
+
 
 ## Triggers all contact VFX: particles, shockwave, and screen shake.
 func play_contact(contact_position: Vector3) -> void:
@@ -124,10 +138,16 @@ func cleanup() -> void:
 		var idx: int = entry[1]
 		var original: Color = entry[2]
 		mm.set_instance_color(idx, original)
+	for entry in _darkened_coin_caches:
+		var coin: Coin = entry[0]
+		var original: Color = entry[1]
+		if is_instance_valid(coin):
+			coin.cached_color = original
 	_darkened_materials.clear()
 	_darkened_coin_materials.clear()
 	_darkened_labels.clear()
 	_darkened_peg_instances.clear()
+	_darkened_coin_caches.clear()
 	# Free shockwave CanvasLayers (added to root, not children of this node)
 	for layer in _shockwave_layers:
 		if is_instance_valid(layer):

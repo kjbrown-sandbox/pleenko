@@ -43,6 +43,12 @@ var _peg_positions: PackedVector3Array
 var _peg_base_color: Color
 var _active_flashes: Dictionary = {}  # peg_index -> { start_color: Color, elapsed: float, duration: float }
 
+# MultiMesh coin state
+var _coin_multimesh_instance: MultiMeshInstance3D
+var _coin_free_indices: Array[int] = []
+var _active_coin_indices: Dictionary = {}  # Coin -> int (multimesh index)
+var _coin_mesh_basis: Basis = Basis.IDENTITY
+
 signal board_rebuilt
 signal autodropper_adjust_requested(button_id: StringName, delta: int)
 signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type: Enums.CurrencyType, amount: int)
@@ -149,6 +155,9 @@ func _process(delta: float) -> void:
 	if not _active_flashes.is_empty():
 		_update_peg_flashes(delta)
 
+	if not _active_coin_indices.is_empty():
+		_sync_coin_multimesh()
+
 
 func _update_peg_flashes(delta: float) -> void:
 	var mm := _peg_multimesh_instance.multimesh
@@ -173,6 +182,76 @@ func _is_hold_to_drop_active() -> bool:
 	return Input.is_action_pressed("drop_coin") \
 		and ChallengeProgressManager.is_unlocked(ChallengeRewardData.UnlockType.HOLD_TO_DROP) \
 		and drop_section.visible
+
+
+# --- Coin MultiMesh management ---
+
+func _allocate_coin_multimesh(coin: Coin) -> void:
+	if _coin_free_indices.is_empty():
+		_grow_coin_multimesh()
+	var idx: int = _coin_free_indices.pop_back()
+	_active_coin_indices[coin] = idx
+	coin.multimesh_index = idx
+	coin.set_mesh_visible(false)
+	_coin_multimesh_instance.multimesh.set_instance_color(idx, coin.cached_color)
+
+
+func _release_coin_multimesh(coin: Coin) -> void:
+	if coin.multimesh_index < 0:
+		return
+	var idx: int = coin.multimesh_index
+	var hidden := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
+	_coin_multimesh_instance.multimesh.set_instance_transform(idx, hidden)
+	_coin_free_indices.append(idx)
+	_active_coin_indices.erase(coin)
+	coin.multimesh_index = -1
+
+
+func eject_coin_from_multimesh(coin: Coin) -> void:
+	_release_coin_multimesh(coin)
+	coin.set_mesh_visible(true)
+
+
+func _grow_coin_multimesh() -> void:
+	var mm := _coin_multimesh_instance.multimesh
+	var old_count: int = mm.instance_count
+	var new_count: int = old_count * 2
+
+	# Save existing data
+	var old_transforms: Array[Transform3D] = []
+	var old_colors: Array[Color] = []
+	for i in old_count:
+		old_transforms.append(mm.get_instance_transform(i))
+		old_colors.append(mm.get_instance_color(i))
+
+	# Resize
+	mm.instance_count = new_count
+
+	# Restore existing data
+	var hidden := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
+	for i in old_count:
+		mm.set_instance_transform(i, old_transforms[i])
+		mm.set_instance_color(i, old_colors[i])
+	for i in range(old_count, new_count):
+		mm.set_instance_transform(i, hidden)
+
+	# Add new indices to pool (in reverse so pop_back gives lowest first)
+	for i in range(new_count - 1, old_count - 1, -1):
+		_coin_free_indices.append(i)
+
+
+func _sync_coin_multimesh() -> void:
+	var mm := _coin_multimesh_instance.multimesh
+	for coin: Coin in _active_coin_indices:
+		if not is_instance_valid(coin):
+			continue
+		var idx: int = _active_coin_indices[coin]
+		mm.set_instance_transform(idx, Transform3D(_coin_mesh_basis, coin.position))
+		mm.set_instance_color(idx, coin.cached_color)
+
+
+func _on_coin_tree_exiting(coin: Coin) -> void:
+	_release_coin_multimesh(coin)
 
 
 func request_drop(costs: Array = [], coin_type: int = -1) -> void:
@@ -244,6 +323,8 @@ func _launch_coin(coin: Coin) -> void:
 	_coin_z_counter += 1
 	coin.position = Vector3(0, vertical_spacing + 0.2, _coin_z_counter * 0.001)
 	add_child(coin)
+	_allocate_coin_multimesh(coin)
+	coin.tree_exiting.connect(_on_coin_tree_exiting.bind(coin), CONNECT_ONE_SHOT)
 	coin.landed.connect(on_coin_landed)
 	coin.final_bounce_started.connect(_on_final_bounce_started)
 	coin.start(Vector3(0, 0.2, 0))
@@ -319,10 +400,7 @@ func on_coin_landed(coin: Coin) -> void:
 ## Completes the normal landing flow: adds currency, emits signal, cleans up coin.
 ## Prestige coins skip currency add and queue_free — the PrestigeAnimator handles them.
 func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
-	# Clip the coin so it doesn't poke through the bottom of the bucket
 	var t: VisualTheme = ThemeProvider.theme
-	coin.set_clip_y(bucket.global_position.y - t.bucket_height / 2.0)
-
 	var bucket_idx := _get_bucket_index(bucket)
 	var amount: int = roundi(bucket.value * coin.multiplier)
 	if not coin.is_prestige_coin:
@@ -497,6 +575,38 @@ func build_board() -> void:
 	_peg_multimesh_instance.multimesh = mm
 	_peg_multimesh_instance.material_override = t.make_peg_shader_material()
 	pegs_container.add_child(_peg_multimesh_instance)
+
+	# --- Coin MultiMesh ---
+	if _coin_multimesh_instance:
+		_coin_multimesh_instance.queue_free()
+	_active_coin_indices.clear()
+	_coin_free_indices.clear()
+
+	var coin_capacity := 64
+	var coin_mm := MultiMesh.new()
+	coin_mm.transform_format = MultiMesh.TRANSFORM_3D
+	coin_mm.use_colors = true
+	coin_mm.mesh = t.make_coin_mesh()
+	coin_mm.instance_count = coin_capacity
+
+	var hidden_xform := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
+	for i in coin_capacity:
+		coin_mm.set_instance_transform(i, hidden_xform)
+
+	_coin_multimesh_instance = MultiMeshInstance3D.new()
+	_coin_multimesh_instance.multimesh = coin_mm
+	var coin_mat := ShaderMaterial.new()
+	coin_mat.shader = preload("res://entities/coin/coin_multimesh.gdshader")
+	_coin_multimesh_instance.material_override = coin_mat
+	add_child(_coin_multimesh_instance)
+
+	for i in range(coin_capacity - 1, -1, -1):
+		_coin_free_indices.append(i)
+
+	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
+		_coin_mesh_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
+	else:
+		_coin_mesh_basis = Basis.IDENTITY
 
 	var num_buckets = num_rows + 1
 	var bucket_x_offset = -space_between_pegs * (num_buckets - 1) / 2

@@ -17,6 +17,10 @@ var multiplier: float = 1.0
 var is_prestige_coin: bool = false
 var _active_tweens: Array[Tween] = []
 
+## MultiMesh rendering state
+var multimesh_index: int = -1
+var cached_color: Color = Color.WHITE
+
 func _ready() -> void:
 	_apply_visuals()
 
@@ -28,6 +32,7 @@ func _apply_visuals() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	mesh_instance.mesh = t.make_coin_mesh()
 	mesh_instance.material_override = t.make_coin_material(coin_type)
+	cached_color = t.coin_silhouette_color if t.coin_silhouette else t.get_coin_color(coin_type)
 	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		mesh_instance.rotation = Vector3(PI / 2, 0, 0)
 	else:
@@ -76,22 +81,21 @@ func kill_tweens() -> void:
 
 
 func get_color() -> Color:
-	var mesh_instance := get_node_or_null("MeshInstance3D")
-	if mesh_instance and mesh_instance.material_override is ShaderMaterial:
-		return mesh_instance.material_override.get_shader_parameter("albedo_color")
-	return ThemeProvider.theme.gold_main
+	return cached_color
 
 
 func set_color(color: Color) -> void:
+	cached_color = color
 	var mesh_instance := get_node_or_null("MeshInstance3D")
 	if mesh_instance and mesh_instance.material_override is ShaderMaterial:
 		mesh_instance.material_override.set_shader_parameter("albedo_color", color)
 
 
-func set_clip_y(y: float) -> void:
+func set_mesh_visible(vis: bool) -> void:
 	var mesh_instance := get_node_or_null("MeshInstance3D")
-	if mesh_instance and mesh_instance.material_override is ShaderMaterial:
-		mesh_instance.material_override.set_shader_parameter("clip_y", y)
+	if mesh_instance:
+		mesh_instance.visible = vis
+
 
 func _bounce_or_despawn() -> void:
 	if position.y < board.buckets_container.position.y + 0.5:
