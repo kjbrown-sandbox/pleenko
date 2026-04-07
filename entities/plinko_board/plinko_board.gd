@@ -610,7 +610,8 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 		halo_mat.set_shader_parameter("glow_color", halo_color)
 		halo_mat.set_shader_parameter("opacity_mult", 1.0)
 		halo.material_override = halo_mat
-		halo.position = Vector3(closest_peg.global_position.x, closest_peg.global_position.y, closest_peg.global_position.z - 0.05)
+		var local_pos := to_local(closest_peg.global_position)
+		halo.position = Vector3(local_pos.x, local_pos.y, local_pos.z - 0.05)
 		add_child(halo)
 		var halo_tween := create_tween()
 		halo_tween.tween_property(halo_mat, "shader_parameter/opacity_mult", 0.0, t.peg_glow_duration) \
