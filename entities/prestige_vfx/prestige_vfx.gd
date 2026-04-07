@@ -102,10 +102,11 @@ func update_desaturation(progress: float) -> void:
 		mm.set_instance_color(idx, original.lerp(bg, amount))
 
 	for entry in _darkened_coin_caches:
+		if not is_instance_valid(entry[0]):
+			continue
 		var coin: Coin = entry[0]
 		var original: Color = entry[1]
-		if is_instance_valid(coin):
-			coin.cached_color = original.lerp(bg, amount)
+		coin.cached_color = original.lerp(bg, amount)
 
 
 ## Triggers all contact VFX: particles, shockwave, and screen shake.
@@ -139,10 +140,11 @@ func cleanup() -> void:
 		var original: Color = entry[2]
 		mm.set_instance_color(idx, original)
 	for entry in _darkened_coin_caches:
+		if not is_instance_valid(entry[0]):
+			continue
 		var coin: Coin = entry[0]
 		var original: Color = entry[1]
-		if is_instance_valid(coin):
-			coin.cached_color = original
+		coin.cached_color = original
 	_darkened_materials.clear()
 	_darkened_coin_materials.clear()
 	_darkened_labels.clear()

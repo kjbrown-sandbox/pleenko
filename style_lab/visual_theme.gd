@@ -59,6 +59,7 @@ enum Palette {
 @export var at_cap_text_source: Palette = Palette.RED_MAIN
 @export var overlay_source: Palette = Palette.BG_7
 @export var overlay_opacity := 0.6
+@export var prestige_flash_source: Palette = Palette.BG_6  # color coin/bucket lerp toward during prestige
 
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")

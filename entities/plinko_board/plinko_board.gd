@@ -576,12 +576,8 @@ func build_board() -> void:
 	_peg_multimesh_instance.material_override = t.make_peg_shader_material()
 	pegs_container.add_child(_peg_multimesh_instance)
 
-	# --- Coin MultiMesh ---
-	if _coin_multimesh_instance:
-		_coin_multimesh_instance.queue_free()
-	_active_coin_indices.clear()
-	_coin_free_indices.clear()
-
+	# --- Coin MultiMesh (only created once, persists across rebuilds) ---
+	if not _coin_multimesh_instance:
 	var coin_capacity := 64
 	var coin_mm := MultiMesh.new()
 	coin_mm.transform_format = MultiMesh.TRANSFORM_3D

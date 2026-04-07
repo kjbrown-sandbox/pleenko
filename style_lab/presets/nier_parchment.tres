@@ -25,6 +25,7 @@ hit_bucket_source = 1
 normal_text_source = 0
 body_text_source = 2
 overlay_opacity = 0.5
+prestige_flash_source = 15
 label_font = ExtResource("1_fbp74")
 button_enabled_source = 2
 button_disabled_source = 4

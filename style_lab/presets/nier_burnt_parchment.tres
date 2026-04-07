@@ -37,3 +37,4 @@ board_glow_opacity = 0.03
 vignette_enabled = true
 vignette_radius = 0.7
 vignette_softness = 0.5
+prestige_flash_source = 15

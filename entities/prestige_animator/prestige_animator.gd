@@ -128,24 +128,24 @@ func _process_slow_mo(real_delta: float, t: VisualTheme) -> void:
 	var y_eased := clampf(y_progress, 0.0, 1.0)
 	Engine.time_scale = lerpf(t.prestige_slow_mo_scale, t.prestige_freeze_scale, y_eased)
 
-	var palette_white: Color = t.resolve(VisualTheme.Palette.BG_6)
+	var flash_color: Color = t.resolve(t.prestige_flash_source)
 
-	_target_coin.set_color(_original_coin_color.lerp(palette_white, y_eased))
+	_target_coin.set_color(_original_coin_color.lerp(flash_color, y_eased))
 
 	# Desaturate pegs and non-target buckets toward background color
 	_vfx.update_desaturation(y_eased)
 
 	# Lerp bucket mesh and label toward palette white alongside the coin
-	_target_bucket._base_material.albedo_color = _original_bucket_color.lerp(palette_white, y_eased)
-	_target_bucket._label.modulate = _original_bucket_label_color.lerp(palette_white, y_eased)
+	_target_bucket._base_material.albedo_color = _original_bucket_color.lerp(flash_color, y_eased)
+	_target_bucket._label.modulate = _original_bucket_label_color.lerp(flash_color, y_eased)
 
 	# Coin bottom reached bucket top — freeze it and trigger contact VFX
 	if coin_world_pos.y <= _contact_y:
 		_target_coin.kill_tweens()
 		_target_coin.global_position.y = _contact_y
-		_target_coin.set_color(palette_white)
-		_target_bucket._base_material.albedo_color = palette_white
-		_target_bucket._label.modulate = palette_white
+		_target_coin.set_color(flash_color)
+		_target_bucket._base_material.albedo_color = flash_color
+		_target_bucket._label.modulate = flash_color
 		_vfx.play_contact(_target_coin.global_position)
 		_phase_elapsed = 0.0
 		PrestigeManager.enter_phase(PrestigeManager.PrestigePhase.FREEZE)
@@ -185,8 +185,8 @@ func _start_coin_expand() -> void:
 
 	var t: VisualTheme = ThemeProvider.theme
 
-	# Ensure coin is palette-white for expand phase
-	_target_coin.set_color(t.resolve(VisualTheme.Palette.BG_6))
+	# Ensure coin matches flash color for expand phase
+	_target_coin.set_color(t.resolve(t.prestige_flash_source))
 
 
 func _transition_to_prestige_screen() -> void:
