@@ -19,6 +19,11 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 
 var _options_dialog: CanvasLayer
 
+# Nav arrow blink state
+var _challenges_ever_visited := false
+var _boards_with_unseen_upgrades: Dictionary = {}  # BoardType -> true
+var _arrow_blink_tweens: Dictionary = {}  # Control -> Tween
+
 func _ready() -> void:
 	# Safety net: ensure time_scale is normal when main scene loads
 	# (in case prestige animation was interrupted)
@@ -49,6 +54,7 @@ func _ready() -> void:
 	board_manager.board_switched.connect(_on_board_switched)
 	board_manager.board_unlocked.connect(_on_board_unlocked)
 	challenge_grouping_manager.group_switched.connect(_on_group_switched)
+	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked_for_nav)
 
 	if ChallengeManager.is_active_challenge:
 		_setup_challenge()
@@ -211,6 +217,7 @@ func _go_back_to_board() -> void:
 
 func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 	if new_mode == ModeManager.Mode.CHALLENGES:
+		_challenges_ever_visited = true
 		coin_values.visible = false
 		level_section.visible = false
 		game_timer.visible = false
@@ -253,9 +260,12 @@ func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
 func _on_prestige_claimed(_board_type: Enums.BoardType) -> void:
 	challenges_down_icon.visible = true
 	challenge_grouping_manager.update_group_visibility()
+	_update_nav_arrow_blinks()
 
 
-func _on_board_switched(_board: PlinkoBoard) -> void:
+func _on_board_switched(board: PlinkoBoard) -> void:
+	# Clear unseen flag for the board we just navigated to
+	_boards_with_unseen_upgrades.erase(board.board_type)
 	_update_nav_arrows()
 
 
@@ -272,6 +282,14 @@ func _on_group_switched(_group: ChallengeGrouping) -> void:
 	_update_nav_arrows()
 
 
+func _on_upgrade_unlocked_for_nav(_upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
+	# If the upgrade is on a board that isn't currently active, mark it unseen
+	var active_board := board_manager.get_active_board()
+	if active_board.board_type != board_type:
+		_boards_with_unseen_upgrades[board_type] = true
+	_update_nav_arrow_blinks()
+
+
 func _update_nav_arrows() -> void:
 	if ModeManager.is_main():
 		board_left_icon.visible = board_manager._active_index > 0
@@ -279,6 +297,43 @@ func _update_nav_arrows() -> void:
 	elif ModeManager.is_challenges():
 		board_left_icon.visible = challenge_grouping_manager.has_prev_group()
 		board_right_icon.visible = challenge_grouping_manager.has_next_group()
+	_update_nav_arrow_blinks()
+
+
+func _update_nav_arrow_blinks() -> void:
+	# Challenges down arrow: blink if challenges are unlocked but never visited
+	var should_blink_down := challenges_down_icon.visible and not _challenges_ever_visited
+	_set_arrow_blink(challenges_down_icon, should_blink_down)
+
+	# Right arrow: blink if any board to the right has unseen upgrades
+	var should_blink_right := false
+	if board_right_icon.visible and ModeManager.is_main():
+		var boards := board_manager.get_boards()
+		for i in range(board_manager._active_index + 1, boards.size()):
+			if boards[i].board_type in _boards_with_unseen_upgrades:
+				should_blink_right = true
+				break
+	_set_arrow_blink(board_right_icon, should_blink_right)
+
+	# Left arrow: blink if any board to the left has unseen upgrades
+	var should_blink_left := false
+	if board_left_icon.visible and ModeManager.is_main():
+		var boards := board_manager.get_boards()
+		for i in range(0, board_manager._active_index):
+			if boards[i].board_type in _boards_with_unseen_upgrades:
+				should_blink_left = true
+				break
+	_set_arrow_blink(board_left_icon, should_blink_left)
+
+
+func _set_arrow_blink(arrow: Control, should_blink: bool) -> void:
+	var is_blinking := arrow in _arrow_blink_tweens
+	if should_blink and not is_blinking:
+		_arrow_blink_tweens[arrow] = ThemeProvider.theme.blink_control(arrow)
+	elif not should_blink and is_blinking:
+		_arrow_blink_tweens[arrow].kill()
+		_arrow_blink_tweens.erase(arrow)
+		arrow.modulate.a = 1.0
 
 
 func _on_left_arrow_pressed() -> void:

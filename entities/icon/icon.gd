@@ -4,7 +4,7 @@ extends TextureButton
 const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
 
 @export var icon_texture: Texture2D
-@export var color_source: VisualTheme.Palette = VisualTheme.Palette.BG_5
+@export var color_source: VisualTheme.Palette = VisualTheme.Palette.BG_4
 
 # Icon from: <a href="https://www.flaticon.com/free-icons/configure" title="configure icons">Configure icons created by logisstudio - Flaticon</a>
 # Arrow icon: <a href="https://www.flaticon.com/free-icons/next" title="next icons">Next icons created by Roundicons - Flaticon</a>
