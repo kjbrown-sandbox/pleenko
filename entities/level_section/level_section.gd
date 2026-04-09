@@ -139,7 +139,4 @@ func _spawn_shockwave_rings() -> void:
 	var bar_center: Vector2 = hbox.global_position + hbox.size * 0.5
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var uv_center: Vector2 = bar_center / viewport_size
-	VfxUtils.spawn_shockwave(self, uv_center,
-		ring_count = 1,
-		duration = t.prestige_ring_duration / 3.0,
-	)
+	VfxUtils.spawn_shockwave(self, uv_center, { "ring_count": 1, "duration": t.prestige_ring_duration / 3.0 })

@@ -2,34 +2,26 @@ class_name VfxUtils
 
 
 ## Spawns screen-space shockwave rings from a UV center point.
-## All parameters after uv_center are optional named overrides;
-## defaults come from VisualTheme prestige ring settings.
+## Pass overrides in opts dictionary. Unset keys use VisualTheme defaults.
+##
+## Supported keys:
+##   ring_width: float        (default 0.06)
+##   distortion_strength: float (default 0.008)
+##   ring_count: int          (default prestige_ring_count)
+##   ring_stagger: float      (default prestige_ring_stagger)
+##   duration: float          (default prestige_ring_duration)
 ##
 ## Usage:
-##   VfxUtils.spawn_shockwave(node, uv_center)
-##   VfxUtils.spawn_shockwave(node, uv_center, ring_count=3, duration=2.0)
-static func spawn_shockwave(
-	caller: Node,
-	uv_center: Vector2,
-	ring_width: float = -1.0,
-	distortion_strength: float = -1.0,
-	ring_count: int = -1,
-	ring_stagger: float = -1.0,
-	duration: float = -1.0,
-) -> void:
+##   VfxUtils.spawn_shockwave(self, uv_center)
+##   VfxUtils.spawn_shockwave(self, uv_center, { "ring_count": 1, "duration": 1.5 })
+static func spawn_shockwave(caller: Node, uv_center: Vector2, opts: Dictionary = {}) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 
-	# Apply defaults from VisualTheme when not overridden
-	if ring_width < 0.0:
-		ring_width = 0.06
-	if distortion_strength < 0.0:
-		distortion_strength = 0.008
-	if ring_count < 0:
-		ring_count = t.prestige_ring_count
-	if ring_stagger < 0.0:
-		ring_stagger = t.prestige_ring_stagger
-	if duration < 0.0:
-		duration = t.prestige_ring_duration
+	var ring_width: float = opts.get("ring_width", 0.06)
+	var distortion_strength: float = opts.get("distortion_strength", 0.008)
+	var ring_count: int = opts.get("ring_count", t.prestige_ring_count)
+	var ring_stagger: float = opts.get("ring_stagger", t.prestige_ring_stagger)
+	var duration: float = opts.get("duration", t.prestige_ring_duration)
 
 	for i in ring_count:
 		_spawn_single_ring(caller, uv_center, ring_width, distortion_strength, duration, i * ring_stagger)
