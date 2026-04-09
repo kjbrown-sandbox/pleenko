@@ -18,9 +18,7 @@ script = ExtResource("2_obj")
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
-type = 2
-upgrade_type = 2
-description = "+1 permanent drop rate (gold)"
+description = "Hold space to auto-drop coins"
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("8_start")

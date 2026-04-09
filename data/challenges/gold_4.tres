@@ -14,7 +14,9 @@ exact = true
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
-description = "Hold space to auto-drop coins"
+type = 2
+upgrade_type = 2
+description = "+1 permanent drop rate (gold)"
 
 [resource]
 script = ExtResource("1_data")

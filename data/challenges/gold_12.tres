@@ -9,7 +9,8 @@
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
-amount = 50
+amount = 100
+exact = true
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
@@ -22,6 +23,6 @@ description = "+0.5 advanced coin multiplier to gold"
 script = ExtResource("1_data")
 id = "gold_12"
 display_name = "Gold Fever"
-time_limit_seconds = 60.0
+time_limit_seconds = 75.0
 objectives = Array[ExtResource("2_uonk8")]([SubResource("objective_1")])
 rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])
