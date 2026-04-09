@@ -190,10 +190,8 @@ const coin_shape := CoinShape.CYLINDER
 
 # ── Level Up VFX ────────────────────────────────────────────────────
 @export_group("Level Up VFX")
-@export var level_bar_shake_threshold := 0.9              ## Progress fraction to start shaking
+@export var level_bar_shake_threshold := 0.85             ## Progress fraction to start shaking
 @export var level_bar_shake_max_intensity := 3.0          ## Max pixel offset at 100%
-@export var level_up_screen_shake_intensity := 0.15       ## Camera h/v offset in world units
-@export var level_up_screen_shake_duration := 0.5         ## Seconds for camera shake to decay
 @export var level_up_particle_count := 12                 ## Number of burst particles from bar
 @export var level_up_particle_duration := 0.8             ## Seconds for particles to fade
 @export var upgrade_materialize_duration := 0.4           ## Seconds for left-to-right reveal

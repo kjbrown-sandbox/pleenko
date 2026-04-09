@@ -4,9 +4,13 @@ var level_label: Label
 var progress_bar: ProgressBar
 var progress_label: Label
 
-var _base_position := Vector2.ZERO
 var _shaking := false
+var _base_offset_left: float
+var _base_offset_right: float
+var _base_offset_top: float
+var _base_offset_bottom: float
 var _particle_overlay: Control
+var _shockwave_layers: Array[CanvasLayer] = []
 
 
 func _ready() -> void:
@@ -55,11 +59,14 @@ func _ready() -> void:
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 	_update_display()
-	_store_base_position.call_deferred()
+	_store_base_offsets.call_deferred()
 
 
-func _store_base_position() -> void:
-	_base_position = position
+func _store_base_offsets() -> void:
+	_base_offset_left = offset_left
+	_base_offset_right = offset_right
+	_base_offset_top = offset_top
+	_base_offset_bottom = offset_bottom
 
 
 func _process(_delta: float) -> void:
@@ -70,10 +77,13 @@ func _process(_delta: float) -> void:
 	var progress: float = LevelManager.get_progress()
 	var shake_range: float = (progress - t.level_bar_shake_threshold) / (1.0 - t.level_bar_shake_threshold)
 	var intensity: float = lerpf(0.0, t.level_bar_shake_max_intensity, clampf(shake_range, 0.0, 1.0))
-	position = _base_position + Vector2(
-		randf_range(-intensity, intensity),
-		randf_range(-intensity, intensity)
-	)
+	# Use offsets for shaking (anchored controls ignore position changes)
+	var dx: float = randf_range(-intensity, intensity)
+	var dy: float = randf_range(-intensity, intensity)
+	offset_left = _base_offset_left + dx
+	offset_right = _base_offset_right + dx
+	offset_top = _base_offset_top + dy
+	offset_bottom = _base_offset_bottom + dy
 
 
 func _on_level_changed(_new_level: int) -> void:
@@ -85,11 +95,19 @@ func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _cap: in
 
 
 func _on_level_up_ready(_level: int, _level_data: LevelData) -> void:
-	# Stop shaking and reset position
-	_shaking = false
-	position = _base_position
-	set_process(false)
+	# Stop shaking and reset offsets
+	_stop_shaking()
 	_spawn_particles()
+	_spawn_shockwave_rings()
+
+
+func _stop_shaking() -> void:
+	_shaking = false
+	offset_left = _base_offset_left
+	offset_right = _base_offset_right
+	offset_top = _base_offset_top
+	offset_bottom = _base_offset_bottom
+	set_process(false)
 
 
 func _update_display() -> void:
@@ -107,7 +125,7 @@ func _update_display() -> void:
 		progress_bar.value = mini(balance, threshold)
 		progress_label.text = "%d/%d" % [balance, threshold]
 
-	# Check if we should start shaking (90-100% progress)
+	# Check if we should start shaking
 	var progress: float = LevelManager.get_progress()
 	var t: VisualTheme = ThemeProvider.theme
 	if progress >= t.level_bar_shake_threshold and progress < 1.0:
@@ -115,9 +133,7 @@ func _update_display() -> void:
 			_shaking = true
 			set_process(true)
 	elif _shaking:
-		_shaking = false
-		position = _base_position
-		set_process(false)
+		_stop_shaking()
 
 
 func _spawn_particles() -> void:
@@ -151,3 +167,44 @@ func _spawn_particles() -> void:
 		tween.tween_property(particle, "modulate:a", 0.0, duration) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 		tween.chain().tween_callback(particle.queue_free)
+
+
+func _spawn_shockwave_rings() -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var bar_center: Vector2 = global_position + size * 0.5
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var uv_center: Vector2 = bar_center / viewport_size
+
+	for i in t.prestige_ring_count:
+		_spawn_single_ring(uv_center, t, i * t.prestige_ring_stagger)
+
+
+func _spawn_single_ring(uv_center: Vector2, t: VisualTheme, delay: float) -> void:
+	var shockwave_shader: Shader = preload("res://entities/prestige_vfx/shockwave.gdshader")
+	var mat := ShaderMaterial.new()
+	mat.shader = shockwave_shader
+	mat.set_shader_parameter("center", uv_center)
+	mat.set_shader_parameter("radius", 0.0)
+	mat.set_shader_parameter("ring_width", 0.06)
+	mat.set_shader_parameter("distortion_strength", 0.008)
+
+	var canvas := CanvasLayer.new()
+	canvas.layer = 90
+	get_tree().root.add_child(canvas)
+
+	var rect := ColorRect.new()
+	rect.material = mat
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	canvas.add_child(rect)
+	_shockwave_layers.append(canvas)
+
+	var tween := create_tween()
+	if delay > 0.0:
+		tween.tween_interval(delay)
+	tween.tween_method(func(r: float): mat.set_shader_parameter("radius", r), 0.0, 1.5, t.prestige_ring_duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_callback(func():
+		_shockwave_layers.erase(canvas)
+		canvas.queue_free()
+	)

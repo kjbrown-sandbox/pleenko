@@ -32,24 +32,28 @@ func _ready() -> void:
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
 
 
-## Plays a left-to-right reveal animation, then starts blinking.
+## Plays a left-to-right clip reveal animation, then starts blinking.
 func materialize() -> void:
 	_needs_attention = true
-	scale.x = 0.0
-	# Defer pivot_offset until the node has its layout size
-	_set_pivot_and_animate.call_deferred()
+	clip_contents = true
+	# Start with zero width — the content is fully clipped
+	custom_minimum_size.x = 0
+	size.x = 0
+	_animate_reveal.call_deferred()
 
 
-func _set_pivot_and_animate() -> void:
-	pivot_offset = Vector2(0, size.y / 2.0)
+func _animate_reveal() -> void:
+	var target_width: float = get_parent().size.x
 	var t: VisualTheme = ThemeProvider.theme
 	var tween := create_tween()
-	tween.tween_property(self, "scale:x", 1.0, t.upgrade_materialize_duration) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	tween.tween_callback(_start_attention)
+	tween.tween_property(self, "custom_minimum_size:x", target_width, t.upgrade_materialize_duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_callback(_finish_materialize)
 
 
-func _start_attention() -> void:
+func _finish_materialize() -> void:
+	clip_contents = false
+	custom_minimum_size.x = 0
 	fill_bar.set_attention(true)
 
 
