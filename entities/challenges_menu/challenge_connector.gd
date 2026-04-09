@@ -68,19 +68,14 @@ func _diamond_edge_dist(btn: ChallengeButton, dir: Vector3) -> float:
 	var ay := absf(dir.y)
 	var denom := ax + ay
 	if denom < 0.001:
-		return half_diag
-	return half_diag / denom
+		return half_diag + 0.1
+	return half_diag / denom + 0.1
 
 
 func _should_be_solid(start_state: int, end_state: int) -> bool:
 	var COMPLETED := ChallengeProgressManager.ChallengeState.COMPLETED
-	var UNLOCKED := ChallengeProgressManager.ChallengeState.UNLOCKED
-	# Solid between completed→unlocked or completed→completed
-	if start_state == COMPLETED and (end_state == UNLOCKED or end_state == COMPLETED):
-		return true
-	if end_state == COMPLETED and (start_state == UNLOCKED or start_state == COMPLETED):
-		return true
-	return false
+	# Solid only between two completed challenges
+	return start_state == COMPLETED and end_state == COMPLETED
 
 
 func _get_line_color(start_state: int, end_state: int) -> Color:
