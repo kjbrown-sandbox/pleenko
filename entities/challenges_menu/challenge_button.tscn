@@ -2,27 +2,64 @@
 
 [ext_resource type="Script" uid="uid://rt86i7vy1e1x" path="res://entities/challenges_menu/challenge_button.gd" id="1_script"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_outer"]
-size = Vector3(0.65, 0.65, 0.1)
+[sub_resource type="BoxMesh" id="BoxMesh_edge_h"]
+size = Vector3(0.55, 0.05, 0.1)
 
-[sub_resource type="BoxMesh" id="BoxMesh_inner"]
-size = Vector3(0.48, 0.48, 0.1)
+[sub_resource type="BoxMesh" id="BoxMesh_edge_v"]
+size = Vector3(0.05, 0.55, 0.1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_corner"]
+radius = 0.025
+height = 0.05
+
+[sub_resource type="BoxMesh" id="BoxMesh_fill"]
+size = Vector3(0.50, 0.50, 0.1)
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_812wr"]
 
 [node name="ChallengeButton" type="Node3D" unique_id=1781855903]
 script = ExtResource("1_script")
 
-[node name="OuterMesh" type="MeshInstance3D" parent="." unique_id=608802383]
+[node name="Outline" type="Node3D" parent="."]
 transform = Transform3D(0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0, 0, 1, 0, 0, 0)
-mesh = SubResource("BoxMesh_outer")
 
-[node name="InnerMesh" type="MeshInstance3D" parent="." unique_id=2139916039]
+[node name="EdgeTop" type="MeshInstance3D" parent="Outline"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.275, 0)
+mesh = SubResource("BoxMesh_edge_h")
+
+[node name="EdgeBottom" type="MeshInstance3D" parent="Outline"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.275, 0)
+mesh = SubResource("BoxMesh_edge_h")
+
+[node name="EdgeRight" type="MeshInstance3D" parent="Outline"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.275, 0, 0)
+mesh = SubResource("BoxMesh_edge_v")
+
+[node name="EdgeLeft" type="MeshInstance3D" parent="Outline"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.275, 0, 0)
+mesh = SubResource("BoxMesh_edge_v")
+
+[node name="CornerTL" type="MeshInstance3D" parent="Outline"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.275, 0.275, 0)
+mesh = SubResource("SphereMesh_corner")
+
+[node name="CornerTR" type="MeshInstance3D" parent="Outline"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.275, 0.275, 0)
+mesh = SubResource("SphereMesh_corner")
+
+[node name="CornerBR" type="MeshInstance3D" parent="Outline"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.275, -0.275, 0)
+mesh = SubResource("SphereMesh_corner")
+
+[node name="CornerBL" type="MeshInstance3D" parent="Outline"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.275, -0.275, 0)
+mesh = SubResource("SphereMesh_corner")
+
+[node name="FillMesh" type="MeshInstance3D" parent="."]
 transform = Transform3D(0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0, 0, 1, 0, 0, 0.001)
-mesh = SubResource("BoxMesh_inner")
+mesh = SubResource("BoxMesh_fill")
 
-[node name="Area3D" type="Area3D" parent="." unique_id=279396125]
+[node name="Area3D" type="Area3D" parent="."]
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D" unique_id=1429501701]
-transform = Transform3D(0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0, 0, 1, 0, 0, 0)
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D"]
 shape = SubResource("SphereShape3D_812wr")
