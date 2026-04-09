@@ -1,8 +1,10 @@
 extends Node
 
 ## Pool of AudioStreamPlayers per sound for overlapping playback.
+## Bucket hits are capped at MAX_BUCKET_SOUNDS concurrent plays — extras are silently dropped.
 
-const POOL_SIZE := 8
+const POOL_SIZE := 10
+const MAX_BUCKET_SOUNDS := 30
 
 var _pools: Dictionary = {}  # StringName -> Array[AudioStreamPlayer]
 var _indices: Dictionary = {}  # StringName -> int (round-robin index)
@@ -22,10 +24,12 @@ var _sounds: Dictionary = {
 
 
 func _ready() -> void:
+	var pool_overrides := {&"coin_flip": MAX_BUCKET_SOUNDS}
 	for sound_name in _sounds:
 		_pools[sound_name] = []
 		_indices[sound_name] = 0
-		for i in POOL_SIZE:
+		var size: int = pool_overrides.get(sound_name, POOL_SIZE)
+		for i in size:
 			var player := AudioStreamPlayer.new()
 			player.stream = _sounds[sound_name]
 			player.bus = &"Master"
@@ -33,7 +37,7 @@ func _ready() -> void:
 			_pools[sound_name].append(player)
 
 
-func play(sound_name: StringName, pitch: float = 0.0) -> void:
+func play(sound_name: StringName, pitch: float = 0.0, max_duration: float = 0.0) -> void:
 	if sound_name not in _pools:
 		return
 	var pool: Array = _pools[sound_name]
@@ -45,3 +49,27 @@ func play(sound_name: StringName, pitch: float = 0.0) -> void:
 		pitch = randf_range(0.9, 1.1)
 	player.pitch_scale = pitch
 	player.play()
+
+	if max_duration > 0.0:
+		get_tree().create_timer(max_duration).timeout.connect(func():
+			if player.playing:
+				player.stop()
+		)
+
+
+## Play a coin_flip for a bucket landing, up to MAX_BUCKET_SOUNDS at once.
+## Extra hits beyond the cap are silently dropped.
+func play_bucket_hit() -> void:
+	var pool: Array = _pools[&"coin_flip"]
+	var playing_count := 0
+	for player: AudioStreamPlayer in pool:
+		if player.playing:
+			playing_count += 1
+	if playing_count >= MAX_BUCKET_SOUNDS:
+		return
+	# Fade volume as more coins play: full at 1, quieter as count rises
+	var volume := linear_to_db(1.0 / (1.0 + playing_count * 0.05))
+	var idx: int = _indices[&"coin_flip"]
+	var player: AudioStreamPlayer = pool[idx]
+	player.volume_db = volume
+	play(&"coin_flip", 0.0, 0.27)

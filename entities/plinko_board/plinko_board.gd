@@ -445,7 +445,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount)
 	bucket.pulse()
 	if upgrade_section.visible:
-		AudioManager.play(&"bucket_land")
+		AudioManager.play_bucket_hit()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
 	if not coin.is_prestige_coin:
