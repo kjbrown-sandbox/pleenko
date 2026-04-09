@@ -49,7 +49,8 @@ func _process(_delta: float) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var progress: float = LevelManager.get_progress()
 	var shake_range: float = (progress - t.level_bar_shake_threshold) / (1.0 - t.level_bar_shake_threshold)
-	var intensity: float = lerpf(0.0, t.level_bar_shake_max_intensity, clampf(shake_range, 0.0, 1.0))
+	var min_intensity: float = t.level_bar_shake_max_intensity * t.level_bar_shake_min_pct
+	var intensity: float = lerpf(min_intensity, t.level_bar_shake_max_intensity, clampf(shake_range, 0.0, 1.0))
 	var dy: float = randf_range(-intensity, intensity)
 	hbox.offset_top = _base_offset_top + dy
 	hbox.offset_bottom = _base_offset_bottom + dy
