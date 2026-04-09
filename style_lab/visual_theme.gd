@@ -195,7 +195,7 @@ const coin_shape := CoinShape.CYLINDER
 @export var level_bar_shake_min_pct := 0.5                ## Starting intensity as fraction of max (0-1)
 @export var level_up_particle_count := 12                 ## Number of burst particles from bar
 @export var level_up_particle_duration := 0.8             ## Seconds for particles to fade
-@export var upgrade_materialize_duration := 0.4           ## Seconds for left-to-right reveal
+@export var upgrade_materialize_duration := 0.8           ## Seconds for left-to-right reveal
 @export var attention_blink_duration := 3.5               ## Seconds for one full on-off blink cycle
 
 

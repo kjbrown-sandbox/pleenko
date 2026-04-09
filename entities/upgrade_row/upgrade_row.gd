@@ -32,41 +32,9 @@ func _ready() -> void:
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
 
 
-## Plays a left-to-right clip reveal animation, then starts blinking.
-## Wraps the FillBar in a clipping Control and tweens its size.x.
-func materialize() -> void:
+func start_attention() -> void:
 	_needs_attention = true
-	# Defer so layout has assigned our size
-	_setup_clip_reveal.call_deferred()
-
-
-func _setup_clip_reveal() -> void:
-	var target_width: float = size.x
-
-	# Reparent FillBar under a clip mask
-	var clip := Control.new()
-	clip.clip_contents = true
-	clip.size = Vector2(0, size.y)
-	clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	# Move FillBar from MarginContainer into the clip
-	remove_child(fill_bar)
-	clip.add_child(fill_bar)
-	fill_bar.position = Vector2.ZERO
-	fill_bar.size = Vector2(target_width, size.y)
-	add_child(clip)
-
-	var t: VisualTheme = ThemeProvider.theme
-	var tween := create_tween()
-	tween.tween_property(clip, "size:x", target_width, t.upgrade_materialize_duration) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	tween.tween_callback(func():
-		# Reparent FillBar back to MarginContainer and remove clip
-		clip.remove_child(fill_bar)
-		add_child(fill_bar)
-		clip.queue_free()
-		fill_bar.set_attention(true)
-	)
+	fill_bar.set_attention(true)
 
 
 func setup_plus(on_pressed: Callable, on_hover: Callable = Callable(), on_update: Callable = Callable()) -> void:
