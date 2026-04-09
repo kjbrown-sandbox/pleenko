@@ -195,44 +195,11 @@ func _spawn_particles(contact_pos: Vector3, t: VisualTheme) -> void:
 		tween.tween_callback(particle.queue_free)
 
 
-func _spawn_shockwave_ring(contact_pos: Vector3, t: VisualTheme) -> void:
+func _spawn_shockwave_ring(contact_pos: Vector3, _t: VisualTheme) -> void:
 	var screen_center: Vector2 = _camera.unproject_position(contact_pos)
 	var viewport_size: Vector2 = _camera.get_viewport().get_visible_rect().size
 	var uv_center := screen_center / viewport_size
-
-	for i in t.prestige_ring_count:
-		_spawn_single_ring(uv_center, t, i * t.prestige_ring_stagger)
-
-
-func _spawn_single_ring(uv_center: Vector2, t: VisualTheme, delay: float) -> void:
-	var shockwave_shader: Shader = preload("res://entities/prestige_vfx/shockwave.gdshader")
-	var mat := ShaderMaterial.new()
-	mat.shader = shockwave_shader
-	mat.set_shader_parameter("center", uv_center)
-	mat.set_shader_parameter("radius", 0.0)
-	mat.set_shader_parameter("ring_width", 0.06)
-	mat.set_shader_parameter("distortion_strength", 0.008)
-
-	var canvas := CanvasLayer.new()
-	canvas.layer = 90
-	canvas.process_mode = Node.PROCESS_MODE_ALWAYS
-	get_tree().root.add_child(canvas)
-
-	var rect := ColorRect.new()
-	rect.material = mat
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	canvas.add_child(rect)
-	_shockwave_layers.append(canvas)
-
-	var tween := create_tween()
-	tween.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
-	tween.set_speed_scale(1.0 / maxf(Engine.time_scale, 0.001))
-	if delay > 0.0:
-		tween.tween_interval(delay)
-	tween.tween_method(func(r: float): mat.set_shader_parameter("radius", r), 0.0, 1.5, t.prestige_ring_duration) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	tween.tween_callback(canvas.queue_free)
+	VfxUtils.spawn_shockwave(self, uv_center)
 
 
 ## Starts a screen shake that lerps from the given intensity to 0 over duration (real time).

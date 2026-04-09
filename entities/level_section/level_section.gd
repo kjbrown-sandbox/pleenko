@@ -11,7 +11,6 @@ var _shaking := false
 var _base_offset_top: float
 var _base_offset_bottom: float
 var _particle_overlay: Control
-var _shockwave_layers: Array[CanvasLayer] = []
 
 
 func _ready() -> void:
@@ -140,37 +139,7 @@ func _spawn_shockwave_rings() -> void:
 	var bar_center: Vector2 = hbox.global_position + hbox.size * 0.5
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var uv_center: Vector2 = bar_center / viewport_size
-
-	for i in t.prestige_ring_count:
-		_spawn_single_ring(uv_center, t, i * t.prestige_ring_stagger)
-
-
-func _spawn_single_ring(uv_center: Vector2, t: VisualTheme, delay: float) -> void:
-	var shockwave_shader: Shader = preload("res://entities/prestige_vfx/shockwave.gdshader")
-	var mat := ShaderMaterial.new()
-	mat.shader = shockwave_shader
-	mat.set_shader_parameter("center", uv_center)
-	mat.set_shader_parameter("radius", 0.0)
-	mat.set_shader_parameter("ring_width", 0.06)
-	mat.set_shader_parameter("distortion_strength", 0.008)
-
-	var canvas := CanvasLayer.new()
-	canvas.layer = 90
-	get_tree().root.add_child(canvas)
-
-	var rect := ColorRect.new()
-	rect.material = mat
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	canvas.add_child(rect)
-	_shockwave_layers.append(canvas)
-
-	var tween := create_tween()
-	if delay > 0.0:
-		tween.tween_interval(delay)
-	tween.tween_method(func(r: float): mat.set_shader_parameter("radius", r), 0.0, 1.5, t.prestige_ring_duration) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	tween.tween_callback(func():
-		_shockwave_layers.erase(canvas)
-		canvas.queue_free()
+	VfxUtils.spawn_shockwave(self, uv_center,
+		ring_count = 1,
+		duration = t.prestige_ring_duration / 3.0,
 	)
