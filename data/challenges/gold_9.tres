@@ -20,9 +20,10 @@ times = 30
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
-type = 2
-upgrade_type = 1
-description = "+1 permanent bucket value (gold)"
+type = 1
+modifier_type = 3
+modifier_amount = 0.5
+description = "+0.5 orange multiplier"
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("8_start")
