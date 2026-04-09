@@ -79,8 +79,8 @@ func _on_level_up_ready(_level: int, level_data: LevelData) -> void:
 	_stop_shaking()
 	_spawn_shockwave_rings()
 
-	var target: Vector2 = _get_reward_target(level_data.rewards)
-	_spawn_particles_with_swoop(target)
+	var targets: Array[Vector2] = _get_reward_targets(level_data.rewards)
+	_spawn_particles_with_swoop(targets)
 
 
 func _stop_shaking() -> void:
@@ -118,40 +118,59 @@ func _update_display() -> void:
 
 
 # ── Reward target resolution ───────────────────────────────────────
+# Returns an array of targets. Empty = scatter only (no swoop).
+# One target = all particles converge. Two targets = particles split evenly.
 
-func _get_reward_target(rewards: Array[RewardData]) -> Vector2:
+func _get_reward_targets(rewards: Array[RewardData]) -> Array[Vector2]:
 	for reward in rewards:
 		match reward.type:
 			RewardData.RewardType.DROP_COINS:
-				return _get_coin_drop_target(reward.target_board)
+				return [_get_coin_drop_target(reward.target_board)]
 			RewardData.RewardType.UNLOCK_UPGRADE, \
 			RewardData.RewardType.UNLOCK_AUTODROPPER, \
 			RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER:
-				return _get_upgrade_section_target()
-	# Fallback: center of screen
-	return get_viewport().get_visible_rect().size * 0.5
+				return [_get_upgrade_section_target()]
+			RewardData.RewardType.UNLOCK_ADVANCED_BUCKET:
+				return _get_advanced_bucket_targets(reward.target_board)
+	return []
 
 
 func _get_upgrade_section_target() -> Vector2:
 	var board = _board_manager.get_active_board()
 	var container: VBoxContainer = board.upgrade_section.upgrades_container
-	# Target the bottom of the existing upgrades (where the new one will appear)
 	return container.global_position + Vector2(container.size.x * 0.5, container.size.y)
 
 
 func _get_coin_drop_target(target_board_type: int) -> Vector2:
-	# Project the 3D coin spawn point to screen space
 	for board in _board_manager.get_boards():
 		if board.board_type == target_board_type:
 			var spawn_pos: Vector3 = board.global_position + Vector3(0, board.vertical_spacing + 0.2, 0)
 			return _camera.unproject_position(spawn_pos)
-	# Fallback: top center
 	return Vector2(get_viewport().get_visible_rect().size.x * 0.5, 100)
+
+
+func _get_advanced_bucket_targets(target_board_type: int) -> Array[Vector2]:
+	# If the board has enough rows, target the two edge buckets.
+	# Otherwise, scatter only (empty array).
+	for board in _board_manager.get_boards():
+		if board.board_type == target_board_type:
+			var num_buckets: int = board.num_rows + 1
+			var half: int = num_buckets / 2
+			if half < board.distance_for_advanced_buckets:
+				return []  # Not enough rows — scatter only
+			# First and last bucket positions
+			var buckets = board.buckets_container.get_children()
+			if buckets.size() < 2:
+				return []
+			var left_pos: Vector2 = _camera.unproject_position(buckets[0].global_position)
+			var right_pos: Vector2 = _camera.unproject_position(buckets[buckets.size() - 1].global_position)
+			return [left_pos, right_pos]
+	return []
 
 
 # ── Two-phase particle animation ──────────────────────────────────
 
-func _spawn_particles_with_swoop(target: Vector2) -> void:
+func _spawn_particles_with_swoop(targets: Array[Vector2]) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var currency: int = LevelManager.get_active_currency()
 	var color: Color = t.get_coin_color(currency)
@@ -172,7 +191,6 @@ func _spawn_particles_with_swoop(target: Vector2) -> void:
 		_particle_overlay.add_child(particle)
 		particles.append(particle)
 
-		# Each particle bursts to a random scatter position
 		var scatter_x: float = start_x + randf_range(-60.0, 60.0)
 		var scatter_y: float = start_y - randf_range(80.0, 200.0)
 		var burst_duration: float = t.level_up_particle_burst_duration * randf_range(0.7, 1.0)
@@ -181,26 +199,31 @@ func _spawn_particles_with_swoop(target: Vector2) -> void:
 		tween.tween_property(particle, "position", Vector2(scatter_x, scatter_y), burst_duration) \
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
-	# Phase 2: After burst, swoop all particles to target, then claim rewards
+	# Phase 2: After burst, swoop or fade
 	var swoop_timer := get_tree().create_timer(t.level_up_particle_burst_duration)
 	swoop_timer.timeout.connect(func():
-		_swoop_particles_to_target(particles, target)
+		if targets.is_empty():
+			_fade_and_claim(particles)
+		else:
+			_swoop_particles_to_targets(particles, targets)
 	)
 
 
-func _swoop_particles_to_target(particles: Array[ColorRect], target: Vector2) -> void:
+func _swoop_particles_to_targets(particles: Array[ColorRect], targets: Array[Vector2]) -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	# Use array for mutable closure capture (GDScript captures primitives by value)
 	var state := [0]  # [arrived_count]
 	var total := particles.size()
 
-	for particle in particles:
+	for i in particles.size():
+		var particle := particles[i]
 		if not is_instance_valid(particle):
 			state[0] += 1
 			if state[0] >= total:
 				LevelManager.claim_rewards()
 			continue
 
+		# Split particles across targets (e.g. left/right for advanced buckets)
+		var target: Vector2 = targets[i % targets.size()]
 		var swoop_duration: float = t.level_up_particle_swoop_duration * randf_range(0.8, 1.2)
 
 		var tween := particle.create_tween()
@@ -212,6 +235,19 @@ func _swoop_particles_to_target(particles: Array[ColorRect], target: Vector2) ->
 			if state[0] >= total:
 				LevelManager.claim_rewards()
 		)
+
+
+## No swoop target — particles fade out, then claim immediately.
+func _fade_and_claim(particles: Array[ColorRect]) -> void:
+	for particle in particles:
+		if is_instance_valid(particle):
+			var tween := particle.create_tween()
+			tween.tween_property(particle, "modulate:a", 0.0, 0.4) \
+				.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+			tween.tween_callback(particle.queue_free)
+	# Claim after a short delay (don't wait for fade to finish)
+	var claim_timer := get_tree().create_timer(0.2)
+	claim_timer.timeout.connect(LevelManager.claim_rewards)
 
 
 # ── Shockwave ─────────────────────────────────────────────────────

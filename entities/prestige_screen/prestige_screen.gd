@@ -31,9 +31,9 @@ func _ready() -> void:
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(vbox)
 
-	# "Prestige Up!" title
+	# "Plinko Up!" title
 	var title := Label.new()
-	title.text = "Prestige Up!"
+	title.text = "Plinko Up!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 48)
 	title.add_theme_color_override("font_color", contrast_color)
