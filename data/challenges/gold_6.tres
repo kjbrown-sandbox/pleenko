@@ -30,7 +30,7 @@ script = ExtResource("3_reward")
 type = 1
 modifier_type = 3
 modifier_amount = 0.5
-description = "+0.5 advanced coin multiplier to gold"
+description = "+0.5 orange multiplier"
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("9_sb")
