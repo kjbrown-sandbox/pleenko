@@ -127,7 +127,9 @@ func _build() -> void:
 	_sync_fill_label_size.call_deferred()
 
 	# Style plus button (same outline style, with visible text)
+	# Start borderless — border is added when enabled via set_plus_disabled/set_plus_filled
 	_plus_styles = _apply_outline_style(plus_button, _fill_color, _disabled_color)
+	_apply_side_border(_plus_styles, false)
 	plus_button.add_theme_color_override("font_color", t.normal_text_color)
 	plus_button.add_theme_color_override("font_hover_color", t.normal_text_color)
 	plus_button.add_theme_color_override("font_pressed_color", t.normal_text_color)
@@ -135,6 +137,7 @@ func _build() -> void:
 
 	# Style minus button (same outline style, with visible text)
 	_minus_styles = _apply_outline_style(minus_button, _fill_color, _disabled_color)
+	_apply_side_border(_minus_styles, false)
 	minus_button.add_theme_color_override("font_color", t.normal_text_color)
 	minus_button.add_theme_color_override("font_hover_color", t.normal_text_color)
 	minus_button.add_theme_color_override("font_pressed_color", t.normal_text_color)
@@ -253,6 +256,7 @@ func show_plus_button(show: bool) -> void:
 
 func set_plus_disabled(is_disabled: bool) -> void:
 	plus_button.disabled = is_disabled
+	_apply_side_border(_plus_styles, not is_disabled)
 
 
 func set_plus_filled(can_afford: bool) -> void:
@@ -266,6 +270,7 @@ func set_plus_filled(can_afford: bool) -> void:
 	for style in _plus_styles:
 		style.bg_color = bg
 		style.border_color = border
+	_apply_side_border(_plus_styles, can_afford)
 	plus_button.add_theme_color_override("font_color", text_col)
 	plus_button.add_theme_color_override("font_hover_color", text_col)
 	plus_button.add_theme_color_override("font_pressed_color", text_col)
@@ -285,6 +290,7 @@ func show_minus_button(show: bool) -> void:
 
 func set_minus_disabled(is_disabled: bool) -> void:
 	minus_button.disabled = is_disabled
+	_apply_side_border(_minus_styles, not is_disabled)
 
 
 func set_minus_filled(is_active: bool) -> void:
@@ -298,6 +304,7 @@ func set_minus_filled(is_active: bool) -> void:
 	for style in _minus_styles:
 		style.bg_color = bg
 		style.border_color = border
+	_apply_side_border(_minus_styles, is_active)
 	minus_button.add_theme_color_override("font_color", text_col)
 	minus_button.add_theme_color_override("font_hover_color", text_col)
 	minus_button.add_theme_color_override("font_pressed_color", text_col)
@@ -366,6 +373,15 @@ func _on_minus_mouse_entered() -> void:
 func _on_minus_mouse_exited() -> void:
 	side_button_hover.emit("")
 	minus_mouse_exited.emit()
+
+
+func _apply_side_border(styles: Array[StyleBoxFlat], show: bool) -> void:
+	var bw: int = ThemeProvider.theme.button_border_width if show else 0
+	for style in styles:
+		style.border_width_left = bw
+		style.border_width_right = bw
+		style.border_width_top = bw
+		style.border_width_bottom = bw
 
 
 func _update_corner_radii() -> void:
