@@ -4,7 +4,6 @@
 [ext_resource type="Script" uid="uid://c6xaea0tfy1nk" path="res://entities/board_manager/board_manager.gd" id="2_brdmgr"]
 [ext_resource type="Script" uid="uid://dqvg32rprv776" path="res://entities/main/coin_values.gd" id="2_dn64k"]
 [ext_resource type="PackedScene" uid="uid://cmlfyxevj4i6g" path="res://entities/level_section/level_section.tscn" id="3_kg4ji"]
-[ext_resource type="PackedScene" path="res://entities/level_up_dialog/level_up_dialog.tscn" id="3_levelup"]
 [ext_resource type="Script" path="res://entities/prestige_animator/prestige_animator.gd" id="5_prestige_anim"]
 [ext_resource type="Script" uid="uid://byxgr86jpb1oy" path="res://entities/main/challenge_hud.gd" id="6_chalhud"]
 [ext_resource type="PackedScene" uid="uid://bnr48yvvij4ge" path="res://entities/icon/icon.tscn" id="6_kg4ji"]
@@ -166,8 +165,6 @@ position_side = 3
 offset = 4.0
 
 [node name="ChallengeInfoPanel" parent="." unique_id=809409958 instance=ExtResource("11_infopanel")]
-
-[node name="LevelUpDialog" parent="." unique_id=1315791600 instance=ExtResource("3_levelup")]
 
 [node name="PrestigeAnimator" type="Node" parent="."]
 script = ExtResource("5_prestige_anim")

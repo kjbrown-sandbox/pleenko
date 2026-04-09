@@ -44,6 +44,8 @@ var _minus_callback: Callable
 var _minus_hover_callback: Callable
 var _minus_update_callback: Callable
 
+var _attention_tween: Tween
+
 # State tracking for guards — skip redundant StyleBox updates
 var _last_fill_disabled := false
 var _last_at_max := false
@@ -304,6 +306,16 @@ func set_minus_filled(is_active: bool) -> void:
 func update_minus() -> void:
 	if _minus_update_callback.is_valid():
 		_minus_update_callback.call()
+
+
+func set_attention(enabled: bool) -> void:
+	if _attention_tween:
+		_attention_tween.kill()
+		_attention_tween = null
+	if not enabled:
+		modulate.a = 1.0
+		return
+	_attention_tween = ThemeProvider.theme.blink_control(self)
 
 
 func pulse_main(scale_override: float = 0.0) -> void:

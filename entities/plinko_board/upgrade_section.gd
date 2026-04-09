@@ -9,6 +9,7 @@ const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 var _board: PlinkoBoard
 var _board_type: Enums.BoardType
 var _rows: Dictionary = {}  # UpgradeType -> UpgradeRow node
+var _initial_setup_complete := false
 
 func setup(board: PlinkoBoard, board_type: Enums.BoardType) -> void:
 	_board = board
@@ -22,6 +23,7 @@ func setup(board: PlinkoBoard, board_type: Enums.BoardType) -> void:
 	# Listen for future unlocks and cap raise availability
 	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked)
 	UpgradeManager.cap_raise_unlocked.connect(_on_cap_raise_unlocked)
+	_initial_setup_complete = true
 
 
 func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
@@ -30,6 +32,8 @@ func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.Boa
 	if upgrade_type in _rows:
 		return
 	_spawn_row(upgrade_type)
+	if _initial_setup_complete:
+		_rows[upgrade_type].materialize()
 
 
 func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:

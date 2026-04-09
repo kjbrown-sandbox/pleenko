@@ -188,6 +188,17 @@ const coin_shape := CoinShape.CYLINDER
 @export var prestige_ring_max_scale := 8.0           ## Final ring scale multiplier
 @export var prestige_desaturation_amount := 0.7           ## How much pegs/buckets fade toward background (0-1)
 
+# ── Level Up VFX ────────────────────────────────────────────────────
+@export_group("Level Up VFX")
+@export var level_bar_shake_threshold := 0.9              ## Progress fraction to start shaking
+@export var level_bar_shake_max_intensity := 3.0          ## Max pixel offset at 100%
+@export var level_up_screen_shake_intensity := 0.15       ## Camera h/v offset in world units
+@export var level_up_screen_shake_duration := 0.5         ## Seconds for camera shake to decay
+@export var level_up_particle_count := 12                 ## Number of burst particles from bar
+@export var level_up_particle_duration := 0.8             ## Seconds for particles to fade
+@export var upgrade_materialize_duration := 0.4           ## Seconds for left-to-right reveal
+@export var attention_blink_duration := 0.6               ## Seconds for one full on-off blink cycle
+
 
 # ── Palette resolver ─────────────────────────────────────────────────
 
@@ -401,6 +412,18 @@ func pulse_control(control: Control, scale_override: float = 0.0) -> void:
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tween.tween_property(control, "scale", Vector2.ONE, button_pulse_duration * 0.6) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)
+
+
+## Starts a looping blink on a Control by oscillating modulate.a.
+## Returns the Tween so the caller can kill() it to stop blinking.
+func blink_control(control: Control) -> Tween:
+	var tween := control.create_tween().set_loops()
+	var half := attention_blink_duration / 2.0
+	tween.tween_property(control, "modulate:a", 0.3, half) \
+		.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(control, "modulate:a", 1.0, half) \
+		.set_trans(Tween.TRANS_SINE)
+	return tween
 
 
 func pulse_node3d(node: Node3D, flash_white: bool = false,

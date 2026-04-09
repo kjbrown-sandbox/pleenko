@@ -17,6 +17,12 @@ var _advanced_autodroppers_unlocked: bool = false
 var _assignments: Dictionary = {}  # StringName -> int (button_id → assigned count)
 var _autodrop_timer: Timer
 
+# Level-up camera shake state
+var _level_shake_active := false
+var _level_shake_elapsed := 0.0
+var _level_shake_intensity := 0.0
+var _level_shake_duration := 0.0
+
 ## Optional gate callable: Callable(board_type: Enums.BoardType) -> bool
 ## Set by ChallengeManager to restrict boards during challenges.
 var board_gate: Callable
@@ -27,6 +33,7 @@ const MIN_CAMERA_Z := 6.0
 
 func setup(camera: Camera3D) -> void:
 	_camera = camera
+	set_process(false)
 	board_spacing = ThemeProvider.theme.board_spacing
 	camera_tween_duration = ThemeProvider.theme.camera_tween_duration
 	# Start with the first tier's board
@@ -35,6 +42,7 @@ func setup(camera: Camera3D) -> void:
 	_snap_camera_to_active_board()
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
+	LevelManager.level_up_ready.connect(_on_level_up)
 
 	# Autodropper timer (1 tick per second, starts paused)
 	_autodrop_timer = Timer.new()
@@ -46,6 +54,34 @@ func setup(camera: Camera3D) -> void:
 	UpgradeManager.autodropper_unlocked.connect(_on_autodropper_unlocked)
 	UpgradeManager.advanced_autodropper_unlocked.connect(_on_advanced_autodropper_unlocked)
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
+
+
+func _process(delta: float) -> void:
+	if not _level_shake_active:
+		set_process(false)
+		return
+	var real_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	_level_shake_elapsed += real_delta
+	if _level_shake_elapsed >= _level_shake_duration:
+		_level_shake_active = false
+		_camera.h_offset = 0.0
+		_camera.v_offset = 0.0
+		set_process(false)
+		return
+	var progress: float = _level_shake_elapsed / _level_shake_duration
+	var decay: float = exp(-4.0 * progress)
+	var current_intensity: float = _level_shake_intensity * decay
+	_camera.h_offset = randf_range(-current_intensity, current_intensity)
+	_camera.v_offset = randf_range(-current_intensity, current_intensity)
+
+
+func _on_level_up(_level: int, _level_data: LevelData) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	_level_shake_active = true
+	_level_shake_elapsed = 0.0
+	_level_shake_intensity = t.level_up_screen_shake_intensity
+	_level_shake_duration = t.level_up_screen_shake_duration
+	set_process(true)
 
 
 func _input(event: InputEvent) -> void:

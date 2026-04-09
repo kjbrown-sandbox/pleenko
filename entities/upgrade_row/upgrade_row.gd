@@ -10,6 +10,7 @@ var _upgrade_type: Enums.UpgradeType
 var _callback: Callable
 var _currency_type: int = -1
 var _dirty := false
+var _needs_attention := false
 
 func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgrade: Callable) -> void:
 	_board_type = board_type
@@ -29,6 +30,27 @@ func _ready() -> void:
 	fill_bar.side_button_hover.connect(_on_side_button_hover)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
+
+
+## Plays a left-to-right reveal animation, then starts blinking.
+func materialize() -> void:
+	_needs_attention = true
+	scale.x = 0.0
+	# Defer pivot_offset until the node has its layout size
+	_set_pivot_and_animate.call_deferred()
+
+
+func _set_pivot_and_animate() -> void:
+	pivot_offset = Vector2(0, size.y / 2.0)
+	var t: VisualTheme = ThemeProvider.theme
+	var tween := create_tween()
+	tween.tween_property(self, "scale:x", 1.0, t.upgrade_materialize_duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_callback(_start_attention)
+
+
+func _start_attention() -> void:
+	fill_bar.set_attention(true)
 
 
 func setup_plus(on_pressed: Callable, on_hover: Callable = Callable(), on_update: Callable = Callable()) -> void:
@@ -97,6 +119,9 @@ func _update_button() -> void:
 
 
 func _on_mouse_entered() -> void:
+	if _needs_attention:
+		_needs_attention = false
+		fill_bar.set_attention(false)
 	if not fill_bar.main_button.disabled:
 		fill_bar.apply_fill_colors(false)
 	fill_bar.pulse_main(1.005)
