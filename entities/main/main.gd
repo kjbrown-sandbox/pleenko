@@ -34,6 +34,7 @@ func _ready() -> void:
 			SaveManager.load_prestige_only()
 
 	board_manager.setup(camera)
+	level_section.setup(board_manager, camera)
 	challenge_grouping_manager.setup(camera, challenge_info_panel)
 	coin_values.setup(board_manager)
 	_setup_gear_button()

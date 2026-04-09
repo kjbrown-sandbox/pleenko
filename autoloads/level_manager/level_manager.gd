@@ -8,7 +8,6 @@ var current_level: int = 0
 
 ## Queue of level-ups waiting to be processed.
 var _pending: Array = []  # Array of { level: int, level_data: LevelData }
-var _is_draining := false  ## Guard against re-entrancy during auto-claim
 
 ## Emitted when a level-up occurs. VFX listeners react to this (particles, camera shake).
 ## Rewards are auto-claimed immediately after — no dialog interaction needed.
@@ -29,7 +28,6 @@ func _ready() -> void:
 func reset() -> void:
 	current_level = 0
 	_pending.clear()
-	_is_draining = false
 
 
 func rebuild_levels() -> void:
@@ -171,6 +169,8 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 	if type != get_active_currency():
 		return
 
+	var was_empty := _pending.is_empty()
+
 	while current_level < levels.size():
 		var next_level_data: LevelData = levels[current_level]
 		# Only advance if this level tracks the currency that changed
@@ -184,18 +184,11 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 		else:
 			break
 
-	# Auto-claim: no dialog, rewards apply immediately
-	if not _is_draining and not _pending.is_empty():
-		_drain_pending()
-
-
-func _drain_pending() -> void:
-	_is_draining = true
-	while not _pending.is_empty():
+	# Notify listeners that a level-up is ready.
+	# level_section drives the particle animation and calls claim_rewards() when done.
+	if was_empty and not _pending.is_empty():
 		var entry = _pending[0]
 		level_up_ready.emit(entry["level"], entry["level_data"])
-		claim_rewards()
-	_is_draining = false
 
 
 func claim_rewards() -> void:
@@ -209,6 +202,11 @@ func claim_rewards() -> void:
 	print("[LevelManager] Claiming rewards for level %d" % level)
 
 	rewards_claimed.emit(level, level_data.rewards)
+
+	# If more level-ups are pending, notify listeners for the next one
+	if not _pending.is_empty():
+		var next = _pending[0]
+		level_up_ready.emit(next["level"], next["level_data"])
 
 
 func get_active_currency() -> Enums.CurrencyType:

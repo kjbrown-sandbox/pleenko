@@ -193,8 +193,9 @@ const coin_shape := CoinShape.CYLINDER
 @export var level_bar_shake_threshold := 0.85             ## Progress fraction to start shaking
 @export var level_bar_shake_max_intensity := 2.0          ## Max pixel offset at 100%
 @export var level_bar_shake_min_pct := 0.5                ## Starting intensity as fraction of max (0-1)
-@export var level_up_particle_count := 12                 ## Number of burst particles from bar
-@export var level_up_particle_duration := 0.8             ## Seconds for particles to fade
+@export var level_up_particle_count := 30                 ## Number of burst particles from bar
+@export var level_up_particle_burst_duration := 0.8       ## Seconds for initial burst phase
+@export var level_up_particle_swoop_duration := 0.6       ## Seconds for particles to fly to target
 @export var upgrade_materialize_duration := 0.8           ## Seconds for left-to-right reveal
 @export var attention_blink_duration := 3.5               ## Seconds for one full on-off blink cycle
 
