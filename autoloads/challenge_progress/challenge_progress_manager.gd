@@ -170,7 +170,8 @@ func serialize() -> Dictionary:
 func deserialize(data: Dictionary) -> void:
 	_states.clear()
 	_rewards_claimed.clear()
-	_unlocks.clear()
+	# Don't clear _unlocks — unlocks are permanent and additive, so merging
+	# prevents loss if in-memory state is newer than disk state
 	_starting_modifiers.clear()
 	_permanent_upgrades.clear()
 
@@ -184,7 +185,7 @@ func deserialize(data: Dictionary) -> void:
 
 	var unlocks_data: Array = data.get("unlocks", [])
 	for unlock_int in unlocks_data:
-		_unlocks[unlock_int as ChallengeRewardData.UnlockType] = true
+		_unlocks[int(unlock_int)] = true
 
 	var modifiers_data: Array = data.get("modifiers", [])
 	for mod_dict in modifiers_data:

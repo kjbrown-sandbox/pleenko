@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dcejwg2il56tp"
+path="res://.godot/imported/Coin Pouch 2.mp3-5b4f00361ab4f476fbbe66a1a5089b33.mp3str"
+
+[deps]
+
+source_file="res://assets/sounds/itchambroggiomusic/Coin Pouch 2.mp3"
+dest_files=["res://.godot/imported/Coin Pouch 2.mp3-5b4f00361ab4f476fbbe66a1a5089b33.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://b2vjegsr7cmcj"
+path="res://.godot/imported/Retro Coin 2.mp3-743c5a2974fa88e0462ed66180573da5.mp3str"
+
+[deps]
+
+source_file="res://assets/sounds/itchambroggiomusic/Retro Coin 2.mp3"
+dest_files=["res://.godot/imported/Retro Coin 2.mp3-743c5a2974fa88e0462ed66180573da5.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

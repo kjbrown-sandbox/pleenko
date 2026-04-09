@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://bu1tqmvvrnayx"
+path="res://.godot/imported/Old Coin.mp3-f9a3da9bfe837c0a32cab2734e3d00ae.mp3str"
+
+[deps]
+
+source_file="res://assets/sounds/itchambroggiomusic/Old Coin.mp3"
+dest_files=["res://.godot/imported/Old Coin.mp3-f9a3da9bfe837c0a32cab2734e3d00ae.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

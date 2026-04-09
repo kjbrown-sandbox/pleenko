@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dpq4s20w7h61n"
+path="res://.godot/imported/Coin Flip.mp3-797625bebe22831b1cf8f3b597503360.mp3str"
+
+[deps]
+
+source_file="res://assets/sounds/itchambroggiomusic/Coin Flip.mp3"
+dest_files=["res://.godot/imported/Coin Flip.mp3-797625bebe22831b1cf8f3b597503360.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
