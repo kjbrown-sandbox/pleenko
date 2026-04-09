@@ -43,46 +43,50 @@ func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.Boa
 
 
 func _materialize_row(row: UpgradeRow) -> void:
-	# Wrap the row in a clip container to animate a left-to-right reveal.
-	# The VBoxContainer manages the wrapper's size; the wrapper clips the row.
-	var wrapper := Control.new()
-	wrapper.clip_contents = true
-	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	# Swap: remove row from VBox, insert wrapper, put row inside wrapper
+	# The VBoxContainer forces direct children to full width, so clip_contents
+	# on a VBox child does nothing useful. Instead we use two layers:
+	#   wrapper (in VBox, full width, holds height) → clip (manually sized) → row
+	# The wrapper is a plain Control so it doesn't manage clip's size.
 	var idx: int = row.get_index()
 	upgrades_container.remove_child(row)
+
+	var wrapper := Control.new()
+	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	upgrades_container.add_child(wrapper)
 	upgrades_container.move_child(wrapper, idx)
-	wrapper.add_child(row)
 
-	# Row fills wrapper naturally via layout. Start wrapper at zero height
-	# so the VBox allocates space progressively (but we want horizontal clip).
-	# Set a fixed height so VBox gives it the right slot, then clip horizontally
-	# by offsetting the row and tweening it in.
-	_animate_clip_reveal.call_deferred(wrapper, row)
+	var clip := Control.new()
+	clip.clip_contents = true
+	clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrapper.add_child(clip)
+
+	clip.add_child(row)
+
+	_animate_clip_reveal.call_deferred(wrapper, clip, row)
 
 
-func _animate_clip_reveal(wrapper: Control, row: UpgradeRow) -> void:
+func _animate_clip_reveal(wrapper: Control, clip: Control, row: UpgradeRow) -> void:
 	var target_width: float = upgrades_container.size.x
 	var row_height: float = row.size.y
-	wrapper.custom_minimum_size = Vector2(0, row_height)
 
-	# Position the row absolutely inside the wrapper
+	# Wrapper reserves the right height in the VBox
+	wrapper.custom_minimum_size.y = row_height
+
+	# Row is full-size inside the clip, positioned at origin
 	row.position = Vector2.ZERO
 	row.size = Vector2(target_width, row_height)
 
-	# Start with wrapper clipping everything (0 width via offset)
-	wrapper.size = Vector2(0, row_height)
+	# Clip starts at 0 width — row is fully hidden
+	clip.size = Vector2(0, row_height)
 
 	var t: VisualTheme = ThemeProvider.theme
-	var tween := wrapper.create_tween()
-	tween.tween_property(wrapper, "custom_minimum_size:x", target_width, t.upgrade_materialize_duration) \
+	var tween := clip.create_tween()
+	tween.tween_property(clip, "size:x", target_width, t.upgrade_materialize_duration) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	tween.tween_callback(func():
-		# Unwrap: move row back to VBox, remove wrapper
+		# Unwrap: move row back into VBox, remove wrapper
 		var i: int = wrapper.get_index()
-		wrapper.remove_child(row)
+		clip.remove_child(row)
 		upgrades_container.remove_child(wrapper)
 		upgrades_container.add_child(row)
 		upgrades_container.move_child(row, i)
