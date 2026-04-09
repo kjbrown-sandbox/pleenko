@@ -426,6 +426,25 @@ func blink_control(control: Control) -> Tween:
 	return tween
 
 
+## Starts a looping blink combining scale (up to max_scale) and fade (down to min_alpha).
+## Returns the Tween so the caller can kill() it to stop.
+func blink_scale_fade(control: Control, max_scale: float = 1.5, min_alpha: float = 0.75) -> Tween:
+	control.pivot_offset = control.size / 2.0
+	var half := attention_blink_duration / 2.0
+	var tween := control.create_tween().set_loops()
+	# Phase 1: scale up + fade out (parallel)
+	tween.tween_property(control, "scale", Vector2.ONE * max_scale, half) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.parallel().tween_property(control, "modulate:a", min_alpha, half) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	# Phase 2: scale down + fade in (parallel)
+	tween.tween_property(control, "scale", Vector2.ONE, half) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.parallel().tween_property(control, "modulate:a", 1.0, half) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	return tween
+
+
 func pulse_node3d(node: Node3D, flash_white: bool = false,
 		material: StandardMaterial3D = null,
 		currency: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN,

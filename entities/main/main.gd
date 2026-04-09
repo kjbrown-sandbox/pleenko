@@ -329,10 +329,11 @@ func _update_nav_arrow_blinks() -> void:
 func _set_arrow_blink(arrow: Control, should_blink: bool) -> void:
 	var is_blinking := arrow in _arrow_blink_tweens
 	if should_blink and not is_blinking:
-		_arrow_blink_tweens[arrow] = ThemeProvider.theme.blink_control(arrow)
+		_arrow_blink_tweens[arrow] = ThemeProvider.theme.blink_scale_fade(arrow)
 	elif not should_blink and is_blinking:
 		_arrow_blink_tweens[arrow].kill()
 		_arrow_blink_tweens.erase(arrow)
+		arrow.scale = Vector2.ONE
 		arrow.modulate.a = 1.0
 
 

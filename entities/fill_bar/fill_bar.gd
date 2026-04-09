@@ -320,9 +320,10 @@ func set_attention(enabled: bool) -> void:
 		_attention_tween.kill()
 		_attention_tween = null
 	if not enabled:
+		scale = Vector2.ONE
 		modulate.a = 1.0
 		return
-	_attention_tween = ThemeProvider.theme.blink_control(self)
+	_attention_tween = ThemeProvider.theme.blink_scale_fade(self, 1.05, 0.5)
 
 
 func pulse_main(scale_override: float = 0.0) -> void:
