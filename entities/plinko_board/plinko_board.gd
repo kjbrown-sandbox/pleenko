@@ -41,7 +41,9 @@ var _coin_z_counter: int = 0  # Increments per coin so later coins render in fro
 var _peg_multimesh_instance: MultiMeshInstance3D
 var _peg_positions: PackedVector3Array
 var _peg_base_color: Color
+var _peg_basis: Basis
 var _active_flashes: Dictionary = {}  # peg_index -> { start_color: Color, elapsed: float, duration: float }
+var _active_peg_pulses: Dictionary = {}  # peg_index -> { elapsed: float, duration: float }
 
 # MultiMesh coin state
 var _coin_multimesh_instance: MultiMeshInstance3D
@@ -146,7 +148,13 @@ func _on_drop_side_hover(text: String) -> void:
 
 
 func _process(delta: float) -> void:
-	if is_waiting:
+	# TEMP: performance test — spam coins while holding spacebar
+	var hack_space := true
+	if Input.is_action_pressed("drop_coin") and drop_section.visible and hack_space:
+		is_waiting = false
+		_drop_timer_remaining = 0.0
+		request_drop()
+	elif is_waiting:
 		_drop_timer_remaining = maxf(0.0, _drop_timer_remaining - delta)
 		_update_drop_fill()
 	elif _is_hold_to_drop_active():
@@ -154,6 +162,8 @@ func _process(delta: float) -> void:
 
 	if not _active_flashes.is_empty():
 		_update_peg_flashes(delta)
+	if not _active_peg_pulses.is_empty():
+		_update_peg_pulses(delta)
 
 	if not _active_coin_indices.is_empty():
 		_sync_coin_multimesh()
@@ -176,6 +186,33 @@ func _update_peg_flashes(delta: float) -> void:
 
 	for idx in finished:
 		_active_flashes.erase(idx)
+
+
+func _update_peg_pulses(delta: float) -> void:
+	var mm := _peg_multimesh_instance.multimesh
+	var t: VisualTheme = ThemeProvider.theme
+	var pulse_scale: float = 1.0 + (t.bucket_pulse_scale - 1.0) * 3.0
+	var finished: PackedInt32Array = []
+
+	for idx: int in _active_peg_pulses:
+		var pulse: Dictionary = _active_peg_pulses[idx]
+		pulse.elapsed += delta
+		var t_ratio: float = clampf(pulse.elapsed / pulse.duration, 0.0, 1.0)
+		# Scale up then back down: peak at t_ratio=0.4
+		var scale: float
+		if t_ratio < 0.4:
+			scale = lerpf(1.0, pulse_scale, t_ratio / 0.4)
+		else:
+			scale = lerpf(pulse_scale, 1.0, (t_ratio - 0.4) / 0.6)
+		var scaled_basis: Basis = _peg_basis.scaled(Vector3.ONE * scale)
+		mm.set_instance_transform(idx, Transform3D(scaled_basis, _peg_positions[idx]))
+
+		if t_ratio >= 1.0:
+			finished.append(idx)
+
+	for idx in finished:
+		mm.set_instance_transform(idx, Transform3D(_peg_basis, _peg_positions[idx]))
+		_active_peg_pulses.erase(idx)
 
 
 func _is_hold_to_drop_active() -> bool:
@@ -563,12 +600,12 @@ func build_board() -> void:
 	mm.instance_count = total_pegs
 	mm.mesh = t.make_peg_mesh()
 
-	var peg_basis := Basis.IDENTITY
+	_peg_basis = Basis.IDENTITY
 	if t.peg_shape == VisualTheme.PegShape.CYLINDER:
-		peg_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
+		_peg_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
 
 	for i in total_pegs:
-		mm.set_instance_transform(i, Transform3D(peg_basis, _peg_positions[i]))
+		mm.set_instance_transform(i, Transform3D(_peg_basis, _peg_positions[i]))
 		mm.set_instance_color(i, _peg_base_color)
 
 	_peg_multimesh_instance = MultiMeshInstance3D.new()
@@ -578,26 +615,26 @@ func build_board() -> void:
 
 	# --- Coin MultiMesh (only created once, persists across rebuilds) ---
 	if not _coin_multimesh_instance:
-	var coin_capacity := 64
-	var coin_mm := MultiMesh.new()
-	coin_mm.transform_format = MultiMesh.TRANSFORM_3D
-	coin_mm.use_colors = true
-	coin_mm.mesh = t.make_coin_mesh()
-	coin_mm.instance_count = coin_capacity
+		var coin_capacity := 64
+		var coin_mm := MultiMesh.new()
+		coin_mm.transform_format = MultiMesh.TRANSFORM_3D
+		coin_mm.use_colors = true
+		coin_mm.mesh = t.make_coin_mesh()
+		coin_mm.instance_count = coin_capacity
 
-	var hidden_xform := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
-	for i in coin_capacity:
-		coin_mm.set_instance_transform(i, hidden_xform)
+		var hidden_xform := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
+		for i in coin_capacity:
+			coin_mm.set_instance_transform(i, hidden_xform)
 
-	_coin_multimesh_instance = MultiMeshInstance3D.new()
-	_coin_multimesh_instance.multimesh = coin_mm
-	var coin_mat := ShaderMaterial.new()
-	coin_mat.shader = preload("res://entities/coin/coin_multimesh.gdshader")
-	_coin_multimesh_instance.material_override = coin_mat
-	add_child(_coin_multimesh_instance)
+		_coin_multimesh_instance = MultiMeshInstance3D.new()
+		_coin_multimesh_instance.multimesh = coin_mm
+		var coin_mat := ShaderMaterial.new()
+		coin_mat.shader = preload("res://entities/coin/coin_multimesh.gdshader")
+		_coin_multimesh_instance.material_override = coin_mat
+		add_child(_coin_multimesh_instance)
 
-	for i in range(coin_capacity - 1, -1, -1):
-		_coin_free_indices.append(i)
+		for i in range(coin_capacity - 1, -1, -1):
+			_coin_free_indices.append(i)
 
 	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		_coin_mesh_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
@@ -736,6 +773,12 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 		"start_color": glow_color,
 		"elapsed": 0.0,
 		"duration": t.peg_glow_duration,
+	}
+
+	# Scale pulse on the peg
+	_active_peg_pulses[closest_idx] = {
+		"elapsed": 0.0,
+		"duration": t.bucket_pulse_duration,
 	}
 
 	if t.peg_glow_halo_enabled:
