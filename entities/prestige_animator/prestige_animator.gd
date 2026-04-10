@@ -147,6 +147,7 @@ func _process_slow_mo(real_delta: float, t: VisualTheme) -> void:
 		_target_bucket._base_material.albedo_color = flash_color
 		_target_bucket._label.modulate = flash_color
 		_vfx.play_contact(_target_coin.global_position)
+		AudioManager.play_prestige()
 		_phase_elapsed = 0.0
 		PrestigeManager.enter_phase(PrestigeManager.PrestigePhase.FREEZE)
 

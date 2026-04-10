@@ -20,6 +20,7 @@ var _sounds: Dictionary = {
 	&"coin_pouch_1": preload("res://assets/sounds/itchambroggiomusic/Coin Pouch 1.mp3"),
 	&"coin_pouch_2": preload("res://assets/sounds/itchambroggiomusic/Coin Pouch 2.mp3"),
 	&"coin_rattle": preload("res://assets/sounds/itchambroggiomusic/Coin Rattle.mp3"),
+	&"prestige": preload("res://assets/sounds/lucadialessandro-prestige.wav"),
 }
 
 
@@ -73,3 +74,21 @@ func play_bucket_hit() -> void:
 	var player: AudioStreamPlayer = pool[idx]
 	player.volume_db = volume
 	play(&"coin_flip", 0.0, 0.27)
+
+
+## Play the prestige sound and fade it out over fade_duration seconds, starting after play_duration.
+func play_prestige(play_duration: float = 3.0, fade_duration: float = 2.0) -> void:
+	var pool: Array = _pools[&"prestige"]
+	var idx: int = _indices[&"prestige"]
+	var player: AudioStreamPlayer = pool[idx]
+	_indices[&"prestige"] = (idx + 1) % pool.size()
+	player.volume_db = 0.0
+	player.pitch_scale = 1.0
+	player.play()
+	# After play_duration, tween the volume down to silence then stop
+	get_tree().create_timer(play_duration).timeout.connect(func():
+		if player.playing:
+			var tween := create_tween()
+			tween.tween_property(player, "volume_db", -40.0, fade_duration)
+			tween.tween_callback(player.stop)
+	)
