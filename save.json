@@ -1,0 +1,587 @@
+{
+	"version": 4,
+	"save_timestamp": 0,
+	"currency": {
+		"GOLD_COIN": {
+			"balance": 250,
+			"cap": 500,
+			"cap_raise_level": 0
+		},
+		"RAW_ORANGE": {
+			"balance": 50,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"ORANGE_COIN": {
+			"balance": 250,
+			"cap": 500,
+			"cap_raise_level": 0
+		},
+		"RAW_RED": {
+			"balance": 50,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"RED_COIN": {
+			"balance": 250,
+			"cap": 500,
+			"cap_raise_level": 0
+		},
+		"RAW_VIOLET": {
+			"balance": 50,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"VIOLET_COIN": {
+			"balance": 250,
+			"cap": 500,
+			"cap_raise_level": 0
+		},
+		"RAW_BLUE": {
+			"balance": 50,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"BLUE_COIN": {
+			"balance": 250,
+			"cap": 500,
+			"cap_raise_level": 0
+		},
+		"RAW_GREEN": {
+			"balance": 50,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"GREEN_COIN": {
+			"balance": 250,
+			"cap": 500,
+			"cap_raise_level": 0
+		}
+	},
+	"level": {
+		"current_level": 60
+	},
+	"upgrades": {
+		"state": {
+			"GOLD": {
+				"ADD_ROW": {
+					"level": 6,
+					"cost": 6000000,
+					"delta": 0,
+					"current_cap": 6,
+					"cap_level": 0
+				},
+				"BUCKET_VALUE": {
+					"level": 7,
+					"cost": 255,
+					"delta": 75,
+					"current_cap": 7,
+					"cap_level": 0
+				},
+				"DROP_RATE": {
+					"level": 5,
+					"cost": 310,
+					"delta": 120,
+					"current_cap": 5,
+					"cap_level": 0
+				},
+				"QUEUE": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"AUTODROPPER": {
+					"level": 10,
+					"cost": 1100,
+					"delta": 100,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				}
+			},
+			"ORANGE": {
+				"ADD_ROW": {
+					"level": 6,
+					"cost": 6000000,
+					"delta": 0,
+					"current_cap": 6,
+					"cap_level": 0
+				},
+				"BUCKET_VALUE": {
+					"level": 7,
+					"cost": 255,
+					"delta": 75,
+					"current_cap": 7,
+					"cap_level": 0
+				},
+				"DROP_RATE": {
+					"level": 5,
+					"cost": 310,
+					"delta": 120,
+					"current_cap": 5,
+					"cap_level": 0
+				},
+				"QUEUE": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"AUTODROPPER": {
+					"level": 10,
+					"cost": 1100,
+					"delta": 100,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				}
+			},
+			"RED": {
+				"ADD_ROW": {
+					"level": 6,
+					"cost": 6000000,
+					"delta": 0,
+					"current_cap": 6,
+					"cap_level": 0
+				},
+				"BUCKET_VALUE": {
+					"level": 7,
+					"cost": 255,
+					"delta": 75,
+					"current_cap": 7,
+					"cap_level": 0
+				},
+				"DROP_RATE": {
+					"level": 5,
+					"cost": 310,
+					"delta": 120,
+					"current_cap": 5,
+					"cap_level": 0
+				},
+				"QUEUE": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"AUTODROPPER": {
+					"level": 10,
+					"cost": 1100,
+					"delta": 100,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				}
+			},
+			"VIOLET": {
+				"ADD_ROW": {
+					"level": 6,
+					"cost": 6000000,
+					"delta": 0,
+					"current_cap": 6,
+					"cap_level": 0
+				},
+				"BUCKET_VALUE": {
+					"level": 7,
+					"cost": 255,
+					"delta": 75,
+					"current_cap": 7,
+					"cap_level": 0
+				},
+				"DROP_RATE": {
+					"level": 5,
+					"cost": 310,
+					"delta": 120,
+					"current_cap": 5,
+					"cap_level": 0
+				},
+				"QUEUE": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"AUTODROPPER": {
+					"level": 10,
+					"cost": 1100,
+					"delta": 100,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				}
+			},
+			"BLUE": {
+				"ADD_ROW": {
+					"level": 6,
+					"cost": 6000000,
+					"delta": 0,
+					"current_cap": 6,
+					"cap_level": 0
+				},
+				"BUCKET_VALUE": {
+					"level": 7,
+					"cost": 255,
+					"delta": 75,
+					"current_cap": 7,
+					"cap_level": 0
+				},
+				"DROP_RATE": {
+					"level": 5,
+					"cost": 310,
+					"delta": 120,
+					"current_cap": 5,
+					"cap_level": 0
+				},
+				"QUEUE": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"AUTODROPPER": {
+					"level": 10,
+					"cost": 1100,
+					"delta": 100,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				}
+			},
+			"GREEN": {
+				"ADD_ROW": {
+					"level": 6,
+					"cost": 6000000,
+					"delta": 0,
+					"current_cap": 6,
+					"cap_level": 0
+				},
+				"BUCKET_VALUE": {
+					"level": 7,
+					"cost": 255,
+					"delta": 75,
+					"current_cap": 7,
+					"cap_level": 0
+				},
+				"DROP_RATE": {
+					"level": 5,
+					"cost": 310,
+					"delta": 120,
+					"current_cap": 5,
+					"cap_level": 0
+				},
+				"QUEUE": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"AUTODROPPER": {
+					"level": 10,
+					"cost": 1100,
+					"delta": 100,
+					"current_cap": 10,
+					"cap_level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"level": 10,
+					"cost": 110,
+					"delta": 10,
+					"current_cap": 10,
+					"cap_level": 0
+				}
+			}
+		},
+		"unlocked": {
+			"GOLD": {
+				"ADD_ROW": true,
+				"BUCKET_VALUE": true,
+				"DROP_RATE": true,
+				"QUEUE": true,
+				"AUTODROPPER": true,
+				"ADVANCED_AUTODROPPER": true
+			},
+			"ORANGE": {
+				"ADD_ROW": true,
+				"BUCKET_VALUE": true,
+				"DROP_RATE": true,
+				"QUEUE": true,
+				"AUTODROPPER": true,
+				"ADVANCED_AUTODROPPER": true
+			},
+			"RED": {
+				"ADD_ROW": true,
+				"BUCKET_VALUE": true,
+				"DROP_RATE": true,
+				"QUEUE": true,
+				"AUTODROPPER": true,
+				"ADVANCED_AUTODROPPER": true
+			},
+			"VIOLET": {
+				"ADD_ROW": true,
+				"BUCKET_VALUE": true,
+				"DROP_RATE": true,
+				"QUEUE": true,
+				"AUTODROPPER": true,
+				"ADVANCED_AUTODROPPER": true
+			},
+			"BLUE": {
+				"ADD_ROW": true,
+				"BUCKET_VALUE": true,
+				"DROP_RATE": true,
+				"QUEUE": true,
+				"AUTODROPPER": true,
+				"ADVANCED_AUTODROPPER": true
+			},
+			"GREEN": {
+				"ADD_ROW": true,
+				"BUCKET_VALUE": true,
+				"DROP_RATE": true,
+				"QUEUE": true,
+				"AUTODROPPER": true,
+				"ADVANCED_AUTODROPPER": true
+			}
+		},
+		"cap_raise_available": {
+			"GOLD": true,
+			"ORANGE": true,
+			"RED": true,
+			"VIOLET": true,
+			"BLUE": true,
+			"GREEN": true
+		}
+	},
+	"boards": {
+		"normal_autodroppers_unlocked": true,
+		"advanced_autodroppers_unlocked": true,
+		"board_types": [
+			0,
+			1,
+			2,
+			3,
+			4,
+			5
+		],
+		"advanced_buckets": {
+			"GOLD": true,
+			"ORANGE": true,
+			"RED": true,
+			"VIOLET": true,
+			"BLUE": true,
+			"GREEN": true
+		},
+		"board_state": {
+			"GOLD": {
+				"num_rows": 8,
+				"drop_delay": 1.0,
+				"bucket_value_multiplier": 8,
+				"advanced_coin_multiplier": 2,
+				"distance_for_advanced_buckets": 2,
+				"multi_drop_count": 1
+			},
+			"ORANGE": {
+				"num_rows": 8,
+				"drop_delay": 1.0,
+				"bucket_value_multiplier": 8,
+				"advanced_coin_multiplier": 2,
+				"distance_for_advanced_buckets": 2,
+				"multi_drop_count": 1
+			},
+			"RED": {
+				"num_rows": 8,
+				"drop_delay": 1.0,
+				"bucket_value_multiplier": 8,
+				"advanced_coin_multiplier": 2,
+				"distance_for_advanced_buckets": 2,
+				"multi_drop_count": 1
+			},
+			"VIOLET": {
+				"num_rows": 8,
+				"drop_delay": 1.0,
+				"bucket_value_multiplier": 8,
+				"advanced_coin_multiplier": 2,
+				"distance_for_advanced_buckets": 2,
+				"multi_drop_count": 1
+			},
+			"BLUE": {
+				"num_rows": 8,
+				"drop_delay": 1.0,
+				"bucket_value_multiplier": 8,
+				"advanced_coin_multiplier": 2,
+				"distance_for_advanced_buckets": 2,
+				"multi_drop_count": 1
+			},
+			"GREEN": {
+				"num_rows": 8,
+				"drop_delay": 1.0,
+				"bucket_value_multiplier": 8,
+				"advanced_coin_multiplier": 2,
+				"distance_for_advanced_buckets": 2,
+				"multi_drop_count": 1
+			}
+		},
+		"assignments": {
+			"GOLD_NORMAL": 1,
+			"ORANGE_NORMAL": 1,
+			"RED_NORMAL": 1,
+			"VIOLET_NORMAL": 1,
+			"BLUE_NORMAL": 1,
+			"GREEN_NORMAL": 1
+		}
+	},
+	"prestige": {
+		"GOLD": 0,
+		"ORANGE": 1,
+		"RED": 1,
+		"VIOLET": 1,
+		"BLUE": 1,
+		"GREEN": 1
+	},
+	"challenges": {
+		"states": {
+			"gold_1": 2,
+			"gold_5": 2,
+			"gold_6": 2,
+			"gold_9": 2,
+			"gold_3": 1,
+			"gold_7": 1,
+			"gold_8": 1,
+			"gold_10": 1,
+			"gold_11": 1,
+			"gold_12": 1,
+			"gold_2": 1,
+			"gold_4": 0,
+			"gold_boss": 0,
+			"orange_1": 2,
+			"orange_5": 2,
+			"orange_6": 2,
+			"orange_9": 2,
+			"orange_3": 1,
+			"orange_7": 1,
+			"orange_8": 1,
+			"orange_10": 1,
+			"orange_11": 1,
+			"orange_12": 1,
+			"orange_2": 1,
+			"orange_4": 0,
+			"orange_boss": 0,
+			"red_1": 2,
+			"red_5": 2,
+			"red_6": 2,
+			"red_9": 2,
+			"red_3": 1,
+			"red_7": 1,
+			"red_8": 1,
+			"red_10": 1,
+			"red_11": 1,
+			"red_12": 1,
+			"red_2": 1,
+			"red_4": 0,
+			"red_boss": 0,
+			"violet_1": 2,
+			"violet_5": 2,
+			"violet_6": 2,
+			"violet_9": 2,
+			"violet_3": 1,
+			"violet_7": 1,
+			"violet_8": 1,
+			"violet_10": 1,
+			"violet_11": 1,
+			"violet_12": 1,
+			"violet_2": 1,
+			"violet_4": 0,
+			"violet_boss": 0,
+			"blue_1": 2,
+			"blue_5": 2,
+			"blue_6": 2,
+			"blue_9": 2,
+			"blue_3": 1,
+			"blue_7": 1,
+			"blue_8": 1,
+			"blue_10": 1,
+			"blue_11": 1,
+			"blue_12": 1,
+			"blue_2": 1,
+			"blue_4": 0,
+			"blue_boss": 0,
+			"green_1": 2,
+			"green_5": 2,
+			"green_6": 2,
+			"green_9": 2,
+			"green_3": 1,
+			"green_7": 1,
+			"green_8": 1,
+			"green_10": 1,
+			"green_11": 1,
+			"green_12": 1,
+			"green_2": 1,
+			"green_4": 0,
+			"green_boss": 0
+		},
+		"rewards_claimed": {
+			"gold_1": true,
+			"gold_5": true,
+			"gold_6": true,
+			"gold_9": true,
+			"orange_1": true,
+			"orange_5": true,
+			"orange_6": true,
+			"orange_9": true,
+			"red_1": true,
+			"red_5": true,
+			"red_6": true,
+			"red_9": true,
+			"violet_1": true,
+			"violet_5": true,
+			"violet_6": true,
+			"violet_9": true,
+			"blue_1": true,
+			"blue_5": true,
+			"blue_6": true,
+			"blue_9": true,
+			"green_1": true,
+			"green_5": true,
+			"green_6": true,
+			"green_9": true
+		},
+		"unlocks": [],
+		"modifiers": [],
+		"permanent_upgrades": []
+	}
+}

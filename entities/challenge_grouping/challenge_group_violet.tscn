@@ -1,0 +1,98 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://ccxiawte32iv3" path="res://entities/challenge_grouping/challenge_grouping.gd" id="1_grouping"]
+[ext_resource type="PackedScene" uid="uid://fbw6oy2vcypq" path="res://entities/challenges_menu/challenge_button.tscn" id="2_btn"]
+[ext_resource type="Resource" uid="uid://dk32jst0ubmvo" path="res://data/challenges/gold_1.tres" id="3_ch1"]
+[ext_resource type="Resource" uid="uid://blry535dwk8ds" path="res://data/challenges/gold_boss.tres" id="4_boss"]
+
+[node name="ChallengeGroupViolet" type="Node3D"]
+script = ExtResource("1_grouping")
+board_type = 3
+
+[node name="violet_1" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.454, 1.194, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_1"
+color_source = 17
+next_challenges = Array[String](["violet_3", "violet_5"])
+
+[node name="violet_2" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.179, -1.371, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_2"
+color_source = 17
+next_challenges = Array[String](["violet_4"])
+
+[node name="violet_3" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.73, 2.183, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_3"
+color_source = 17
+
+[node name="violet_4" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.877, -2.634, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_4"
+color_source = 17
+next_challenges = Array[String](["violet_6"])
+
+[node name="violet_5" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.151, 0.467, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_5"
+color_source = 17
+next_challenges = Array[String](["violet_6", "violet_9"])
+
+[node name="violet_6" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.87, -1.504, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_6"
+color_source = 17
+next_challenges = Array[String](["violet_8", "violet_11"])
+
+[node name="violet_7" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.371, 3.092, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_7"
+color_source = 17
+
+[node name="violet_8" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.092, -2.988, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_8"
+color_source = 17
+
+[node name="violet_9" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.382, 1.274, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_9"
+color_source = 17
+next_challenges = Array[String](["violet_7", "violet_12", "violet_10"])
+
+[node name="violet_10" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.505, 0.293, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_10"
+color_source = 17
+next_challenges = Array[String](["violet_boss"])
+
+[node name="violet_11" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.801, -1.024, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_11"
+color_source = 17
+next_challenges = Array[String](["violet_boss"])
+
+[node name="violet_12" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.255, 3.223, 0)
+challenge = ExtResource("3_ch1")
+challenge_ui_name = "violet_12"
+color_source = 17
+
+[node name="violet_boss" parent="." instance=ExtResource("2_btn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.953, 0.0, 0)
+challenge = ExtResource("4_boss")
+challenge_ui_name = "violet_boss"
+color_source = 17
+is_boss = true
+

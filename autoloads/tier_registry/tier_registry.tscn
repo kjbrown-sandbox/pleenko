@@ -4,7 +4,10 @@
 [ext_resource type="Resource" path="res://data/tiers/gold.tres" id="2"]
 [ext_resource type="Resource" path="res://data/tiers/orange.tres" id="3"]
 [ext_resource type="Resource" path="res://data/tiers/red.tres" id="4"]
+[ext_resource type="Resource" path="res://data/tiers/violet.tres" id="5"]
+[ext_resource type="Resource" path="res://data/tiers/blue.tres" id="6"]
+[ext_resource type="Resource" path="res://data/tiers/green.tres" id="7"]
 
 [node name="TierRegistry" type="Node"]
 script = ExtResource("1")
-tiers = [ExtResource("2"), ExtResource("3"), ExtResource("4")]
+tiers = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7")]

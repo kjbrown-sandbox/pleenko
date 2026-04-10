@@ -12,6 +12,12 @@ const RAW_ORANGE := 1
 const ORANGE_COIN := 2
 const RAW_RED := 3
 const RED_COIN := 4
+const RAW_VIOLET := 5
+const VIOLET_COIN := 6
+const RAW_BLUE := 7
+const BLUE_COIN := 8
+const RAW_GREEN := 9
+const GREEN_COIN := 10
 
 # ── Palette enum ─────────────────────────────────────────────────────
 enum Palette {
@@ -20,6 +26,9 @@ enum Palette {
 	ORANGE_FADED = 9, ORANGE_MAIN = 10,
 	RED_FADED = 12, RED_MAIN = 13,
 	BG_7 = 15,
+	VIOLET_FADED = 16, VIOLET_MAIN = 17,
+	BLUE_FADED = 18, BLUE_MAIN = 19,
+	GREEN_FADED = 20, GREEN_MAIN = 21,
 }
 
 # ── Colors (master palette) ──────────────────────────────────────────
@@ -45,6 +54,18 @@ enum Palette {
 @export_group("Colors – Red")
 @export var red_main := Color(0.7, 0.2, 0.25)
 @export var red_faded := Color(0.4, 0.08, 0.1)
+
+@export_group("Colors – Violet")
+@export var violet_main := Color(0.50, 0.30, 0.55)
+@export var violet_faded := Color(0.35, 0.18, 0.38)
+
+@export_group("Colors – Blue")
+@export var blue_main := Color(0.30, 0.42, 0.58)
+@export var blue_faded := Color(0.18, 0.28, 0.40)
+
+@export_group("Colors – Green")
+@export var green_main := Color(0.35, 0.52, 0.30)
+@export var green_faded := Color(0.20, 0.35, 0.18)
 
 # ── Color assignments (pick from palette via dropdown) ───────────────
 @export_group("Color Assignments")
@@ -217,6 +238,12 @@ func resolve(source: Palette) -> Color:
 		Palette.ORANGE_FADED: return orange_faded
 		Palette.RED_MAIN: return red_main
 		Palette.RED_FADED: return red_faded
+		Palette.VIOLET_MAIN: return violet_main
+		Palette.VIOLET_FADED: return violet_faded
+		Palette.BLUE_MAIN: return blue_main
+		Palette.BLUE_FADED: return blue_faded
+		Palette.GREEN_MAIN: return green_main
+		Palette.GREEN_FADED: return green_faded
 		_: return bg_shade_6
 
 
@@ -311,6 +338,9 @@ func get_coin_color(currency_type: int) -> Color:
 		GOLD_COIN: return gold_main
 		RAW_ORANGE, ORANGE_COIN: return orange_main
 		RAW_RED, RED_COIN: return red_main
+		RAW_VIOLET, VIOLET_COIN: return violet_main
+		RAW_BLUE, BLUE_COIN: return blue_main
+		RAW_GREEN, GREEN_COIN: return green_main
 		_: return gold_main
 
 
@@ -319,6 +349,9 @@ func get_coin_color_faded(currency_type: int) -> Color:
 		GOLD_COIN: return gold_faded
 		RAW_ORANGE, ORANGE_COIN: return orange_faded
 		RAW_RED, RED_COIN: return red_faded
+		RAW_VIOLET, VIOLET_COIN: return violet_faded
+		RAW_BLUE, BLUE_COIN: return blue_faded
+		RAW_GREEN, GREEN_COIN: return green_faded
 		_: return gold_faded
 
 

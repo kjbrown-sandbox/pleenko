@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TierData" format=3]
+
+[ext_resource type="Script" uid="uid://cub60hx042scp" path="res://scripts/tier_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+board_type = 5
+display_name = "Green"
+primary_currency = 10
+raw_currency = 9

@@ -7,10 +7,13 @@ const GroupScenes: Array[PackedScene] = [
 	preload("res://entities/challenge_grouping/challenge_group_gold.tscn"),
 	preload("res://entities/challenge_grouping/challenge_group_orange.tscn"),
 	preload("res://entities/challenge_grouping/challenge_group_red.tscn"),
+	preload("res://entities/challenge_grouping/challenge_group_violet.tscn"),
+	preload("res://entities/challenge_grouping/challenge_group_blue.tscn"),
+	preload("res://entities/challenge_grouping/challenge_group_green.tscn"),
 ]
 
 @export var group_spacing: float = 15.0
-@export var challenge_y_offset: float = -17.0
+@export var challenge_y_offset: float = -20.0
 
 var camera_tween_duration: float
 var _groups: Array[ChallengeGrouping] = []

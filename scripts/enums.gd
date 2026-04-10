@@ -3,7 +3,10 @@ class_name Enums
 enum BoardType {
 	GOLD,
 	ORANGE,
-	RED
+	RED,
+	VIOLET,
+	BLUE,
+	GREEN
 }
 
 enum CurrencyType {
@@ -11,7 +14,13 @@ enum CurrencyType {
 	RAW_ORANGE,
 	ORANGE_COIN,
 	RAW_RED,
-	RED_COIN
+	RED_COIN,
+	RAW_VIOLET,
+	VIOLET_COIN,
+	RAW_BLUE,
+	BLUE_COIN,
+	RAW_GREEN,
+	GREEN_COIN
 }
 
 enum UpgradeType {
