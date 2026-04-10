@@ -1,8 +1,6 @@
 [gd_scene format=3 uid="uid://bd5t24nqjmy8m"]
 
 [ext_resource type="Script" uid="uid://ddgdk7oji1mbd" path="res://autoloads/theme_provider/theme_provider.gd" id="1_tp"]
-[ext_resource type="Resource" uid="uid://cmex0lbdpom2m" path="res://style_lab/presets/nier_parchment.tres" id="2_dq7bl"]
 
 [node name="ThemeProvider" type="Node" unique_id=602725034]
 script = ExtResource("1_tp")
-theme = ExtResource("2_dq7bl")

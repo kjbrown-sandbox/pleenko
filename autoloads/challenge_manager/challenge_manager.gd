@@ -32,6 +32,7 @@ func has_failed() -> bool:
 # ── Setup ─────────────────────────────────────────────────────────
 
 func setup(board_manager: BoardManager) -> void:
+	ThemeProvider.set_theme(ThemeProvider.Kind.CHALLENGE)
 	_board_manager = board_manager
 
 	# Reset currency to starting state
@@ -171,6 +172,7 @@ static func get_objective_text_for(challenge: ChallengeData) -> String:
 # ── Teardown ──────────────────────────────────────────────────────
 
 func clear_challenge() -> void:
+	ThemeProvider.set_theme(ThemeProvider.Kind.NORMAL)
 	is_active_challenge = false
 	_challenge = null
 

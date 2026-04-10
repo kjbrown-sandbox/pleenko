@@ -36,7 +36,6 @@ func _ready() -> void:
 	# (in case prestige animation was interrupted)
 	PrestigeManager.reset_time_scale()
 
-	_setup_environment()
 	ModeManager.current_mode = ModeManager.Mode.MAIN
 
 	# Reset state BEFORE board setup so challenges start clean
@@ -73,26 +72,6 @@ func _ready() -> void:
 	challenges_down_icon.visible = ModeManager.are_challenges_unlocked()
 	_update_nav_arrows()
 	_update_lockdown_overlay()
-
-
-func _setup_environment() -> void:
-	var t: VisualTheme = ThemeProvider.theme
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = t.background_color
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = t.ambient_light_color
-	env.ambient_light_energy = t.ambient_light_energy
-	var env_node := WorldEnvironment.new()
-	env_node.environment = env
-	add_child(env_node)
-
-	if not t.unshaded:
-		var light := DirectionalLight3D.new()
-		light.light_color = t.directional_light_color
-		light.light_energy = t.directional_light_energy
-		light.rotation_degrees = t.directional_light_angle
-		add_child(light)
 
 
 func _setup_normal() -> void:
