@@ -78,17 +78,18 @@ func play_bucket_hit() -> void:
 
 ## Play the prestige sound and fade it out over fade_duration seconds, starting after play_duration.
 func play_prestige(play_duration: float = 3.0, fade_duration: float = 2.0) -> void:
-	var pool: Array = _pools[&"prestige"]
-	var idx: int = _indices[&"prestige"]
-	var player: AudioStreamPlayer = pool[idx]
-	_indices[&"prestige"] = (idx + 1) % pool.size()
-	player.volume_db = 0.0
-	player.pitch_scale = 1.0
-	player.play()
-	# After play_duration, tween the volume down to silence then stop
-	get_tree().create_timer(play_duration).timeout.connect(func():
-		if player.playing:
-			var tween := create_tween()
-			tween.tween_property(player, "volume_db", -40.0, fade_duration)
-			tween.tween_callback(player.stop)
-	)
+	pass	
+	# var pool: Array = _pools[&"prestige"]
+	# var idx: int = _indices[&"prestige"]
+	# var player: AudioStreamPlayer = pool[idx]
+	# _indices[&"prestige"] = (idx + 1) % pool.size()
+	# player.volume_db = 0.0
+	# player.pitch_scale = 1.0
+	# player.play()
+	# # After play_duration, tween the volume down to silence then stop
+	# get_tree().create_timer(play_duration).timeout.connect(func():
+	# 	if player.playing:
+	# 		var tween := create_tween()
+	# 		tween.tween_property(player, "volume_db", -40.0, fade_duration)
+	# 		tween.tween_callback(player.stop)
+	# )
