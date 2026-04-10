@@ -1,6 +1,12 @@
 extends Node3D
 
 const OptionsDialogScript := preload("res://entities/options_dialog/options_dialog.gd")
+const ComingSoonOverlayScript := preload("res://entities/coming_soon_overlay/coming_soon_overlay.gd")
+
+## Demo lockdown toggle. When true, the red board and orange/red challenge
+## groups are blocked behind a "More coming soon!" overlay. Toggle from the
+## Inspector on the Main node to switch between demo and full play.
+@export var demo_mode: bool = true
 
 @onready var board_manager: BoardManager = $BoardManager
 @onready var challenge_grouping_manager: ChallengeGroupingManager = $ChallengeGroupingManager
@@ -10,14 +16,15 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 @onready var game_timer: Label = $CanvasLayer/GameTimer
 @onready var options_icon: TextureButton = $CanvasLayer/OptionsIcon
 @onready var level_section = $CanvasLayer/LevelSection
-@onready var challenges_down_icon: TextureButton = $CanvasLayer/ChallengesDownIcon
-@onready var challenges_up_icon: TextureButton = $CanvasLayer/ChallengesUpIcon
-@onready var board_left_icon: TextureButton = $CanvasLayer/BoardLeftIcon
-@onready var board_right_icon: TextureButton = $CanvasLayer/BoardRightIcon
+@onready var challenges_down_icon: TextureButton = $NavIconsLayer/ChallengesDownIcon
+@onready var challenges_up_icon: TextureButton = $NavIconsLayer/ChallengesUpIcon
+@onready var board_left_icon: TextureButton = $NavIconsLayer/BoardLeftIcon
+@onready var board_right_icon: TextureButton = $NavIconsLayer/BoardRightIcon
 @onready var challenge_info_panel: ChallengeInfoPanel = $ChallengeInfoPanel
 @onready var prestige_animator: PrestigeAnimator = $PrestigeAnimator
 
 var _options_dialog: CanvasLayer
+var _coming_soon_overlay: CanvasLayer
 
 # Nav arrow blink state
 var _challenges_ever_visited := false
@@ -44,6 +51,7 @@ func _ready() -> void:
 	coin_values.setup(board_manager)
 	_setup_gear_button()
 	_setup_options_dialog()
+	_setup_coming_soon_overlay()
 	_setup_prestige_animator()
 
 	_setup_vignette()
@@ -64,6 +72,7 @@ func _ready() -> void:
 	# Show down-arrow only after save is loaded (prestige state is available)
 	challenges_down_icon.visible = ModeManager.are_challenges_unlocked()
 	_update_nav_arrows()
+	_update_lockdown_overlay()
 
 
 func _setup_environment() -> void:
@@ -200,6 +209,30 @@ func _setup_options_dialog() -> void:
 	add_child(_options_dialog)
 
 
+func _setup_coming_soon_overlay() -> void:
+	_coming_soon_overlay = CanvasLayer.new()
+	_coming_soon_overlay.set_script(ComingSoonOverlayScript)
+	add_child(_coming_soon_overlay)
+
+
+## Demo lockdown: shows the "More coming soon!" overlay when the active board
+## or challenge group is one of the locked tiers. No-op when demo_mode is off.
+func _update_lockdown_overlay() -> void:
+	if not demo_mode:
+		_coming_soon_overlay.visible = false
+		return
+	var should_show := false
+	if ModeManager.is_main():
+		var board := board_manager.get_active_board()
+		if board and board.board_type == Enums.BoardType.RED:
+			should_show = true
+	elif ModeManager.is_challenges():
+		var group := challenge_grouping_manager.get_active_group()
+		if group and (group.board_type == Enums.BoardType.ORANGE or group.board_type == Enums.BoardType.RED):
+			should_show = true
+	_coming_soon_overlay.visible = should_show
+
+
 func _on_gear_pressed() -> void:
 	_options_dialog.show_dialog()
 
@@ -229,6 +262,7 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		challenge_info_panel.visible = true
 		challenge_grouping_manager.enter_challenges_mode()
 		_update_nav_arrows()
+		_update_lockdown_overlay()
 	else:
 		coin_values.visible = true
 		level_section.visible = true
@@ -238,6 +272,7 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		challenges_up_icon.visible = false
 		challenge_info_panel.visible = false
 		_update_nav_arrows()
+		_update_lockdown_overlay()
 		_go_back_to_board()
 
 
@@ -269,6 +304,7 @@ func _on_board_switched(board: PlinkoBoard) -> void:
 	# Clear unseen flag for the board we just navigated to
 	_boards_with_unseen_upgrades.erase(board.board_type)
 	_update_nav_arrows()
+	_update_lockdown_overlay()
 
 
 func _on_board_unlocked(_board_type: Enums.BoardType) -> void:
@@ -282,6 +318,7 @@ func _on_board_unlocked(_board_type: Enums.BoardType) -> void:
 
 func _on_group_switched(_group: ChallengeGrouping) -> void:
 	_update_nav_arrows()
+	_update_lockdown_overlay()
 
 
 func _on_upgrade_unlocked_for_nav(_upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:

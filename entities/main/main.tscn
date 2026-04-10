@@ -88,7 +88,10 @@ offset_bottom = -14.0
 grow_horizontal = 0
 grow_vertical = 0
 
-[node name="ChallengesDownIcon" parent="CanvasLayer" unique_id=1543464600 instance=ExtResource("17_navarrow")]
+[node name="NavIconsLayer" type="CanvasLayer" parent="." unique_id=2147483601]
+layer = 6
+
+[node name="ChallengesDownIcon" parent="NavIconsLayer" unique_id=1543464600 instance=ExtResource("17_navarrow")]
 visible = false
 texture_filter = 0
 custom_minimum_size = Vector2(0, 0)
@@ -106,11 +109,11 @@ texture_normal = ExtResource("9_qgs1w")
 rotation_angle = 3.0
 icon_texture = null
 
-[node name="Tooltip" parent="CanvasLayer/ChallengesDownIcon" unique_id=1689310439 instance=ExtResource("19_tooltip")]
+[node name="Tooltip" parent="NavIconsLayer/ChallengesDownIcon" unique_id=1689310439 instance=ExtResource("19_tooltip")]
 text = "Hotkey: Down arrow"
 offset = 4.0
 
-[node name="ChallengesUpIcon" parent="CanvasLayer" unique_id=2081979746 instance=ExtResource("17_navarrow")]
+[node name="ChallengesUpIcon" parent="NavIconsLayer" unique_id=2081979746 instance=ExtResource("17_navarrow")]
 visible = false
 texture_filter = 0
 custom_minimum_size = Vector2(0, 0)
@@ -125,12 +128,12 @@ texture_normal = ExtResource("9_qgs1w")
 rotation_angle = -1.5708
 icon_texture = null
 
-[node name="Tooltip" parent="CanvasLayer/ChallengesUpIcon" unique_id=953103228 instance=ExtResource("19_tooltip")]
+[node name="Tooltip" parent="NavIconsLayer/ChallengesUpIcon" unique_id=953103228 instance=ExtResource("19_tooltip")]
 text = "Hotkey: Up arrow"
 position_side = 2
 offset = 4.0
 
-[node name="BoardLeftIcon" parent="CanvasLayer" unique_id=1333567701 instance=ExtResource("17_navarrow")]
+[node name="BoardLeftIcon" parent="NavIconsLayer" unique_id=1333567701 instance=ExtResource("17_navarrow")]
 visible = false
 texture_filter = 0
 anchors_preset = 4
@@ -144,12 +147,12 @@ texture_normal = ExtResource("9_qgs1w")
 rotation_angle = 3.14159
 icon_texture = null
 
-[node name="Tooltip" parent="CanvasLayer/BoardLeftIcon" unique_id=1645626912 instance=ExtResource("19_tooltip")]
+[node name="Tooltip" parent="NavIconsLayer/BoardLeftIcon" unique_id=1645626912 instance=ExtResource("19_tooltip")]
 text = "Hotkey: Left arrow"
 position_side = 1
 offset = 4.0
 
-[node name="BoardRightIcon" parent="CanvasLayer" unique_id=383221458 instance=ExtResource("17_navarrow")]
+[node name="BoardRightIcon" parent="NavIconsLayer" unique_id=383221458 instance=ExtResource("17_navarrow")]
 visible = false
 texture_filter = 0
 anchors_preset = 6
@@ -165,7 +168,7 @@ grow_vertical = 2
 texture_normal = ExtResource("9_qgs1w")
 icon_texture = null
 
-[node name="Tooltip" parent="CanvasLayer/BoardRightIcon" unique_id=198097779 instance=ExtResource("19_tooltip")]
+[node name="Tooltip" parent="NavIconsLayer/BoardRightIcon" unique_id=198097779 instance=ExtResource("19_tooltip")]
 text = "Hotkey: Right arrow"
 position_side = 3
 offset = 4.0
