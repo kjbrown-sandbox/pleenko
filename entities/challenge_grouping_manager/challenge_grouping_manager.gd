@@ -151,6 +151,7 @@ func _on_challenge_pressed(btn: ChallengeButton) -> void:
 	if state == ChallengeProgressManager.ChallengeState.LOCKED:
 		return
 	ChallengeManager.set_challenge(btn.challenge)
+	ThemeProvider.set_theme(ThemeProvider.Kind.CHALLENGE)
 	get_tree().reload_current_scene.call_deferred()
 
 

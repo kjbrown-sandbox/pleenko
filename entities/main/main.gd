@@ -108,6 +108,7 @@ func _on_challenge_completed() -> void:
 	challenge_hud.show_result("Challenge Complete!")
 	await get_tree().create_timer(2.0).timeout
 	SaveManager.reset_state()
+	ThemeProvider.set_theme(ThemeProvider.Kind.NORMAL)
 	get_tree().reload_current_scene()
 
 
@@ -116,6 +117,7 @@ func _on_challenge_failed(reason: String) -> void:
 	await get_tree().create_timer(2.0).timeout
 	ChallengeManager.clear_challenge()
 	SaveManager.reset_state()
+	ThemeProvider.set_theme(ThemeProvider.Kind.NORMAL)
 	get_tree().reload_current_scene()
 
 
