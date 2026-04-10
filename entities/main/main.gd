@@ -146,6 +146,8 @@ func _input(event: InputEvent) -> void:
 		_debug_test_prestige()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_O:
 		_debug_setup_prestigeable_state()
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_U:
+		CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, 1)
 
 
 func _debug_test_prestige() -> void:
