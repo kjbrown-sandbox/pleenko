@@ -12,7 +12,8 @@ const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
 @export var interactive: bool = true
 
 func _ready() -> void:
-	texture_normal = icon_texture
+	if icon_texture:
+		texture_normal = icon_texture
 	var mat := ShaderMaterial.new()
 	mat.shader = IconTintShader
 	mat.set_shader_parameter("tint_color", ThemeProvider.theme.resolve(color_source))

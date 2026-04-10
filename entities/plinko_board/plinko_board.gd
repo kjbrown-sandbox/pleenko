@@ -150,7 +150,7 @@ func _on_drop_side_hover(text: String) -> void:
 func _process(delta: float) -> void:
 	# TEMP: performance test — spam coins while holding spacebar
 	var hack_space := true
-	if Input.is_action_pressed("drop_coin") and drop_section.visible and hack_space:
+	if hack_space and Input.is_action_pressed("drop_coin") and drop_section.visible:
 		is_waiting = false
 		_drop_timer_remaining = 0.0
 		request_drop()

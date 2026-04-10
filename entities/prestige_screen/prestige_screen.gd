@@ -52,6 +52,7 @@ func _ready() -> void:
 	if t.label_font:
 		rewards_label.add_theme_font_override("font", t.label_font)
 	rewards_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rewards_label.custom_minimum_size = Vector2(1200, 0)
 	rewards_label.modulate.a = 0.0
 	vbox.add_child(rewards_label)
 
@@ -64,6 +65,7 @@ func _ready() -> void:
 	var claim_button := Button.new()
 	claim_button.text = "Claim Rewards"
 	claim_button.focus_mode = Control.FOCUS_NONE
+	claim_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	t.apply_button_theme(claim_button)
 	claim_button.add_theme_font_size_override("font_size", 28)
 	claim_button.add_theme_color_override("font_color", flash_color)
@@ -97,7 +99,9 @@ func _build_rewards_text() -> String:
 		lower_names.append(TierRegistry.get_tier_by_index(i).display_name.to_lower())
 	var multi_drop_target: String = " and ".join(lower_names) if lower_names.size() > 0 else "lower"
 
-	return "+1 multi-drop for the %s board\nAccess to the %s board" % [multi_drop_target, board_name]
+	var rewards_text := "+1 multi-drop for the %s board\nAccess to the %s board" % [multi_drop_target, board_name]
+	rewards_text += "\nAccess to %s challenges" % [multi_drop_target] if multi_drop_target == "gold" else ""
+	return rewards_text
 
 
 func _on_claim_pressed() -> void:
