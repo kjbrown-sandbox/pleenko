@@ -375,6 +375,10 @@ func _on_coin_tree_exiting(coin: Coin) -> void:
 	_release_coin_multimesh(coin)
 
 
+func has_in_flight_coins() -> bool:
+	return not _active_coin_indices.is_empty()
+
+
 func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	if ChallengeManager.is_active_challenge and ChallengeManager.has_failed():
 		return

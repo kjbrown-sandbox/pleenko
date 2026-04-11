@@ -293,9 +293,39 @@ func _on_autodrop_tick() -> void:
 			board.try_autodrop(is_advanced)
 
 
-func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, _board_type: Enums.BoardType, _new_level: int) -> void:
+func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, _new_level: int) -> void:
 	if upgrade_type == Enums.UpgradeType.AUTODROPPER or upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
 		_update_all_button_displays()
+	if board_type == Enums.BoardType.GOLD:
+		_check_and_rescue_gold_soft_lock()
+
+
+## After a gold-board upgrade purchase, verify the player can still produce
+## gold or raw orange. Gold and raw orange are the only "source" currencies —
+## only the gold board generates them — so if both are zero and no coins are
+## mid-flight or queued there, the player is soft-locked. Grant 1 gold to
+## unstick them.
+func _check_and_rescue_gold_soft_lock() -> void:
+	if CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN) >= 1:
+		return
+	if CurrencyManager.get_balance(Enums.CurrencyType.RAW_ORANGE) >= 1:
+		return
+	var gold_board: PlinkoBoard = _find_board(Enums.BoardType.GOLD)
+	if gold_board == null:
+		return
+	if gold_board.has_in_flight_coins():
+		return
+	if not gold_board.coin_queue.is_empty():
+		return
+	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, 1)
+	print("[BoardManager] Soft-lock detected after gold upgrade purchase; granted 1 gold.")
+
+
+func _find_board(type: Enums.BoardType) -> PlinkoBoard:
+	for board in _boards:
+		if board.board_type == type:
+			return board
+	return null
 
 
 func _find_board_for_button(button_id: StringName) -> PlinkoBoard:
