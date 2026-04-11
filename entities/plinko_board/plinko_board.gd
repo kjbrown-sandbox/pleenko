@@ -65,8 +65,11 @@ signal prestige_coin_landed(coin: Coin, bucket: Bucket)
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
 var _drop_burst_times: Array[float] = []
-# Shared mesh for drop burst particles — built once in _ready, reused for every spawn.
-var _drop_burst_mesh: QuadMesh
+
+# MultiMesh drop burst state
+var _drop_burst_mm_instance: MultiMeshInstance3D
+var _drop_burst_free_indices: Array[int] = []
+var _active_drop_bursts: Array[Dictionary] = []
 
 var _drop_timer_remaining: float = 0.0
 
@@ -74,8 +77,6 @@ func _ready() -> void:
 	space_between_pegs = ThemeProvider.theme.space_between_pegs
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
-
-	_drop_burst_mesh = QuadMesh.new()
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -208,6 +209,9 @@ func _process(delta: float) -> void:
 
 	if not _active_coin_indices.is_empty():
 		_sync_coin_multimesh(delta)
+
+	if not _active_drop_bursts.is_empty():
+		_sync_drop_burst(delta)
 
 
 func _update_peg_flashes(delta: float) -> void:
@@ -486,36 +490,61 @@ func _try_emit_drop_burst(drop_coin_type: Enums.CurrencyType) -> void:
 	_spawn_drop_burst_3d(local_pos, t.get_coin_color(drop_coin_type))
 
 
-## Radial burst of small 3D spheres scattering outward in the board's XY plane
-## (the face the camera sees). Each particle gets its own material so alpha can
-## animate independently. Particles are children of the board, so they move and
-## scale with it automatically.
+## Radial burst of small quads scattering outward in the board's XY plane.
+## Seeds slots in the shared drop burst MultiMesh; _sync_drop_burst animates them.
 func _spawn_drop_burst_3d(local_pos: Vector3, color: Color) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var particle_size: float = t.drop_burst_particle_size
-	_drop_burst_mesh.size = Vector2(particle_size, particle_size)
-	for i in t.drop_burst_particle_count:
-		var particle := MeshInstance3D.new()
-		particle.mesh = _drop_burst_mesh
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = color
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		particle.material_override = mat
-		particle.position = local_pos
-		add_child(particle)
+	var count: int = t.drop_burst_particle_count
+
+	for i in count:
+		if _drop_burst_free_indices.is_empty():
+			return
+		var idx: int = _drop_burst_free_indices.pop_back()
 
 		var angle: float = randf() * TAU
 		var distance: float = t.drop_burst_spread * randf_range(0.5, 1.0)
 		var target: Vector3 = local_pos + Vector3(cos(angle) * distance, sin(angle) * distance, 0.0)
 		var duration: float = t.drop_burst_duration * randf_range(0.7, 1.0)
 
-		var tween := particle.create_tween().set_parallel()
-		tween.tween_property(particle, "position", target, duration) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		tween.tween_property(mat, "albedo_color:a", 0.0, duration) \
-			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		tween.chain().tween_callback(particle.queue_free)
+		_active_drop_bursts.append({
+			"idx": idx,
+			"start": local_pos,
+			"target": target,
+			"elapsed": 0.0,
+			"duration": duration,
+			"size": particle_size,
+			"color": color,
+		})
+
+
+func _sync_drop_burst(delta: float) -> void:
+	var mm := _drop_burst_mm_instance.multimesh
+	var hidden := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
+	var i: int = 0
+	while i < _active_drop_bursts.size():
+		var p: Dictionary = _active_drop_bursts[i]
+		p.elapsed += delta
+		var k: float = clampf(p.elapsed / p.duration, 0.0, 1.0)
+
+		if k >= 1.0:
+			mm.set_instance_transform(p.idx, hidden)
+			_drop_burst_free_indices.append(p.idx)
+			_active_drop_bursts.remove_at(i)
+			continue
+
+		var eased_pos: float = 1.0 - (1.0 - k) * (1.0 - k)  # ease-out quad
+		var pos: Vector3 = (p.start as Vector3).lerp(p.target, eased_pos)
+		var alpha: float = 1.0 - k * k  # ease-in quad fade
+
+		var size: float = p.size
+		var basis := Basis.IDENTITY.scaled(Vector3(size, size, size))
+		mm.set_instance_transform(p.idx, Transform3D(basis, pos))
+		var c: Color = p.color
+		c.a = alpha
+		mm.set_instance_color(p.idx, c)
+
+		i += 1
 
 
 func _drop_from_queue() -> void:
@@ -792,6 +821,32 @@ func build_board() -> void:
 
 		for i in range(coin_capacity - 1, -1, -1):
 			_coin_free_indices.append(i)
+
+	# --- Drop burst MultiMesh (only created once, persists across rebuilds) ---
+	if not _drop_burst_mm_instance:
+		var burst_capacity := 64
+		var burst_mesh := QuadMesh.new()
+		burst_mesh.size = Vector2.ONE  # scaled per-instance via transform basis
+
+		var burst_mm := MultiMesh.new()
+		burst_mm.transform_format = MultiMesh.TRANSFORM_3D
+		burst_mm.use_colors = true
+		burst_mm.mesh = burst_mesh
+		burst_mm.instance_count = burst_capacity
+
+		var hidden_burst_xform := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
+		for i in burst_capacity:
+			burst_mm.set_instance_transform(i, hidden_burst_xform)
+
+		_drop_burst_mm_instance = MultiMeshInstance3D.new()
+		_drop_burst_mm_instance.multimesh = burst_mm
+		var burst_mat := ShaderMaterial.new()
+		burst_mat.shader = preload("res://entities/plinko_board/drop_burst_multimesh.gdshader")
+		_drop_burst_mm_instance.material_override = burst_mat
+		add_child(_drop_burst_mm_instance)
+
+		for i in range(burst_capacity - 1, -1, -1):
+			_drop_burst_free_indices.append(i)
 
 	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		_coin_mesh_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
