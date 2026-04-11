@@ -24,8 +24,6 @@ var _darkened_labels: Array = []
 var _darkened_peg_instances: Array = []
 ## Stores original cached_color for MultiMesh coins: [[Coin, original_color], ...]
 var _darkened_coin_caches: Array = []
-## Shockwave CanvasLayers added to root (not children of this node) that need manual cleanup.
-var _shockwave_layers: Array[CanvasLayer] = []
 
 
 func setup(camera: Camera3D, board: PlinkoBoard, target_bucket: Bucket, target_coin: Coin = null) -> void:
@@ -150,11 +148,6 @@ func cleanup() -> void:
 	_darkened_labels.clear()
 	_darkened_peg_instances.clear()
 	_darkened_coin_caches.clear()
-	# Free shockwave CanvasLayers (added to root, not children of this node)
-	for layer in _shockwave_layers:
-		if is_instance_valid(layer):
-			layer.queue_free()
-	_shockwave_layers.clear()
 	# Reset camera shake offsets
 	if _camera:
 		_camera.h_offset = 0.0
