@@ -22,12 +22,23 @@ var _total_drops: int = 0
 var _has_failed: bool = false
 var _timer_started: bool = false
 
+# Survive-specific state. Survive challenges drive their own two-phase timing
+# and ignore challenge.time_limit_seconds entirely.
+enum SurvivePhase { WAITING, SURVIVING, DONE }
+var _survive_objective: Survive = null
+var _survive_phase: int = SurvivePhase.WAITING
+var _survive_phase_remaining: float = 0.0
+## Total real-time elapsed since survive challenge started (for stats).
+var _survive_elapsed: float = 0.0
+
 
 func get_total_drops() -> int:
 	return _total_drops
 
 
 func get_time_taken() -> float:
+	if _survive_objective:
+		return _survive_elapsed
 	return challenge.time_limit_seconds - time_remaining if challenge else 0.0
 
 
@@ -43,6 +54,16 @@ func setup(_challenge: ChallengeData, _board_manager: BoardManager) -> void:
 	_current_bucket_group = 0
 	_total_drops = 0
 	_timer_started = false
+
+	# Detect a Survive objective and initialize the two-phase countdown.
+	_survive_objective = null
+	_survive_phase = SurvivePhase.WAITING
+	_survive_elapsed = 0.0
+	for objective in challenge.objectives:
+		if objective is Survive:
+			_survive_objective = objective
+			_survive_phase_remaining = objective.start_delay
+			break
 
 
 func start_timer() -> void:
@@ -77,6 +98,9 @@ func _on_board_switched(_board: PlinkoBoard) -> void:
 # ── Timer ─────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
+	if _survive_objective:
+		_process_survive(delta)
+		return
 	if not _timer_started:
 		return
 	time_remaining -= delta
@@ -84,6 +108,29 @@ func _process(delta: float) -> void:
 		time_remaining = 0.0
 		_on_time_up()
 		set_process(false)
+
+
+func _process_survive(delta: float) -> void:
+	if _has_failed or _survive_phase == SurvivePhase.DONE:
+		return
+	_survive_elapsed += delta
+	_survive_phase_remaining -= delta
+	if _survive_phase_remaining > 0.0:
+		return
+
+	if _survive_phase == SurvivePhase.WAITING:
+		# Transition: autodroppers appear and the survive countdown starts.
+		_survive_phase = SurvivePhase.SURVIVING
+		_survive_phase_remaining += _survive_objective.survive_duration
+		ChallengeManager.activate_survive_autodroppers(_survive_objective)
+	elif _survive_phase == SurvivePhase.SURVIVING:
+		# Survived the full duration — challenge complete.
+		_survive_phase_remaining = 0.0
+		_survive_phase = SurvivePhase.DONE
+		_survive_passed = true
+		set_process(false)
+		if _are_all_objectives_met():
+			completed.emit()
 
 
 func _on_time_up() -> void:
@@ -295,6 +342,11 @@ func _try_advance_bucket_group(objective: HitBucketsInOrder) -> bool:
 # ── Progress text ─────────────────────────────────────────────────
 
 func get_progress_text() -> String:
+	# Survive challenges replace the entire progress text with a phase-aware
+	# countdown line.
+	if _survive_objective:
+		return _get_survive_progress_text()
+
 	var parts: PackedStringArray = []
 	for objective in challenge.objectives:
 		if objective is GetSameBucketXTimes:
@@ -334,6 +386,20 @@ func _get_board(board_type: Enums.BoardType) -> PlinkoBoard:
 		if board.board_type == board_type:
 			return board
 	return null
+
+func _get_survive_progress_text() -> String:
+	var seconds: int = int(ceil(_survive_phase_remaining))
+	var mins: int = seconds / 60
+	var secs: int = seconds % 60
+	var time_str: String = "%d:%02d" % [mins, secs]
+	match _survive_phase:
+		SurvivePhase.WAITING:
+			var board_name: String = Enums.BoardType.keys()[_survive_objective.board_type].to_lower()
+			return "Time until %s autodropper starts: %s" % [board_name, time_str]
+		SurvivePhase.SURVIVING:
+			return "Survive for: %s" % time_str
+	return ""
+
 
 static func _bucket_key(board_type: Enums.BoardType, bucket_index: int) -> String:
 	return "%d_%d" % [board_type, bucket_index]

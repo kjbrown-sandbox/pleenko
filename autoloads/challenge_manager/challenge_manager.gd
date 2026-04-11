@@ -63,10 +63,9 @@ func setup(board_manager: BoardManager) -> void:
 	_tracker.connect_to_boards()
 	_tracker.mark_initial_visuals()
 
-	# Force-start autodroppers for Survive objectives
-	for objective in _challenge.objectives:
-		if objective is Survive:
-			_setup_survive(objective)
+	# Survive objectives now drive their own timing inside the tracker. The
+	# tracker calls activate_survive_autodroppers() when phase 1 begins, so
+	# nothing needs to happen here at challenge start.
 
 
 # ── Starting conditions ──────────────────────────────────────────
@@ -103,33 +102,26 @@ func _apply_starting_conditions() -> void:
 			CurrencyManager.add(mod.currency_type, int(mod.modifier_amount))
 
 
-func _setup_survive(objective: Survive) -> void:
+## Called by ChallengeTracker when the survive challenge transitions from the
+## WAITING phase to the SURVIVING phase. This is the moment the orange board's
+## autodroppers should appear and start dropping.
+func activate_survive_autodroppers(objective: Survive) -> void:
+	if not is_active_challenge:
+		return
 	var board := _get_board(objective.board_type)
 	if not board:
 		return
 
+	# Create the autodropper pool if needed and reveal the UI on every board.
 	var needed: int = objective.autodropper_count - _board_manager.get_free_autodroppers()
 	for i in needed:
 		UpgradeManager.force_apply(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
-
 	_board_manager._on_autodropper_unlocked()
 
-	if objective.start_delay > 0.0:
-		var tween := create_tween()
-		tween.tween_interval(objective.start_delay)
-		tween.tween_callback(_activate_autodroppers.bind(objective))
-	else:
-		_activate_autodroppers(objective)
-
-
-func _activate_autodroppers(objective: Survive) -> void:
-	if not is_active_challenge:
-		return
-	if _tracker:
-		_tracker.start_timer()
+	# Assign the autodroppers to this board, bypassing the player gate.
 	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[objective.board_type])
 	for i in objective.autodropper_count:
-		_board_manager._on_autodropper_adjust(normal_id, 1)
+		_board_manager._on_autodropper_adjust(normal_id, 1, false)
 
 
 # ── Gates ─────────────────────────────────────────────────────────

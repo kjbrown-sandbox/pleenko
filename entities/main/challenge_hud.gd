@@ -17,6 +17,10 @@ func start(challenge: ChallengeData) -> void:
 
 	_apply_theme()
 
+	# Survive challenges have their own two-phase countdown rendered into the
+	# progress label, so the regular timer label is hidden to avoid duplication.
+	_timer_label.visible = not _challenge_has_survive(challenge)
+
 	# Create progress label between objective and result
 	if not _progress_label:
 		_progress_label = Label.new()
@@ -29,6 +33,13 @@ func start(challenge: ChallengeData) -> void:
 
 	_update_timer_display()
 	_update_progress()
+
+
+func _challenge_has_survive(challenge: ChallengeData) -> bool:
+	for objective in challenge.objectives:
+		if objective is Survive:
+			return true
+	return false
 
 
 func _process(_delta: float) -> void:

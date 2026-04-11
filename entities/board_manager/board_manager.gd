@@ -252,7 +252,12 @@ func _on_advanced_autodropper_unlocked() -> void:
 		board.set_advanced_autodroppers_visible(true)
 
 
-func _on_autodropper_adjust(button_id: StringName, delta: int) -> void:
+func _on_autodropper_adjust(button_id: StringName, delta: int, from_player: bool = true) -> void:
+	# During an active challenge the player isn't allowed to add or remove
+	# autodroppers — only the challenge itself (via from_player = false) can.
+	if from_player and ChallengeManager.is_active_challenge:
+		return
+
 	var current: int = _assignments.get(button_id, 0)
 	var new_count: int = current + delta
 
