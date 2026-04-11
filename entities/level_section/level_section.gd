@@ -260,6 +260,38 @@ func _swoop_particles_to_targets(particles: Array[ColorRect], targets: Array[Vec
 		)
 
 
+## Radial burst at a world-space point, used for coin drop feedback. Unlike the
+## level-up burst, particles scatter outward in all directions and fade out.
+## Rate limiting is handled by the board before emission.
+func spawn_drop_burst(world_pos: Vector3, color: Color) -> void:
+	if not _camera:
+		return
+	var t: VisualTheme = ThemeProvider.theme
+	var screen_pos: Vector2 = _camera.unproject_position(world_pos)
+	var particle_size := Vector2(5, 5)
+	var half_size: Vector2 = particle_size * 0.5
+
+	for i in t.drop_burst_particle_count:
+		var particle := ColorRect.new()
+		particle.size = particle_size
+		particle.color = color
+		particle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		particle.position = screen_pos - half_size
+		_particle_overlay.add_child(particle)
+
+		var angle: float = randf() * TAU
+		var distance: float = t.drop_burst_spread * randf_range(0.5, 1.0)
+		var target: Vector2 = screen_pos + Vector2.from_angle(angle) * distance - half_size
+		var duration: float = t.drop_burst_duration * randf_range(0.7, 1.0)
+
+		var tween := particle.create_tween().set_parallel()
+		tween.tween_property(particle, "position", target, duration) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(particle, "modulate:a", 0.0, duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.chain().tween_callback(particle.queue_free)
+
+
 ## No swoop target — particles fade out, then claim immediately.
 func _fade_and_claim(particles: Array[ColorRect]) -> void:
 	for particle in particles:

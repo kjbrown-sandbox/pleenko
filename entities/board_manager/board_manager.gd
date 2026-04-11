@@ -3,6 +3,7 @@ extends Node3D
 
 signal board_switched(board: PlinkoBoard)
 signal board_unlocked(board_type: Enums.BoardType)
+signal drop_burst_requested(world_pos: Vector3, color: Color)
 
 const BoardScene: PackedScene = preload("res://entities/plinko_board/plinko_board.tscn")
 
@@ -127,6 +128,7 @@ func _spawn_board(type: Enums.BoardType) -> void:
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
+	board.drop_burst_requested.connect(_on_board_drop_burst_requested)
 	if _normal_autodroppers_unlocked:
 		board.set_normal_autodroppers_visible(true)
 	if _advanced_autodroppers_unlocked:
@@ -177,6 +179,10 @@ func _on_board_rebuilt(board: PlinkoBoard) -> void:
 	# Only adjust the camera if the rebuilt board is the one we're looking at
 	if board == _boards[_active_index]:
 		_tween_camera_to_active_board()
+
+
+func _on_board_drop_burst_requested(world_pos: Vector3, color: Color) -> void:
+	drop_burst_requested.emit(world_pos, color)
 
 
 func _get_camera_target(board: PlinkoBoard) -> Vector3:

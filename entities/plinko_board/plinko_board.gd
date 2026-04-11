@@ -60,7 +60,12 @@ signal autodropper_adjust_requested(button_id: StringName, delta: int)
 signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type: Enums.CurrencyType, amount: int, multiplier: float)
 signal autodrop_failed(board_type: Enums.BoardType)
 signal coin_dropped
+signal drop_burst_requested(world_pos: Vector3, color: Color)
 signal prestige_coin_landed(coin: Coin, bucket: Bucket)
+
+# Timestamps of recent drop bursts, used to rate-limit emissions to
+# drop_burst_max_per_second. Only the last ~1 second of entries are kept.
+var _drop_burst_times: Array[float] = []
 
 var _drop_timer_remaining: float = 0.0
 
@@ -395,13 +400,18 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	else:
 		return  # Can't drop right now
 
+	# Spawn burst VFX for the first coin. Bonus coins from the multi-drop loop
+	# below fire their own bursts via force_drop_coin. The per-board rate limit
+	# (drop_burst_max_per_second) naturally caps this during heavy drop storms.
+	_try_emit_drop_burst(drop_coin_type)
+
 	# Multi-drop: first coin pays the cost (above). Bonus coins from prestige/challenges
 	# are free and staggered so they don't all land in the same bucket simultaneously.
 	var mult: float = advanced_coin_multiplier if drop_coin_type == advanced_bucket_type else 1.0
 	for i in range(1, coin_multi_drop):
 		var tween := create_tween()
 		tween.tween_interval(i * MULTI_DROP_STAGGER)
-		tween.tween_callback(force_drop_coin.bind(drop_coin_type, mult))
+		tween.tween_callback(force_drop_coin.bind(drop_coin_type, mult, true))
 
 	if coin_multi_drop > 1:
 		_show_multi_drop_label(coin_multi_drop)
@@ -454,6 +464,21 @@ func _launch_coin(coin: Coin) -> void:
 func _drop_immediate_coin(coin: Coin) -> void:
 	_launch_coin(coin)
 	_start_drop_timer()
+
+
+## Emits drop_burst_requested if the per-second rate limit hasn't been hit.
+## Called once per successful drop (not per multi-drop bonus coin).
+func _try_emit_drop_burst(drop_coin_type: Enums.CurrencyType) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var now: float = Time.get_ticks_msec() / 1000.0
+	# Prune entries older than 1 second
+	while not _drop_burst_times.is_empty() and now - _drop_burst_times[0] >= 1.0:
+		_drop_burst_times.remove_at(0)
+	if _drop_burst_times.size() >= t.drop_burst_max_per_second:
+		return
+	_drop_burst_times.append(now)
+	var world_pos: Vector3 = to_global(Vector3(0, vertical_spacing + 0.2, 0))
+	drop_burst_requested.emit(world_pos, t.get_coin_color(drop_coin_type))
 
 
 func _drop_from_queue() -> void:
@@ -598,11 +623,13 @@ func clear_all_markings() -> void:
 	_bucket_markings.clear()
 
 
-func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0) -> void:
+func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0, show_burst: bool = false) -> void:
 	var coin = CoinScene.instantiate()
 	coin.coin_type = type
 	coin.multiplier = mult
 	_launch_coin(coin)
+	if show_burst:
+		_try_emit_drop_burst(type)
 
 
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:

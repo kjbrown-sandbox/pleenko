@@ -230,6 +230,13 @@ const coin_shape := CoinShape.CYLINDER
 @export var upgrade_materialize_duration := 0.8           ## Seconds for left-to-right reveal
 @export var attention_blink_duration := 3.5               ## Seconds for one full on-off blink cycle
 
+# ── Drop Burst VFX ───────────────────────────────────────────────────
+@export_group("Drop Burst VFX")
+@export var drop_burst_particle_count := 20               ## Particles per drop burst
+@export var drop_burst_duration := 0.8                    ## Seconds for particles to fade out
+@export var drop_burst_spread := 90.0                     ## Max pixel distance particles travel
+@export var drop_burst_max_per_second := 10                ## Rate limit per board
+
 
 # ── Palette resolver ─────────────────────────────────────────────────
 
