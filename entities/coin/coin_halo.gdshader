@@ -6,8 +6,8 @@ uniform float opacity_mult = 1.0;
 
 void fragment() {
 	float dist = length(UV - vec2(0.5)) * 2.0;  // 0 at center, 1 at edge
-	float falloff = exp(-dist * dist * 2.0);     // soft gaussian — spreads across quad
-	float circle = 1.0 - smoothstep(0.3, 1.0, dist);  // gradual fade to quad edge
+	float falloff = exp(-dist * dist * 4.0);     // steep gaussian — near-zero at edges                                                                                                      
+   float circle = 1.0 - smoothstep(0.55, 1.0, dist);  // hard circular clip                   
 	float alpha = falloff * circle * opacity_mult;
 	ALBEDO = glow_color.rgb;
 	ALPHA = alpha * glow_color.a;
