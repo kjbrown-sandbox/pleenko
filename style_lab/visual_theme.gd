@@ -232,9 +232,10 @@ const coin_shape := CoinShape.CYLINDER
 
 # ── Drop Burst VFX ───────────────────────────────────────────────────
 @export_group("Drop Burst VFX")
-@export var drop_burst_particle_count := 10               ## Particles per drop burst
+@export var drop_burst_particle_count := 6               ## Particles per drop burst
+@export var drop_burst_particle_size := 0.06               ## World-unit edge length of each square particle
 @export var drop_burst_duration := 0.8                    ## Seconds for particles to fade out
-@export var drop_burst_spread := 50.0                     ## Max pixel distance particles travel
+@export var drop_burst_spread := 0.8                      ## Max world-unit distance particles travel
 @export var drop_burst_max_per_second := 6                ## Rate limit per board
 
 

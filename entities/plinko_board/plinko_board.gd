@@ -60,12 +60,13 @@ signal autodropper_adjust_requested(button_id: StringName, delta: int)
 signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type: Enums.CurrencyType, amount: int, multiplier: float)
 signal autodrop_failed(board_type: Enums.BoardType)
 signal coin_dropped
-signal drop_burst_requested(world_pos: Vector3, color: Color)
 signal prestige_coin_landed(coin: Coin, bucket: Bucket)
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
 var _drop_burst_times: Array[float] = []
+# Shared mesh for drop burst particles — built once in _ready, reused for every spawn.
+var _drop_burst_mesh: QuadMesh
 
 var _drop_timer_remaining: float = 0.0
 
@@ -73,6 +74,8 @@ func _ready() -> void:
 	space_between_pegs = ThemeProvider.theme.space_between_pegs
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
+
+	_drop_burst_mesh = QuadMesh.new()
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -466,8 +469,8 @@ func _drop_immediate_coin(coin: Coin) -> void:
 	_start_drop_timer()
 
 
-## Emits drop_burst_requested if the per-second rate limit hasn't been hit.
-## Called once per successful drop (not per multi-drop bonus coin).
+## Spawns a 3D drop burst at the drop point if the per-second rate limit hasn't
+## been hit. Called once per successful drop (not per multi-drop bonus coin).
 func _try_emit_drop_burst(drop_coin_type: Enums.CurrencyType) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var now: float = Time.get_ticks_msec() / 1000.0
@@ -477,8 +480,40 @@ func _try_emit_drop_burst(drop_coin_type: Enums.CurrencyType) -> void:
 	if _drop_burst_times.size() >= t.drop_burst_max_per_second:
 		return
 	_drop_burst_times.append(now)
-	var world_pos: Vector3 = to_global(Vector3(0, vertical_spacing + 0.2, 0))
-	drop_burst_requested.emit(world_pos, t.get_coin_color(drop_coin_type))
+	var local_pos := Vector3(0, vertical_spacing + 0.2, 0)
+	_spawn_drop_burst_3d(local_pos, t.get_coin_color(drop_coin_type))
+
+
+## Radial burst of small 3D spheres scattering outward in the board's XY plane
+## (the face the camera sees). Each particle gets its own material so alpha can
+## animate independently. Particles are children of the board, so they move and
+## scale with it automatically.
+func _spawn_drop_burst_3d(local_pos: Vector3, color: Color) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var particle_size: float = t.drop_burst_particle_size
+	_drop_burst_mesh.size = Vector2(particle_size, particle_size)
+	for i in t.drop_burst_particle_count:
+		var particle := MeshInstance3D.new()
+		particle.mesh = _drop_burst_mesh
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		particle.material_override = mat
+		particle.position = local_pos
+		add_child(particle)
+
+		var angle: float = randf() * TAU
+		var distance: float = t.drop_burst_spread * randf_range(0.5, 1.0)
+		var target: Vector3 = local_pos + Vector3(cos(angle) * distance, sin(angle) * distance, 0.0)
+		var duration: float = t.drop_burst_duration * randf_range(0.7, 1.0)
+
+		var tween := particle.create_tween().set_parallel()
+		tween.tween_property(particle, "position", target, duration) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(mat, "albedo_color:a", 0.0, duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.chain().tween_callback(particle.queue_free)
 
 
 func _drop_from_queue() -> void:

@@ -62,7 +62,6 @@ func _ready() -> void:
 	PrestigeManager.prestige_phase_changed.connect(_on_prestige_phase_changed)
 	board_manager.board_switched.connect(_on_board_switched)
 	board_manager.board_unlocked.connect(_on_board_unlocked)
-	board_manager.drop_burst_requested.connect(level_section.spawn_drop_burst)
 	challenge_grouping_manager.group_switched.connect(_on_group_switched)
 	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked_for_nav)
 
