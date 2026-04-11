@@ -15,7 +15,7 @@ blocked_upgrades = Array[int]([0])
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
-bucket_groups = Array[PackedInt32Array]([PackedInt32Array(3), PackedInt32Array(2, 4), PackedInt32Array(1, 5), PackedInt32Array(0, 6)])
+bucket_groups = Array[PackedInt32Array]([PackedInt32Array(3), PackedInt32Array(2, 4), PackedInt32Array(1, 5), PackedInt32Array(0, 6), PackedInt32Array(1, 5), PackedInt32Array(2, 4), PackedInt32Array(3)])
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
