@@ -10,6 +10,7 @@ var _rewards_claimed: Dictionary = {}                 # challenge_id -> bool
 var _unlocks: Dictionary = {}                         # UnlockType -> bool
 var _starting_modifiers: Array[ChallengeRewardData] = []
 var _permanent_upgrades: Array[ChallengeRewardData] = []
+var challenges_ever_visited: bool = false
 
 
 func initialize(buttons: Array[ChallengeButton]) -> void:
@@ -164,6 +165,7 @@ func serialize() -> Dictionary:
 		"unlocks": unlocks_data,
 		"modifiers": modifiers_data,
 		"permanent_upgrades": perm_upgrades_data,
+		"challenges_ever_visited": challenges_ever_visited,
 	}
 
 
@@ -205,3 +207,5 @@ func deserialize(data: Dictionary) -> void:
 		mod.modifier_amount = mod_dict.get("modifier_amount", 1)
 		mod.board_type = mod_dict.get("board_type", 0)
 		_permanent_upgrades.append(mod)
+
+	challenges_ever_visited = data.get("challenges_ever_visited", false)

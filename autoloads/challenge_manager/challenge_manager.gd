@@ -25,6 +25,14 @@ func get_time_remaining() -> float:
 	return _tracker.time_remaining if _tracker else 0.0
 
 
+func get_total_drops() -> int:
+	return _tracker.get_total_drops() if _tracker else 0
+
+
+func get_time_taken() -> float:
+	return _tracker.get_time_taken() if _tracker else 0.0
+
+
 func has_failed() -> bool:
 	return _tracker._has_failed if _tracker else false
 
@@ -86,6 +94,13 @@ func _apply_starting_conditions() -> void:
 			var board := _get_board(condition.board_type)
 			if board:
 				board.drop_delay = condition.drop_delay
+
+	# Apply STARTING_MODIFIER rewards earned from previously-completed challenges.
+	# Other modifier types (MULTI_DROP, ADVANCED_COIN_MULTIPLIER, BUCKET_VALUE_PERCENT)
+	# are consumed directly by the board on setup via the ChallengeProgressManager getters.
+	for mod in ChallengeProgressManager.get_starting_modifiers():
+		if mod.modifier_type == ChallengeRewardData.ModifierType.STARTING_COINS:
+			CurrencyManager.add(mod.currency_type, int(mod.modifier_amount))
 
 
 func _setup_survive(objective: Survive) -> void:

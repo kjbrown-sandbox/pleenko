@@ -53,7 +53,7 @@ var _coin_mesh_basis: Basis = Basis.IDENTITY
 
 signal board_rebuilt
 signal autodropper_adjust_requested(button_id: StringName, delta: int)
-signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type: Enums.CurrencyType, amount: int)
+signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type: Enums.CurrencyType, amount: int, multiplier: float)
 signal autodrop_failed(board_type: Enums.BoardType)
 signal coin_dropped
 signal prestige_coin_landed(coin: Coin, bucket: Bucket)
@@ -131,7 +131,23 @@ func _format_cost_text(costs: Array) -> String:
 
 func _on_drop_main_hover() -> void:
 	_drop_main.pulse_main(1.005)
-	_drop_tooltip.update_and_show("Cost: %s\nHotkey: SPACE" % _format_cost_text(_get_drop_costs()))
+	var costs := _get_drop_costs()
+	# When the player can't afford and isn't just waiting on cooldown, show a
+	# red "Needs X" tooltip listing the missing currency.
+	if not is_waiting and not _can_afford(costs):
+		_drop_tooltip.update_and_show_colored("Needs %s" % _format_missing_cost_text(costs), Color.RED)
+	else:
+		_drop_tooltip.update_and_show("Cost: %s\nHotkey: SPACE" % _format_cost_text(costs))
+
+
+func _format_missing_cost_text(costs: Array) -> String:
+	var parts: PackedStringArray = []
+	for cost in costs:
+		var balance: int = CurrencyManager.get_balance(cost[0])
+		var missing: int = cost[1] - balance
+		if missing > 0:
+			parts.append("%s %s" % [FormatUtils.format_number(missing), FormatUtils.currency_name(cost[0], false)])
+	return ", ".join(parts)
 
 
 func _on_drop_advanced_hover() -> void:
@@ -148,15 +164,13 @@ func _on_drop_side_hover(text: String) -> void:
 
 
 func _process(delta: float) -> void:
-	# TEMP: performance test — spam coins while holding spacebar
-	var hack_space := true
-	if hack_space and Input.is_action_pressed("drop_coin") and drop_section.visible:
-		is_waiting = false
-		_drop_timer_remaining = 0.0
-		request_drop()
-	elif is_waiting:
+	if is_waiting:
 		_drop_timer_remaining = maxf(0.0, _drop_timer_remaining - delta)
 		_update_drop_fill()
+		if _drop_timer_remaining == 0.0:
+			_on_drop_timer_done()
+	elif _is_hold_to_drop_advanced_active():
+		request_drop(_get_advanced_drop_costs(), advanced_bucket_type)
 	elif _is_hold_to_drop_active():
 		request_drop()
 
@@ -221,6 +235,13 @@ func _is_hold_to_drop_active() -> bool:
 		and drop_section.visible
 
 
+func _is_hold_to_drop_advanced_active() -> bool:
+	return Input.is_action_pressed("drop_unrefined") \
+		and ChallengeProgressManager.is_unlocked(ChallengeRewardData.UnlockType.HOLD_TO_DROP) \
+		and drop_section.visible \
+		and _drop_advanced.visible
+
+
 # --- Coin MultiMesh management ---
 
 func _allocate_coin_multimesh(coin: Coin) -> void:
@@ -247,6 +268,18 @@ func _release_coin_multimesh(coin: Coin) -> void:
 func eject_coin_from_multimesh(coin: Coin) -> void:
 	_release_coin_multimesh(coin)
 	coin.set_mesh_visible(true)
+
+
+## Toggles visibility of all coins on this board (in-flight, queued, prestige).
+## Pegs and buckets stay visible. Used by BoardManager to hide inactive boards' coins.
+func set_coins_visible(vis: bool) -> void:
+	if _coin_multimesh_instance:
+		_coin_multimesh_instance.visible = vis
+	for coin in _active_coin_indices.keys():
+		if is_instance_valid(coin):
+			coin.visible = vis
+	if coin_queue:
+		coin_queue.visible = vis
 
 
 func _grow_coin_multimesh() -> void:
@@ -302,7 +335,9 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	if not _can_afford(costs):
 		return
 
-	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
+	# Multi-drop count is per-color (the coin's native board), not per the board it's
+	# being dropped on. Raw orange dropped on gold uses orange's multi-drop level, etc.
+	var coin_multi_drop: int = _get_multi_drop_for_coin_type(drop_coin_type)
 
 	# First coin — normal queue/immediate path (pays cost once)
 	var coin: Coin = CoinScene.instantiate()
@@ -324,13 +359,22 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	# Multi-drop: first coin pays the cost (above). Bonus coins from prestige/challenges
 	# are free and staggered so they don't all land in the same bucket simultaneously.
 	var mult: float = advanced_coin_multiplier if drop_coin_type == advanced_bucket_type else 1.0
-	for i in range(1, multi_drop_count):
+	for i in range(1, coin_multi_drop):
 		var tween := create_tween()
 		tween.tween_interval(i * MULTI_DROP_STAGGER)
 		tween.tween_callback(force_drop_coin.bind(drop_coin_type, mult))
 
-	if multi_drop_count > 1:
-		_show_multi_drop_label(multi_drop_count)
+	if coin_multi_drop > 1:
+		_show_multi_drop_label(coin_multi_drop)
+
+
+## Returns the multi-drop count for a specific coin color, looked up from that
+## coin's native board (not necessarily the current board). Raw orange always
+## uses orange's multi-drop, even when dropped on gold.
+func _get_multi_drop_for_coin_type(coin_type: Enums.CurrencyType) -> int:
+	var tier := TierRegistry.get_tier_for_currency(coin_type)
+	var native_board: Enums.BoardType = tier.board_type if tier else board_type
+	return PrestigeManager.get_multi_drop(native_board) + ChallengeProgressManager.get_bonus_multi_drop(native_board)
 
 
 ## Returns the costs to drop a normal coin on this board.
@@ -385,9 +429,6 @@ func _drop_from_queue() -> void:
 func _start_drop_timer() -> void:
 	is_waiting = true
 	_drop_timer_remaining = drop_delay
-	var tween := create_tween()
-	tween.tween_interval(drop_delay)
-	tween.tween_callback(_on_drop_timer_done)
 
 
 func _on_drop_timer_done() -> void:
@@ -442,7 +483,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var amount: int = roundi(bucket.value * coin.multiplier)
 	if not coin.is_prestige_coin:
 		CurrencyManager.add(bucket.currency_type, amount)
-		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount)
+		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
 	bucket.pulse()
 	if upgrade_section.visible:
 		AudioManager.play_bucket_hit()
@@ -553,6 +594,15 @@ func _show_advanced_drop_bar() -> void:
 	_drop_advanced.main_mouse_entered.connect(_on_drop_advanced_hover)
 	_drop_advanced.main_mouse_exited.connect(_on_drop_hover_exit)
 	_drop_advanced.side_button_hover.connect(_on_drop_side_hover)
+
+	# B key shortcut for advanced drop
+	var adv_shortcut := Shortcut.new()
+	var adv_key := InputEventAction.new()
+	adv_key.action = "drop_unrefined"
+	adv_shortcut.events = [adv_key]
+	_drop_advanced.main_button.shortcut = adv_shortcut
+	_drop_advanced.main_button.shortcut_in_tooltip = false
+
 	_drop_advanced.visible = true
 	var adv_id := StringName("%s_ADVANCED" % Enums.BoardType.keys()[board_type])
 	_drop_buttons[adv_id] = _drop_advanced
@@ -665,6 +715,7 @@ func build_board() -> void:
 		var pct_bonus := ChallengeProgressManager.get_bucket_value_percent_bonus(board_type)
 		if pct_bonus > 0.0:
 			value = roundi(value * (1.0 + pct_bonus))
+		bucket.is_prestige_bucket = _will_trigger_prestige(bucket_currency)
 		buckets_container.add_child(bucket)
 		bucket.setup(bucket_currency, Vector3(i * space_between_pegs, 0, 0), value)
 

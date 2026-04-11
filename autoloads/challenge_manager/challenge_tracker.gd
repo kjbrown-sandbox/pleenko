@@ -23,6 +23,14 @@ var _has_failed: bool = false
 var _timer_started: bool = false
 
 
+func get_total_drops() -> int:
+	return _total_drops
+
+
+func get_time_taken() -> float:
+	return challenge.time_limit_seconds - time_remaining if challenge else 0.0
+
+
 func setup(_challenge: ChallengeData, _board_manager: BoardManager) -> void:
 	challenge = _challenge
 	board_manager = _board_manager
@@ -91,15 +99,16 @@ func _on_time_up() -> void:
 
 # ── Coin landing ─────────────────────────────────────────────────
 
-func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_type: Enums.CurrencyType, _amount: int) -> void:
+func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_type: Enums.CurrencyType, _amount: int, multiplier: float) -> void:
 	if _has_failed:
 		return
 	_total_drops += 1
 
-	# Track bucket hits
+	# Track bucket hits — multiplier coins count as round(multiplier) hits (min 1)
+	var hit_count: int = maxi(1, roundi(multiplier))
 	var key := _bucket_key(board_type, bucket_index)
 	var first_hit := not _bucket_hits.has(key)
-	_bucket_hits[key] = _bucket_hits.get(key, 0) + 1
+	_bucket_hits[key] = _bucket_hits.get(key, 0) + hit_count
 	_group_hits[key] = true
 
 	# Mark bucket visually for LandInEveryBucket objectives

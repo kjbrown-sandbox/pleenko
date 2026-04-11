@@ -51,6 +51,10 @@ func _update_progress() -> void:
 	_progress_label.visible = progress != ""
 
 
+func refresh_progress() -> void:
+	_update_progress()
+
+
 func show_result(text: String) -> void:
 	_is_running = false
 	_result_label.text = text

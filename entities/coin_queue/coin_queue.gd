@@ -45,6 +45,9 @@ func enqueue(coin: Coin) -> void:
 	coin.position = _slot_position(slot_index)
 	coin.rotation = coin_rotation
 	add_child(coin)
+	# Ensure visuals (including halo) are applied — the coin_type setter skips
+	# _apply_visuals() before _ready, and the queue path doesn't re-trigger it.
+	coin._apply_visuals()
 	_coins.append(coin)
 
 

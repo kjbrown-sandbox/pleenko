@@ -2,6 +2,7 @@ extends Node3D
 
 const OptionsDialogScript := preload("res://entities/options_dialog/options_dialog.gd")
 const ComingSoonOverlayScript := preload("res://entities/coming_soon_overlay/coming_soon_overlay.gd")
+const ChallengeCompleteDialogScene := preload("res://entities/challenge_complete_dialog/challenge_complete_dialog.tscn")
 
 ## Demo lockdown toggle. When true, the red board and orange/red challenge
 ## groups are blocked behind a "More coming soon!" overlay. Toggle from the
@@ -25,9 +26,9 @@ const ComingSoonOverlayScript := preload("res://entities/coming_soon_overlay/com
 
 var _options_dialog: CanvasLayer
 var _coming_soon_overlay: CanvasLayer
+var _challenge_complete_dialog: CanvasLayer
 
 # Nav arrow blink state
-var _challenges_ever_visited := false
 var _boards_with_unseen_upgrades: Dictionary = {}  # BoardType -> true
 var _arrow_blink_tweens: Dictionary = {}  # Control -> Tween
 
@@ -51,6 +52,7 @@ func _ready() -> void:
 	_setup_gear_button()
 	_setup_options_dialog()
 	_setup_coming_soon_overlay()
+	_setup_challenge_complete_dialog()
 	_setup_prestige_animator()
 
 	_setup_vignette()
@@ -102,14 +104,64 @@ func _on_challenge_completed() -> void:
 		if btn.challenge == challenge:
 			next_ids = btn.next_challenges
 			break
+
+	# Capture stats from the tracker BEFORE clearing it
+	var stats := {
+		"time_taken": ChallengeManager.get_time_taken(),
+		"coins_dropped": ChallengeManager.get_total_drops(),
+	}
+
 	ChallengeProgressManager.complete_challenge(challenge.id, next_ids, challenge.rewards)
 	SaveManager.save_challenge_progress()
+
+	# Build reward summary lines from the rewards list
+	var reward_lines: Array[String] = []
+	for reward in challenge.rewards:
+		reward_lines.append(_format_reward(reward))
+
+	# Refresh the HUD progress label one more time so the final n/n shows before
+	# clear_challenge() nulls the tracker.
+	challenge_hud.refresh_progress()
 	ChallengeManager.clear_challenge()
 	challenge_hud.show_result("Challenge Complete!")
 	await get_tree().create_timer(2.0).timeout
+
+	_challenge_complete_dialog.show_with_results(stats, reward_lines)
+	await _challenge_complete_dialog.closed
+
 	SaveManager.reset_state()
 	ThemeProvider.set_theme(ThemeProvider.Kind.NORMAL)
 	get_tree().reload_current_scene()
+
+
+func _format_reward(reward: ChallengeRewardData) -> String:
+	match reward.type:
+		ChallengeRewardData.RewardType.UNLOCK:
+			return "Unlocked: %s" % ChallengeRewardData.UnlockType.keys()[reward.unlock_type].capitalize().replace("_", " ")
+		ChallengeRewardData.RewardType.STARTING_MODIFIER:
+			return _format_starting_modifier(reward)
+		ChallengeRewardData.RewardType.PERMANENT_UPGRADE:
+			var board_name: String = Enums.BoardType.keys()[reward.board_type].capitalize()
+			var upgrade_name: String = Enums.UpgradeType.keys()[reward.upgrade_type].capitalize().replace("_", " ")
+			return "+%d %s level (%s)" % [int(reward.modifier_amount), upgrade_name, board_name]
+	return ""
+
+
+func _format_starting_modifier(reward: ChallengeRewardData) -> String:
+	var board_name: String = Enums.BoardType.keys()[reward.board_type].capitalize()
+	match reward.modifier_type:
+		ChallengeRewardData.ModifierType.STARTING_COINS:
+			var currency_name: String = FormatUtils.currency_name(reward.currency_type, false)
+			return "+%d starting %s" % [int(reward.modifier_amount), currency_name]
+		ChallengeRewardData.ModifierType.MULTI_DROP:
+			return "+%d multi-drop (%s)" % [int(reward.modifier_amount), board_name]
+		ChallengeRewardData.ModifierType.ADVANCED_COIN_MULTIPLIER:
+			return "+%.1fx advanced multiplier (%s)" % [reward.modifier_amount, board_name]
+		ChallengeRewardData.ModifierType.BUCKET_VALUE_PERCENT:
+			return "+%d%% bucket value (%s)" % [int(reward.modifier_amount * 100), board_name]
+		ChallengeRewardData.ModifierType.STARTING_AUTODROPPERS:
+			return "+%d starting autodroppers (%s)" % [int(reward.modifier_amount), board_name]
+	return ""
 
 
 func _on_challenge_failed(reason: String) -> void:
@@ -196,6 +248,11 @@ func _setup_coming_soon_overlay() -> void:
 	add_child(_coming_soon_overlay)
 
 
+func _setup_challenge_complete_dialog() -> void:
+	_challenge_complete_dialog = ChallengeCompleteDialogScene.instantiate()
+	add_child(_challenge_complete_dialog)
+
+
 ## Demo lockdown: shows the "More coming soon!" overlay when the active board
 ## or challenge group is one of the locked tiers. No-op when demo_mode is off.
 func _update_lockdown_overlay() -> void:
@@ -233,7 +290,7 @@ func _go_back_to_board() -> void:
 
 func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 	if new_mode == ModeManager.Mode.CHALLENGES:
-		_challenges_ever_visited = true
+		ChallengeProgressManager.challenges_ever_visited = true
 		coin_values.visible = false
 		level_section.visible = false
 		game_timer.visible = false
@@ -322,7 +379,7 @@ func _update_nav_arrows() -> void:
 
 func _update_nav_arrow_blinks() -> void:
 	# Challenges down arrow: blink if challenges are unlocked but never visited
-	var should_blink_down := challenges_down_icon.visible and not _challenges_ever_visited
+	var should_blink_down := challenges_down_icon.visible and not ChallengeProgressManager.challenges_ever_visited
 	_set_arrow_blink(challenges_down_icon, should_blink_down)
 
 	# Right arrow: blink if any board to the right has unseen upgrades

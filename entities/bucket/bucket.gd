@@ -5,12 +5,13 @@ extends Node3D
 	set(v):
 		value = v
 		if is_node_ready():
-			_label.text = str(value)
+			_label.text = _label_text()
 
 const SkullTexture := preload("res://assets/icons/skull.png")
 const SpriteTintShader := preload("res://entities/bucket/sprite_tint.gdshader")
 
 var currency_type: Enums.CurrencyType
+var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
 
@@ -19,7 +20,11 @@ var _is_hit: bool = false
 
 
 func _ready() -> void:
-	_label.text = str(value)
+	_label.text = _label_text()
+
+
+func _label_text() -> String:
+	return "?" if is_prestige_bucket else str(value)
 
 
 func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) -> void:

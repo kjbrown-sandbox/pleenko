@@ -80,6 +80,15 @@ func set_text(new_text: String) -> void:
 
 func update_and_show(new_text: String) -> void:
 	_label.text = new_text
+	_label.add_theme_color_override("font_color", ThemeProvider.theme.body_text_color)
+	show_tooltip()
+
+
+## Same as update_and_show but with a custom font color override. Use this for
+## error/warning tooltips like "Needs 100 raw orange" in red.
+func update_and_show_colored(new_text: String, color: Color) -> void:
+	_label.text = new_text
+	_label.add_theme_color_override("font_color", color)
 	show_tooltip()
 
 

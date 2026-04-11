@@ -88,12 +88,14 @@ func switch_board(index: int) -> void:
 	if index == _active_index:
 		return
 
-	# Hide old board's UI, show new board's UI
+	# Hide old board's UI + coins, show new board's UI + coins
 	_boards[_active_index].upgrade_section.visible = false
 	_boards[_active_index].drop_section.visible = false
+	_boards[_active_index].set_coins_visible(false)
 	_active_index = index
 	_boards[_active_index].upgrade_section.visible = true
 	_boards[_active_index].drop_section.visible = true
+	_boards[_active_index].set_coins_visible(true)
 
 	_tween_camera_to_active_board()
 	board_switched.emit(_boards[_active_index])
@@ -117,10 +119,11 @@ func _spawn_board(type: Enums.BoardType) -> void:
 	for i in _boards.size():
 		_boards[i].position = Vector3(i * board_spacing, 0, 0)
 
-	# Only the active board's UI should be visible
+	# Only the active board's UI + coins should be visible
 	if insert_at != _active_index:
 		board.upgrade_section.visible = false
 		board.drop_section.visible = false
+		board.set_coins_visible(false)
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
@@ -153,6 +156,10 @@ func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap:
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 	for reward in rewards:
 		if reward.type != RewardData.RewardType.DROP_COINS:
+			continue
+		# Don't yank the camera to a different board for advanced/raw coin drops —
+		# the player should stay on whatever they're looking at.
+		if TierRegistry.is_raw_currency(reward.coin_type):
 			continue
 		if reward.target_board != _boards[_active_index].board_type:
 			_switch_to_board_type(reward.target_board)

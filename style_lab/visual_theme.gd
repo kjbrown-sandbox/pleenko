@@ -318,7 +318,8 @@ func apply_button_theme(button: Button, currency_type: int = -1) -> void:
 	var border_col := get_coin_color(currency_type) if currency_type >= 0 else button_border_color
 	button.add_theme_stylebox_override("normal", _make_stylebox(enabled_col, border_col))
 	button.add_theme_stylebox_override("hover", _make_stylebox(hovered_col, border_col))
-	button.add_theme_stylebox_override("pressed", _make_stylebox(hovered_col, border_col))
+	# Pressed: solid flash matching normal text color for clear click feedback.
+	button.add_theme_stylebox_override("pressed", _make_stylebox(normal_text_color, normal_text_color))
 	button.add_theme_stylebox_override("disabled", _make_stylebox(disabled_col, border_col.darkened(0.3)))
 	button.add_theme_font_size_override("font_size", button_font_size)
 	var text_col := bg_shade_6 if currency_type >= 0 else button_text_color

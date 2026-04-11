@@ -6,6 +6,7 @@
 [node name="Icon" type="TextureButton" unique_id=824553164]
 texture_filter = 1
 custom_minimum_size = Vector2(32, 32)
+focus_mode = 0
 texture_normal = ExtResource("1_24bdt")
 ignore_texture_size = true
 stretch_mode = 0

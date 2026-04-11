@@ -14,6 +14,12 @@ var _particle_overlay: Control
 var _board_manager: Node
 var _camera: Camera3D
 
+# Shake re-roll throttle: hold the same offset for this many seconds before
+# generating a new one. Lower frequency = less jittery, more readable.
+const SHAKE_REROLL_INTERVAL: float = 0.06
+var _shake_reroll_accum: float = 0.0
+var _shake_dy: float = 0.0
+
 
 func setup(board_manager: Node, cam: Camera3D) -> void:
 	_board_manager = board_manager
@@ -48,18 +54,21 @@ func _store_base_offsets() -> void:
 	_base_offset_bottom = hbox.offset_bottom
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not _shaking:
 		set_process(false)
 		return
-	var t: VisualTheme = ThemeProvider.theme
-	var progress: float = LevelManager.get_progress()
-	var shake_range: float = (progress - t.level_bar_shake_threshold) / (1.0 - t.level_bar_shake_threshold)
-	var min_intensity: float = t.level_bar_shake_max_intensity * t.level_bar_shake_min_pct
-	var intensity: float = lerpf(min_intensity, t.level_bar_shake_max_intensity, clampf(shake_range, 0.0, 1.0))
-	var dy: float = randf_range(-intensity, intensity)
-	hbox.offset_top = _base_offset_top + dy
-	hbox.offset_bottom = _base_offset_bottom + dy
+	_shake_reroll_accum += delta
+	if _shake_reroll_accum >= SHAKE_REROLL_INTERVAL:
+		_shake_reroll_accum = 0.0
+		var t: VisualTheme = ThemeProvider.theme
+		var progress: float = LevelManager.get_progress()
+		var shake_range: float = (progress - t.level_bar_shake_threshold) / (1.0 - t.level_bar_shake_threshold)
+		var min_intensity: float = t.level_bar_shake_max_intensity * t.level_bar_shake_min_pct
+		var intensity: float = lerpf(min_intensity, t.level_bar_shake_max_intensity, clampf(shake_range, 0.0, 1.0))
+		_shake_dy = randf_range(-intensity, intensity)
+	hbox.offset_top = _base_offset_top + _shake_dy
+	hbox.offset_bottom = _base_offset_bottom + _shake_dy
 
 
 func _on_level_changed(_new_level: int) -> void:
@@ -126,7 +135,13 @@ func _get_reward_targets(rewards: Array[RewardData]) -> Array[Vector2]:
 		match reward.type:
 			RewardData.RewardType.DROP_COINS:
 				return [_get_coin_drop_target(reward.target_board)]
-			RewardData.RewardType.UNLOCK_UPGRADE, \
+			RewardData.RewardType.UNLOCK_UPGRADE:
+				# In challenges where this upgrade is blocked, the board drops a
+				# coin instead — aim particles at the coin spawn instead of the
+				# (hidden) upgrade section.
+				if ChallengeManager.is_active_challenge and not ChallengeManager.is_upgrade_allowed(reward.upgrade_type):
+					return [_get_coin_drop_target(reward.board_type)]
+				return [_get_upgrade_section_target(reward.upgrade_type)]
 			RewardData.RewardType.UNLOCK_AUTODROPPER, \
 			RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER:
 				return [_get_upgrade_section_target()]
@@ -135,9 +150,17 @@ func _get_reward_targets(rewards: Array[RewardData]) -> Array[Vector2]:
 	return []
 
 
-func _get_upgrade_section_target() -> Vector2:
+## If upgrade_type is provided and the row already exists (e.g., a level-up that
+## upgrades an existing row rather than unlocking a new one), target that row's
+## center. Otherwise target the bottom of the upgrades container, which is where
+## the next new row will materialize.
+func _get_upgrade_section_target(upgrade_type: int = -1) -> Vector2:
 	var board = _board_manager.get_active_board()
-	var container: VBoxContainer = board.upgrade_section.upgrades_container
+	var section = board.upgrade_section
+	if upgrade_type >= 0 and section._rows.has(upgrade_type):
+		var row: Control = section._rows[upgrade_type]
+		return row.global_position + row.size * 0.5
+	var container: VBoxContainer = section.upgrades_container
 	return container.global_position + Vector2(container.size.x * 0.5, container.size.y)
 
 
