@@ -473,6 +473,8 @@ func _drop_immediate_coin(coin: Coin) -> void:
 ## been hit. Called once per successful drop (not per multi-drop bonus coin).
 func _try_emit_drop_burst(drop_coin_type: Enums.CurrencyType) -> void:
 	var t: VisualTheme = ThemeProvider.theme
+	if not t.drop_burst_enabled:
+		return
 	var now: float = Time.get_ticks_msec() / 1000.0
 	# Prune entries older than 1 second
 	while not _drop_burst_times.is_empty() and now - _drop_burst_times[0] >= 1.0:
@@ -924,21 +926,24 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 	var glow_color := t.get_coin_color(currency_type)
 
 	# Set instance color to flash color and register for animated fade-back
-	_peg_multimesh_instance.multimesh.set_instance_color(closest_idx, glow_color)
-	_active_flashes[closest_idx] = {
-		"start_color": glow_color,
-		"elapsed": 0.0,
-		"duration": t.peg_glow_duration,
-	}
+	if t.peg_flash_enabled:
+		_peg_multimesh_instance.multimesh.set_instance_color(closest_idx, glow_color)
+		_active_flashes[closest_idx] = {
+			"start_color": glow_color,
+			"elapsed": 0.0,
+			"duration": t.peg_glow_duration,
+		}
 
-	# Scale pulse on the peg
-	_active_peg_pulses[closest_idx] = {
-		"elapsed": 0.0,
-		"duration": t.bucket_pulse_duration,
-	}
+	if t.peg_pulse_enabled:
+		_active_peg_pulses[closest_idx] = {
+			"elapsed": 0.0,
+			"duration": t.bucket_pulse_duration,
+		}
 
 	if t.peg_glow_halo_enabled:
 		_spawn_peg_halo(_peg_positions[closest_idx], glow_color, t)
+	if t.peg_ring_enabled:
+		_spawn_peg_ring(_peg_positions[closest_idx], _peg_base_color, t)
 
 
 func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) -> void:
@@ -960,6 +965,34 @@ func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) 
 	halo_tween.tween_property(halo_mat, "shader_parameter/opacity_mult", 0.0, t.peg_glow_duration) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	halo_tween.tween_callback(halo.queue_free)
+
+
+func _spawn_peg_ring(peg_local_pos: Vector3, ring_color: Color, t: VisualTheme) -> void:
+	var ring_shader: Shader = preload("res://entities/plinko_board/peg_ring.gdshader")
+	var ring := MeshInstance3D.new()
+	var ring_mesh := QuadMesh.new()
+	var quad_size: float = t.peg_ring_max_radius * 2.0
+	ring_mesh.size = Vector2(quad_size, quad_size)
+	ring.mesh = ring_mesh
+	var mat := ShaderMaterial.new()
+	mat.shader = ring_shader
+	mat.set_shader_parameter("ring_color", ring_color)
+	mat.set_shader_parameter("ring_thickness", t.peg_ring_thickness)
+	mat.set_shader_parameter("ring_radius", 0.0)
+	mat.set_shader_parameter("opacity_mult", 0.0)
+	ring.material_override = mat
+	ring.position = Vector3(peg_local_pos.x, peg_local_pos.y, peg_local_pos.z - 0.04)
+	add_child(ring)
+
+	var duration: float = t.peg_ring_duration
+	var max_opacity: float = t.peg_ring_max_opacity
+	var tween := create_tween()
+	tween.tween_method(
+		func(p: float) -> void:
+			mat.set_shader_parameter("ring_radius", p)
+			mat.set_shader_parameter("opacity_mult", sin(p * PI) * max_opacity),
+		0.0, 1.0, duration)
+	tween.tween_callback(ring.queue_free)
 
 
 func increase_queue_capacity() -> void:

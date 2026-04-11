@@ -187,6 +187,17 @@ const coin_shape := CoinShape.CYLINDER
 @export var peg_glow_halo_enabled := false                        # soft radial halo around pegs when they light up
 @export var peg_glow_halo_radius := 1.5
 @export var peg_glow_halo_opacity := 0.06
+@export var peg_flash_enabled := true                             # peg briefly takes coin color on contact
+@export var peg_pulse_enabled := true                             # peg scale-pulse on coin contact
+@export var bucket_pulse_enabled := true                          # bucket scale-pulse on receive
+@export var drop_burst_enabled := true                            # particle burst at drop point
+
+# Peg rings — expanding ripple at each peg hit, alternative/complement to the glow halo.
+@export var peg_ring_enabled := false
+@export var peg_ring_max_radius := 0.5                            # world units — how far the ring reaches
+@export var peg_ring_duration := 0.9                              # seconds
+@export var peg_ring_max_opacity := 0.35                          # peak alpha at sine apex
+@export var peg_ring_thickness := 0.06                            # UV-space ring half-width
 
 # ── Vignette ─────────────────────────────────────────────────────────
 @export_group("Vignette")
