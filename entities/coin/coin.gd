@@ -16,6 +16,9 @@ var multiplier: float = 1.0
 ## When true, the coin won't be freed on landing — the PrestigeAnimator handles its lifecycle.
 var is_prestige_coin: bool = false
 var _active_tweens: Array[Tween] = []
+## Seconds remaining on the impact-squash recovery animation. 0 = no squash.
+## Read by PlinkoBoard._sync_coin_multimesh to derive the per-coin scale.
+var impact_squash_remaining: float = 0.0
 
 ## MultiMesh rendering state
 var multimesh_index: int = -1
@@ -103,6 +106,9 @@ func _bounce_or_despawn() -> void:
 	else:
 		board.flash_nearest_peg(global_position, coin_type)
 		var t: VisualTheme = ThemeProvider.theme
+		# Trigger the impact squash on peg contact.
+		if t.coin_impact_squash_enabled:
+			impact_squash_remaining = t.coin_impact_squash_duration
 		var direction = 1 if randf() < 0.5 else -1
 		var next_x: float = position.x + direction * board.space_between_pegs / 2.0
 		var next_y: float = position.y - board.vertical_spacing

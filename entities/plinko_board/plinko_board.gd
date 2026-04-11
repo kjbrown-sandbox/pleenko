@@ -199,7 +199,7 @@ func _process(delta: float) -> void:
 		_update_peg_pulses(delta)
 
 	if not _active_coin_indices.is_empty():
-		_sync_coin_multimesh()
+		_sync_coin_multimesh(delta)
 
 
 func _update_peg_flashes(delta: float) -> void:
@@ -329,13 +329,33 @@ func _grow_coin_multimesh() -> void:
 		_coin_free_indices.append(i)
 
 
-func _sync_coin_multimesh() -> void:
+func _sync_coin_multimesh(delta: float) -> void:
 	var mm := _coin_multimesh_instance.multimesh
+	var t: VisualTheme = ThemeProvider.theme
+	var impact_duration: float = t.coin_impact_squash_duration
+	var impact_peak: Vector3 = t.coin_impact_squash_scale
+	var coin_radius: float = t.coin_radius
 	for coin: Coin in _active_coin_indices:
 		if not is_instance_valid(coin):
 			continue
 		var idx: int = _active_coin_indices[coin]
-		mm.set_instance_transform(idx, Transform3D(_coin_mesh_basis, coin.position))
+
+		# Impact squash: lerp from peak scale back to identity over the recovery
+		# duration. Triggered by Coin._bounce_or_despawn on peg contact.
+		var basis: Basis = _coin_mesh_basis
+		var pos: Vector3 = coin.position
+		if coin.impact_squash_remaining > 0.0 and impact_duration > 0.0:
+			coin.impact_squash_remaining = maxf(0.0, coin.impact_squash_remaining - delta)
+			var k: float = coin.impact_squash_remaining / impact_duration  # 1=peak, 0=done
+			var scale: Vector3 = Vector3.ONE.lerp(impact_peak, k)
+			# Apply scale in world space (left-multiply) so the squash flattens
+			# along world Y regardless of how _coin_mesh_basis rotates the mesh.
+			basis = Basis.IDENTITY.scaled(scale) * _coin_mesh_basis
+			# Sink the coin so its bottom edge stays planted on the peg as it
+			# squashes — otherwise the squash makes it look like it's hovering.
+			pos.y -= coin_radius * (1.0 - scale.y)
+
+		mm.set_instance_transform(idx, Transform3D(basis, pos))
 		mm.set_instance_color(idx, coin.cached_color)
 
 

@@ -132,6 +132,16 @@ const coin_shape := CoinShape.CYLINDER
 @export var coin_silhouette := false                              # near-black coin with glow behind
 @export var coin_silhouette_color := Color(0.06, 0.06, 0.06)
 
+# Impact squash — coins flatten briefly when they hit a peg, then snap back
+# to round. Pure cartoon punch, not velocity-driven.
+@export_subgroup("Impact Squash")
+@export var coin_impact_squash_enabled := true
+## Peak deformation at the moment of contact. The default flattens vertically
+## (Y < 1) and bulges horizontally (X/Z > 1) for a "splat" feel.
+@export var coin_impact_squash_scale: Vector3 = Vector3(1.25, 0.75, 1.4)
+## Seconds to recover from peak squash back to identity scale.
+@export var coin_impact_squash_duration: float = 0.12
+
 # ── Buttons ──────────────────────────────────────────────────────────
 @export_group("Buttons")
 @export var button_enabled_source: Palette = Palette.BG_4
