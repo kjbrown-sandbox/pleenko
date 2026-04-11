@@ -168,7 +168,7 @@ func _refresh_needs_tooltip() -> void:
 func _on_drop_advanced_hover() -> void:
 	_drop_advanced.pulse_main(1.005)
 	_drop_button_hovered = true
-	_drop_tooltip.update_and_show("Cost: %s" % _format_cost_text(_get_advanced_drop_costs()))
+	_drop_tooltip.update_and_show("Cost: %s\nHotkey: B" % _format_cost_text(_get_advanced_drop_costs()))
 
 
 func _on_drop_hover_exit() -> void:
