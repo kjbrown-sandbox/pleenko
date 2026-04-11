@@ -345,6 +345,10 @@ func pulse_minus() -> void:
 func _on_plus_pressed() -> void:
 	if _plus_callback.is_valid():
 		_plus_callback.call()
+	# Re-emit hover info with fresh text so the tooltip reflects the post-purchase
+	# cost without requiring the player to mouse out and back in.
+	if _plus_hover_callback.is_valid():
+		side_button_hover.emit(_plus_hover_callback.call())
 	plus_pressed.emit()
 
 

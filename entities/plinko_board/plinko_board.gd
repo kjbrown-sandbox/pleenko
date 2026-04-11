@@ -36,6 +36,10 @@ var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
 var multi_drop_count: int = -1
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
+# True while the mouse is hovering either drop button — used by the tooltip
+# refresh logic so the persistent "Needs X" message is suppressed in favor of
+# the regular cost tooltip during hover.
+var _drop_button_hovered: bool = false
 
 # MultiMesh peg state
 var _peg_multimesh_instance: MultiMeshInstance3D
@@ -131,13 +135,10 @@ func _format_cost_text(costs: Array) -> String:
 
 func _on_drop_main_hover() -> void:
 	_drop_main.pulse_main(1.005)
-	var costs := _get_drop_costs()
-	# When the player can't afford and isn't just waiting on cooldown, show a
-	# red "Needs X" tooltip listing the missing currency.
-	if not is_waiting and not _can_afford(costs):
-		_drop_tooltip.update_and_show_colored("Needs %s" % _format_missing_cost_text(costs), Color.RED)
-	else:
-		_drop_tooltip.update_and_show("Cost: %s\nHotkey: SPACE" % _format_cost_text(costs))
+	_drop_button_hovered = true
+	# Hover always shows the regular cost tooltip, overriding any persistent
+	# "Needs X" message until the mouse exits.
+	_drop_tooltip.update_and_show("Cost: %s\nHotkey: SPACE" % _format_cost_text(_get_drop_costs()))
 
 
 func _format_missing_cost_text(costs: Array) -> String:
@@ -150,13 +151,31 @@ func _format_missing_cost_text(costs: Array) -> String:
 	return ", ".join(parts)
 
 
+## Persistent "Needs X" tooltip on the normal drop button — visible whenever
+## the player can't afford a drop and isn't just waiting on cooldown. Hidden
+## while the mouse is hovering either drop button (the hover handler shows
+## the regular cost tooltip instead).
+func _refresh_needs_tooltip() -> void:
+	if _drop_button_hovered:
+		return
+	var costs := _get_drop_costs()
+	if not is_waiting and not _can_afford(costs):
+		_drop_tooltip.update_and_show_colored("Needs %s" % _format_missing_cost_text(costs), ThemeProvider.theme.red_main)
+	else:
+		_drop_tooltip.hide_tooltip()
+
+
 func _on_drop_advanced_hover() -> void:
 	_drop_advanced.pulse_main(1.005)
+	_drop_button_hovered = true
 	_drop_tooltip.update_and_show("Cost: %s" % _format_cost_text(_get_advanced_drop_costs()))
 
 
 func _on_drop_hover_exit() -> void:
+	_drop_button_hovered = false
 	_drop_tooltip.hide_tooltip()
+	# Re-evaluate the persistent needs message after the hover ends.
+	_refresh_needs_tooltip()
 
 
 func _on_drop_side_hover(text: String) -> void:
@@ -468,6 +487,8 @@ func _update_drop_fill() -> void:
 		var can_drop_advanced: bool = _can_afford(_get_advanced_drop_costs()) and not show_cooldown
 		_drop_advanced.set_main_disabled(not can_drop_advanced)
 		_drop_advanced.apply_fill_colors(not can_drop_advanced)
+
+	_refresh_needs_tooltip()
 
 
 func on_coin_landed(coin: Coin) -> void:
