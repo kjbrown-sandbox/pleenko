@@ -255,6 +255,10 @@ const coin_shape := CoinShape.CYLINDER
 @export var drop_burst_spread := 0.8                      ## Max world-unit distance particles travel
 @export var drop_burst_max_per_second := 6                ## Rate limit per board
 
+# ── Audio ────────────────────────────────────────────────────────────
+@export_group("Audio")
+@export var audio_drums_enabled := false                  ## Lofi drum layer on drops and autodropper ticks
+
 
 # ── Palette resolver ─────────────────────────────────────────────────
 

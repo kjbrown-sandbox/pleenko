@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="VisualTheme" format=3 uid="uid://bnrlofjaj7q00"]
+
+[ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_fbp74"]
+[ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
+
+[resource]
+script = ExtResource("1_vt")
+bg_shade_7 = Color(0.19, 0.16, 0.13, 1)
+bg_shade_1 = Color(0.27, 0.22, 0.18, 1)
+bg_shade_2 = Color(0.39, 0.33, 0.27, 1)
+bg_shade_3 = Color(0.51, 0.44, 0.38, 1)
+bg_shade_4 = Color(0.63, 0.56, 0.49, 1)
+bg_shade_5 = Color(0.75, 0.69, 0.62, 1)
+bg_shade_6 = Color(0.86, 0.83, 0.77, 1)
+gold_main = Color(0.65, 0.55, 0.24, 1)
+gold_faded = Color(0.72, 0.64, 0.36, 1)
+orange_main = Color(0.65, 0.38, 0.22, 1)
+orange_faded = Color(0.78, 0.54, 0.38, 1)
+red_main = Color(0.58, 0.26, 0.26, 1)
+red_faded = Color(0.72, 0.4, 0.4, 1)
+violet_faded = Color(0.64, 0.46, 0.68, 1)
+blue_faded = Color(0.46, 0.56, 0.7, 1)
+green_faded = Color(0.5, 0.64, 0.44, 1)
+background_source = 5
+ambient_light_source = 3
+directional_light_source = 4
+hit_bucket_source = 1
+normal_text_source = 0
+body_text_source = 2
+overlay_opacity = 0.5
+prestige_flash_source = 15
+label_font = ExtResource("1_fbp74")
+button_enabled_source = 2
+button_disabled_source = 4
+button_hovered_source = 15
+button_font = ExtResource("1_fbp74")
+button_bg_source = 5
+button_fill_text_source = 5
+button_border_source = 2
+board_glow_opacity = 0.03
+peg_flash_enabled = false
+peg_ring_enabled = true
+audio_drums_enabled = true
+vignette_enabled = true
+vignette_radius = 0.7
+vignette_softness = 0.5

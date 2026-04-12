@@ -379,7 +379,7 @@ func has_in_flight_coins() -> bool:
 	return not _active_coin_indices.is_empty()
 
 
-func request_drop(costs: Array = [], coin_type: int = -1) -> void:
+func request_drop(costs: Array = [], coin_type: int = -1, is_manual: bool = true) -> void:
 	if ChallengeManager.is_active_challenge and ChallengeManager.has_failed():
 		return
 
@@ -415,6 +415,8 @@ func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	# below fire their own bursts via force_drop_coin. The per-board rate limit
 	# (drop_burst_max_per_second) naturally caps this during heavy drop storms.
 	_try_emit_drop_burst(drop_coin_type)
+	if is_manual:
+		AudioManager.play_manual_drop_drum(board_type)
 
 	# Multi-drop: first coin pays the cost (above). Bonus coins from prestige/challenges
 	# are free and staggered so they don't all land in the same bucket simultaneously.
@@ -1070,7 +1072,7 @@ func try_autodrop(is_advanced: bool) -> void:
 	var costs: Array = _get_advanced_drop_costs() if is_advanced else _get_drop_costs()
 	var coin_type: int = advanced_bucket_type if is_advanced else -1
 	if _can_afford(costs):
-		request_drop(costs, coin_type)
+		request_drop(costs, coin_type, false)
 	else:
 		autodrop_failed.emit(board_type)
 
