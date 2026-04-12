@@ -7,7 +7,7 @@ const ChallengeCompleteDialogScene := preload("res://entities/challenge_complete
 ## Demo lockdown toggle. When true, the red board and orange/red challenge
 ## groups are blocked behind a "More coming soon!" overlay. Toggle from the
 ## Inspector on the Main node to switch between demo and full play.
-@export var demo_mode: bool = true
+@export var demo_mode: bool = false
 
 @onready var board_manager: BoardManager = $BoardManager
 @onready var challenge_grouping_manager: ChallengeGroupingManager = $ChallengeGroupingManager
