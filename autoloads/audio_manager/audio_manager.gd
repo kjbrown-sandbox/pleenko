@@ -73,6 +73,25 @@ var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
 var _active_drones: Dictionary = {}  # String key -> { "idx": int, "timer": float }
 
+# ── Lofi drum system ─────────────────────────────────────────────────
+# Player drops pick randomly from a pool of snare/clap/rim variants.
+# Normal autodropper cycles through a pool of kick variants.
+# Advanced autodropper cycles through a pool of hat/rim variants, delayed
+# by 0.5s from the tick so it lands on the offbeat.
+const DRUM_POOL_PLAYER_VOLUME_DB := 2.0
+const DRUM_POOL_KICK_VOLUME_DB := 4.0
+const DRUM_POOL_HAT_VOLUME_DB := -2.0
+const DRUM_RAPID_FIRE_WINDOW := 0.25  # seconds — drops within this are attenuated
+const DRUM_RAPID_FIRE_ATTENUATION_DB := -6.0
+const ADVANCED_DRUM_OFFSET := 0.75  # seconds after the autodropper tick — half of 1.5s tick interval
+
+var _player_drum_players: Array[AudioStreamPlayer] = []  # random pick
+var _kick_drum_players: Array[AudioStreamPlayer] = []    # cycle
+var _hat_drum_players: Array[AudioStreamPlayer] = []     # cycle
+var _kick_rotation_idx: int = 0
+var _hat_rotation_idx: int = 0
+var _last_player_drum_time: float = -999.0
+
 # Bus indices (set in _ready)
 var _melody_bus_idx: int = -1
 var _click_bus_idx: int = -1
@@ -157,6 +176,50 @@ func _ready() -> void:
 		add_child(drone)
 		_drone_pool.append(drone)
 		_drone_free.append(i)
+
+	# ── Lofi drum pools ─────────────────────────────────────────────
+	# Player drops: snare, clap, rim shot — random pick per drop.
+	var player_drum_streams: Array[AudioStreamWAV] = [
+		_generate_snare(180.0, 0.18),
+		_generate_clap(0.2),
+		_generate_rim(400.0, 0.08),
+	]
+	for stream in player_drum_streams:
+		var p := AudioStreamPlayer.new()
+		p.stream = stream
+		p.bus = &"Click"
+		p.volume_db = DRUM_POOL_PLAYER_VOLUME_DB
+		add_child(p)
+		_player_drum_players.append(p)
+
+	# Normal autodropper: kick variants — rotating pattern.
+	# First = deep foundation. Second = noticeably thinner, higher-pitched,
+	# shorter — more of a ticky kick than a boomy one.
+	var kick_streams: Array[AudioStreamWAV] = [
+		_generate_kick(60.0, 0.22),      # deeper
+		_generate_kick(100.0, 0.09),     # thin & ticky
+	]
+	for stream in kick_streams:
+		var p := AudioStreamPlayer.new()
+		p.stream = stream
+		p.bus = &"Click"
+		p.volume_db = DRUM_POOL_KICK_VOLUME_DB
+		add_child(p)
+		_kick_drum_players.append(p)
+
+	# Advanced autodropper: single closed hat. Same sound every tick — light
+	# and consistent on the offbeat. If we add more variants here later,
+	# rotation still works because we reference the array by index.
+	var hat_streams: Array[AudioStreamWAV] = [
+		_generate_hat(6000.0, 0.05),     # closed
+	]
+	for stream in hat_streams:
+		var p := AudioStreamPlayer.new()
+		p.stream = stream
+		p.bus = &"Click"
+		p.volume_db = DRUM_POOL_HAT_VOLUME_DB
+		add_child(p)
+		_hat_drum_players.append(p)
 
 	set_process(true)
 
@@ -249,6 +312,65 @@ func on_coin_dropped() -> void:
 ## timer once this drops the count to 0.
 func on_coin_landed() -> void:
 	_active_coin_count = maxi(0, _active_coin_count - 1)
+
+
+## Plays a lofi drum on manual drop button press. Random pick from the player
+## drum pool. Rapid-fire drops within DRUM_RAPID_FIRE_WINDOW seconds are
+## attenuated so button-mashing doesn't fatigue.
+func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
+	if board_type != _active_board:
+		return
+	if not ThemeProvider.theme.audio_drums_enabled:
+		return
+	if _player_drum_players.is_empty():
+		return
+
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var rapid: bool = (now - _last_player_drum_time) < DRUM_RAPID_FIRE_WINDOW
+	_last_player_drum_time = now
+
+	var player: AudioStreamPlayer = _player_drum_players[randi() % _player_drum_players.size()]
+	player.pitch_scale = _get_ambient_pitch(board_type)
+	player.volume_db = DRUM_POOL_PLAYER_VOLUME_DB + (DRUM_RAPID_FIRE_ATTENUATION_DB if rapid else 0.0)
+	player.play()
+
+
+## Plays a lofi drum on autodropper tick. Normal autodroppers fire a kick
+## immediately (on the beat). Advanced autodroppers fire a hat/rim 0.5s later
+## (on the offbeat), creating a boom-chk pattern when both are active.
+## Rotates through the pool in order — not randomized.
+func play_autodropper_drum(board_type: Enums.BoardType, is_advanced: bool) -> void:
+	if board_type != _active_board:
+		return
+	if not ThemeProvider.theme.audio_drums_enabled:
+		return
+
+	if is_advanced:
+		get_tree().create_timer(ADVANCED_DRUM_OFFSET).timeout.connect(
+			_play_advanced_drum_now.bind(board_type))
+	else:
+		_play_kick_now(board_type)
+
+
+func _play_kick_now(board_type: Enums.BoardType) -> void:
+	if _kick_drum_players.is_empty():
+		return
+	var player: AudioStreamPlayer = _kick_drum_players[_kick_rotation_idx]
+	_kick_rotation_idx = (_kick_rotation_idx + 1) % _kick_drum_players.size()
+	player.pitch_scale = _get_ambient_pitch(board_type)
+	player.play()
+
+
+func _play_advanced_drum_now(board_type: Enums.BoardType) -> void:
+	# Re-check active board in case the player switched during the 0.5s delay.
+	if board_type != _active_board:
+		return
+	if _hat_drum_players.is_empty():
+		return
+	var player: AudioStreamPlayer = _hat_drum_players[_hat_rotation_idx]
+	_hat_rotation_idx = (_hat_rotation_idx + 1) % _hat_drum_players.size()
+	player.pitch_scale = _get_ambient_pitch(board_type)
+	player.play()
 
 
 # ── Legacy API (kept for backward compatibility) ─────────────────────
@@ -468,6 +590,121 @@ func _generate_ambient_pad(duration: float, mix_rate: int = 44100, freq_root: fl
 		var t: float = float(i) / mix_rate
 		var breath: float = 0.7 + 0.3 * sin(TAU * 0.25 * t)
 		var value: float = (sin(TAU * freq_root * t) * 0.5 + sin(TAU * freq_fifth * t) * 0.3) * breath * 0.3
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
+	wav.data = data
+	return wav
+
+
+# ── Drum generators ──────────────────────────────────────────────────
+
+func _generate_kick(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	var num_samples := int(duration * mix_rate)
+	var data := PackedByteArray()
+	data.resize(num_samples * 2)
+	# Pitch-swept sine from freq*2.5 down to freq over first 15% of duration,
+	# then sustained + exponential decay. Short click noise burst at t=0 for attack.
+	var sweep_len: float = duration * 0.15
+	for i in num_samples:
+		var t: float = float(i) / mix_rate
+		var freq_at_t: float
+		if t < sweep_len:
+			freq_at_t = lerpf(freq * 2.5, freq, t / sweep_len)
+		else:
+			freq_at_t = freq
+		var env: float = exp(-t * 8.0)
+		var body: float = sin(TAU * freq_at_t * t) * env
+		var click: float = 0.0
+		if t < 0.003:
+			click = randf_range(-1.0, 1.0) * (1.0 - t / 0.003) * 0.3
+		var value: float = (body + click) * 0.7
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
+	wav.data = data
+	return wav
+
+
+func _generate_snare(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	var num_samples := int(duration * mix_rate)
+	var data := PackedByteArray()
+	data.resize(num_samples * 2)
+	# Tonal body at freq + mid-range noise burst, both with exponential decay.
+	for i in num_samples:
+		var t: float = float(i) / mix_rate
+		var env: float = exp(-t * 15.0)
+		var body: float = sin(TAU * freq * t) * env * 0.3
+		var noise: float = randf_range(-1.0, 1.0) * env * 0.5
+		var value: float = (body + noise) * 0.6
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
+	wav.data = data
+	return wav
+
+
+func _generate_hat(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	var num_samples := int(duration * mix_rate)
+	var data := PackedByteArray()
+	data.resize(num_samples * 2)
+	# High-freq noise burst with fast decay. Slight tonal shimmer at freq.
+	var decay_rate: float = 4.0 / duration
+	for i in num_samples:
+		var t: float = float(i) / mix_rate
+		var env: float = exp(-t * decay_rate)
+		var noise: float = randf_range(-1.0, 1.0) * env * 0.6
+		var shimmer: float = sin(TAU * freq * t) * env * 0.1
+		var value: float = (noise + shimmer) * 0.5
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
+	wav.data = data
+	return wav
+
+
+func _generate_clap(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	var num_samples := int(duration * mix_rate)
+	var data := PackedByteArray()
+	data.resize(num_samples * 2)
+	# 3 layered noise bursts ~15ms apart for a "clap" impression, then sustain.
+	var burst_offsets: Array[float] = [0.0, 0.013, 0.026]
+	for i in num_samples:
+		var t: float = float(i) / mix_rate
+		var value: float = 0.0
+		for offset in burst_offsets:
+			var dt: float = t - offset
+			if dt >= 0.0:
+				var env: float = exp(-dt * 40.0)
+				value += randf_range(-1.0, 1.0) * env * 0.35
+		# Trailing noise tail for body
+		var tail_env: float = exp(-t * 20.0) * 0.2
+		value += randf_range(-1.0, 1.0) * tail_env
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
+	wav.data = data
+	return wav
+
+
+func _generate_rim(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	var num_samples := int(duration * mix_rate)
+	var data := PackedByteArray()
+	data.resize(num_samples * 2)
+	# Tight tonal click — narrow sine + very brief noise.
+	for i in num_samples:
+		var t: float = float(i) / mix_rate
+		var env: float = exp(-t * 35.0)
+		var tonal: float = sin(TAU * freq * t) * env * 0.5
+		var click: float = 0.0
+		if t < 0.005:
+			click = randf_range(-1.0, 1.0) * (1.0 - t / 0.005) * 0.4
+		var value: float = (tonal + click) * 0.55
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
 	return wav
