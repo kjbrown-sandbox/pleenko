@@ -20,6 +20,15 @@ const SHAKE_REROLL_INTERVAL: float = 0.06
 var _shake_reroll_accum: float = 0.0
 var _shake_dy: float = 0.0
 
+# Shimmer sweep state — moving highlight on the filled portion of the bar.
+var _shimmer_rect: ColorRect
+var _shimmer_material: ShaderMaterial
+var _shimmer_time: float = 0.0
+
+# Rising bar particles accumulator — fractional spawn rate accumulator, spawns
+# a particle each time it crosses an integer boundary.
+var _bar_particle_accum: float = 0.0
+
 
 func setup(board_manager: Node, cam: Camera3D) -> void:
 	_board_manager = board_manager
@@ -41,6 +50,23 @@ func _ready() -> void:
 	_particle_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_particle_overlay)
 
+	# Shimmer overlay — parented inside the fill bar's clip Control so the sweep
+	# is automatically masked to the filled portion. Starts at zero intensity;
+	# _process ramps it up when progress crosses the shake threshold.
+	var fill_clip: Control = progress_bar.get_fill_clip()
+	if fill_clip:
+		_shimmer_material = ShaderMaterial.new()
+		_shimmer_material.shader = preload("res://entities/level_section/level_bar_shimmer.gdshader")
+		_shimmer_material.set_shader_parameter("intensity", 0.0)
+		_shimmer_rect = ColorRect.new()
+		_shimmer_rect.material = _shimmer_material
+		_shimmer_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_shimmer_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		fill_clip.add_child(_shimmer_rect)
+		# Sit between _fill_rect (idx 0) and _fill_label (idx 2) so the sweep
+		# draws over the fill but under the progress text.
+		fill_clip.move_child(_shimmer_rect, 1)
+
 	LevelManager.level_changed.connect(_on_level_changed)
 	LevelManager.level_up_ready.connect(_on_level_up_ready)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
@@ -58,17 +84,35 @@ func _process(delta: float) -> void:
 	if not _shaking:
 		set_process(false)
 		return
+
+	var t: VisualTheme = ThemeProvider.theme
+	var progress: float = LevelManager.get_progress()
+	# 0 at the shake threshold, 1 at full — drives all three effects' intensity.
+	var fill_range: float = clampf((progress - t.level_bar_shake_threshold) / (1.0 - t.level_bar_shake_threshold), 0.0, 1.0)
+
 	_shake_reroll_accum += delta
 	if _shake_reroll_accum >= SHAKE_REROLL_INTERVAL:
 		_shake_reroll_accum = 0.0
-		var t: VisualTheme = ThemeProvider.theme
-		var progress: float = LevelManager.get_progress()
-		var shake_range: float = (progress - t.level_bar_shake_threshold) / (1.0 - t.level_bar_shake_threshold)
 		var min_intensity: float = t.level_bar_shake_max_intensity * t.level_bar_shake_min_pct
-		var intensity: float = lerpf(min_intensity, t.level_bar_shake_max_intensity, clampf(shake_range, 0.0, 1.0))
+		var intensity: float = lerpf(min_intensity, t.level_bar_shake_max_intensity, fill_range)
 		_shake_dy = randf_range(-intensity, intensity)
 	hbox.offset_top = _base_offset_top + _shake_dy
 	hbox.offset_bottom = _base_offset_bottom + _shake_dy
+
+	# Shimmer sweep: animate time_offset uniform and lerp intensity from
+	# min_opacity (at the shake threshold) to max_opacity (at 100% fill).
+	if t.level_bar_shimmer_enabled and _shimmer_material:
+		_shimmer_time = fposmod(_shimmer_time + delta * t.level_bar_shimmer_speed, 1.0)
+		_shimmer_material.set_shader_parameter("time_offset", _shimmer_time)
+		var shimmer_intensity: float = lerpf(t.level_bar_shimmer_min_opacity, t.level_bar_shimmer_max_opacity, fill_range)
+		_shimmer_material.set_shader_parameter("intensity", shimmer_intensity)
+
+	# Rising particles: accumulate spawn rate, emit each time we cross an integer boundary.
+	if t.level_bar_particle_enabled:
+		_bar_particle_accum += delta * t.level_bar_particle_rate * fill_range
+		while _bar_particle_accum >= 1.0:
+			_bar_particle_accum -= 1.0
+			_spawn_bar_particle()
 
 
 func _on_level_changed(_new_level: int) -> void:
@@ -97,6 +141,42 @@ func _stop_shaking() -> void:
 	hbox.offset_top = _base_offset_top
 	hbox.offset_bottom = _base_offset_bottom
 	set_process(false)
+	if _shimmer_material:
+		_shimmer_material.set_shader_parameter("intensity", 0.0)
+	_bar_particle_accum = 0.0
+
+
+func _spawn_bar_particle() -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var currency: int = LevelManager.get_active_currency()
+	var color: Color = t.get_coin_color(currency)
+	var size := 3.0
+
+	var particle := ColorRect.new()
+	particle.size = Vector2(size, size)
+	particle.color = color
+	particle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Spawn at a random X along the top edge of the progress bar, global coords
+	# (the particle overlay is top_level, so it draws in global space).
+	var bar_global: Vector2 = progress_bar.global_position
+	var bar_width: float = progress_bar.size.x
+	var start_x: float = bar_global.x + randf() * bar_width
+	var start_y: float = bar_global.y
+	particle.position = Vector2(start_x - size * 0.5, start_y - size * 0.5)
+	_particle_overlay.add_child(particle)
+
+	var rise: float = randf_range(25.0, 45.0)
+	var drift: float = randf_range(-6.0, 6.0)
+	var duration: float = randf_range(0.45, 0.75)
+	var target: Vector2 = Vector2(start_x + drift - size * 0.5, start_y - rise - size * 0.5)
+
+	var tween := particle.create_tween().set_parallel()
+	tween.tween_property(particle, "position", target, duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(particle, "modulate:a", 0.0, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_callback(particle.queue_free)
 
 
 func _update_display() -> void:

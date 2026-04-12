@@ -54,7 +54,13 @@ static func _spawn_single_ring(
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	canvas.add_child(rect)
 
-	var tween := caller.create_tween()
+	# Bind the tween to the canvas, not the caller. The canvas lives on root
+	# until its cleanup callback frees it, so tying the tween to its lifetime
+	# guarantees the callback fires — even if the caller is freed, reparented,
+	# or has its tweens killed mid-animation (which used to leave a permanent
+	# screen-wide distortion shader behind when level-ups happened during
+	# challenge mode transitions).
+	var tween := canvas.create_tween()
 	tween.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
 	tween.set_speed_scale(1.0 / maxf(Engine.time_scale, 0.001))
 	if delay > 0.0:

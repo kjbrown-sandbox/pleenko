@@ -90,4 +90,6 @@ func mark_forbidden() -> void:
 
 func pulse() -> void:
 	var t: VisualTheme = ThemeProvider.theme
+	if not t.bucket_pulse_enabled:
+		return
 	t.pulse_node3d(self, true, _base_material, currency_type, _is_hit)

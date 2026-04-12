@@ -187,6 +187,17 @@ const coin_shape := CoinShape.CYLINDER
 @export var peg_glow_halo_enabled := false                        # soft radial halo around pegs when they light up
 @export var peg_glow_halo_radius := 1.5
 @export var peg_glow_halo_opacity := 0.06
+@export var peg_flash_enabled := true                             # peg briefly takes coin color on contact
+@export var peg_pulse_enabled := true                             # peg scale-pulse on coin contact
+@export var bucket_pulse_enabled := true                          # bucket scale-pulse on receive
+@export var drop_burst_enabled := true                            # particle burst at drop point
+
+# Peg rings — expanding ripple at each peg hit, alternative/complement to the glow halo.
+@export var peg_ring_enabled := false
+@export var peg_ring_max_radius := 0.5                            # world units — how far the ring reaches
+@export var peg_ring_duration := 0.9                              # seconds
+@export var peg_ring_max_opacity := 0.35                          # peak alpha at sine apex
+@export var peg_ring_thickness := 0.06                            # UV-space ring half-width
 
 # ── Vignette ─────────────────────────────────────────────────────────
 @export_group("Vignette")
@@ -224,6 +235,12 @@ const coin_shape := CoinShape.CYLINDER
 @export var level_bar_shake_threshold := 0.85             ## Progress fraction to start shaking
 @export var level_bar_shake_max_intensity := 2.0          ## Max pixel offset at 100%
 @export var level_bar_shake_min_pct := 0.5                ## Starting intensity as fraction of max (0-1)
+@export var level_bar_shimmer_enabled := true             ## Moving highlight sweep across the filled portion
+@export var level_bar_shimmer_speed := 1.2                ## Shimmer loops per second at full
+@export var level_bar_shimmer_min_opacity := 0.1         ## Floor brightness of the sweep at the shake threshold (0-1)
+@export var level_bar_shimmer_max_opacity := 0.2         ## Peak brightness of the sweep at full fill (0-1)
+@export var level_bar_particle_enabled := true            ## Small particles rising from the top edge
+@export var level_bar_particle_rate := 8.0                ## Max particles per second at full fill
 @export var level_up_particle_count := 30                 ## Number of burst particles from bar
 @export var level_up_particle_burst_duration := 0.8       ## Seconds for initial burst phase
 @export var level_up_particle_swoop_duration := 0.6       ## Seconds for particles to fly to target

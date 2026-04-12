@@ -65,8 +65,11 @@ signal prestige_coin_landed(coin: Coin, bucket: Bucket)
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
 var _drop_burst_times: Array[float] = []
-# Shared mesh for drop burst particles — built once in _ready, reused for every spawn.
-var _drop_burst_mesh: QuadMesh
+
+# MultiMesh drop burst state
+var _drop_burst_mm_instance: MultiMeshInstance3D
+var _drop_burst_free_indices: Array[int] = []
+var _active_drop_bursts: Array[Dictionary] = []
 
 var _drop_timer_remaining: float = 0.0
 
@@ -74,8 +77,6 @@ func _ready() -> void:
 	space_between_pegs = ThemeProvider.theme.space_between_pegs
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
-
-	_drop_burst_mesh = QuadMesh.new()
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -208,6 +209,9 @@ func _process(delta: float) -> void:
 
 	if not _active_coin_indices.is_empty():
 		_sync_coin_multimesh(delta)
+
+	if not _active_drop_bursts.is_empty():
+		_sync_drop_burst(delta)
 
 
 func _update_peg_flashes(delta: float) -> void:
@@ -371,6 +375,10 @@ func _on_coin_tree_exiting(coin: Coin) -> void:
 	_release_coin_multimesh(coin)
 
 
+func has_in_flight_coins() -> bool:
+	return not _active_coin_indices.is_empty()
+
+
 func request_drop(costs: Array = [], coin_type: int = -1) -> void:
 	if ChallengeManager.is_active_challenge and ChallengeManager.has_failed():
 		return
@@ -473,6 +481,8 @@ func _drop_immediate_coin(coin: Coin) -> void:
 ## been hit. Called once per successful drop (not per multi-drop bonus coin).
 func _try_emit_drop_burst(drop_coin_type: Enums.CurrencyType) -> void:
 	var t: VisualTheme = ThemeProvider.theme
+	if not t.drop_burst_enabled:
+		return
 	var now: float = Time.get_ticks_msec() / 1000.0
 	# Prune entries older than 1 second
 	while not _drop_burst_times.is_empty() and now - _drop_burst_times[0] >= 1.0:
@@ -484,36 +494,61 @@ func _try_emit_drop_burst(drop_coin_type: Enums.CurrencyType) -> void:
 	_spawn_drop_burst_3d(local_pos, t.get_coin_color(drop_coin_type))
 
 
-## Radial burst of small 3D spheres scattering outward in the board's XY plane
-## (the face the camera sees). Each particle gets its own material so alpha can
-## animate independently. Particles are children of the board, so they move and
-## scale with it automatically.
+## Radial burst of small quads scattering outward in the board's XY plane.
+## Seeds slots in the shared drop burst MultiMesh; _sync_drop_burst animates them.
 func _spawn_drop_burst_3d(local_pos: Vector3, color: Color) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var particle_size: float = t.drop_burst_particle_size
-	_drop_burst_mesh.size = Vector2(particle_size, particle_size)
-	for i in t.drop_burst_particle_count:
-		var particle := MeshInstance3D.new()
-		particle.mesh = _drop_burst_mesh
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = color
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		particle.material_override = mat
-		particle.position = local_pos
-		add_child(particle)
+	var count: int = t.drop_burst_particle_count
+
+	for i in count:
+		if _drop_burst_free_indices.is_empty():
+			return
+		var idx: int = _drop_burst_free_indices.pop_back()
 
 		var angle: float = randf() * TAU
 		var distance: float = t.drop_burst_spread * randf_range(0.5, 1.0)
 		var target: Vector3 = local_pos + Vector3(cos(angle) * distance, sin(angle) * distance, 0.0)
 		var duration: float = t.drop_burst_duration * randf_range(0.7, 1.0)
 
-		var tween := particle.create_tween().set_parallel()
-		tween.tween_property(particle, "position", target, duration) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		tween.tween_property(mat, "albedo_color:a", 0.0, duration) \
-			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		tween.chain().tween_callback(particle.queue_free)
+		_active_drop_bursts.append({
+			"idx": idx,
+			"start": local_pos,
+			"target": target,
+			"elapsed": 0.0,
+			"duration": duration,
+			"size": particle_size,
+			"color": color,
+		})
+
+
+func _sync_drop_burst(delta: float) -> void:
+	var mm := _drop_burst_mm_instance.multimesh
+	var hidden := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
+	var i: int = 0
+	while i < _active_drop_bursts.size():
+		var p: Dictionary = _active_drop_bursts[i]
+		p.elapsed += delta
+		var k: float = clampf(p.elapsed / p.duration, 0.0, 1.0)
+
+		if k >= 1.0:
+			mm.set_instance_transform(p.idx, hidden)
+			_drop_burst_free_indices.append(p.idx)
+			_active_drop_bursts.remove_at(i)
+			continue
+
+		var eased_pos: float = 1.0 - (1.0 - k) * (1.0 - k)  # ease-out quad
+		var pos: Vector3 = (p.start as Vector3).lerp(p.target, eased_pos)
+		var alpha: float = 1.0 - k * k  # ease-in quad fade
+
+		var size: float = p.size
+		var basis := Basis.IDENTITY.scaled(Vector3(size, size, size))
+		mm.set_instance_transform(p.idx, Transform3D(basis, pos))
+		var c: Color = p.color
+		c.a = alpha
+		mm.set_instance_color(p.idx, c)
+
+		i += 1
 
 
 func _drop_from_queue() -> void:
@@ -586,8 +621,10 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		CurrencyManager.add(bucket.currency_type, amount)
 		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
 	bucket.pulse()
-	if upgrade_section.visible:
-		AudioManager.play_bucket_hit()
+	var num_buckets: int = buckets_container.get_child_count()
+	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
+	var is_advanced: bool = coin.coin_type == advanced_bucket_type
+	AudioManager.play_bucket(board_type, bucket_distance, is_advanced)
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
 	if not coin.is_prestige_coin:
@@ -791,6 +828,32 @@ func build_board() -> void:
 		for i in range(coin_capacity - 1, -1, -1):
 			_coin_free_indices.append(i)
 
+	# --- Drop burst MultiMesh (only created once, persists across rebuilds) ---
+	if not _drop_burst_mm_instance:
+		var burst_capacity := 64
+		var burst_mesh := QuadMesh.new()
+		burst_mesh.size = Vector2.ONE  # scaled per-instance via transform basis
+
+		var burst_mm := MultiMesh.new()
+		burst_mm.transform_format = MultiMesh.TRANSFORM_3D
+		burst_mm.use_colors = true
+		burst_mm.mesh = burst_mesh
+		burst_mm.instance_count = burst_capacity
+
+		var hidden_burst_xform := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
+		for i in burst_capacity:
+			burst_mm.set_instance_transform(i, hidden_burst_xform)
+
+		_drop_burst_mm_instance = MultiMeshInstance3D.new()
+		_drop_burst_mm_instance.multimesh = burst_mm
+		var burst_mat := ShaderMaterial.new()
+		burst_mat.shader = preload("res://entities/plinko_board/drop_burst_multimesh.gdshader")
+		_drop_burst_mm_instance.material_override = burst_mat
+		add_child(_drop_burst_mm_instance)
+
+		for i in range(burst_capacity - 1, -1, -1):
+			_drop_burst_free_indices.append(i)
+
 	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		_coin_mesh_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
 	else:
@@ -922,23 +985,32 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 		return
 
 	var glow_color := t.get_coin_color(currency_type)
+	var is_sparkle: bool = randf() < AudioManager.PEG_SPARKLE_CHANCE
 
-	# Set instance color to flash color and register for animated fade-back
-	_peg_multimesh_instance.multimesh.set_instance_color(closest_idx, glow_color)
-	_active_flashes[closest_idx] = {
-		"start_color": glow_color,
-		"elapsed": 0.0,
-		"duration": t.peg_glow_duration,
-	}
+	if is_sparkle:
+		AudioManager.play_peg_sparkle(board_type)
 
-	# Scale pulse on the peg
-	_active_peg_pulses[closest_idx] = {
-		"elapsed": 0.0,
-		"duration": t.bucket_pulse_duration,
-	}
+	# Set instance color to flash color and register for animated fade-back.
+	# Always flash on sparkle so the peg visually signals the chime.
+	if t.peg_flash_enabled or is_sparkle:
+		_peg_multimesh_instance.multimesh.set_instance_color(closest_idx, glow_color)
+		_active_flashes[closest_idx] = {
+			"start_color": glow_color,
+			"elapsed": 0.0,
+			"duration": t.peg_glow_duration,
+		}
+
+	if t.peg_pulse_enabled:
+		_active_peg_pulses[closest_idx] = {
+			"elapsed": 0.0,
+			"duration": t.bucket_pulse_duration,
+		}
 
 	if t.peg_glow_halo_enabled:
 		_spawn_peg_halo(_peg_positions[closest_idx], glow_color, t)
+	if t.peg_ring_enabled:
+		var ring_color: Color = glow_color if is_sparkle else _peg_base_color
+		_spawn_peg_ring(_peg_positions[closest_idx], ring_color, t)
 
 
 func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) -> void:
@@ -960,6 +1032,34 @@ func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) 
 	halo_tween.tween_property(halo_mat, "shader_parameter/opacity_mult", 0.0, t.peg_glow_duration) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	halo_tween.tween_callback(halo.queue_free)
+
+
+func _spawn_peg_ring(peg_local_pos: Vector3, ring_color: Color, t: VisualTheme) -> void:
+	var ring_shader: Shader = preload("res://entities/plinko_board/peg_ring.gdshader")
+	var ring := MeshInstance3D.new()
+	var ring_mesh := QuadMesh.new()
+	var quad_size: float = t.peg_ring_max_radius * 2.0
+	ring_mesh.size = Vector2(quad_size, quad_size)
+	ring.mesh = ring_mesh
+	var mat := ShaderMaterial.new()
+	mat.shader = ring_shader
+	mat.set_shader_parameter("ring_color", ring_color)
+	mat.set_shader_parameter("ring_thickness", t.peg_ring_thickness)
+	mat.set_shader_parameter("ring_radius", 0.0)
+	mat.set_shader_parameter("opacity_mult", 0.0)
+	ring.material_override = mat
+	ring.position = Vector3(peg_local_pos.x, peg_local_pos.y, peg_local_pos.z - 0.04)
+	add_child(ring)
+
+	var duration: float = t.peg_ring_duration
+	var max_opacity: float = t.peg_ring_max_opacity
+	var tween := create_tween()
+	tween.tween_method(
+		func(p: float) -> void:
+			mat.set_shader_parameter("ring_radius", p)
+			mat.set_shader_parameter("opacity_mult", sin(p * PI) * max_opacity),
+		0.0, 1.0, duration)
+	tween.tween_callback(ring.queue_free)
 
 
 func increase_queue_capacity() -> void:

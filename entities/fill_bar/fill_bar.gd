@@ -202,6 +202,12 @@ func set_fill(percent: float) -> void:
 	_fill_clip.offset_right = -fill_inset if percent > 0.99 else 0.0
 
 
+## Returns the clip Control that masks children to the filled portion.
+## Used by the level bar's shimmer overlay so it only renders on the filled area.
+func get_fill_clip() -> Control:
+	return _fill_clip
+
+
 func set_main_disabled(is_disabled: bool) -> void:
 	main_button.disabled = is_disabled
 

@@ -31,6 +31,9 @@ var _challenge_complete_dialog: CanvasLayer
 # Nav arrow blink state
 var _boards_with_unseen_upgrades: Dictionary = {}  # BoardType -> true
 var _arrow_blink_tweens: Dictionary = {}  # Control -> Tween
+# Suppresses unseen-board marking while replaying board_unlocked signals during
+# save load — otherwise every arrow would blink on every startup.
+var _loading_from_save: bool = false
 
 func _ready() -> void:
 	# Safety net: ensure time_scale is normal when main scene loads
@@ -81,7 +84,9 @@ func _setup_normal() -> void:
 	SaveManager.setup(board_manager, true)
 
 	if SaveManager.has_save():
+		_loading_from_save = true
 		SaveManager.load_game()
+		_loading_from_save = false
 		coin_values.refresh_visible_currencies()
 		challenge_grouping_manager.refresh_challenge_progress()
 
@@ -345,12 +350,14 @@ func _on_board_switched(board: PlinkoBoard) -> void:
 	_update_lockdown_overlay()
 
 
-func _on_board_unlocked(_board_type: Enums.BoardType) -> void:
+func _on_board_unlocked(board_type: Enums.BoardType) -> void:
 	# Connect the newly unlocked board to the prestige animator
 	for board in board_manager.get_boards():
-		if board.board_type == _board_type:
+		if board.board_type == board_type:
 			prestige_animator.connect_board(board)
 			break
+	if not _loading_from_save:
+		_boards_with_unseen_upgrades[board_type] = true
 	_update_nav_arrows()
 
 
