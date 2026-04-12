@@ -14,7 +14,7 @@ all_upgrades = true
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
-amount = 55
+amount = 50
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("4_reward")

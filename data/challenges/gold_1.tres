@@ -9,7 +9,7 @@
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
-amount = 50
+amount = 45
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
