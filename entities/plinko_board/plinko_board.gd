@@ -621,8 +621,10 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		CurrencyManager.add(bucket.currency_type, amount)
 		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
 	bucket.pulse()
-	if upgrade_section.visible:
-		AudioManager.play_bucket_hit()
+	var num_buckets: int = buckets_container.get_child_count()
+	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
+	var is_advanced: bool = coin.coin_type == advanced_bucket_type
+	AudioManager.play_bucket(board_type, bucket_distance, is_advanced)
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
 	if not coin.is_prestige_coin:
@@ -983,9 +985,14 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 		return
 
 	var glow_color := t.get_coin_color(currency_type)
+	var is_sparkle: bool = randf() < AudioManager.PEG_SPARKLE_CHANCE
 
-	# Set instance color to flash color and register for animated fade-back
-	if t.peg_flash_enabled:
+	if is_sparkle:
+		AudioManager.play_peg_sparkle(board_type)
+
+	# Set instance color to flash color and register for animated fade-back.
+	# Always flash on sparkle so the peg visually signals the chime.
+	if t.peg_flash_enabled or is_sparkle:
 		_peg_multimesh_instance.multimesh.set_instance_color(closest_idx, glow_color)
 		_active_flashes[closest_idx] = {
 			"start_color": glow_color,
@@ -1002,7 +1009,8 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 	if t.peg_glow_halo_enabled:
 		_spawn_peg_halo(_peg_positions[closest_idx], glow_color, t)
 	if t.peg_ring_enabled:
-		_spawn_peg_ring(_peg_positions[closest_idx], _peg_base_color, t)
+		var ring_color: Color = glow_color if is_sparkle else _peg_base_color
+		_spawn_peg_ring(_peg_positions[closest_idx], ring_color, t)
 
 
 func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) -> void:

@@ -97,6 +97,7 @@ func switch_board(index: int) -> void:
 	_boards[_active_index].drop_section.visible = true
 	_boards[_active_index].set_coins_visible(true)
 
+	AudioManager.set_active_board(_boards[_active_index].board_type)
 	_tween_camera_to_active_board()
 	board_switched.emit(_boards[_active_index])
 
