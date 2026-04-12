@@ -320,7 +320,7 @@ func on_coin_landed() -> void:
 func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
 	if board_type != _active_board:
 		return
-	if not ThemeProvider.theme.audio_drums_enabled:
+	if not ThemeProvider.theme.audio_lofi_enabled:
 		return
 	if _player_drum_players.is_empty():
 		return
@@ -342,7 +342,7 @@ func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
 func play_autodropper_drum(board_type: Enums.BoardType, is_advanced: bool) -> void:
 	if board_type != _active_board:
 		return
-	if not ThemeProvider.theme.audio_drums_enabled:
+	if not ThemeProvider.theme.audio_lofi_enabled:
 		return
 
 	if is_advanced:
