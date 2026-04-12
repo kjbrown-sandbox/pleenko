@@ -150,7 +150,7 @@ func _ready() -> void:
 
 	# ── Placeholder tones (swap for real samples later) ──────────────
 	var cello_stream := _generate_tone(196.0, 0.8)      # G3
-	var chime_stream := _generate_chime(1568.0, 0.6)     # G6 + shimmer
+	var chime_stream := _generate_chime(784.0, 0.6)      # G5 + shimmer
 	var click_stream := _generate_click(0.05)
 
 	# Per-board ambient pad voicings — each board's chord as a 4-note stack.
@@ -838,9 +838,10 @@ func _generate_rim(freq: float, duration: float, mix_rate: int = 44100) -> Audio
 
 # ── Vinyl crackle generator ──────────────────────────────────────────
 
-## Generates a seamless loop of vinyl-crackle texture: low-amplitude
-## averaged-noise hiss (pink-ish tilt) + occasional louder pop spikes.
-## Lives continuously under the ambient pad when lofi is active.
+## Generates a seamless loop of vinyl-crackle texture: pops and clicks at
+## varying amplitudes, with near-silent space between. No constant white-noise
+## hiss — just occasional crackle events, with a small chance of forming
+## clusters so it feels like actual vinyl defects rather than ambient noise.
 func _generate_vinyl_crackle(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
@@ -851,29 +852,39 @@ func _generate_vinyl_crackle(duration: float, mix_rate: int = 44100) -> AudioStr
 	var data := PackedByteArray()
 	data.resize(num_samples * 2)
 
-	# Pre-generate pop positions — a handful of random "ticks" per second.
-	var pop_positions: PackedInt32Array = []
-	var pops_per_second := 3.0
+	# Pre-generate pop events. Each has a position and amplitude. Every pop
+	# has a 15% chance of spawning a short cluster of follow-up pops, which
+	# gives the impression of actual vinyl damage rather than evenly spaced ticks.
+	var pop_events: Array[Dictionary] = []
+	var pops_per_second: float = 7.0
 	var total_pops := int(duration * pops_per_second)
 	for i in total_pops:
-		pop_positions.append(randi() % num_samples)
+		var pos := randi() % num_samples
+		pop_events.append({ "pos": pos, "amp": randf_range(0.3, 1.0) })
+		if randf() < 0.15:
+			var cluster_size: int = randi_range(1, 3)
+			for j in cluster_size:
+				var delay := randi_range(int(mix_rate * 0.003), int(mix_rate * 0.015))
+				pop_events.append({
+					"pos": (pos + delay * (j + 1)) % num_samples,
+					"amp": randf_range(0.2, 0.6)
+				})
 
-	# Averaged noise for a softer, warmer hiss than raw white noise.
+	# Very subtle room presence — almost inaudible (0.015 amplitude vs the
+	# old 0.5). Provides a hint of texture without being a constant hiss.
 	var prev_sample: float = 0.0
 	for i in num_samples:
 		var raw: float = randf_range(-1.0, 1.0)
-		# Low-pass via simple one-pole filter for pink-ish softness
-		var hiss: float = prev_sample * 0.75 + raw * 0.25
-		prev_sample = hiss
-		var value: float = hiss * 0.5
+		var hum: float = prev_sample * 0.85 + raw * 0.15
+		prev_sample = hum
+		var value: float = hum * 0.015
 
-		# Pop spike if this sample is a pop position — short burst
-		for pop_i: int in pop_positions:
-			var dist := i - pop_i
-			if dist >= 0 and dist < 60:
-				var pop_env: float = exp(-float(dist) * 0.1)
-				value += randf_range(-1.0, 1.0) * pop_env * 0.8
-				break
+		# Layer in any pop events that fire within the next 30 samples.
+		for event: Dictionary in pop_events:
+			var dist: int = i - event["pos"]
+			if dist >= 0 and dist < 30:
+				var pop_env: float = exp(-float(dist) * 0.25)
+				value += randf_range(-1.0, 1.0) * pop_env * event["amp"]
 
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
