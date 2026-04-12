@@ -25,11 +25,19 @@ var _sounds: Dictionary = {
 
 # ── Musical system ───────────────────────────────────────────────────
 
-# Pentatonic scale: semitone offsets from root. Wraps for larger bucket counts.
-const PENTATONIC := [0, 2, 4, 7, 9, 12, 14, 16, 19, 21]
+# Chord quality: semitone offsets above the chord's root, stacked thirds.
+# Bucket distance from center maps to an index in this array — center = root,
+# ±1 = 3rd, ±2 = 5th, ±3 = 7th, ±4 = octave, etc. Multiple buckets landing
+# together build an actual jazz chord rather than a pentatonic cluster.
+const CHORD_MAJ7 := [0, 4, 7, 11, 12, 16, 19, 23]   # 1, 3, 5, 7, 8ve, 8ve+3, 8ve+5, 8ve+7
+const CHORD_DOM7 := [0, 4, 7, 10, 12, 16, 19, 22]   # major 3, minor 7 (the V chord)
+const CHORD_MIN7 := [0, 3, 7, 10, 12, 15, 19, 22]   # minor 3, minor 7
 
-# Pachelbel Canon progression: board_type → semitone offset from C
-var _board_keys: Dictionary = {}
+# Pachelbel progression I-V-vi-iii-IV-I with 7ths added. Each board knows its
+# chord root offset (semitones from C) and its chord quality. All chord tones
+# across all boards are diatonic to C major — cross-board multi-drops stay
+# consonant.
+var _board_chords: Dictionary = {}  # BoardType -> { "root": int, "chord": Array }
 
 const MELODY_POOL_SIZE := 12
 const CLICK_POOL_SIZE := 8
@@ -52,11 +60,13 @@ var _click_idx: int = 0
 var _active_board: Enums.BoardType = Enums.BoardType.GOLD
 var _melody_timestamps: Array[float] = []
 
-# Ambient pad double-buffer
+# Ambient pad double-buffer. Each board has its own pre-generated pad stream
+# at the board's chord voicing (e.g., Cmaj7 for gold, G7 for orange). Board
+# switches assign the new stream to the inactive player before crossfading.
 var _ambient_a: AudioStreamPlayer
 var _ambient_b: AudioStreamPlayer
 var _ambient_active: AudioStreamPlayer
-var _ambient_pad_stream: AudioStreamWAV
+var _ambient_pad_streams: Dictionary = {}  # BoardType -> AudioStreamWAV
 var _ambient_fading_in: bool = false
 var _idle_timer: float = 0.0
 var _activity_detected: bool = false
@@ -112,11 +122,12 @@ func _ready() -> void:
 			add_child(player)
 			_pools[sound_name].append(player)
 
-	# ── Board key mapping (Pachelbel I–V–vi–iii–IV–I) ────────────────
-	_board_keys[Enums.BoardType.GOLD] = 0      # C  (I)
-	_board_keys[Enums.BoardType.ORANGE] = 7    # G  (V)
-	_board_keys[Enums.BoardType.RED] = 9       # Am (vi)
-	# Future boards: iii = +4 (Em), IV = +5 (F), I' = +12 (C octave)
+	# ── Board chord mapping (Pachelbel I–V–vi–iii–IV–I with 7ths) ────
+	_board_chords[Enums.BoardType.GOLD] = { "root": 0, "chord": CHORD_MAJ7 }    # Cmaj7 (I)
+	_board_chords[Enums.BoardType.ORANGE] = { "root": 7, "chord": CHORD_DOM7 }  # G7    (V)
+	_board_chords[Enums.BoardType.RED] = { "root": 9, "chord": CHORD_MIN7 }     # Am7   (vi)
+	# Future boards: iii = Em7 (root 4, MIN7), IV = Fmaj7 (root 5, MAJ7),
+	# I' = Cmaj7 octave (root 12, MAJ7).
 
 	# ── Audio buses ──────────────────────────────────────────────────
 	_setup_buses()
@@ -125,7 +136,15 @@ func _ready() -> void:
 	var cello_stream := _generate_tone(196.0, 0.8)      # G3
 	var chime_stream := _generate_chime(1568.0, 0.6)     # G6 + shimmer
 	var click_stream := _generate_click(0.05)
-	_ambient_pad_stream = _generate_ambient_pad(4.0)
+
+	# Per-board ambient pad voicings — each board's chord as a 4-note stack.
+	# Frequencies chosen to keep the overall pad in the bass/low-mid range.
+	_ambient_pad_streams[Enums.BoardType.GOLD] = _generate_ambient_pad(4.0, 44100,
+		[130.81, 164.81, 196.00, 246.94])  # Cmaj7: C3 E3 G3 B3
+	_ambient_pad_streams[Enums.BoardType.ORANGE] = _generate_ambient_pad(4.0, 44100,
+		[98.00, 123.47, 146.83, 174.61])   # G7:    G2 B2 D3 F3
+	_ambient_pad_streams[Enums.BoardType.RED] = _generate_ambient_pad(4.0, 44100,
+		[110.00, 130.81, 164.81, 196.00])  # Am7:   A2 C3 E3 G3
 
 	# ── Musical pools ───────────────────────────────────────────────
 	for i in MELODY_POOL_SIZE:
@@ -152,14 +171,15 @@ func _ready() -> void:
 		_click_pool.append(click)
 
 	# ── Ambient pad players ──────────────────────────────────────────
+	var initial_pad: AudioStreamWAV = _ambient_pad_streams[Enums.BoardType.GOLD]
 	_ambient_a = AudioStreamPlayer.new()
-	_ambient_a.stream = _ambient_pad_stream
+	_ambient_a.stream = initial_pad
 	_ambient_a.bus = &"Ambient"
 	_ambient_a.volume_db = -80.0
 	add_child(_ambient_a)
 
 	_ambient_b = AudioStreamPlayer.new()
-	_ambient_b.stream = _ambient_pad_stream
+	_ambient_b.stream = initial_pad
 	_ambient_b.bus = &"Ambient"
 	_ambient_b.volume_db = -80.0
 	add_child(_ambient_b)
@@ -167,7 +187,7 @@ func _ready() -> void:
 	_ambient_active = _ambient_a
 
 	# ── Bucket drone pool ───────────────────────────────────────────
-	var drone_stream := _generate_ambient_pad(2.0, 44100, 262.0, 392.0)
+	var drone_stream := _generate_ambient_pad(2.0, 44100, [262.0, 392.0])
 	for i in BUCKET_DRONE_POOL_SIZE:
 		var drone := AudioStreamPlayer.new()
 		drone.stream = drone_stream
@@ -406,8 +426,10 @@ func play_prestige(play_duration: float = 3.0, fade_duration: float = 2.0) -> vo
 # ── Musical internals ────────────────────────────────────────────────
 
 func _get_pitch_scale(scale_degree: int, board_type: Enums.BoardType) -> float:
-	var semitones: int = PENTATONIC[scale_degree % PENTATONIC.size()]
-	semitones += _board_keys.get(board_type, 0)
+	var board_chord: Dictionary = _board_chords.get(board_type, _board_chords[Enums.BoardType.GOLD])
+	var chord: Array = board_chord["chord"]
+	var semitones: int = chord[scale_degree % chord.size()]
+	semitones += board_chord["root"]
 	return pow(2.0, semitones / 12.0)
 
 
@@ -426,7 +448,9 @@ func _check_density() -> bool:
 func _fade_in_ambient() -> void:
 	_ambient_fading_in = true
 	if not _ambient_active.playing:
-		_ambient_active.pitch_scale = _get_ambient_pitch(_active_board)
+		# Stream is pre-voiced per board; no pitch shift needed.
+		_ambient_active.stream = _ambient_pad_streams.get(_active_board, _ambient_pad_streams[Enums.BoardType.GOLD])
+		_ambient_active.pitch_scale = 1.0
 		_ambient_active.play()
 	var tween := create_tween()
 	tween.tween_property(_ambient_active, "volume_db", AMBIENT_VOLUME_DB, AMBIENT_FADE_DURATION)
@@ -451,9 +475,10 @@ func _crossfade_ambient(board_type: Enums.BoardType) -> void:
 		out_tween.tween_property(old_player, "volume_db", -80.0, AMBIENT_FADE_DURATION)
 		out_tween.tween_callback(old_player.stop)
 
-	# Fade in new at the new key
+	# Fade in new with the new board's pre-voiced chord stream.
 	if _ambient_fading_in:
-		new_player.pitch_scale = _get_ambient_pitch(board_type)
+		new_player.stream = _ambient_pad_streams.get(board_type, _ambient_pad_streams[Enums.BoardType.GOLD])
+		new_player.pitch_scale = 1.0
 		new_player.volume_db = -80.0
 		new_player.play()
 		var in_tween := create_tween()
@@ -476,8 +501,13 @@ func _update_bucket_drones(delta: float) -> void:
 		_active_drones.erase(key)
 
 
+## Returns the pitch multiplier for an instrument rooted at C4 to play at the
+## given board's root note. Used by drums to stay consonant with the chord
+## progression. The ambient pad no longer uses this — each board has its
+## own pre-voiced pad stream.
 func _get_ambient_pitch(board_type: Enums.BoardType) -> float:
-	var semitones: int = _board_keys.get(board_type, 0)
+	var board_chord: Dictionary = _board_chords.get(board_type, _board_chords[Enums.BoardType.GOLD])
+	var semitones: int = board_chord["root"]
 	return pow(2.0, semitones / 12.0)
 
 
@@ -572,7 +602,7 @@ func _generate_click(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
 	return wav
 
 
-func _generate_ambient_pad(duration: float, mix_rate: int = 44100, freq_root: float = 131.0, freq_fifth: float = 196.0) -> AudioStreamWAV:
+func _generate_ambient_pad(duration: float, mix_rate: int = 44100, frequencies: Array = [131.0, 196.0]) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = mix_rate
@@ -581,15 +611,20 @@ func _generate_ambient_pad(duration: float, mix_rate: int = 44100, freq_root: fl
 	var num_samples := int(duration * mix_rate)
 	var data := PackedByteArray()
 	data.resize(num_samples * 2)
-	# Both 131 Hz and 196 Hz complete exact integer cycles in 4 seconds
-	# (524 and 784), so the waveform is at zero-crossing at the loop
-	# boundary — no envelope needed for seamless looping.
-	# Slow amplitude modulation (0.25 Hz = one full breath per 4s loop)
-	# gives the pad a gentle pulse so it doesn't feel static.
+	# Each frequency's cycles should land on zero-crossings at the loop
+	# boundary to avoid pops. For a 4-second loop, any integer-Hz
+	# frequency auto-aligns (since N seconds * F Hz = integer cycles).
+	# Slow 0.25 Hz amplitude modulation adds a gentle breath so the pad
+	# doesn't feel static.
+	# Amplitude per voice scales so the sum doesn't clip.
+	var amplitude: float = 0.3 / sqrt(float(frequencies.size()))
 	for i in num_samples:
 		var t: float = float(i) / mix_rate
 		var breath: float = 0.7 + 0.3 * sin(TAU * 0.25 * t)
-		var value: float = (sin(TAU * freq_root * t) * 0.5 + sin(TAU * freq_fifth * t) * 0.3) * breath * 0.3
+		var sum: float = 0.0
+		for freq: float in frequencies:
+			sum += sin(TAU * freq * t)
+		var value: float = sum * amplitude * breath
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
 	return wav
