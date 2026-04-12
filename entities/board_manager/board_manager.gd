@@ -38,7 +38,7 @@ func setup(camera: Camera3D) -> void:
 
 	# Autodropper timer (1 tick per second, starts paused)
 	_autodrop_timer = Timer.new()
-	_autodrop_timer.wait_time = 1.0
+	_autodrop_timer.wait_time = 1.5
 	_autodrop_timer.autostart = false
 	_autodrop_timer.timeout.connect(_on_autodrop_tick)
 	add_child(_autodrop_timer)
@@ -282,6 +282,12 @@ func _on_autodropper_adjust(button_id: StringName, delta: int, from_player: bool
 
 
 func _on_autodrop_tick() -> void:
+	# Track which boards have at least one normal / advanced autodropper
+	# assigned so we can fire one drum per board per kind (rather than one
+	# per assigned count — the drum beat is fixed regardless of pool size).
+	var boards_with_normal: Dictionary = {}
+	var boards_with_advanced: Dictionary = {}
+
 	for button_id in _assignments:
 		var count: int = _assignments[button_id]
 		if count <= 0:
@@ -290,8 +296,19 @@ func _on_autodrop_tick() -> void:
 		if not board:
 			continue
 		var is_advanced: bool = (button_id as String).ends_with("_ADVANCED")
+		if is_advanced:
+			boards_with_advanced[board.board_type] = true
+		else:
+			boards_with_normal[board.board_type] = true
 		for i in count:
 			board.try_autodrop(is_advanced)
+
+	# One drum hit per board per kind. AudioManager gates against the active
+	# board internally, so only the viewed board contributes to the groove.
+	for board_type in boards_with_normal:
+		AudioManager.play_autodropper_drum(board_type, false)
+	for board_type in boards_with_advanced:
+		AudioManager.play_autodropper_drum(board_type, true)
 
 
 func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, _new_level: int) -> void:
