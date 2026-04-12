@@ -37,7 +37,7 @@ const MAX_MELODY_PER_SECOND := 8
 const AMBIENT_FADE_DURATION := 2.0
 const AMBIENT_IDLE_TIMEOUT := 2.0
 const AMBIENT_VOLUME_DB := -6.0
-const PEG_SPARKLE_CHANCE := 0.25
+const PEG_SPARKLE_CHANCE := 0.5
 const PEG_CLICK_VOLUME_DB := -18.0
 const PEG_SPARKLE_VOLUME_DB := -14.0
 const BUCKET_VOLUME_DB := -8.0
@@ -60,11 +60,14 @@ var _ambient_pad_stream: AudioStreamWAV
 var _ambient_fading_in: bool = false
 var _idle_timer: float = 0.0
 var _activity_detected: bool = false
+# Tracks coins currently in-flight on active boards. Ambient pad stays alive
+# while this is > 0 and for AMBIENT_IDLE_TIMEOUT seconds after it hits 0.
+var _active_coin_count: int = 0
 
 # Bucket drones: one sustained note per unique bucket pitch. Each bucket's note
 # starts on first hit and extends on repeat hits. Fades after SUSTAIN seconds idle.
-const BUCKET_DRONE_SUSTAIN := 2.0
-const BUCKET_DRONE_FADE_RATE := 60.0  # dB/sec during fade-out
+const BUCKET_DRONE_SUSTAIN := 3.0
+const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — ~3s tail from -8 to -80 dB
 const BUCKET_DRONE_POOL_SIZE := 16
 var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
@@ -159,7 +162,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if _activity_detected:
+	var has_activity: bool = _activity_detected or _active_coin_count > 0
+	if has_activity:
 		_idle_timer = 0.0
 		_activity_detected = false
 		if not _ambient_fading_in:
@@ -231,6 +235,20 @@ func set_active_board(board_type: Enums.BoardType) -> void:
 		return
 	_active_board = board_type
 	_crossfade_ambient(board_type)
+
+
+## Called when a coin is launched on any board. Keeps the ambient pad alive
+## for the whole descent even on large boards where the 2s idle timeout
+## would otherwise fade it out between sparkles.
+func on_coin_dropped() -> void:
+	_active_coin_count += 1
+	_activity_detected = true
+
+
+## Called when a coin finishes landing. Ambient pad starts its fade-out
+## timer once this drops the count to 0.
+func on_coin_landed() -> void:
+	_active_coin_count = maxi(0, _active_coin_count - 1)
 
 
 # ── Legacy API (kept for backward compatibility) ─────────────────────

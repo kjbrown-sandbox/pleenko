@@ -470,6 +470,7 @@ func _launch_coin(coin: Coin) -> void:
 	coin.final_bounce_started.connect(_on_final_bounce_started)
 	coin.start(Vector3(0, 0.2, 0))
 	coin_dropped.emit()
+	AudioManager.on_coin_dropped()
 
 
 func _drop_immediate_coin(coin: Coin) -> void:
@@ -625,6 +626,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
 	AudioManager.play_bucket(board_type, bucket_distance, is_advanced)
+	AudioManager.on_coin_landed()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
 	if not coin.is_prestige_coin:
