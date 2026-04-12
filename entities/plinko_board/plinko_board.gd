@@ -990,9 +990,7 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 	if is_sparkle:
 		AudioManager.play_peg_sparkle(board_type)
 
-	# Set instance color to flash color and register for animated fade-back.
-	# Always flash on sparkle so the peg visually signals the chime.
-	if t.peg_flash_enabled or is_sparkle:
+	if t.peg_flash_enabled:
 		_peg_multimesh_instance.multimesh.set_instance_color(closest_idx, glow_color)
 		_active_flashes[closest_idx] = {
 			"start_color": glow_color,
@@ -1000,7 +998,8 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 			"duration": t.peg_glow_duration,
 		}
 
-	if t.peg_pulse_enabled:
+	# Pulse only on sparkle so the scale-pop serves as the visual cue for the chime.
+	if t.peg_pulse_enabled and is_sparkle:
 		_active_peg_pulses[closest_idx] = {
 			"elapsed": 0.0,
 			"duration": t.bucket_pulse_duration,
@@ -1008,9 +1007,8 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 
 	if t.peg_glow_halo_enabled:
 		_spawn_peg_halo(_peg_positions[closest_idx], glow_color, t)
-	if t.peg_ring_enabled:
-		var ring_color: Color = glow_color if is_sparkle else _peg_base_color
-		_spawn_peg_ring(_peg_positions[closest_idx], ring_color, t)
+	if t.peg_ring_enabled and is_sparkle:
+		_spawn_peg_ring(_peg_positions[closest_idx], _peg_base_color, t)
 
 
 func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) -> void:
