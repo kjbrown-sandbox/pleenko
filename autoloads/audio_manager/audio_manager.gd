@@ -47,7 +47,7 @@ const AMBIENT_IDLE_TIMEOUT := 2.0
 const AMBIENT_VOLUME_DB := -6.0
 const PEG_SPARKLE_CHANCE := 0.5
 const PEG_CLICK_VOLUME_DB := -18.0
-const PEG_SPARKLE_VOLUME_DB := -14.0
+const PEG_SPARKLE_VOLUME_DB := -8.0
 const BUCKET_VOLUME_DB := -8.0
 
 var _cello_pool: Array[AudioStreamPlayer] = []
@@ -82,6 +82,22 @@ const BUCKET_DRONE_POOL_SIZE := 16
 var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
 var _active_drones: Dictionary = {}  # String key -> { "idx": int, "timer": float }
+# Two drone streams — zen uses the sine pad loop (matches the ambient pad
+# texture); lofi uses the FM electric piano one-shot. Selected per-play in
+# play_bucket based on the active theme's audio_lofi_enabled flag.
+var _sine_drone_stream: AudioStreamWAV
+var _piano_drone_stream: AudioStream = preload("res://assets/sounds/instrument_samples/Ensoniq-ESQ-1-FM-Piano-C4.wav")
+
+# Vinyl crackle bed — continuous texture under the ambient pad when lofi
+# active. Fades in/out via the theme_changed handler.
+const CRACKLE_VOLUME_DB := -28.0
+const CRACKLE_FADE_DURATION := 1.0
+var _crackle_player: AudioStreamPlayer
+
+# Low-pass filter on the Melody bus — enabled when lofi active, disabled
+# otherwise. The index tracks where in the bus effect chain it sits.
+const MELODY_LOWPASS_CUTOFF := 3000.0
+var _melody_lowpass_effect_idx: int = -1
 
 # ── Lofi drum system ─────────────────────────────────────────────────
 # Player drops pick randomly from a pool of snare/clap/rim variants.
@@ -146,6 +162,13 @@ func _ready() -> void:
 	_ambient_pad_streams[Enums.BoardType.RED] = _generate_ambient_pad(4.0, 44100,
 		[110.00, 130.81, 164.81, 196.00])  # Am7:   A2 C3 E3 G3
 
+	# Zen uses a simple sine drone for bucket notes; lofi swaps to the FM piano
+	# preload. Generated here so the drone pool has a default stream on startup.
+	_sine_drone_stream = _generate_ambient_pad(2.0, 44100, [262.0, 392.0])
+
+	# Vinyl crackle bed — averaged white noise with occasional pops.
+	var crackle_stream := _generate_vinyl_crackle(6.0)
+
 	# ── Musical pools ───────────────────────────────────────────────
 	for i in MELODY_POOL_SIZE:
 		var cello := AudioStreamPlayer.new()
@@ -186,11 +209,21 @@ func _ready() -> void:
 
 	_ambient_active = _ambient_a
 
+	# ── Vinyl crackle player ────────────────────────────────────────
+	_crackle_player = AudioStreamPlayer.new()
+	_crackle_player.stream = crackle_stream
+	_crackle_player.bus = &"Ambient"
+	_crackle_player.volume_db = -80.0
+	add_child(_crackle_player)
+
 	# ── Bucket drone pool ───────────────────────────────────────────
-	var drone_stream := _generate_ambient_pad(2.0, 44100, [262.0, 392.0])
+	# Each player's stream is (re)assigned per-play in play_bucket based on
+	# the active theme: sine drone for zen, FM piano one-shot for lofi. The
+	# default here is the sine stream so players have something valid at
+	# construction time.
 	for i in BUCKET_DRONE_POOL_SIZE:
 		var drone := AudioStreamPlayer.new()
-		drone.stream = drone_stream
+		drone.stream = _sine_drone_stream
 		drone.bus = &"Melody"
 		drone.volume_db = -80.0
 		add_child(drone)
@@ -241,6 +274,12 @@ func _ready() -> void:
 		add_child(p)
 		_hat_drum_players.append(p)
 
+	# Listen for theme swaps so lofi-gated effects (low-pass, crackle) can
+	# toggle at runtime. Call once to sync initial state against the loaded
+	# theme (via call_deferred so ThemeProvider autoload is fully ready).
+	ThemeProvider.theme_changed.connect(_on_theme_changed)
+	_on_theme_changed.call_deferred()
+
 	set_process(true)
 
 
@@ -268,22 +307,31 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 
 	var degree: int = bucket_distance_from_center
 	var key: String = ("A_" if is_advanced else "N_") + str(degree)
+	var lofi: bool = ThemeProvider.theme.audio_lofi_enabled
 
 	if key in _active_drones:
 		_active_drones[key].timer = BUCKET_DRONE_SUSTAIN
 		var player: AudioStreamPlayer = _drone_pool[_active_drones[key].idx]
 		if player.volume_db < BUCKET_VOLUME_DB - 1.0:
 			player.volume_db = BUCKET_VOLUME_DB
+		# Retrigger fix for one-shot piano samples: if the sample has decayed
+		# to silence while the slot is still "active", re-play it on the next
+		# bucket hit. Sine drones loop, so they're always .playing — no-op for zen.
+		if not player.playing:
+			player.play()
 		return
 
 	if _drone_free.is_empty():
 		return
 	var idx: int = _drone_free.pop_back()
 	var player: AudioStreamPlayer = _drone_pool[idx]
-	var pitch: float = _get_pitch_scale(degree, board_type)
+	player.stream = _piano_drone_stream if lofi else _sine_drone_stream
+	# Drop buckets one octave below their chord-tone position so they feel
+	# like the foundation of the mix rather than a melodic voice up top.
+	var pitch: float = _get_pitch_scale(degree, board_type) * 0.5
 	if is_advanced:
-		pitch *= 0.5
-	player.pitch_scale = pitch
+		pitch *= 0.5  # advanced coins: another octave down for extra punch
+	player.pitch_scale = _apply_tape_wobble(pitch)
 	player.volume_db = BUCKET_VOLUME_DB + (4.0 if is_advanced else 0.0)
 	player.play()
 	_active_drones[key] = { "idx": idx, "timer": BUCKET_DRONE_SUSTAIN }
@@ -295,11 +343,13 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	if not _check_density():
 		return
 	_activity_detected = true
-	var degree: int = randi() % 5
+	# Pick from the full chord range (8 chord tones including octave-up set)
+	# so sparkles feel airier and more varied — not just hovering around the root.
+	var degree: int = randi() % 8
 	var pitch := _get_pitch_scale(degree, board_type)
 	var player: AudioStreamPlayer = _chime_pool[_chime_idx]
 	_chime_idx = (_chime_idx + 1) % _chime_pool.size()
-	player.pitch_scale = pitch
+	player.pitch_scale = _apply_tape_wobble(pitch)
 	player.play()
 
 
@@ -433,6 +483,15 @@ func _get_pitch_scale(scale_degree: int, board_type: Enums.BoardType) -> float:
 	return pow(2.0, semitones / 12.0)
 
 
+## Tape wobble: a tiny sine LFO applied to pitch for lofi's analog feel.
+## Returns pitch unchanged for non-lofi themes.
+func _apply_tape_wobble(pitch: float) -> float:
+	if not ThemeProvider.theme.audio_lofi_enabled:
+		return pitch
+	var t: float = Time.get_ticks_msec() / 1000.0
+	return pitch * (1.0 + sin(t * 3.0) * 0.004)
+
+
 func _check_density() -> bool:
 	var now: float = Time.get_ticks_msec() / 1000.0
 	while not _melody_timestamps.is_empty() and now - _melody_timestamps[0] >= 1.0:
@@ -511,6 +570,30 @@ func _get_ambient_pitch(board_type: Enums.BoardType) -> float:
 	return pow(2.0, semitones / 12.0)
 
 
+# ── Theme-gated lofi effects ─────────────────────────────────────────
+
+func _on_theme_changed() -> void:
+	if not ThemeProvider.theme:
+		return
+	var lofi: bool = ThemeProvider.theme.audio_lofi_enabled
+
+	# Toggle the Melody bus low-pass filter.
+	if _melody_bus_idx >= 0 and _melody_lowpass_effect_idx >= 0:
+		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, lofi)
+
+	# Fade the crackle bed in/out.
+	if _crackle_player:
+		var tween := create_tween()
+		if lofi:
+			if not _crackle_player.playing:
+				_crackle_player.volume_db = -80.0
+				_crackle_player.play()
+			tween.tween_property(_crackle_player, "volume_db", CRACKLE_VOLUME_DB, CRACKLE_FADE_DURATION)
+		else:
+			tween.tween_property(_crackle_player, "volume_db", -80.0, CRACKLE_FADE_DURATION)
+			tween.tween_callback(_crackle_player.stop)
+
+
 # ── Audio bus setup ──────────────────────────────────────────────────
 
 func _setup_buses() -> void:
@@ -526,6 +609,14 @@ func _setup_buses() -> void:
 		reverb.dry = 0.6
 		reverb.damping = 0.5
 		AudioServer.add_bus_effect(_melody_bus_idx, reverb)
+		# Low-pass filter for lofi warmth — disabled by default, toggled via
+		# _on_theme_changed when the lofi theme is active.
+		var lowpass := AudioEffectLowPassFilter.new()
+		lowpass.cutoff_hz = MELODY_LOWPASS_CUTOFF
+		lowpass.resonance = 0.5
+		AudioServer.add_bus_effect(_melody_bus_idx, lowpass)
+		_melody_lowpass_effect_idx = AudioServer.get_bus_effect_count(_melody_bus_idx) - 1
+		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, false)
 	else:
 		_melody_bus_idx = AudioServer.get_bus_index(&"Melody")
 
@@ -740,6 +831,50 @@ func _generate_rim(freq: float, duration: float, mix_rate: int = 44100) -> Audio
 		if t < 0.005:
 			click = randf_range(-1.0, 1.0) * (1.0 - t / 0.005) * 0.4
 		var value: float = (tonal + click) * 0.55
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
+	wav.data = data
+	return wav
+
+
+# ── Vinyl crackle generator ──────────────────────────────────────────
+
+## Generates a seamless loop of vinyl-crackle texture: low-amplitude
+## averaged-noise hiss (pink-ish tilt) + occasional louder pop spikes.
+## Lives continuously under the ambient pad when lofi is active.
+func _generate_vinyl_crackle(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_end = int(duration * mix_rate)
+	var num_samples := int(duration * mix_rate)
+	var data := PackedByteArray()
+	data.resize(num_samples * 2)
+
+	# Pre-generate pop positions — a handful of random "ticks" per second.
+	var pop_positions: PackedInt32Array = []
+	var pops_per_second := 3.0
+	var total_pops := int(duration * pops_per_second)
+	for i in total_pops:
+		pop_positions.append(randi() % num_samples)
+
+	# Averaged noise for a softer, warmer hiss than raw white noise.
+	var prev_sample: float = 0.0
+	for i in num_samples:
+		var raw: float = randf_range(-1.0, 1.0)
+		# Low-pass via simple one-pole filter for pink-ish softness
+		var hiss: float = prev_sample * 0.75 + raw * 0.25
+		prev_sample = hiss
+		var value: float = hiss * 0.5
+
+		# Pop spike if this sample is a pop position — short burst
+		for pop_i: int in pop_positions:
+			var dist := i - pop_i
+			if dist >= 0 and dist < 60:
+				var pop_env: float = exp(-float(dist) * 0.1)
+				value += randf_range(-1.0, 1.0) * pop_env * 0.8
+				break
+
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
 	return wav
