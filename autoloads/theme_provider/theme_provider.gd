@@ -4,8 +4,8 @@ signal theme_changed
 
 enum Kind { NORMAL, CHALLENGE }
 
-const NORMAL_THEME: VisualTheme = preload("res://style_lab/presets/nier_parchment.tres")
-const CHALLENGE_THEME: VisualTheme = preload("res://style_lab/presets/glow_dark.tres")
+@export var normal_theme: VisualTheme = preload("res://style_lab/presets/nier_zen.tres")
+@export var challenge_theme: VisualTheme = preload("res://style_lab/presets/glow_dark.tres")
 
 var theme: VisualTheme
 
@@ -27,9 +27,9 @@ func set_theme(kind: Kind) -> void:
 	var new_theme: VisualTheme
 	match kind:
 		Kind.NORMAL:
-			new_theme = NORMAL_THEME
+			new_theme = normal_theme
 		Kind.CHALLENGE:
-			new_theme = CHALLENGE_THEME
+			new_theme = challenge_theme
 	if new_theme == theme:
 		return
 	theme = new_theme
