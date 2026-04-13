@@ -179,6 +179,7 @@ const coin_shape := CoinShape.CYLINDER
 @export var bucket_pulse_duration := 0.15
 @export var bucket_fade_duration := 1.0                           # chord-change visual tween duration
 @export var linger_fade_duration := 2.5                           # chord-gated audio handoff fade (new-coin to previous-chord drones)
+@export var eviction_fade_duration := 0.4                         # voice-stolen audio fade when the drone voice cap is exceeded
 @export var floating_text_rise := 1.5                             # units upward
 @export var floating_text_duration := 1.2
 @export var coin_spawn_scale_from := 0.0                          # fade-in start scale
