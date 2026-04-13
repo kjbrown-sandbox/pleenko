@@ -5,7 +5,7 @@ extends Node3D
 var space_between_pegs: float
 var vertical_spacing: float
 @export var drop_delay: float = 2.0
-@export var drop_delay_reduction_factor: float = 0.75
+@export var drop_delay_reduction_factor: float = 0.85
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
 ## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
@@ -972,6 +972,8 @@ func _show_multi_drop_label(count: int) -> void:
 func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 	if _peg_positions.is_empty():
 		return
+	if not AudioManager.is_active_board(board_type):
+		return
 
 	var t: VisualTheme = ThemeProvider.theme
 	var local_pos := to_local(coin_pos)
@@ -989,7 +991,7 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 		return
 
 	var glow_color := t.get_coin_color(currency_type)
-	var is_sparkle: bool = randf() < AudioManager.PEG_SPARKLE_CHANCE
+	var is_sparkle: bool = AudioManager.should_sparkle(board_type)
 
 	if is_sparkle:
 		AudioManager.play_peg_sparkle(board_type)

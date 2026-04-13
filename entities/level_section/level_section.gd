@@ -8,17 +8,9 @@ var max_value: int = 0
 var value: int = 0
 
 var _shaking := false
-var _base_offset_top: float
-var _base_offset_bottom: float
 var _particle_overlay: Control
 var _board_manager: Node
 var _camera: Camera3D
-
-# Shake re-roll throttle: hold the same offset for this many seconds before
-# generating a new one. Lower frequency = less jittery, more readable.
-const SHAKE_REROLL_INTERVAL: float = 0.06
-var _shake_reroll_accum: float = 0.0
-var _shake_dy: float = 0.0
 
 # Shimmer sweep state — moving highlight on the filled portion of the bar.
 var _shimmer_rect: ColorRect
@@ -72,12 +64,6 @@ func _ready() -> void:
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 	_update_display()
-	_store_base_offsets.call_deferred()
-
-
-func _store_base_offsets() -> void:
-	_base_offset_top = hbox.offset_top
-	_base_offset_bottom = hbox.offset_bottom
 
 
 func _process(delta: float) -> void:
@@ -87,17 +73,8 @@ func _process(delta: float) -> void:
 
 	var t: VisualTheme = ThemeProvider.theme
 	var progress: float = LevelManager.get_progress()
-	# 0 at the shake threshold, 1 at full — drives all three effects' intensity.
+	# 0 at the threshold, 1 at full — drives effect intensity.
 	var fill_range: float = clampf((progress - t.level_bar_shake_threshold) / (1.0 - t.level_bar_shake_threshold), 0.0, 1.0)
-
-	_shake_reroll_accum += delta
-	if _shake_reroll_accum >= SHAKE_REROLL_INTERVAL:
-		_shake_reroll_accum = 0.0
-		var min_intensity: float = t.level_bar_shake_max_intensity * t.level_bar_shake_min_pct
-		var intensity: float = lerpf(min_intensity, t.level_bar_shake_max_intensity, fill_range)
-		_shake_dy = randf_range(-intensity, intensity)
-	hbox.offset_top = _base_offset_top + _shake_dy
-	hbox.offset_bottom = _base_offset_bottom + _shake_dy
 
 	# Shimmer sweep: animate time_offset uniform and lerp intensity from
 	# min_opacity (at the shake threshold) to max_opacity (at 100% fill).
@@ -138,8 +115,6 @@ func _on_level_up_ready(_level: int, level_data: LevelData) -> void:
 
 func _stop_shaking() -> void:
 	_shaking = false
-	hbox.offset_top = _base_offset_top
-	hbox.offset_bottom = _base_offset_bottom
 	set_process(false)
 	if _shimmer_material:
 		_shimmer_material.set_shader_parameter("intensity", 0.0)

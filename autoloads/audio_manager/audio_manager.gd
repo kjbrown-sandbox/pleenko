@@ -25,22 +25,33 @@ var _sounds: Dictionary = {
 
 # ── Musical system ───────────────────────────────────────────────────
 
-# Pentatonic scale: semitone offsets from root. Wraps for larger bucket counts.
-const PENTATONIC := [0, 2, 4, 7, 9, 12, 14, 16, 19, 21]
+# Chord quality: semitone offsets above the chord's root, stacked thirds.
+# Bucket distance from center maps to an index in this array — center = root,
+# ±1 = 3rd, ±2 = 5th, ±3 = 7th, ±4 = octave, etc. Multiple buckets landing
+# together build an actual jazz chord rather than a pentatonic cluster.
+const CHORD_MAJ7 := [0, 4, 7, 11, 12, 16, 19, 23]   # 1, 3, 5, 7, 8ve, 8ve+3, 8ve+5, 8ve+7
+const CHORD_DOM7 := [0, 4, 7, 10, 12, 16, 19, 22]   # major 3, minor 7 (the V chord)
+const CHORD_MIN7 := [0, 3, 7, 10, 12, 15, 19, 22]   # minor 3, minor 7
 
-# Pachelbel Canon progression: board_type → semitone offset from C
-var _board_keys: Dictionary = {}
+# Per-board chord progressions. Each entry is { "root": int, "chord": Array }
+# and the active chord cycles on CHORD_DURATION while the active board sees
+# activity. All chord tones stay diatonic to C major so cross-board multi-drops
+# stay consonant.
+var _board_progressions: Dictionary = {}  # BoardType -> Array[{ "root", "chord" }]
+var _current_chord_index: Dictionary = {}  # BoardType -> int
+
+const CHORD_DURATION := 6.0           # seconds per chord before advancing
+const CHORD_IDLE_RESET := 2.0         # seconds of idle before harmonic rhythm resets
+const SPARKLE_COOLDOWN := 0.5  # seconds between sparkles — next peg after cooldown sparkles
 
 const MELODY_POOL_SIZE := 12
 const CLICK_POOL_SIZE := 8
-const MAX_MELODY_PER_SECOND := 8
 const AMBIENT_FADE_DURATION := 2.0
 const AMBIENT_IDLE_TIMEOUT := 2.0
 const AMBIENT_VOLUME_DB := -6.0
-const PEG_SPARKLE_CHANCE := 0.5
 const PEG_CLICK_VOLUME_DB := -18.0
-const PEG_SPARKLE_VOLUME_DB := -14.0
-const BUCKET_VOLUME_DB := -8.0
+const PEG_SPARKLE_VOLUME_DB := -8.0
+const BUCKET_VOLUME_DB := -17.5
 
 var _cello_pool: Array[AudioStreamPlayer] = []
 var _chime_pool: Array[AudioStreamPlayer] = []
@@ -50,13 +61,21 @@ var _chime_idx: int = 0
 var _click_idx: int = 0
 
 var _active_board: Enums.BoardType = Enums.BoardType.GOLD
-var _melody_timestamps: Array[float] = []
 
-# Ambient pad double-buffer
+# Harmonic rhythm + melodic sparkle walker state.
+var _chord_timer: float = CHORD_DURATION
+var _chord_idle_timer: float = 0.0
+var _walker_degree: int = 0        # 0..7 index into current chord voicing
+var _walker_direction: int = 1     # +1 ascending or -1 descending through the arpeggio
+var _last_sparkle_time: float = -999.0
+
+# Ambient pad double-buffer. Each board has its own pre-generated pad stream
+# at the board's chord voicing (e.g., Cmaj7 for gold, G7 for orange). Board
+# switches assign the new stream to the inactive player before crossfading.
 var _ambient_a: AudioStreamPlayer
 var _ambient_b: AudioStreamPlayer
 var _ambient_active: AudioStreamPlayer
-var _ambient_pad_stream: AudioStreamWAV
+var _ambient_pad_streams: Dictionary = {}  # BoardType -> AudioStreamWAV
 var _ambient_fading_in: bool = false
 var _idle_timer: float = 0.0
 var _activity_detected: bool = false
@@ -66,21 +85,31 @@ var _active_coin_count: int = 0
 
 # Bucket drones: one sustained note per unique bucket pitch. Each bucket's note
 # starts on first hit and extends on repeat hits. Fades after SUSTAIN seconds idle.
-const BUCKET_DRONE_SUSTAIN := 3.0
-const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — ~3s tail from -8 to -80 dB
+const BUCKET_DRONE_SUSTAIN := 2.0
+const BUCKET_DRONE_FADE_RATE := 48.0  # dB/sec — 1.5s fade from -8 to -80 dB
 const BUCKET_DRONE_POOL_SIZE := 16
 var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
 var _active_drones: Dictionary = {}  # String key -> { "idx": int, "timer": float }
+# Two drone streams — zen uses the sine pad loop (matches the ambient pad
+# texture); lofi uses the FM electric piano one-shot. Selected per-play in
+# play_bucket based on the active theme's audio_lofi_enabled flag.
+var _sine_drone_stream: AudioStreamWAV
+var _piano_drone_stream: AudioStream = preload("res://assets/sounds/instrument_samples/Ensoniq-ESQ-1-FM-Piano-C4.wav")
+
+# Low-pass filter on the Melody bus — enabled when lofi active, disabled
+# otherwise. The index tracks where in the bus effect chain it sits.
+const MELODY_LOWPASS_CUTOFF := 3000.0
+var _melody_lowpass_effect_idx: int = -1
 
 # ── Lofi drum system ─────────────────────────────────────────────────
 # Player drops pick randomly from a pool of snare/clap/rim variants.
 # Normal autodropper cycles through a pool of kick variants.
 # Advanced autodropper cycles through a pool of hat/rim variants, delayed
 # by 0.5s from the tick so it lands on the offbeat.
-const DRUM_POOL_PLAYER_VOLUME_DB := 2.0
-const DRUM_POOL_KICK_VOLUME_DB := 4.0
-const DRUM_POOL_HAT_VOLUME_DB := -2.0
+const DRUM_POOL_PLAYER_VOLUME_DB := -2.0
+const DRUM_POOL_KICK_VOLUME_DB := 0.0
+const DRUM_POOL_HAT_VOLUME_DB := -6.0
 const DRUM_RAPID_FIRE_WINDOW := 0.25  # seconds — drops within this are attenuated
 const DRUM_RAPID_FIRE_ATTENUATION_DB := -6.0
 const ADVANCED_DRUM_OFFSET := 0.75  # seconds after the autodropper tick — half of 1.5s tick interval
@@ -112,20 +141,46 @@ func _ready() -> void:
 			add_child(player)
 			_pools[sound_name].append(player)
 
-	# ── Board key mapping (Pachelbel I–V–vi–iii–IV–I) ────────────────
-	_board_keys[Enums.BoardType.GOLD] = 0      # C  (I)
-	_board_keys[Enums.BoardType.ORANGE] = 7    # G  (V)
-	_board_keys[Enums.BoardType.RED] = 9       # Am (vi)
-	# Future boards: iii = +4 (Em), IV = +5 (F), I' = +12 (C octave)
+	# ── Per-board chord progressions ─────────────────────────────────
+	# Gold cycles Cmaj7 → Am7 → Fmaj7 → G7 (vi-IV-I-V flavor, classic lofi
+	# nostalgia, 24s full cycle at 6s/chord). All chords share at least one
+	# common tone with their neighbors so bucket-drone crossfades stay smooth.
+	# Orange/Red currently single-chord; expand progressions later.
+	_board_progressions[Enums.BoardType.GOLD] = [
+		{ "root": 0, "chord": CHORD_MAJ7 },  # Cmaj7
+		{ "root": 9, "chord": CHORD_MIN7 },  # Am7
+		{ "root": 5, "chord": CHORD_MAJ7 },  # Fmaj7
+		{ "root": 7, "chord": CHORD_DOM7 },  # G7
+	]
+	_board_progressions[Enums.BoardType.ORANGE] = [
+		{ "root": 7, "chord": CHORD_DOM7 },  # G7
+	]
+	_board_progressions[Enums.BoardType.RED] = [
+		{ "root": 9, "chord": CHORD_MIN7 },  # Am7
+	]
+	for bt in _board_progressions:
+		_current_chord_index[bt] = 0
 
 	# ── Audio buses ──────────────────────────────────────────────────
 	_setup_buses()
 
 	# ── Placeholder tones (swap for real samples later) ──────────────
 	var cello_stream := _generate_tone(196.0, 0.8)      # G3
-	var chime_stream := _generate_chime(1568.0, 0.6)     # G6 + shimmer
+	var chime_stream := _generate_chime(784.0, 0.6)      # G5 + shimmer
 	var click_stream := _generate_click(0.05)
-	_ambient_pad_stream = _generate_ambient_pad(4.0)
+
+	# Per-board ambient pad voicings — each board's chord as a 4-note stack.
+	# Frequencies chosen to keep the overall pad in the bass/low-mid range.
+	_ambient_pad_streams[Enums.BoardType.GOLD] = _generate_ambient_pad(4.0, 44100,
+		[130.81, 164.81, 196.00, 246.94])  # Cmaj7: C3 E3 G3 B3
+	_ambient_pad_streams[Enums.BoardType.ORANGE] = _generate_ambient_pad(4.0, 44100,
+		[98.00, 123.47, 146.83, 174.61])   # G7:    G2 B2 D3 F3
+	_ambient_pad_streams[Enums.BoardType.RED] = _generate_ambient_pad(4.0, 44100,
+		[110.00, 130.81, 164.81, 196.00])  # Am7:   A2 C3 E3 G3
+
+	# Zen uses a simple sine drone for bucket notes; lofi swaps to the FM piano
+	# preload. Generated here so the drone pool has a default stream on startup.
+	_sine_drone_stream = _generate_ambient_pad(2.0, 44100, [262.0, 392.0])
 
 	# ── Musical pools ───────────────────────────────────────────────
 	for i in MELODY_POOL_SIZE:
@@ -152,14 +207,15 @@ func _ready() -> void:
 		_click_pool.append(click)
 
 	# ── Ambient pad players ──────────────────────────────────────────
+	var initial_pad: AudioStreamWAV = _ambient_pad_streams[Enums.BoardType.GOLD]
 	_ambient_a = AudioStreamPlayer.new()
-	_ambient_a.stream = _ambient_pad_stream
+	_ambient_a.stream = initial_pad
 	_ambient_a.bus = &"Ambient"
 	_ambient_a.volume_db = -80.0
 	add_child(_ambient_a)
 
 	_ambient_b = AudioStreamPlayer.new()
-	_ambient_b.stream = _ambient_pad_stream
+	_ambient_b.stream = initial_pad
 	_ambient_b.bus = &"Ambient"
 	_ambient_b.volume_db = -80.0
 	add_child(_ambient_b)
@@ -167,10 +223,13 @@ func _ready() -> void:
 	_ambient_active = _ambient_a
 
 	# ── Bucket drone pool ───────────────────────────────────────────
-	var drone_stream := _generate_ambient_pad(2.0, 44100, 262.0, 392.0)
+	# Each player's stream is (re)assigned per-play in play_bucket based on
+	# the active theme: sine drone for zen, FM piano one-shot for lofi. The
+	# default here is the sine stream so players have something valid at
+	# construction time.
 	for i in BUCKET_DRONE_POOL_SIZE:
 		var drone := AudioStreamPlayer.new()
-		drone.stream = drone_stream
+		drone.stream = _sine_drone_stream
 		drone.bus = &"Melody"
 		drone.volume_db = -80.0
 		add_child(drone)
@@ -221,6 +280,12 @@ func _ready() -> void:
 		add_child(p)
 		_hat_drum_players.append(p)
 
+	# Listen for theme swaps so lofi-gated effects (low-pass) can toggle at
+	# runtime. Call once to sync initial state against the loaded theme (via
+	# call_deferred so ThemeProvider autoload is fully ready).
+	ThemeProvider.theme_changed.connect(_on_theme_changed)
+	_on_theme_changed.call_deferred()
+
 	set_process(true)
 
 
@@ -236,7 +301,35 @@ func _process(delta: float) -> void:
 		if _idle_timer >= AMBIENT_IDLE_TIMEOUT and _ambient_fading_in:
 			_fade_out_ambient()
 
+	_tick_harmonic_rhythm(delta, has_activity)
 	_update_bucket_drones(delta)
+
+
+## Advances the active board's chord index while activity is present. After
+## CHORD_IDLE_RESET seconds of inactivity, resets the progression and walker
+## so each new session starts grounded on the root chord.
+func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
+	if has_activity:
+		_chord_idle_timer = 0.0
+		_chord_timer -= delta
+		if _chord_timer <= 0.0:
+			var progression: Array = _board_progressions.get(_active_board, [])
+			if progression.size() > 1:
+				_current_chord_index[_active_board] = (_current_chord_index[_active_board] + 1) % progression.size()
+				# Restart the arpeggio on the new chord's root so the melodic
+				# shape aligns with the harmonic change.
+				_walker_degree = 0
+				_walker_direction = 1
+			_chord_timer = CHORD_DURATION
+	else:
+		_chord_idle_timer += delta
+		if _chord_idle_timer >= CHORD_IDLE_RESET:
+			_chord_idle_timer = 0.0
+			for bt in _current_chord_index:
+				_current_chord_index[bt] = 0
+			_chord_timer = CHORD_DURATION
+			_walker_degree = 0
+			_walker_direction = 1
 
 
 # ── Public API: musical sounds ───────────────────────────────────────
@@ -248,22 +341,27 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 
 	var degree: int = bucket_distance_from_center
 	var key: String = ("A_" if is_advanced else "N_") + str(degree)
+	var lofi: bool = ThemeProvider.theme.audio_lofi_enabled
 
+	# Cooldown lockout: if this bucket is still in its sustain-or-fade window,
+	# ignore the hit entirely. The cooldown is NOT extended by repeat hits —
+	# the bucket plays exactly one note per ~2s (1s sustain + 1s fade),
+	# regardless of how many coins land in it during that window. Prevents
+	# the drone stacking / mid-game muddiness from same-bucket spam.
 	if key in _active_drones:
-		_active_drones[key].timer = BUCKET_DRONE_SUSTAIN
-		var player: AudioStreamPlayer = _drone_pool[_active_drones[key].idx]
-		if player.volume_db < BUCKET_VOLUME_DB - 1.0:
-			player.volume_db = BUCKET_VOLUME_DB
 		return
 
 	if _drone_free.is_empty():
 		return
 	var idx: int = _drone_free.pop_back()
 	var player: AudioStreamPlayer = _drone_pool[idx]
-	var pitch: float = _get_pitch_scale(degree, board_type)
+	player.stream = _piano_drone_stream if lofi else _sine_drone_stream
+	# Drop buckets one octave below their chord-tone position so they feel
+	# like the foundation of the mix rather than a melodic voice up top.
+	var pitch: float = _get_pitch_scale(degree, board_type) * 0.5
 	if is_advanced:
-		pitch *= 0.5
-	player.pitch_scale = pitch
+		pitch *= 0.5  # advanced coins: another octave down for extra punch
+	player.pitch_scale = _apply_tape_wobble(pitch)
 	player.volume_db = BUCKET_VOLUME_DB + (4.0 if is_advanced else 0.0)
 	player.play()
 	_active_drones[key] = { "idx": idx, "timer": BUCKET_DRONE_SUSTAIN }
@@ -272,15 +370,21 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	if board_type != _active_board:
 		return
-	if not _check_density():
-		return
 	_activity_detected = true
-	var degree: int = randi() % 5
-	var pitch := _get_pitch_scale(degree, board_type)
+	# Deterministic arpeggio up and down the chord tones. Play the current
+	# walker degree, then advance for next time. The walker index persists
+	# across chord changes so the arpeggio shape continues into the new
+	# harmony without resetting.
+	var pitch := _get_pitch_scale(_walker_degree, board_type)
 	var player: AudioStreamPlayer = _chime_pool[_chime_idx]
 	_chime_idx = (_chime_idx + 1) % _chime_pool.size()
-	player.pitch_scale = pitch
+	# Share the bucket drone's voice so sparkles and buckets sit in the same
+	# timbral world — FM piano under lofi, sine pad otherwise.
+	var lofi: bool = ThemeProvider.theme.audio_lofi_enabled
+	player.stream = _piano_drone_stream if lofi else _sine_drone_stream
+	player.pitch_scale = _apply_tape_wobble(pitch)
 	player.play()
+	_advance_walker()
 
 
 func play_peg_click(board_type: Enums.BoardType) -> void:
@@ -320,7 +424,7 @@ func on_coin_landed() -> void:
 func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
 	if board_type != _active_board:
 		return
-	if not ThemeProvider.theme.audio_drums_enabled:
+	if not ThemeProvider.theme.audio_lofi_enabled:
 		return
 	if _player_drum_players.is_empty():
 		return
@@ -342,7 +446,7 @@ func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
 func play_autodropper_drum(board_type: Enums.BoardType, is_advanced: bool) -> void:
 	if board_type != _active_board:
 		return
-	if not ThemeProvider.theme.audio_drums_enabled:
+	if not ThemeProvider.theme.audio_lofi_enabled:
 		return
 
 	if is_advanced:
@@ -406,27 +510,81 @@ func play_prestige(play_duration: float = 3.0, fade_duration: float = 2.0) -> vo
 # ── Musical internals ────────────────────────────────────────────────
 
 func _get_pitch_scale(scale_degree: int, board_type: Enums.BoardType) -> float:
-	var semitones: int = PENTATONIC[scale_degree % PENTATONIC.size()]
-	semitones += _board_keys.get(board_type, 0)
+	var entry: Dictionary = _current_chord_entry(board_type)
+	var chord: Array = entry["chord"]
+	var semitones: int = chord[scale_degree % chord.size()] + int(entry["root"])
 	return pow(2.0, semitones / 12.0)
 
 
-func _check_density() -> bool:
-	var now: float = Time.get_ticks_msec() / 1000.0
-	while not _melody_timestamps.is_empty() and now - _melody_timestamps[0] >= 1.0:
-		_melody_timestamps.remove_at(0)
-	if _melody_timestamps.size() >= MAX_MELODY_PER_SECOND:
+func _current_chord_entry(board_type: Enums.BoardType) -> Dictionary:
+	var progression: Array = _board_progressions.get(board_type, _board_progressions[Enums.BoardType.GOLD])
+	var idx: int = _current_chord_index.get(board_type, 0)
+	return progression[idx % progression.size()]
+
+
+## Tape wobble: a tiny sine LFO applied to pitch for lofi's analog feel.
+## Returns pitch unchanged for non-lofi themes.
+func _apply_tape_wobble(pitch: float) -> float:
+	if not ThemeProvider.theme.audio_lofi_enabled:
+		return pitch
+	var t: float = Time.get_ticks_msec() / 1000.0
+	return pitch * (1.0 + sin(t * 3.0) * 0.004)
+
+
+## Whether the given board is the one currently in view. Used by non-audio
+## systems (peg VFX, sparkle triggers) to silence inactive boards.
+func is_active_board(board_type: Enums.BoardType) -> bool:
+	return board_type == _active_board
+
+
+## Cooldown-gated sparkle trigger. The first peg hit after SPARKLE_COOLDOWN
+## seconds of sparkle silence always sparkles; subsequent hits within that
+## window are skipped. Returns false for inactive boards so VFX and audio
+## stay in sync. Consumes the cooldown on success.
+func should_sparkle(board_type: Enums.BoardType) -> bool:
+	if board_type != _active_board:
 		return false
-	_melody_timestamps.append(now)
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if now - _last_sparkle_time < SPARKLE_COOLDOWN:
+		return false
+	_last_sparkle_time = now
 	return true
+
+
+## Called by BoardManager on each autodropper tick. Clears the sparkle cooldown
+## so the very next peg hit sparkles — any drift off the beat resets here.
+func notify_autodropper_beat() -> void:
+	_last_sparkle_time = (Time.get_ticks_msec() / 1000.0) - SPARKLE_COOLDOWN
+
+
+## Deterministic arpeggio: ping-pongs up and down through the 8 chord tones
+## (1, 3, 5, 7, 8ve, 8ve+3, 8ve+5, 8ve+7). When the chord changes, the index
+## persists so the same arpeggio shape continues into the new harmony.
+const ARPEGGIO_TOP := 5  # peak index; goes 0→5 then back to 0, then up again
+
+func _advance_walker() -> void:
+	var next: int = _walker_degree + _walker_direction
+	if next > ARPEGGIO_TOP:
+		_walker_direction = -1
+		next = _walker_degree + _walker_direction
+	elif next < 0:
+		_walker_direction = 1
+		next = _walker_degree + _walker_direction
+	_walker_degree = clampi(next, 0, ARPEGGIO_TOP)
 
 
 # ── Ambient pad ──────────────────────────────────────────────────────
 
 func _fade_in_ambient() -> void:
+	# Ambient pad disabled for now — was feeling over-dense with the drums
+	# and bucket drones already in the mix. Early-return keeps the rest of
+	# the pad infrastructure intact for easy re-enable later.
+	return
 	_ambient_fading_in = true
 	if not _ambient_active.playing:
-		_ambient_active.pitch_scale = _get_ambient_pitch(_active_board)
+		# Stream is pre-voiced per board; no pitch shift needed.
+		_ambient_active.stream = _ambient_pad_streams.get(_active_board, _ambient_pad_streams[Enums.BoardType.GOLD])
+		_ambient_active.pitch_scale = 1.0
 		_ambient_active.play()
 	var tween := create_tween()
 	tween.tween_property(_ambient_active, "volume_db", AMBIENT_VOLUME_DB, AMBIENT_FADE_DURATION)
@@ -451,9 +609,10 @@ func _crossfade_ambient(board_type: Enums.BoardType) -> void:
 		out_tween.tween_property(old_player, "volume_db", -80.0, AMBIENT_FADE_DURATION)
 		out_tween.tween_callback(old_player.stop)
 
-	# Fade in new at the new key
+	# Fade in new with the new board's pre-voiced chord stream.
 	if _ambient_fading_in:
-		new_player.pitch_scale = _get_ambient_pitch(board_type)
+		new_player.stream = _ambient_pad_streams.get(board_type, _ambient_pad_streams[Enums.BoardType.GOLD])
+		new_player.pitch_scale = 1.0
 		new_player.volume_db = -80.0
 		new_player.play()
 		var in_tween := create_tween()
@@ -476,9 +635,26 @@ func _update_bucket_drones(delta: float) -> void:
 		_active_drones.erase(key)
 
 
+## Returns the pitch multiplier for an instrument rooted at C4 to play at the
+## given board's root note. Used by drums to stay consonant with the chord
+## progression. The ambient pad no longer uses this — each board has its
+## own pre-voiced pad stream.
 func _get_ambient_pitch(board_type: Enums.BoardType) -> float:
-	var semitones: int = _board_keys.get(board_type, 0)
+	var entry: Dictionary = _current_chord_entry(board_type)
+	var semitones: int = int(entry["root"])
 	return pow(2.0, semitones / 12.0)
+
+
+# ── Theme-gated lofi effects ─────────────────────────────────────────
+
+func _on_theme_changed() -> void:
+	if not ThemeProvider.theme:
+		return
+	var lofi: bool = ThemeProvider.theme.audio_lofi_enabled
+
+	# Toggle the Melody bus low-pass filter.
+	if _melody_bus_idx >= 0 and _melody_lowpass_effect_idx >= 0:
+		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, lofi)
 
 
 # ── Audio bus setup ──────────────────────────────────────────────────
@@ -491,11 +667,19 @@ func _setup_buses() -> void:
 		AudioServer.set_bus_name(_melody_bus_idx, &"Melody")
 		AudioServer.set_bus_send(_melody_bus_idx, &"Master")
 		var reverb := AudioEffectReverb.new()
-		reverb.room_size = 0.85
-		reverb.wet = 0.4
-		reverb.dry = 0.6
-		reverb.damping = 0.5
+		reverb.room_size = 0.55
+		reverb.wet = 0.25
+		reverb.dry = 0.75
+		reverb.damping = 0.7
 		AudioServer.add_bus_effect(_melody_bus_idx, reverb)
+		# Low-pass filter for lofi warmth — disabled by default, toggled via
+		# _on_theme_changed when the lofi theme is active.
+		var lowpass := AudioEffectLowPassFilter.new()
+		lowpass.cutoff_hz = MELODY_LOWPASS_CUTOFF
+		lowpass.resonance = 0.5
+		AudioServer.add_bus_effect(_melody_bus_idx, lowpass)
+		_melody_lowpass_effect_idx = AudioServer.get_bus_effect_count(_melody_bus_idx) - 1
+		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, false)
 	else:
 		_melody_bus_idx = AudioServer.get_bus_index(&"Melody")
 
@@ -572,7 +756,7 @@ func _generate_click(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
 	return wav
 
 
-func _generate_ambient_pad(duration: float, mix_rate: int = 44100, freq_root: float = 131.0, freq_fifth: float = 196.0) -> AudioStreamWAV:
+func _generate_ambient_pad(duration: float, mix_rate: int = 44100, frequencies: Array = [131.0, 196.0]) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = mix_rate
@@ -581,15 +765,20 @@ func _generate_ambient_pad(duration: float, mix_rate: int = 44100, freq_root: fl
 	var num_samples := int(duration * mix_rate)
 	var data := PackedByteArray()
 	data.resize(num_samples * 2)
-	# Both 131 Hz and 196 Hz complete exact integer cycles in 4 seconds
-	# (524 and 784), so the waveform is at zero-crossing at the loop
-	# boundary — no envelope needed for seamless looping.
-	# Slow amplitude modulation (0.25 Hz = one full breath per 4s loop)
-	# gives the pad a gentle pulse so it doesn't feel static.
+	# Each frequency's cycles should land on zero-crossings at the loop
+	# boundary to avoid pops. For a 4-second loop, any integer-Hz
+	# frequency auto-aligns (since N seconds * F Hz = integer cycles).
+	# Slow 0.25 Hz amplitude modulation adds a gentle breath so the pad
+	# doesn't feel static.
+	# Amplitude per voice scales so the sum doesn't clip.
+	var amplitude: float = 0.3 / sqrt(float(frequencies.size()))
 	for i in num_samples:
 		var t: float = float(i) / mix_rate
 		var breath: float = 0.7 + 0.3 * sin(TAU * 0.25 * t)
-		var value: float = (sin(TAU * freq_root * t) * 0.5 + sin(TAU * freq_fifth * t) * 0.3) * breath * 0.3
+		var sum: float = 0.0
+		for freq: float in frequencies:
+			sum += sin(TAU * freq * t)
+		var value: float = sum * amplitude * breath
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
 	return wav
@@ -708,3 +897,5 @@ func _generate_rim(freq: float, duration: float, mix_rate: int = 44100) -> Audio
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
 	return wav
+
+
