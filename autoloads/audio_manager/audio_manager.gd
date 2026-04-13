@@ -129,6 +129,16 @@ var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree",
 # in-flight fade tween first so it can't keep writing to the new drone's
 # volume_db after reassignment.
 var _drone_fade_tweens: Dictionary = {}
+
+# Bucket activation rate limit. Coins can land many-per-frame at high drop
+# rates (advanced + normal + multi-drop + chord boundaries), which slammed
+# the soundfield with simultaneous chimes. Any activation within the cooldown
+# window of the previous one is silently dropped (visual and audio both).
+# Window is ACTIVATION_RATE_DIVISOR-ths of the autodropper interval so the
+# musical pacing scales with gameplay tempo: ~190 ms at the default 1.5 s
+# autodrop, tightening as drop-rate upgrades shorten the interval.
+const ACTIVATION_RATE_DIVISOR := 8.0
+var _last_activation_time: float = -999.0
 var _sparkle_counter: int = 0  # monotonic id for unique sparkle drone keys
 # Two drone streams — zen uses the sine pad loop (matches the ambient pad
 # texture); lofi uses the FM electric piano one-shot. Selected per-play in
@@ -543,6 +553,22 @@ func _finish_drone_fade(idx: int) -> void:
 ## How long the current chord has left before the next chord_changed emit.
 func get_time_until_next_chord() -> float:
 	return _chord_timer
+
+
+## Rate-limit gate for new bucket activations. Returns true if the caller
+## should proceed with the activation (visual mark_active + play_bucket);
+## returns false if still inside the cooldown window from the previous
+## accepted activation. Caller must treat a false return as "drop this
+## activation entirely" — do NOT fall back to visual-only, since part of
+## the goal is to preserve the early-game arpeggio feel where bucket
+## lights follow the musical pulse, not the coin-landing rate.
+func try_consume_bucket_activation() -> bool:
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var window: float = _autodrop_interval / ACTIVATION_RATE_DIVISOR
+	if now - _last_activation_time < window:
+		return false
+	_last_activation_time = now
+	return true
 
 
 ## Runs on chord advance (default harp path + AudioStyle path). Chord changes
