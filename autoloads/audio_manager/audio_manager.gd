@@ -117,7 +117,22 @@ var _active_coin_count: int = 0
 #   LINGERING — previous chord's bucket note carrying across silence; timer
 #               set to the synthesized sample length so the pool slot releases
 #               after the audible decay ends, even if no new coin hits.
+#
+# Three separate fade-duration knobs live on VisualTheme, each tied to a
+# different trigger:
+#   bucket_fade_duration    — visual bucket color tween on chord change.
+#   linger_fade_duration    — audio handoff fade when a new coin lands and
+#                             clears the previous chord's LINGERING drones.
+#   eviction_fade_duration  — audio fade when the voice cap steals an older
+#                             drone's slot to make room for a new allocation.
 enum DroneState { SPARKLE, ACTIVE, LINGERING }
+
+# Hard cap on simultaneous drone voices (ACTIVE + LINGERING + SPARKLE). Tuned
+# empirically against the bus compressor: 8 voices is where the compressor
+# hits meaningful gain reduction without pumping, and where density still
+# feels rich rather than sparse. Raising this weakens the compressor's
+# density response; lowering thins the texture.
+const MAX_ACTIVE_DRONES := 8
 
 const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — 3s fade over the ~72 dB range
 const SPARKLE_DRONE_SUSTAIN := 3.5     # sparkles ring a bit shorter than bucket drones
@@ -210,6 +225,7 @@ var _last_player_drum_time: float = -999.0
 
 # Bus indices (set in _ready)
 var _melody_bus_idx: int = -1
+var _drones_bus_idx: int = -1
 var _click_bus_idx: int = -1
 var _ambient_bus_idx: int = -1
 
@@ -344,7 +360,7 @@ func _ready() -> void:
 	for i in BUCKET_DRONE_POOL_SIZE:
 		var drone := AudioStreamPlayer.new()
 		drone.stream = _sine_drone_stream
-		drone.bus = &"Melody"
+		drone.bus = &"Drones"
 		drone.volume_db = -80.0
 		add_child(drone)
 		_drone_pool.append(drone)
@@ -542,6 +558,67 @@ func _kill_fade_tween(idx: int) -> void:
 	_drone_fade_tweens.erase(idx)
 
 
+## Factory for `_active_drones` entries. Every allocation site goes through
+## this so `created_at` and the other fields can't drift per-site.
+func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, state: int) -> Dictionary:
+	return {
+		"idx": idx,
+		"timer": timer,
+		"degree": degree,
+		"octave_mult": octave_mult,
+		"state": state,
+		"created_at": Time.get_ticks_msec(),
+	}
+
+
+## Eviction priority for the voice cap: fade LINGERING (trailing tails) before
+## SPARKLE (decorative plucks) before ACTIVE (melody in the current chord).
+## Higher return value = evict first. Decoupled from enum declaration order.
+func _eviction_priority(state: int) -> int:
+	match state:
+		DroneState.LINGERING: return 2
+		DroneState.SPARKLE: return 1
+		DroneState.ACTIVE: return 0
+		_: return 0
+
+
+## Voice cap enforcement: when `_active_drones` is at `MAX_ACTIVE_DRONES`,
+## pick the drone with the highest eviction priority (oldest first as tie-
+## breaker) and fade it over `eviction_fade_duration` so the caller has a
+## free pool slot. No-op below cap.
+##
+## NOTE: chord advances flip many ACTIVE drones to LINGERING in one frame
+## without allocating, so `_active_drones.size()` can transiently exceed
+## the cap immediately after. That's by design — the compressor on the
+## Drones bus is the safety net for that burst; the cap bites on the
+## next allocation and brings the count back under.
+func _evict_oldest_drone_if_full() -> void:
+	if _active_drones.size() < MAX_ACTIVE_DRONES:
+		return
+	var victim_key: String = ""
+	var victim_priority: int = -1
+	var victim_age: int = -1  # higher = older
+	var now: int = Time.get_ticks_msec()
+	for drone_key in _active_drones:
+		var drone: Dictionary = _active_drones[drone_key]
+		var priority: int = _eviction_priority(drone["state"])
+		var age: int = now - int(drone.get("created_at", now))
+		if priority > victim_priority or (priority == victim_priority and age > victim_age):
+			victim_priority = priority
+			victim_age = age
+			victim_key = drone_key
+	if victim_key == "":
+		return
+	var victim: Dictionary = _active_drones[victim_key]
+	var fade_duration: float = 0.4
+	if ThemeProvider and ThemeProvider.theme:
+		fade_duration = ThemeProvider.theme.eviction_fade_duration
+	# Erase first so any subsequent lookups (e.g. during the fade tween's
+	# tick callback) can't see a half-dead entry.
+	_active_drones.erase(victim_key)
+	_fade_drone(int(victim["idx"]), fade_duration)
+
+
 func _finish_drone_fade(idx: int) -> void:
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stop()
@@ -666,6 +743,9 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	if key in _active_drones and _active_drones[key]["state"] == DroneState.ACTIVE:
 		return
 
+	# Eviction runs AFTER _fade_lingering_drones (above) so the linger-clear's
+	# natural reduction is counted first — we only evict when genuinely full.
+	_evict_oldest_drone_if_full()
 	if _drone_free.is_empty():
 		return
 	var idx: int = _drone_free.pop_back()
@@ -679,13 +759,7 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	player.volume_db = target_volume
 	player.play()
 	var tail: float = maxf(_chord_timer, MIN_BUCKET_RING_SECONDS)
-	_active_drones[key] = {
-		"idx": idx,
-		"timer": tail,
-		"degree": degree,
-		"octave_mult": octave_mult,
-		"state": DroneState.ACTIVE,
-	}
+	_active_drones[key] = _make_drone_entry(idx, tail, degree, octave_mult, DroneState.ACTIVE)
 
 
 ## Peg sparkle audio is currently suppressed — it clashes with the chord-gated
@@ -1034,6 +1108,31 @@ func _setup_buses() -> void:
 		AudioServer.set_bus_send(_ambient_bus_idx, &"Master")
 	else:
 		_ambient_bus_idx = AudioServer.get_bus_index(&"Ambient")
+
+	# Dedicated drone-voice bus. Compressor first (tames the dry stack as
+	# voice count grows), then reverb (small-room "glue", blooms off the
+	# compressed signal — order matters; reverb-before-comp would pump the
+	# tail with every new hit).
+	if AudioServer.get_bus_index(&"Drones") < 0:
+		_drones_bus_idx = AudioServer.bus_count
+		AudioServer.add_bus()
+		AudioServer.set_bus_name(_drones_bus_idx, &"Drones")
+		AudioServer.set_bus_send(_drones_bus_idx, &"Master")
+		var comp := AudioEffectCompressor.new()
+		comp.threshold = -18.0
+		comp.ratio = 3.0
+		comp.attack_us = 10000.0  # 10 ms
+		comp.release_ms = 500.0
+		AudioServer.add_bus_effect(_drones_bus_idx, comp)
+		var reverb := AudioEffectReverb.new()
+		reverb.room_size = 0.4
+		reverb.damping = 0.5
+		reverb.wet = 0.2
+		reverb.dry = 0.8
+		reverb.hipass = 0.2  # cut muddy low-end buildup on dense stacks
+		AudioServer.add_bus_effect(_drones_bus_idx, reverb)
+	else:
+		_drones_bus_idx = AudioServer.get_bus_index(&"Drones")
 
 
 # ── Placeholder tone generation ──────────────────────────────────────
