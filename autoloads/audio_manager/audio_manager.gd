@@ -33,19 +33,22 @@ const CHORD_MAJ7 := [0, 4, 7, 11, 12, 16, 19, 23]   # 1, 3, 5, 7, 8ve, 8ve+3, 8v
 const CHORD_DOM7 := [0, 4, 7, 10, 12, 16, 19, 22]   # major 3, minor 7 (the V chord)
 const CHORD_MIN7 := [0, 3, 7, 10, 12, 15, 19, 22]   # minor 3, minor 7
 
-# Pachelbel progression I-V-vi-iii-IV-I with 7ths added. Each board knows its
-# chord root offset (semitones from C) and its chord quality. All chord tones
-# across all boards are diatonic to C major — cross-board multi-drops stay
-# consonant.
-var _board_chords: Dictionary = {}  # BoardType -> { "root": int, "chord": Array }
+# Per-board chord progressions. Each entry is { "root": int, "chord": Array }
+# and the active chord cycles on CHORD_DURATION while the active board sees
+# activity. All chord tones stay diatonic to C major so cross-board multi-drops
+# stay consonant.
+var _board_progressions: Dictionary = {}  # BoardType -> Array[{ "root", "chord" }]
+var _current_chord_index: Dictionary = {}  # BoardType -> int
+
+const CHORD_DURATION := 6.0           # seconds per chord before advancing
+const CHORD_IDLE_RESET := 2.0         # seconds of idle before harmonic rhythm resets
+const SPARKLE_COOLDOWN := 0.5  # seconds between sparkles — next peg after cooldown sparkles
 
 const MELODY_POOL_SIZE := 12
 const CLICK_POOL_SIZE := 8
-const MAX_MELODY_PER_SECOND := 8
 const AMBIENT_FADE_DURATION := 2.0
 const AMBIENT_IDLE_TIMEOUT := 2.0
 const AMBIENT_VOLUME_DB := -6.0
-const PEG_SPARKLE_CHANCE := 0.5
 const PEG_CLICK_VOLUME_DB := -18.0
 const PEG_SPARKLE_VOLUME_DB := -8.0
 const BUCKET_VOLUME_DB := -17.5
@@ -58,7 +61,13 @@ var _chime_idx: int = 0
 var _click_idx: int = 0
 
 var _active_board: Enums.BoardType = Enums.BoardType.GOLD
-var _melody_timestamps: Array[float] = []
+
+# Harmonic rhythm + melodic sparkle walker state.
+var _chord_timer: float = CHORD_DURATION
+var _chord_idle_timer: float = 0.0
+var _walker_degree: int = 0        # 0..7 index into current chord voicing
+var _walker_direction: int = 1     # +1 ascending or -1 descending through the arpeggio
+var _last_sparkle_time: float = -999.0
 
 # Ambient pad double-buffer. Each board has its own pre-generated pad stream
 # at the board's chord voicing (e.g., Cmaj7 for gold, G7 for orange). Board
@@ -132,12 +141,22 @@ func _ready() -> void:
 			add_child(player)
 			_pools[sound_name].append(player)
 
-	# ── Board chord mapping (Pachelbel I–V–vi–iii–IV–I with 7ths) ────
-	_board_chords[Enums.BoardType.GOLD] = { "root": 0, "chord": CHORD_MAJ7 }    # Cmaj7 (I)
-	_board_chords[Enums.BoardType.ORANGE] = { "root": 7, "chord": CHORD_DOM7 }  # G7    (V)
-	_board_chords[Enums.BoardType.RED] = { "root": 9, "chord": CHORD_MIN7 }     # Am7   (vi)
-	# Future boards: iii = Em7 (root 4, MIN7), IV = Fmaj7 (root 5, MAJ7),
-	# I' = Cmaj7 octave (root 12, MAJ7).
+	# ── Per-board chord progressions ─────────────────────────────────
+	# Gold cycles Fmaj7 ↔ Em7 (voice-leading: F→E, A→G, C→B, E→D — all stepwise,
+	# so bucket-drone crossfades through chord changes stay consonant).
+	# Orange/Red currently single-chord; expand progressions later.
+	_board_progressions[Enums.BoardType.GOLD] = [
+		{ "root": 5, "chord": CHORD_MAJ7 },  # Fmaj7
+		{ "root": 4, "chord": CHORD_MIN7 },  # Em7
+	]
+	_board_progressions[Enums.BoardType.ORANGE] = [
+		{ "root": 7, "chord": CHORD_DOM7 },  # G7
+	]
+	_board_progressions[Enums.BoardType.RED] = [
+		{ "root": 9, "chord": CHORD_MIN7 },  # Am7
+	]
+	for bt in _board_progressions:
+		_current_chord_index[bt] = 0
 
 	# ── Audio buses ──────────────────────────────────────────────────
 	_setup_buses()
@@ -279,7 +298,35 @@ func _process(delta: float) -> void:
 		if _idle_timer >= AMBIENT_IDLE_TIMEOUT and _ambient_fading_in:
 			_fade_out_ambient()
 
+	_tick_harmonic_rhythm(delta, has_activity)
 	_update_bucket_drones(delta)
+
+
+## Advances the active board's chord index while activity is present. After
+## CHORD_IDLE_RESET seconds of inactivity, resets the progression and walker
+## so each new session starts grounded on the root chord.
+func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
+	if has_activity:
+		_chord_idle_timer = 0.0
+		_chord_timer -= delta
+		if _chord_timer <= 0.0:
+			var progression: Array = _board_progressions.get(_active_board, [])
+			if progression.size() > 1:
+				_current_chord_index[_active_board] = (_current_chord_index[_active_board] + 1) % progression.size()
+				# Restart the arpeggio on the new chord's root so the melodic
+				# shape aligns with the harmonic change.
+				_walker_degree = 0
+				_walker_direction = 1
+			_chord_timer = CHORD_DURATION
+	else:
+		_chord_idle_timer += delta
+		if _chord_idle_timer >= CHORD_IDLE_RESET:
+			_chord_idle_timer = 0.0
+			for bt in _current_chord_index:
+				_current_chord_index[bt] = 0
+			_chord_timer = CHORD_DURATION
+			_walker_degree = 0
+			_walker_direction = 1
 
 
 # ── Public API: musical sounds ───────────────────────────────────────
@@ -320,17 +367,21 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	if board_type != _active_board:
 		return
-	if not _check_density():
-		return
 	_activity_detected = true
-	# Pick from the full chord range (8 chord tones including octave-up set)
-	# so sparkles feel airier and more varied — not just hovering around the root.
-	var degree: int = randi() % 8
-	var pitch := _get_pitch_scale(degree, board_type)
+	# Deterministic arpeggio up and down the chord tones. Play the current
+	# walker degree, then advance for next time. The walker index persists
+	# across chord changes so the arpeggio shape continues into the new
+	# harmony without resetting.
+	var pitch := _get_pitch_scale(_walker_degree, board_type)
 	var player: AudioStreamPlayer = _chime_pool[_chime_idx]
 	_chime_idx = (_chime_idx + 1) % _chime_pool.size()
+	# Share the bucket drone's voice so sparkles and buckets sit in the same
+	# timbral world — FM piano under lofi, sine pad otherwise.
+	var lofi: bool = ThemeProvider.theme.audio_lofi_enabled
+	player.stream = _piano_drone_stream if lofi else _sine_drone_stream
 	player.pitch_scale = _apply_tape_wobble(pitch)
 	player.play()
+	_advance_walker()
 
 
 func play_peg_click(board_type: Enums.BoardType) -> void:
@@ -456,11 +507,16 @@ func play_prestige(play_duration: float = 3.0, fade_duration: float = 2.0) -> vo
 # ── Musical internals ────────────────────────────────────────────────
 
 func _get_pitch_scale(scale_degree: int, board_type: Enums.BoardType) -> float:
-	var board_chord: Dictionary = _board_chords.get(board_type, _board_chords[Enums.BoardType.GOLD])
-	var chord: Array = board_chord["chord"]
-	var semitones: int = chord[scale_degree % chord.size()]
-	semitones += board_chord["root"]
+	var entry: Dictionary = _current_chord_entry(board_type)
+	var chord: Array = entry["chord"]
+	var semitones: int = chord[scale_degree % chord.size()] + int(entry["root"])
 	return pow(2.0, semitones / 12.0)
+
+
+func _current_chord_entry(board_type: Enums.BoardType) -> Dictionary:
+	var progression: Array = _board_progressions.get(board_type, _board_progressions[Enums.BoardType.GOLD])
+	var idx: int = _current_chord_index.get(board_type, 0)
+	return progression[idx % progression.size()]
 
 
 ## Tape wobble: a tiny sine LFO applied to pitch for lofi's analog feel.
@@ -472,14 +528,40 @@ func _apply_tape_wobble(pitch: float) -> float:
 	return pitch * (1.0 + sin(t * 3.0) * 0.004)
 
 
-func _check_density() -> bool:
-	var now: float = Time.get_ticks_msec() / 1000.0
-	while not _melody_timestamps.is_empty() and now - _melody_timestamps[0] >= 1.0:
-		_melody_timestamps.remove_at(0)
-	if _melody_timestamps.size() >= MAX_MELODY_PER_SECOND:
+## Whether the given board is the one currently in view. Used by non-audio
+## systems (peg VFX, sparkle triggers) to silence inactive boards.
+func is_active_board(board_type: Enums.BoardType) -> bool:
+	return board_type == _active_board
+
+
+## Cooldown-gated sparkle trigger. The first peg hit after SPARKLE_COOLDOWN
+## seconds of sparkle silence always sparkles; subsequent hits within that
+## window are skipped. Returns false for inactive boards so VFX and audio
+## stay in sync. Consumes the cooldown on success.
+func should_sparkle(board_type: Enums.BoardType) -> bool:
+	if board_type != _active_board:
 		return false
-	_melody_timestamps.append(now)
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if now - _last_sparkle_time < SPARKLE_COOLDOWN:
+		return false
+	_last_sparkle_time = now
 	return true
+
+
+## Deterministic arpeggio: ping-pongs up and down through the 8 chord tones
+## (1, 3, 5, 7, 8ve, 8ve+3, 8ve+5, 8ve+7). When the chord changes, the index
+## persists so the same arpeggio shape continues into the new harmony.
+const ARPEGGIO_TOP := 5  # peak index; goes 0→5 then back to 0, then up again
+
+func _advance_walker() -> void:
+	var next: int = _walker_degree + _walker_direction
+	if next > ARPEGGIO_TOP:
+		_walker_direction = -1
+		next = _walker_degree + _walker_direction
+	elif next < 0:
+		_walker_direction = 1
+		next = _walker_degree + _walker_direction
+	_walker_degree = clampi(next, 0, ARPEGGIO_TOP)
 
 
 # ── Ambient pad ──────────────────────────────────────────────────────
@@ -549,8 +631,8 @@ func _update_bucket_drones(delta: float) -> void:
 ## progression. The ambient pad no longer uses this — each board has its
 ## own pre-voiced pad stream.
 func _get_ambient_pitch(board_type: Enums.BoardType) -> float:
-	var board_chord: Dictionary = _board_chords.get(board_type, _board_chords[Enums.BoardType.GOLD])
-	var semitones: int = board_chord["root"]
+	var entry: Dictionary = _current_chord_entry(board_type)
+	var semitones: int = int(entry["root"])
 	return pow(2.0, semitones / 12.0)
 
 
