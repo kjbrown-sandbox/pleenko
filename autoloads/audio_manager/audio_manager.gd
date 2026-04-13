@@ -48,7 +48,7 @@ const AMBIENT_VOLUME_DB := -6.0
 const PEG_SPARKLE_CHANCE := 0.5
 const PEG_CLICK_VOLUME_DB := -18.0
 const PEG_SPARKLE_VOLUME_DB := -8.0
-const BUCKET_VOLUME_DB := -8.0
+const BUCKET_VOLUME_DB := -17.5
 
 var _cello_pool: Array[AudioStreamPlayer] = []
 var _chime_pool: Array[AudioStreamPlayer] = []
@@ -76,8 +76,8 @@ var _active_coin_count: int = 0
 
 # Bucket drones: one sustained note per unique bucket pitch. Each bucket's note
 # starts on first hit and extends on repeat hits. Fades after SUSTAIN seconds idle.
-const BUCKET_DRONE_SUSTAIN := 3.0
-const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — ~3s tail from -8 to -80 dB
+const BUCKET_DRONE_SUSTAIN := 2.0
+const BUCKET_DRONE_FADE_RATE := 48.0  # dB/sec — 1.5s fade from -8 to -80 dB
 const BUCKET_DRONE_POOL_SIZE := 16
 var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
@@ -98,9 +98,9 @@ var _melody_lowpass_effect_idx: int = -1
 # Normal autodropper cycles through a pool of kick variants.
 # Advanced autodropper cycles through a pool of hat/rim variants, delayed
 # by 0.5s from the tick so it lands on the offbeat.
-const DRUM_POOL_PLAYER_VOLUME_DB := 2.0
-const DRUM_POOL_KICK_VOLUME_DB := 4.0
-const DRUM_POOL_HAT_VOLUME_DB := -2.0
+const DRUM_POOL_PLAYER_VOLUME_DB := -2.0
+const DRUM_POOL_KICK_VOLUME_DB := 0.0
+const DRUM_POOL_HAT_VOLUME_DB := -6.0
 const DRUM_RAPID_FIRE_WINDOW := 0.25  # seconds — drops within this are attenuated
 const DRUM_RAPID_FIRE_ATTENUATION_DB := -6.0
 const ADVANCED_DRUM_OFFSET := 0.75  # seconds after the autodropper tick — half of 1.5s tick interval
@@ -293,16 +293,12 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	var key: String = ("A_" if is_advanced else "N_") + str(degree)
 	var lofi: bool = ThemeProvider.theme.audio_lofi_enabled
 
+	# Cooldown lockout: if this bucket is still in its sustain-or-fade window,
+	# ignore the hit entirely. The cooldown is NOT extended by repeat hits —
+	# the bucket plays exactly one note per ~2s (1s sustain + 1s fade),
+	# regardless of how many coins land in it during that window. Prevents
+	# the drone stacking / mid-game muddiness from same-bucket spam.
 	if key in _active_drones:
-		_active_drones[key].timer = BUCKET_DRONE_SUSTAIN
-		var player: AudioStreamPlayer = _drone_pool[_active_drones[key].idx]
-		if player.volume_db < BUCKET_VOLUME_DB - 1.0:
-			player.volume_db = BUCKET_VOLUME_DB
-		# Retrigger fix for one-shot piano samples: if the sample has decayed
-		# to silence while the slot is still "active", re-play it on the next
-		# bucket hit. Sine drones loop, so they're always .playing — no-op for zen.
-		if not player.playing:
-			player.play()
 		return
 
 	if _drone_free.is_empty():
@@ -489,6 +485,10 @@ func _check_density() -> bool:
 # ── Ambient pad ──────────────────────────────────────────────────────
 
 func _fade_in_ambient() -> void:
+	# Ambient pad disabled for now — was feeling over-dense with the drums
+	# and bucket drones already in the mix. Early-return keeps the rest of
+	# the pad infrastructure intact for easy re-enable later.
+	return
 	_ambient_fading_in = true
 	if not _ambient_active.playing:
 		# Stream is pre-voiced per board; no pitch shift needed.
@@ -576,10 +576,10 @@ func _setup_buses() -> void:
 		AudioServer.set_bus_name(_melody_bus_idx, &"Melody")
 		AudioServer.set_bus_send(_melody_bus_idx, &"Master")
 		var reverb := AudioEffectReverb.new()
-		reverb.room_size = 0.85
-		reverb.wet = 0.4
-		reverb.dry = 0.6
-		reverb.damping = 0.5
+		reverb.room_size = 0.55
+		reverb.wet = 0.25
+		reverb.dry = 0.75
+		reverb.damping = 0.7
 		AudioServer.add_bus_effect(_melody_bus_idx, reverb)
 		# Low-pass filter for lofi warmth — disabled by default, toggled via
 		# _on_theme_changed when the lofi theme is active.
