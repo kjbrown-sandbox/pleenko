@@ -38,63 +38,210 @@ Coins should calculate their path **row by row**, not all at once. This way if t
 
 > **Living documentation.** This section is the authoritative map of how systems own state, emit signals, and call into each other. It is kept in sync with the code — each time a feature branch is ready to merge to `main`, the relevant entries below are updated to reflect the new behavior, signals, data flows, and cross-system relations. New systems get new entries. Removed systems are deleted. The goal is that reading this section alone is enough to understand how the systems fit together without diving into the code.
 
-**CurrencyManager (Autoload)**
+#### Project layout
 
-- Owns all balances: gold, unrefined orange, orange, unrefined red, red
-- Owns all caps and cap upgrade costs
-- Methods: add(), spend(), can_afford(), get_balance()
-- Emits: currency_changed(type, new_amount, max_amount)
-- UI listens directly to currency_changed — no manual update calls needed
+- `autoloads/` — singleton managers. One subdirectory per autoload.
+- `entities/` — scenes (`.tscn` + `.gd` pairs). Each is self-contained.
+- `scripts/` — shared data classes, utilities (enums, reward/tier data, format utils, offline earnings).
+- `style_lab/` — `VisualTheme` resource, presets under `style_lab/presets/*.tres`, plus the in-editor style lab scene.
+- `assets/` — icons, sounds, fonts.
 
-**BoardManager**
+Autoload init order is set in `project.godot` and matters: `TierRegistry → CurrencyManager → UpgradeManager → LevelManager → PrestigeManager → SaveManager → SceneManager → ChallengeManager → ThemeProvider → ModeManager → ChallengeProgressManager → AudioManager`. Later autoloads may subscribe to earlier ones in `_ready`.
 
-- Creates/destroys board instances (gold, orange, red)
-- Handles board positioning and spacing
-- Manages board selection and camera tweening
-- Keyboard navigation between boards
+#### Autoloads
 
-**PlinkoBoard**
+**TierRegistry** — `autoloads/tier_registry/tier_registry.gd`
 
-- Builds pegs and buckets procedurally based on num_rows
-- Spawns coins via drop_coin()
-- Exposes methods for coins to query: get_peg_position(row, col), get_bucket_position(col), get_bucket_value(col), get_bucket_type(col)
-- Emits: coin_landed(value, bucket_type)
-- Shares mesh resources (peg_mesh, bucket_mesh, materials) across instances
+- Pure data lookup over the ordered tier chain (gold, orange, red, ...). No mutable state.
+- Consumed by nearly every manager for per-board currency, drop costs, tier indices.
+- Methods: `get_tier(board_type)`, `get_tier_index`, `get_next_tier`, `primary_currency`, `raw_currency`, `get_drop_costs`.
+- Emits nothing.
 
-**Coin**
+**CurrencyManager** — `autoloads/currency_manager/currency_manager.gd`
 
-- Receives board reference and starting info on spawn
-- Animates row by row: picks left/right, asks board for next waypoint
-- Determines bucket value at landing time (not drop time)
-- Emits: landed(bucket_value) then queue_free()
+- Owns balances + caps for all currencies.
+- Methods: `add`, `spend`, `can_afford`, `get_balance`, `get_cap`, `buy_cap_raise`, `reset`, `serialize/deserialize`.
+- Emits: `currency_changed(type, new_balance, new_cap)` on every mutation.
+- LevelManager, UpgradeManager (for cap-raise unlocks), and ChallengeTracker listen to `currency_changed`.
 
-**DropManager**
+**UpgradeManager** — `autoloads/upgrade_manager/upgrade_manager.gd`
 
-- Owns per-board queues and cooldown timers
-- Owns autodropper pool and assignment
-- Handles queue drainage on timer callbacks
-- Methods: request_drop(board_type), add_to_queue(board_type, multiplier)
+- Owns per-board, per-upgrade state (level, cost, delta, caps, unlocked flag).
+- `upgrade_gate: Callable` — optional gate set by `ChallengeManager` to block purchases during a challenge.
+- Methods: `buy`, `can_buy`, `get_level`, `get_cost`, `unlock`, `is_cap_raise_available`, `buy_cap_raise`, `force_apply` (used for starting conditions), `serialize/deserialize`.
+- Emits: `upgrade_purchased(upgrade_type, board_type, level)`, `upgrade_unlocked(upgrade_type, board_type)`, `cap_raise_unlocked(board_type)`, `autodropper_unlocked`, `advanced_autodropper_unlocked`.
+- Listens: `LevelManager.rewards_claimed` (to unlock upgrades from level rewards), `CurrencyManager.currency_changed` (to flip cap-raise availability when the tier's raw currency is first earned).
 
-**LevelManager**
+**LevelManager** — `autoloads/level_manager/level_manager.gd`
 
-- Owns player_level and XP tracking
-- Defines level thresholds and rewards
-- Emits: level_changed(new_level), level_up(level, rewards)
-- Gates feature unlocks (shop, upgrades, boards) behind levels
+- Owns `current_level` and the level table (thresholds, messages, rewards per slot).
+- Level table is rebuilt per tier based on `TierRegistry` + `PrestigeManager` unlock state.
+- Methods: `claim_rewards`, `get_active_currency`, `get_next_threshold`, `get_progress`, `get_tier_for_level`, `serialize/deserialize`.
+- Emits: `level_changed(level)`, `level_up_ready(level, data)` (VFX layer listens), `rewards_claimed(level, rewards: Array[RewardData])`.
+- Listens: `CurrencyManager.currency_changed` (to detect threshold crossings).
 
-**UpgradeManager**
+**PrestigeManager** — `autoloads/prestige_manager/prestige_manager.gd`
 
-- Stores upgrade definitions as data (not code branches)
-- Each upgrade: id, display_name, cost_formula, max_level, cap_raise_currency, effect
-- Methods: buy(upgrade_id), can_buy(upgrade_id), get_upgrades_for_board(board_type)
-- Talks to CurrencyManager to spend, emits upgrade_purchased(id, new_level)
+- Owns per-board prestige counts (0 = locked, ≥1 = permanently unlocked) and the current `PrestigePhase` (NONE, SLOW_MO, FREEZE, EXPAND, TRANSITION) which sets `Engine.time_scale`.
+- Methods: `can_prestige`, `is_board_unlocked_permanently`, `get_multi_drop(board_type)`, `trigger_prestige`, `claim_prestige`, `enter_phase(phase)`, `serialize/deserialize`.
+- Emits: `prestige_triggered(board_type)`, `prestige_claimed(board_type)`, `prestige_phase_changed(phase)`.
+- Reads `ThemeProvider.theme` inside `enter_phase` for time-scale values. BoardManager queries multi-drop; LevelManager checks unlock state when rebuilding the level table.
 
-**SaveManager**
+**SaveManager** — `autoloads/save_manager/save_manager.gd`
 
-- Queries other managers for serializable state
-- Writes/reads JSON to user:// path
-- Auto-save timer (30 seconds)
-- Quicksave/quickload support
+- Orchestrates save/load to `user://save.json`. No signals, no state beyond an optional autosave timer.
+- Methods: `setup(board_manager, autosave)`, `save_game`, `load_game`, `save_challenge_progress`, `load_prestige_only`, `reset_game`, `reset_game_without_reload`, `has_save`.
+- Deserialization order (strict): `PrestigeManager → ChallengeProgressManager → LevelManager → CurrencyManager → UpgradeManager → BoardManager`. Order matters so signals fire against fully-initialized state.
+- Calls `OfflineCalculator` (`scripts/offline/`) to credit earnings accumulated since last save.
+
+**SceneManager** — `autoloads/scene_manager/scene_manager.gd`
+
+- Thin scene-transition helper. `set_new_scene(packed_scene, instant)` — optional 1s fade overlay.
+
+**ChallengeManager** — `autoloads/challenge_manager/challenge_manager.gd` (+ child `ChallengeTracker`)
+
+- Lifecycle manager for active challenges. Owns `is_active_challenge`, the current `ChallengeData`, and a child `ChallengeTracker` node that runs live tracking.
+- Methods: `set_challenge(challenge)` (marks active, emits state_changed), `setup(board_manager)` (creates tracker, applies starting conditions, sets gates on UpgradeManager + BoardManager), `clear_challenge`, `is_upgrade_allowed`, `is_board_allowed`, `get_time_remaining`, `get_total_seconds`, `get_total_drops`, `get_time_taken`, `get_objective_text`, `get_objective_progress`, `activate_survive_autodroppers`.
+- Emits: `challenge_completed`, `challenge_failed(reason)`, `challenge_state_changed` (on set/clear — AudioManager listens), `tick(seconds_remaining)` (emitted by `ChallengeTracker` each integer-second crossing — AudioManager and ChallengeClock listen).
+- Challenge start flow: caller calls `set_challenge`, then `ThemeProvider.set_theme(CHALLENGE)`, then `get_tree().reload_current_scene()`. After reload, `Main._setup_challenge` calls `ChallengeManager.setup(board_manager)` which creates the tracker.
+
+**ChallengeTracker** (child node of ChallengeManager) — `autoloads/challenge_manager/challenge_tracker.gd`
+
+- Runs one challenge: tracks coin landings, checks constraints and objectives, decrements `time_remaining`.
+- Handles two-phase Survive objectives (WAITING → SURVIVING; activates autodroppers at transition via `ChallengeManager.activate_survive_autodroppers`).
+- Emits per-integer-second `ChallengeManager.tick(seconds_remaining)` from both regular and SURVIVING phase timers.
+- Emits `completed` / `failed(reason)` up to ChallengeManager.
+- Listens: per-board `coin_landed`, `coin_dropped`, `autodrop_failed`; `BoardManager.board_switched`; `CurrencyManager.currency_changed`.
+
+**ThemeProvider** — `autoloads/theme_provider/theme_provider.gd`
+
+- Owns the active `VisualTheme` resource. Swaps `normal_theme ↔ challenge_theme` via `set_theme(kind)`. Configures the shared `WorldEnvironment` and (optionally) a `DirectionalLight3D` based on `theme.unshaded`.
+- Emits: `theme_changed` (sync, on any theme swap).
+- AudioManager reads `theme.audio_style` on `theme_changed` to route arcade audio; PrestigeManager reads theme fields for prestige time-scale values; every Bucket/Coin/Peg reads their colors/materials on setup.
+
+**ModeManager** — `autoloads/mode_manager/mode_manager.gd`
+
+- Tracks `MAIN` vs `CHALLENGES` mode.
+- Methods: `switch_to_challenges`, `switch_to_main`, `is_main`, `is_challenges`, `are_challenges_unlocked` (queries `PrestigeManager`).
+- Emits: `mode_changed(new_mode)`.
+
+**ChallengeProgressManager** — `autoloads/challenge_progress/challenge_progress_manager.gd`
+
+- Persistent state for challenge completion, unlock flags, starting modifiers, permanent upgrades. Survives a prestige reset (alongside PrestigeManager).
+- Methods: `initialize(buttons)`, `get_state(id)`, `is_unlocked(unlock_type)`, `get_bonus_multi_drop`, `get_advanced_coin_multiplier_bonus`, `get_bucket_value_percent_bonus`, `get_permanent_upgrade_level`, `complete_challenge`, `serialize/deserialize`.
+- Emits: `challenge_state_changed(id, state)`, `unlock_granted(unlock_type)`.
+- Read by `PlinkoBoard.setup` to apply per-board bonus multipliers and permanent upgrade levels.
+
+**AudioManager** — `autoloads/audio_manager/audio_manager.gd`
+
+- Owns every sound in the game: legacy SFX pools, procedural harp (multi-sample), procedural arcade square-wave + kick, ambient pad per board, drone pool shared by bucket drones + harp sparkles, bucket/coin chimes, click sounds, drum pools (currently disabled).
+- Owns the beat grid (`_beat_period`, `_beat_phase`, `_motif_position`, `_beat_armed`) and per-board harmonic progression state (`_board_progressions`, `_current_chord_index`). Arcade mode swaps in the AudioStyle's own progression via `_active_audio_style` + `_style_chord_index`.
+- Methods: `play_bucket`, `play_peg_sparkle`, `play_peg_click`, `play_bucket_hit`, `set_active_board`, `on_coin_dropped`, `on_coin_landed`, `play_manual_drop_drum`, `play_autodropper_drum`, `play(sound_name, pitch, max_duration)`, `play_prestige`, `notify_autodropper_beat(interval)`, `should_sparkle(bt)`, `is_active_board(bt)`.
+- Emits nothing; read-only subscriber.
+- Listens: `ThemeProvider.theme_changed` (update lofi bus effects + re-select AudioStyle), `ChallengeManager.challenge_state_changed` (re-select style), `ChallengeManager.tick` (phase-lock beat grid + fire kick; final 10s schedules a second kick +0.5s later via `create_timer`).
+- AudioStyle routing: when `ThemeProvider.theme.audio_style` is set AND (not `active_during_challenge_only` OR a challenge is active), that style replaces the default harp path — different chord progression, beat-period from `beats_per_tick`, square-wave timbre via `_tonal_stream_and_pitch`. On any style transition, `_fade_all_drones(1s)` clears lingering drones so the outgoing world doesn't bleed into the new one.
+- Arcade-specific: kick is the only audible backing layer (once per second, doubled to 2/sec in the final 10 seconds). Sparkle audio is currently muted in arcade (`play_peg_sparkle` early-returns); peg ring VFX still fires through `should_sparkle`. Bucket drones play as usual.
+
+#### Scene-level systems
+
+**BoardManager** — `entities/board_manager/board_manager.gd`
+
+- Orchestrates all `PlinkoBoard` instances. Owns `_boards[]`, `_active_index`, autodropper pool + assignments, camera tweening, and the autodropper timer.
+- Methods: `setup`, `switch_board`, `unlock_board`, `get_active_board`, `get_boards`.
+- Emits: `board_switched(board)`, `board_unlocked(type)`.
+- Per-tick: `_autodrop_timer` (wait=1.5s) fires `_on_autodrop_tick`, which calls `AudioManager.notify_autodropper_beat(wait_time)` to sync the beat grid, then dispatches to assigned boards.
+- Listens: `UpgradeManager.{autodropper_unlocked, advanced_autodropper_unlocked, upgrade_purchased}`, `CurrencyManager.currency_changed`, `LevelManager.rewards_claimed`, per-board `board_rebuilt` / `autodropper_adjust_requested`.
+
+**PlinkoBoard** — `entities/plinko_board/plinko_board.gd`
+
+- Per-board gameplay: peg + bucket multimesh rendering, coin spawning, drop queue, drop timer, per-board upgrade multipliers, bucket marking API for challenges.
+- Methods: `setup(board_type)`, `request_drop(costs, coin_type, is_manual)`, `try_autodrop`, `add_two_rows`, `flash_nearest_peg(coin_pos, currency_type)`, `get_bucket(index)`, `get_nearest_bucket(x)`, `mark_bucket_*` (target/hit/unhit/forbidden).
+- Emits: `coin_dropped`, `coin_landed(board_type, bucket_index, currency_type, amount, multiplier)`, `board_rebuilt`, `autodropper_adjust_requested`, `prestige_coin_landed`, `autodrop_failed(board_type)`.
+- On coin land: calls `AudioManager.play_bucket(board_type, distance, is_advanced)` and `AudioManager.on_coin_landed`. On peg contact: `flash_nearest_peg` calls `AudioManager.should_sparkle` and `play_peg_sparkle`, and fires peg VFX (flash + pulse always, halo always, ring on beat-armed sparkles in coin color).
+- Peg VFX split: the expanding ring uses the coin's color and only fires when `AudioManager.should_sparkle` returns true (beat-gated). Flash, halo, pulse always fire on peg contact.
+
+**Coin** — `entities/coin/coin.gd`
+
+- Individual coin animation. Picks left/right at each row, queries the board for the next waypoint, determines final bucket at landing time.
+- Owned state: `coin_type`, `multiplier`, `impact_squash_remaining`, multimesh index.
+- Methods: `start(target)`, `kill_tweens`, `set_color`, `set_mesh_visible`.
+- Emits: `final_bounce_started(coin, predicted_bucket)` (triggers prestige handover when applicable), `landed`.
+
+**Bucket** — `entities/bucket/bucket.gd`
+
+- Per-bucket visual: `MeshInstance3D` with a per-instance `StandardMaterial3D`, `Label3D` showing value.
+- Fields: `value` (setter updates label), `currency_type`, `is_prestige_bucket`, `_base_material`, `_is_hit`.
+- Methods: `setup(currency_type, position, value)`, `mark_hit`, `mark_target`, `mark_unhit`, `mark_forbidden`, `pulse`.
+- No signals (pure view).
+
+**ChallengeClock** — `entities/challenge_clock/challenge_clock.gd` + `.tscn`
+
+- White pie-slice countdown inside `ChallengeHUD`. Instanced by `challenge_hud.gd` on challenge start.
+- Updates shape **only on** `ChallengeManager.tick` (discrete once-per-second steps — reinforces the audio kick). Reads `ChallengeManager.get_total_seconds()` to compute fraction.
+- Hides on `challenge_completed` / `challenge_failed`.
+
+**ChallengeHUD** — `entities/main/challenge_hud.gd` + nodes in `entities/main/main.tscn`
+
+- Challenge UI container: timer label, objective label, progress label, result label, embedded `ChallengeClock`.
+- Methods: `start(challenge)`, `show_result(text)`, `refresh_progress`.
+- Polls `ChallengeManager.get_time_remaining` + `get_objective_progress` each frame for label updates.
+
+**Main** — `entities/main/main.gd`
+
+- Root scene orchestrator. Wires up BoardManager, ChallengeHUD, challenge dialogs, UI panels, prestige animator. On `_ready` decides between `_setup_normal()` and `_setup_challenge()` based on `ChallengeManager.is_active_challenge` (set before scene reload).
+- Listens: `ModeManager.mode_changed`, `PrestigeManager.{prestige_claimed, prestige_phase_changed}`, `BoardManager.{board_switched, board_unlocked}`, `UpgradeManager.upgrade_unlocked`, `ChallengeManager.{challenge_completed, challenge_failed}`.
+
+**DropSection** — `entities/drop_section/`
+
+- Contains `DropButton` instances (normal + advanced). Each `DropButton` emits `drop_pressed` (wired to `PlinkoBoard.request_drop()`) and `autodropper_adjust_requested` (wired up to `BoardManager` via the board's matching signal).
+
+#### Resources (data)
+
+**VisualTheme** — `style_lab/visual_theme.gd`, presets in `style_lab/presets/*.tres`
+
+- Huge bundle of visual configuration: background shades, per-currency colors, coin/bucket/label materials, VFX toggles (peg flash, halo, ring, pulse), coin physics timings, audio flags. Consumed by every visual system through `ThemeProvider.theme`.
+- Audio-related fields: `audio_lofi_enabled` (gates lofi bus effects — currently parked), `audio_style: AudioStyle` (optional override; null = main harp).
+- Helpers: `get_coin_color`, `get_bucket_color`, `make_bucket_mesh`, `make_bucket_material`, `make_coin_material`, `pulse_node3d`, plus palette resolution.
+
+**AudioStyle** — `autoloads/audio_manager/audio_style.gd`
+
+- Data-only resource attached to a `VisualTheme`. Describes an alternate audio world.
+- Fields: `display_name`, `active_during_challenge_only`, `beats_per_tick`, `has_backing_kick`, `has_backing_bass`, `timbre` (`"square" | "harp"`), `progression[]` (array of `{ root, chord, motif }`), `chord_duration`, `bucket_accent_motif[]`.
+- Current preset: `style_lab/presets/arcade_audio_style.tres` — square timbre, i-VI-VII-i in A minor, kick backing only (bass layer is defined but arcade currently doesn't fire it).
+
+**ChallengeData** — `autoloads/challenge_manager/challenge_data.gd`
+
+- Per-challenge metadata: `id`, `display_name`, `time_limit_seconds`, `objectives[]`, `constraints[]`, `starting_conditions[]`, `rewards[]`.
+
+**Objective types** (files under `autoloads/challenge_manager/objectives/`): `Survive`, `LandInEveryBucket`, `HitBucketsInOrder`, `HitXBucketYTimes`, `GetSameBucketXTimes`, `EarnWithinXDrops`, `BoardGoal`, `CoinGoal`. Evaluated by `ChallengeTracker`.
+
+**StartingCondition** subclasses (also under challenge_manager/): `StartingCap`, `StartingCoins`, `StartingUpgrades`, `StartingBoards`, `StartingDropDelay`. Applied by `ChallengeManager._apply_starting_conditions` when a challenge begins.
+
+**RewardData** — `scripts/reward_data.gd`
+
+- Unified reward container used by `LevelManager` level rewards and by challenge completion rewards.
+- `type: RewardType` enum covers `UNLOCK_UPGRADE`, `DROP_COINS`, `UNLOCK_AUTODROPPER`, `UNLOCK_ADVANCED_AUTODROPPER`, `UNLOCK_ADVANCED_BUCKET`, with per-type fields (`upgrade_type`, `board_type`, `coin_count`, `coin_type`, `target_board`).
+
+**BaseUpgradeData** — `autoloads/upgrade_manager/base_upgrade_data.gd`, presets in `autoloads/upgrade_manager/data/*.tres`
+
+- Per-upgrade economy: `type`, `display_name`, `base_cost`, `max_level`, `cost_delta`. UpgradeManager reads max_level as the starting cap.
+
+**TierData** — `scripts/tier_data.gd`, presets in `autoloads/tier_registry/data/*.tres`
+
+- Per-tier config: `board_type`, `display_name`, `primary_currency`, `raw_currency`, economy caps, drop costs.
+
+#### Cross-cutting data flows (quick map)
+
+- **Currency → Progression:** `CurrencyManager.currency_changed` → `LevelManager` (threshold crossings) → `rewards_claimed` → `UpgradeManager.unlock` / reward dispatch.
+- **Cap raises:** `CurrencyManager.currency_changed` on a tier's raw currency → `UpgradeManager.cap_raise_unlocked(board_type)`.
+- **Challenge gates:** `ChallengeManager.setup` installs `upgrade_gate` on `UpgradeManager` and `board_gate` on `BoardManager`. Cleared in `clear_challenge`.
+- **Challenge pulse:** `ChallengeTracker._process` → `ChallengeManager.tick(seconds_remaining)` (once per integer second). `AudioManager` uses it to fire the arcade kick + phase-lock the beat grid; `ChallengeClock` redraws the pie slice.
+- **Theme → Audio:** `ThemeProvider.theme_changed` → `AudioManager._on_theme_changed` → `_reselect_audio_style` picks up `theme.audio_style`.
+- **Challenge → Audio:** `ChallengeManager.challenge_state_changed` → `AudioManager._reselect_audio_style` (activates arcade if theme has a style with `active_during_challenge_only`). Any style transition triggers `AudioManager._fade_all_drones(1s)`.
+- **Autodropper → Audio beat:** `BoardManager._on_autodrop_tick` → `AudioManager.notify_autodropper_beat(wait_time)` to sync the harp beat grid to the autodropper timer.
+- **Coin lifecycle:** `PlinkoBoard.request_drop` → `Coin.start(target)` → per-row board queries → `Coin.final_bounce_started` → `PlinkoBoard.finalize_coin_landing` → `coin_landed` signal (ChallengeTracker, BoardManager listen) + `AudioManager.play_bucket` + `AudioManager.on_coin_landed`.
+- **Peg VFX:** `Coin._on_peg_hit` → `PlinkoBoard.flash_nearest_peg` → flash + pulse + halo (always) + ring (coin color, gated on `AudioManager.should_sparkle`).
+- **Save:** `SaveManager.save_game` serializes each manager in order. `load_game` deserializes in the order `PrestigeManager → ChallengeProgressManager → LevelManager → CurrencyManager → UpgradeManager → BoardManager` so signals fire against a consistent state.
 
 ### Three-Currency Economy
 
