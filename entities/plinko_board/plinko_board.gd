@@ -1038,14 +1038,10 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 
 	if t.peg_glow_halo_enabled:
 		_spawn_peg_halo(_peg_positions[closest_idx], glow_color, t)
-	# Ring is the sparkle visual. Color source is theme-controlled: coin color
-	# (rewarding accent) or peg color (neutral, for themes where peg pulses
-	# shouldn't double as reward cues).
+	# Ring is the sparkle visual — coin-colored so it reads as a rewarding
+	# accent rather than a generic ripple.
 	if t.peg_ring_enabled and is_sparkle:
-		var ring_color: Color = glow_color
-		if t.peg_emit_circle_color == VisualTheme.PegEmitCircleColor.PEG:
-			ring_color = t.peg_color
-		_spawn_peg_ring(_peg_positions[closest_idx], ring_color, t)
+		_spawn_peg_ring(_peg_positions[closest_idx], glow_color, t)
 
 
 func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) -> void:

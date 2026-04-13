@@ -177,7 +177,8 @@ const coin_shape := CoinShape.CYLINDER
 @export var coin_land_particle_duration := 0.6                    # how long particles live
 @export var bucket_pulse_scale := 1.15                            # scale on receive
 @export var bucket_pulse_duration := 0.15
-@export var bucket_fade_duration := 1.0                           # chord-gated bucket color tween + chime fade
+@export var bucket_fade_duration := 1.0                           # chord-change visual tween duration
+@export var linger_fade_duration := 2.5                           # chord-gated audio handoff fade (new-coin to previous-chord drones)
 @export var floating_text_rise := 1.5                             # units upward
 @export var floating_text_duration := 1.2
 @export var coin_spawn_scale_from := 0.0                          # fade-in start scale
@@ -199,9 +200,6 @@ const coin_shape := CoinShape.CYLINDER
 @export var peg_ring_duration := 0.9                              # seconds
 @export var peg_ring_max_opacity := 0.35                          # peak alpha at sine apex
 @export var peg_ring_thickness := 0.06                            # UV-space ring half-width
-
-enum PegEmitCircleColor { COIN, PEG }
-@export var peg_emit_circle_color: PegEmitCircleColor = PegEmitCircleColor.COIN  # ring color: coin (currency) or peg (neutral)
 
 # ── Vignette ─────────────────────────────────────────────────────────
 @export_group("Vignette")
