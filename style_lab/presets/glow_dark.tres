@@ -43,6 +43,7 @@ board_glow_opacity = 0.06
 peg_glow_halo_enabled = true
 peg_glow_halo_radius = 2.0
 peg_glow_halo_opacity = 0.08
+peg_ring_enabled = true
 vignette_enabled = true
 vignette_intensity = 0.3
 vignette_radius = 0.65
