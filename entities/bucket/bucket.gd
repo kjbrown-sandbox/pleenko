@@ -44,19 +44,15 @@ func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) ->
 	if t.label_font:
 		_label.font = t.label_font
 
-	# In AudioStyle mode, buckets start faded and light up only when a coin
-	# lands in them (until the next chord change).
-	var initial: Color = _resolve_default_color()
-	_base_material.albedo_color = initial
-	_label.modulate = initial
+	# Buckets start faded and light up only when a coin lands in them (until
+	# the next chord change). See mark_active / mark_inactive.
+	_apply_color(_resolve_default_color())
 
 
 func mark_hit() -> void:
 	_kill_color_tween()
 	_is_hit = true
-	var hit_color: Color = ThemeProvider.theme.hit_bucket_color
-	_base_material.albedo_color = hit_color
-	_label.modulate = hit_color
+	_apply_color(ThemeProvider.theme.hit_bucket_color)
 
 
 func mark_target() -> void:
@@ -67,9 +63,7 @@ func mark_target() -> void:
 func mark_unhit() -> void:
 	_kill_color_tween()
 	_is_hit = false
-	var color: Color = _resolve_default_color()
-	_base_material.albedo_color = color
-	_label.modulate = color
+	_apply_color(_resolve_default_color())
 	_label.visible = true
 	# Remove skull icon if present
 	var skull := get_node_or_null("SkullIcon")
@@ -104,20 +98,19 @@ func pulse() -> void:
 
 
 ## Chord-gated activation: snap to full bucket color instantly. Called by
-## PlinkoBoard when a coin lands in this bucket during AudioStyle mode.
-## No-op if the bucket is already marked as hit/forbidden by a challenge —
-## those markers win.
+## PlinkoBoard when a coin lands in this bucket. No-op if the bucket is
+## already marked as hit/forbidden by a challenge — those markers win.
 func mark_active() -> void:
 	if _is_hit:
 		return
 	_kill_color_tween()
-	var color: Color = ThemeProvider.theme.get_bucket_color(currency_type)
-	_base_material.albedo_color = color
-	_label.modulate = color
+	_apply_color(ThemeProvider.theme.get_bucket_color(currency_type))
 
 
 ## Chord change: tween back to the faded color over `duration` seconds.
-## No-op if marked hit/forbidden by a challenge.
+## No-op if marked hit/forbidden by a challenge. EASE_IN + TRANS_QUAD matches
+## the feel of bucket_pulse so the motion language stays consistent; the
+## audio fade uses EASE_OUT on purpose (see AudioManager._fade_drone).
 func mark_inactive(duration: float) -> void:
 	if _is_hit:
 		return
@@ -134,6 +127,11 @@ func mark_inactive(duration: float) -> void:
 
 func _resolve_default_color() -> Color:
 	return ThemeProvider.theme.get_bucket_color_faded(currency_type)
+
+
+func _apply_color(color: Color) -> void:
+	_base_material.albedo_color = color
+	_label.modulate = color
 
 
 func _kill_color_tween() -> void:
