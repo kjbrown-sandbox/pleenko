@@ -142,12 +142,15 @@ func _ready() -> void:
 			_pools[sound_name].append(player)
 
 	# ── Per-board chord progressions ─────────────────────────────────
-	# Gold cycles Fmaj7 ↔ Em7 (voice-leading: F→E, A→G, C→B, E→D — all stepwise,
-	# so bucket-drone crossfades through chord changes stay consonant).
+	# Gold cycles Cmaj7 → Am7 → Fmaj7 → G7 (vi-IV-I-V flavor, classic lofi
+	# nostalgia, 24s full cycle at 6s/chord). All chords share at least one
+	# common tone with their neighbors so bucket-drone crossfades stay smooth.
 	# Orange/Red currently single-chord; expand progressions later.
 	_board_progressions[Enums.BoardType.GOLD] = [
+		{ "root": 0, "chord": CHORD_MAJ7 },  # Cmaj7
+		{ "root": 9, "chord": CHORD_MIN7 },  # Am7
 		{ "root": 5, "chord": CHORD_MAJ7 },  # Fmaj7
-		{ "root": 4, "chord": CHORD_MIN7 },  # Em7
+		{ "root": 7, "chord": CHORD_DOM7 },  # G7
 	]
 	_board_progressions[Enums.BoardType.ORANGE] = [
 		{ "root": 7, "chord": CHORD_DOM7 },  # G7
