@@ -1,31 +1,24 @@
-[gd_resource type="Resource" script_class="AudioStyle" format=3 uid="uid://bn4v7rk3qz5ac"]
+[gd_resource type="Resource" script_class="AudioStyle" format=3 uid="uid://bn4v7rk3q05ac"]
 
-[ext_resource type="Script" path="res://autoloads/audio_manager/audio_style.gd" id="1_as"]
+[ext_resource type="Script" uid="uid://m01u1iil43l5" path="res://autoloads/audio_manager/audio_style.gd" id="1_as"]
 
 [resource]
 script = ExtResource("1_as")
 display_name = "Arcade"
-active_during_challenge_only = true
-beats_per_tick = 2
-has_backing_kick = true
-has_backing_bass = true
-timbre = "square"
-chord_duration = 4.0
 progression = [{
-"root": 9,
 "chord": [0, 3, 7, 12, 15, 19, 24, 27],
-"motif": [0, 2, 4, 2, 0, 2, 4, -1]
+"motif": [0, 2, 4, 2, 0, 2, 4, -1],
+"root": 9
 }, {
-"root": 5,
 "chord": [0, 4, 7, 12, 16, 19, 24, 28],
-"motif": [0, 2, 4, 2, 0, 2, 4, -1]
+"motif": [0, 2, 4, 2, 0, 2, 4, -1],
+"root": 5
 }, {
-"root": 7,
 "chord": [0, 4, 7, 12, 16, 19, 24, 28],
-"motif": [0, 2, 4, 2, 0, 2, 4, -1]
+"motif": [0, 2, 4, 2, 0, 2, 4, -1],
+"root": 7
 }, {
-"root": 9,
 "chord": [0, 3, 7, 12, 15, 19, 24, 27],
-"motif": [0, 4, 2, 5, 4, 2, 0, -1]
+"motif": [0, 4, 2, 5, 4, 2, 0, -1],
+"root": 9
 }]
-bucket_accent_motif = [0, 2, 4]
