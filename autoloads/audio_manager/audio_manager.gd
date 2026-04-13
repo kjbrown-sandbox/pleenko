@@ -150,9 +150,9 @@ var _drone_fade_tweens: Dictionary = {}
 # the soundfield with simultaneous chimes. Any activation within the cooldown
 # window of the previous one is silently dropped (visual and audio both).
 # Window is ACTIVATION_RATE_DIVISOR-ths of the autodropper interval so the
-# musical pacing scales with gameplay tempo: ~190 ms at the default 1.5 s
+# musical pacing scales with gameplay tempo: ~375 ms at the default 1.5 s
 # autodrop, tightening as drop-rate upgrades shorten the interval.
-const ACTIVATION_RATE_DIVISOR := 8.0
+const ACTIVATION_RATE_DIVISOR := 4.0
 var _last_activation_time: float = -999.0
 var _sparkle_counter: int = 0  # monotonic id for unique sparkle drone keys
 # Two drone streams — zen uses the sine pad loop (matches the ambient pad
@@ -170,7 +170,7 @@ const HARP_LOW_FREQ := 130.81           # C3 — native frequency of low sample
 const HARP_HIGH_FREQ := 523.25          # C5 — native frequency of high sample
 const HARP_CROSSOVER_FREQ := 261.63     # C4 — below uses low, at/above uses high
 const HARP_BASE_FREQ := 261.63          # C4 — used by call sites as the semantic anchor
-const HARP_DECAY_SECONDS := 16.0
+const HARP_DECAY_SECONDS := 4.0
 var _harp_low_stream: AudioStreamWAV    # warm, C3-native
 var _harp_high_stream: AudioStreamWAV   # dark, C5-native
 
@@ -748,6 +748,13 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	_evict_oldest_drone_if_full()
 	if _drone_free.is_empty():
 		return
+	# Exponential per-voice attenuation: each new voice allocated while N
+	# drones are already ringing plays at (3/4)^N of the base amplitude.
+	# Keeps the aggregate mix self-limiting by construction — each additional
+	# voice is ~2.5 dB quieter than the one before it, so late voices settle
+	# behind the first-voice melody rather than stacking into a wall.
+	var voice_count: int = _active_drones.size()
+	var voice_attenuation_db: float = 20.0 * log(pow(0.75, voice_count)) / log(10.0)
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
@@ -756,7 +763,7 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	# like the foundation of the mix rather than a melodic voice up top.
 	# Advanced coins drop another octave for extra punch.
 	player.pitch_scale = _apply_tape_wobble(sp["pitch_scale"])
-	player.volume_db = target_volume
+	player.volume_db = target_volume + voice_attenuation_db
 	player.play()
 	var tail: float = maxf(_chord_timer, MIN_BUCKET_RING_SECONDS)
 	_active_drones[key] = _make_drone_entry(idx, tail, degree, octave_mult, DroneState.ACTIVE)
@@ -1240,16 +1247,16 @@ func _generate_harp(freq: float, duration: float, darker: bool, mix_rate: int = 
 	# rolls off hard so the high-register sample stays round even at C6.
 	var harmonics: Array[float]
 	var decays: Array[float]
-	# Decays scaled down ~4x from the original 4-second sample so tails stay
-	# audible across the 16-second HARP_DECAY_SECONDS window — fills silence
-	# between sparse drops and carries the old chord across a chord change
-	# until the new-coin handoff fade takes over.
+	# Fundamental decay constants tuned against the 4-second HARP_DECAY_SECONDS
+	# window — fundamental rings most of the sample, upper partials fade fast
+	# so the attack is bright but the tail settles into a pure-ish sustained
+	# tone. Darker profile rolls upper partials off harder.
 	if darker:
 		harmonics = [1.0, 0.30, 0.08, 0.02, 0.006, 0.002, 0.0005, 0.0001, 0.00005, 0.00002]
-		decays    = [0.125, 0.225, 0.375, 0.75, 1.5, 2.5, 4.0, 6.0, 8.75, 12.5]
+		decays    = [0.5, 0.9, 1.5, 3.0, 6.0, 10.0, 16.0, 24.0, 35.0, 50.0]
 	else:
 		harmonics = [1.0, 0.45, 0.20, 0.08, 0.04, 0.02, 0.01, 0.005, 0.003, 0.002]
-		decays    = [0.125, 0.175, 0.3, 0.5, 0.75, 1.25, 1.75, 2.25, 3.0, 4.0]
+		decays    = [0.5, 0.7, 1.2, 2.0, 3.0, 5.0, 7.0, 9.0, 12.0, 16.0]
 
 	# Inharmonicity coefficient — real plucked strings have partials slightly
 	# sharp of integer multiples (f · n · (1 + B·n²)). Using a small B value
