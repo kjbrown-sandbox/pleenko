@@ -3,6 +3,16 @@ extends Node
 ## Pool of AudioStreamPlayers per sound for overlapping playback.
 ## Bucket hits are capped at MAX_BUCKET_SOUNDS concurrent plays — extras are silently dropped.
 
+# Emitted when the active AudioStyle advances to the next chord in its progression.
+# Only fires in AudioStyle mode — the default per-board harp path doesn't emit.
+# PlinkoBoard listens and fades chord-activated buckets back to their faded color.
+signal chord_changed(chord_index: int)
+
+# Floor for chord-gated chime tail length. If a bucket is hit in the last ~0.5s
+# of a chord, the natural tail would clip before becoming audible — this keeps
+# at least one second of ring before the chord_changed fade starts.
+const MIN_BUCKET_RING_SECONDS := 1.0
+
 const POOL_SIZE := 10
 const MAX_BUCKET_SOUNDS := 30
 
@@ -107,7 +117,7 @@ const SPARKLE_DRONE_SUSTAIN := 3.5     # sparkles ring a bit shorter than bucket
 const BUCKET_DRONE_POOL_SIZE := 24
 var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
-var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree", "octave_mult" }
+var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree", "octave_mult", "chord_gated" }
 var _sparkle_counter: int = 0  # monotonic id for unique sparkle drone keys
 # Two drone streams — zen uses the sine pad loop (matches the ambient pad
 # texture); lofi uses the FM electric piano one-shot. Selected per-play in
@@ -124,7 +134,7 @@ const HARP_LOW_FREQ := 130.81           # C3 — native frequency of low sample
 const HARP_HIGH_FREQ := 523.25          # C5 — native frequency of high sample
 const HARP_CROSSOVER_FREQ := 261.63     # C4 — below uses low, at/above uses high
 const HARP_BASE_FREQ := 261.63          # C4 — used by call sites as the semantic anchor
-const HARP_DECAY_SECONDS := 4.0
+const HARP_DECAY_SECONDS := 16.0
 var _harp_low_stream: AudioStreamWAV    # warm, C3-native
 var _harp_high_stream: AudioStreamWAV   # dark, C5-native
 
@@ -411,6 +421,7 @@ func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
 			_style_chord_index = (_style_chord_index + 1) % _active_audio_style.progression.size()
 			_motif_position = 0
 			_chord_timer = _active_audio_style.chord_duration
+			_handle_chord_advance()
 		return
 
 	if has_activity:
@@ -426,6 +437,7 @@ func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
 				_motif_position = 0
 			_chord_timer = CHORD_DURATION
 			_chord_had_sparkle = false
+			_handle_chord_advance()
 	else:
 		_chord_idle_timer += delta
 		if _chord_idle_timer >= CHORD_IDLE_RESET:
@@ -441,6 +453,9 @@ func _reset_harmonic_state() -> void:
 	_beat_phase = 0.0
 	_beat_armed = true
 	_chord_had_sparkle = false
+	# Treat the idle reset as a chord change for visuals — buckets need to
+	# fade back to their faded color even when silence triggered the reset.
+	_handle_chord_advance()
 
 
 ## Selects the applicable AudioStyle based on current theme + challenge state.
@@ -479,12 +494,16 @@ func _reselect_audio_style() -> void:
 func _fade_all_drones(duration: float) -> void:
 	for drone_key in _active_drones.keys():
 		var drone: Dictionary = _active_drones[drone_key]
-		var idx: int = int(drone["idx"])
-		var player: AudioStreamPlayer = _drone_pool[idx]
-		var tween := create_tween()
-		tween.tween_property(player, "volume_db", -80.0, duration)
-		tween.tween_callback(_finish_drone_fade.bind(idx))
+		_fade_drone(int(drone["idx"]), duration)
 	_active_drones.clear()
+
+
+func _fade_drone(idx: int, duration: float) -> void:
+	var player: AudioStreamPlayer = _drone_pool[idx]
+	var tween := create_tween()
+	tween.tween_property(player, "volume_db", -80.0, duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_callback(_finish_drone_fade.bind(idx))
 
 
 func _finish_drone_fade(idx: int) -> void:
@@ -492,6 +511,47 @@ func _finish_drone_fade(idx: int) -> void:
 	player.stop()
 	if not _drone_free.has(idx):
 		_drone_free.append(idx)
+
+
+## How long the current chord has left before the next chord_changed emit.
+func get_time_until_next_chord() -> float:
+	return _chord_timer
+
+
+## Runs on chord advance (default harp path + AudioStyle path). Chord changes
+## are a VISUAL event here — they fire chord_changed so buckets revert to their
+## faded color, and tag active drones as "lingering" so the bucket-activation
+## gate no longer suppresses re-hits. They do NOT fade audio. Lingering drones
+## keep ringing naturally (via the synthesized decay) until a new coin lands,
+## at which point `_fade_lingering_drones` hand-fades them in 1s.
+func _handle_chord_advance() -> void:
+	for drone_key in _active_drones.keys():
+		var drone: Dictionary = _active_drones[drone_key]
+		if drone.get("chord_gated", false):
+			drone["lingering"] = true
+			drone["timer"] = 999.0  # hold — let the synthesized sample decay naturally
+	var idx: int = _style_chord_index if _active_audio_style else _current_chord_index.get(_active_board, 0)
+	chord_changed.emit(idx)
+
+
+## Fades every drone currently tagged as lingering. Called when a new coin
+## lands after a chord advance — the new note hands off from the old chord's
+## tail. Audio fade is longer than the visual fade (2.5s vs 1s) so the handoff
+## doesn't feel abrupt against the sustained linger.
+const LINGER_FADE_DURATION := 2.5
+
+func _fade_lingering_drones() -> void:
+	if _active_drones.is_empty():
+		return
+	var fade_duration: float = LINGER_FADE_DURATION
+	var keys: Array = []
+	for drone_key in _active_drones.keys():
+		if _active_drones[drone_key].get("lingering", false):
+			keys.append(drone_key)
+	for drone_key in keys:
+		var drone: Dictionary = _active_drones[drone_key]
+		_fade_drone(int(drone["idx"]), fade_duration)
+		_active_drones.erase(drone_key)
 
 
 ## Called every second by ChallengeManager.tick. Fires the kick on the
@@ -536,18 +596,18 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 
 	var sp: Dictionary = _tonal_stream_and_pitch(pitch)
 
-	# If this bucket is already ringing (sustain or fade), re-pluck it: reset
-	# the timer, restore full volume, and retrigger the sample so the attack
-	# transient plays again. A harpist plucking an already-ringing string
-	# interrupts and restarts the note — not silence.
-	if key in _active_drones:
-		var existing: Dictionary = _active_drones[key]
-		var existing_player: AudioStreamPlayer = _drone_pool[existing["idx"]]
-		existing_player.stream = sp["stream"]
-		existing_player.pitch_scale = _apply_tape_wobble(sp["pitch_scale"])
-		existing_player.volume_db = target_volume
-		existing_player.play()
-		existing["timer"] = BUCKET_DRONE_SUSTAIN
+	# First hit of a new chord: fade any drones left lingering from the
+	# previous chord. The new note acts as the handoff signal so silence
+	# between chords gets filled by the old chord's tones until activity
+	# resumes.
+	_fade_lingering_drones()
+
+	# Each bucket rings once per chord — re-hits during the same chord are
+	# visual-only (PlinkoBoard re-flashes the bucket). Restarting the sample
+	# here would create a double-attack inside a still-ringing note.
+	# Lingering drones don't gate — the bucket's visual already reverted, so
+	# a new hit should play the new chord's tone on that key.
+	if key in _active_drones and not _active_drones[key].get("lingering", false):
 		return
 
 	if _drone_free.is_empty():
@@ -561,15 +621,21 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	player.pitch_scale = _apply_tape_wobble(sp["pitch_scale"])
 	player.volume_db = target_volume
 	player.play()
+	var tail: float = maxf(_chord_timer, MIN_BUCKET_RING_SECONDS)
 	_active_drones[key] = {
 		"idx": idx,
-		"timer": BUCKET_DRONE_SUSTAIN,
+		"timer": tail,
 		"degree": degree,
 		"octave_mult": octave_mult,
+		"chord_gated": true,
 	}
 
 
 func play_peg_sparkle(board_type: Enums.BoardType) -> void:
+	# TEMP: sparkle audio disabled — clashes with chord-gated bucket drones.
+	# Separate follow-up feature will redesign sparkle voice to fit the new
+	# musical layer.
+	return
 	if board_type != _active_board:
 		return
 	# Arcade mode mutes sparkle audio — the melody is bucket-driven now.
@@ -861,6 +927,11 @@ func _update_bucket_drones(delta: float) -> void:
 	var expired: Array[String] = []
 	for drone_key: String in _active_drones:
 		var drone: Dictionary = _active_drones[drone_key]
+		# Chord-gated drones are managed entirely by chord advances and the
+		# new-coin handoff fade — the timer-based ramp would cut them off
+		# mid-chord if a coin landed late in the chord.
+		if drone.get("chord_gated", false):
+			continue
 		drone.timer -= delta
 		if drone.timer <= 0.0:
 			var player: AudioStreamPlayer = _drone_pool[drone.idx]
@@ -1051,12 +1122,13 @@ func _generate_harp(freq: float, duration: float, darker: bool, mix_rate: int = 
 	var decays: Array[float]
 	if darker:
 		harmonics = [1.0, 0.30, 0.08, 0.02, 0.006, 0.002, 0.0005, 0.0001, 0.00005, 0.00002]
-		# Slow mid-harmonic decay so the tail keeps some body instead of
-		# collapsing to a pure sine (which reads as synthetic).
-		decays    = [0.5, 0.9, 1.5, 3.0, 6.0, 10.0, 16.0, 24.0, 35.0, 50.0]
+		# Decays scaled down from the 4-second version by ~4x so the tail stays
+		# audible across multiple chord lengths — fills silence between sparse
+		# drops and carries the old chord into the next when handoff is slow.
+		decays    = [0.125, 0.225, 0.375, 0.75, 1.5, 2.5, 4.0, 6.0, 8.75, 12.5]
 	else:
 		harmonics = [1.0, 0.45, 0.20, 0.08, 0.04, 0.02, 0.01, 0.005, 0.003, 0.002]
-		decays    = [0.5, 0.7, 1.2, 2.0, 3.0, 5.0, 7.0, 9.0, 12.0, 16.0]
+		decays    = [0.125, 0.175, 0.3, 0.5, 0.75, 1.25, 1.75, 2.25, 3.0, 4.0]
 
 	# Inharmonicity coefficient — real plucked strings have partials slightly
 	# sharp of integer multiples (f · n · (1 + B·n²)). Using a small B value
