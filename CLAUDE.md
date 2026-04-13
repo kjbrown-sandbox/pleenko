@@ -26,32 +26,6 @@ Do NOT use a real physics engine for coin movement. The game needs to scale to t
 
 Coins should calculate their path **row by row**, not all at once. This way if the board changes mid-drop (e.g., rows added), the coin dynamically adapts to the new layout and always lands in the correct bucket position. The coin picks left/right randomly at each row, queries the board for the next waypoint, and determines its final bucket value at landing time.
 
-## Architecture (Rewrite Reference)
-
-The prototype had nearly all logic in a single 2200-line `main.gd`. The rewrite should follow Godot's scene composition pattern with separated responsibilities.
-
-### Recommended File Structure
-
-```
-scripts/
-  game_manager.gd          # Thin orchestrator — wires signals between systems
-  currency/
-    currency_manager.gd     # All currency state, add/spend/check, caps
-  boards/
-    plinko_board.gd         # Board visuals, peg/bucket rendering, coin spawning
-    board_manager.gd        # Multi-board creation, selection, camera, positioning
-  coins/
-    coin.gd                 # Coin animation (row-by-row waypoint resolution)
-    drop_manager.gd         # Queues, cooldown timers, autodroppers
-  progression/
-    level_manager.gd        # XP, thresholds, level-up rewards, unlock gating
-    upgrade_manager.gd      # Upgrade definitions, costs, caps, buy logic
-  persistence/
-    save_manager.gd         # Save/load/quicksave serialization
-  ui/
-    ui.gd                   # HUD, currency displays, upgrade panel, dialogs
-```
-
 ### Key Godot Patterns to Follow
 
 - **Signals up, calls down.** Children emit signals to notify parents. Parents call methods on children to command them. Never the reverse.
@@ -61,6 +35,8 @@ scripts/
 - **Scenes are self-contained.** Each `.tscn` + `.gd` pair handles its own initialization, state, and cleanup.
 
 ### System Responsibilities
+
+> **Living documentation.** This section is the authoritative map of how systems own state, emit signals, and call into each other. It is kept in sync with the code — each time a feature branch is ready to merge to `main`, the relevant entries below are updated to reflect the new behavior, signals, data flows, and cross-system relations. New systems get new entries. Removed systems are deleted. The goal is that reading this section alone is enough to understand how the systems fit together without diving into the code.
 
 **CurrencyManager (Autoload)**
 
@@ -250,7 +226,15 @@ After the user confirms the implementation looks good, run a **post-implementati
 4. **Round 2+ — Resolution:** Same multi-round debate as the planning phase. Agents see each other's concerns and resolve conflicts. Up to 3 rounds.
 5. **Escalation:** Unresolved disagreements after 3 rounds go to the user.
 6. **Fix:** Address all blocking concerns on the feature branch. Advisory concerns are listed but do not block the merge.
-7. **Merge:** Once all blocking concerns are resolved, merge the feature branch into `main` and delete the feature branch.
+7. **Update living documentation:** Before merging, edit the "System Responsibilities" section of this `CLAUDE.md` so it reflects the state of the code on the branch. Scope of the edit:
+   - For every system touched, update its ownership/methods/signals/data-flow bullets to match the actual implementation. If a signal was added, renamed, or removed, that change must appear here.
+   - Add a new subsection for any new system (autoload, manager, resource, major scene) introduced by the branch.
+   - Remove or rewrite subsections for systems that were deleted or fundamentally restructured.
+   - Capture cross-system relations explicitly — "X emits foo_changed, which Y and Z listen to" is the kind of line that belongs here.
+   - Prefer behavior over implementation detail: readers should come away understanding *what each system owns and how it talks to others*, not line-by-line specifics.
+
+   Commit this documentation update as its own commit (e.g. `docs: update system responsibilities for <feature>`) so the living-docs change is easy to spot in history. If a branch made no meaningful system-level change, explicitly note that in the commit message rather than skipping the check.
+8. **Merge:** Once all blocking concerns are resolved and the living docs are updated, merge the feature branch into `main` and delete the feature branch.
 
 #### Logging
 
