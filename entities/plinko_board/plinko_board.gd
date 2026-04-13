@@ -77,6 +77,22 @@ func _ready() -> void:
 	space_between_pegs = ThemeProvider.theme.space_between_pegs
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
+	AudioManager.chord_changed.connect(_on_chord_changed)
+
+
+func _exit_tree() -> void:
+	if AudioManager.chord_changed.is_connected(_on_chord_changed):
+		AudioManager.chord_changed.disconnect(_on_chord_changed)
+
+
+## Chord advanced in AudioStyle mode: fade every bucket on this board back to
+## its faded color. Buckets marked as challenge hit/forbidden are skipped by
+## Bucket.mark_inactive itself.
+func _on_chord_changed(_chord_index: int) -> void:
+	var duration: float = ThemeProvider.theme.bucket_fade_duration
+	for child in buckets_container.get_children():
+		if child is Bucket:
+			child.mark_inactive(duration)
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -624,7 +640,15 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		CurrencyManager.add(bucket.currency_type, amount)
 		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
 	bucket.pulse()
+	bucket.mark_active()
 	var num_buckets: int = buckets_container.get_child_count()
+	# Mirror: buckets symmetric across center share the same note, so light up
+	# the mirror too. (Skips when the hit bucket IS center — same index.)
+	var mirror_idx: int = num_buckets - 1 - bucket_idx
+	if mirror_idx != bucket_idx:
+		var mirror: Bucket = get_bucket(mirror_idx)
+		if mirror:
+			mirror.mark_active()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
 	AudioManager.play_bucket(board_type, bucket_distance, is_advanced)

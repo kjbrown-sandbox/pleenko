@@ -177,6 +177,8 @@ const coin_shape := CoinShape.CYLINDER
 @export var coin_land_particle_duration := 0.6                    # how long particles live
 @export var bucket_pulse_scale := 1.15                            # scale on receive
 @export var bucket_pulse_duration := 0.15
+@export var bucket_fade_duration := 1.0                           # chord-change visual tween duration
+@export var linger_fade_duration := 2.5                           # chord-gated audio handoff fade (new-coin to previous-chord drones)
 @export var floating_text_rise := 1.5                             # units upward
 @export var floating_text_duration := 1.2
 @export var coin_spawn_scale_from := 0.0                          # fade-in start scale
@@ -398,6 +400,10 @@ func get_coin_color_faded(currency_type: int) -> Color:
 
 func get_bucket_color(currency_type: int) -> Color:
 	return get_coin_color(currency_type)
+
+
+func get_bucket_color_faded(currency_type: int) -> Color:
+	return get_coin_color_faded(currency_type)
 
 
 # ── Material / mesh factories ────────────────────────────────────────

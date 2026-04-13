@@ -14,6 +14,7 @@ var currency_type: Enums.CurrencyType
 var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
+var _color_tween: Tween
 
 @onready var _mesh: MeshInstance3D = $MeshInstance3D
 @onready var _label: Label3D = $BucketValue
@@ -40,16 +41,18 @@ func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) ->
 	_label.font_size = t.bucket_label_font_size
 	_label.outline_size = t.label_outline_size
 	_label.position = Vector3(0, t.bucket_label_offset, 0.05)
-	_label.modulate = t.get_bucket_color(currency_type)
 	if t.label_font:
 		_label.font = t.label_font
 
+	# Buckets start faded and light up only when a coin lands in them (until
+	# the next chord change). See mark_active / mark_inactive.
+	_apply_color(_resolve_default_color())
+
 
 func mark_hit() -> void:
+	_kill_color_tween()
 	_is_hit = true
-	var hit_color: Color = ThemeProvider.theme.hit_bucket_color
-	_base_material.albedo_color = hit_color
-	_label.modulate = hit_color
+	_apply_color(ThemeProvider.theme.hit_bucket_color)
 
 
 func mark_target() -> void:
@@ -58,10 +61,9 @@ func mark_target() -> void:
 
 
 func mark_unhit() -> void:
+	_kill_color_tween()
 	_is_hit = false
-	var t: VisualTheme = ThemeProvider.theme
-	_base_material.albedo_color = t.get_bucket_color(currency_type)
-	_label.modulate = t.get_bucket_color(currency_type)
+	_apply_color(_resolve_default_color())
 	_label.visible = true
 	# Remove skull icon if present
 	var skull := get_node_or_null("SkullIcon")
@@ -93,3 +95,46 @@ func pulse() -> void:
 	if not t.bucket_pulse_enabled:
 		return
 	t.pulse_node3d(self, true, _base_material, currency_type, _is_hit)
+
+
+## Chord-gated activation: snap to full bucket color instantly. Called by
+## PlinkoBoard when a coin lands in this bucket. No-op if the bucket is
+## already marked as hit/forbidden by a challenge — those markers win.
+func mark_active() -> void:
+	if _is_hit:
+		return
+	_kill_color_tween()
+	_apply_color(ThemeProvider.theme.get_bucket_color(currency_type))
+
+
+## Chord change: tween back to the faded color over `duration` seconds.
+## No-op if marked hit/forbidden by a challenge. EASE_IN + TRANS_QUAD matches
+## the feel of bucket_pulse so the motion language stays consistent; the
+## audio fade uses EASE_OUT on purpose (see AudioManager._fade_drone).
+func mark_inactive(duration: float) -> void:
+	if _is_hit:
+		return
+	_kill_color_tween()
+	var target: Color = ThemeProvider.theme.get_bucket_color_faded(currency_type)
+	_color_tween = create_tween()
+	_color_tween.bind_node(self)
+	_color_tween.set_parallel(true)
+	_color_tween.tween_property(_base_material, "albedo_color", target, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_color_tween.tween_property(_label, "modulate", target, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+
+func _resolve_default_color() -> Color:
+	return ThemeProvider.theme.get_bucket_color_faded(currency_type)
+
+
+func _apply_color(color: Color) -> void:
+	_base_material.albedo_color = color
+	_label.modulate = color
+
+
+func _kill_color_tween() -> void:
+	if _color_tween and _color_tween.is_valid():
+		_color_tween.kill()
+	_color_tween = null

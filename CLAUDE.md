@@ -136,11 +136,12 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Owns every sound in the game: legacy SFX pools, procedural harp (multi-sample), procedural arcade square-wave + kick, ambient pad per board, drone pool shared by bucket drones + harp sparkles, bucket/coin chimes, click sounds, drum pools (currently disabled).
 - Owns the beat grid (`_beat_period`, `_beat_phase`, `_motif_position`, `_beat_armed`) and per-board harmonic progression state (`_board_progressions`, `_current_chord_index`). Arcade mode swaps in the AudioStyle's own progression via `_active_audio_style` + `_style_chord_index`.
-- Methods: `play_bucket`, `play_peg_sparkle`, `play_peg_click`, `play_bucket_hit`, `set_active_board`, `on_coin_dropped`, `on_coin_landed`, `play_manual_drop_drum`, `play_autodropper_drum`, `play(sound_name, pitch, max_duration)`, `play_prestige`, `notify_autodropper_beat(interval)`, `should_sparkle(bt)`, `is_active_board(bt)`.
-- Emits nothing; read-only subscriber.
+- Methods: `play_bucket`, `play_peg_sparkle`, `play_peg_click`, `play_bucket_hit`, `set_active_board`, `on_coin_dropped`, `on_coin_landed`, `play_manual_drop_drum`, `play_autodropper_drum`, `play(sound_name, pitch, max_duration)`, `play_prestige`, `notify_autodropper_beat(interval)`, `should_sparkle(bt)`, `is_active_board(bt)`, `get_time_until_next_chord()`.
+- Emits: `chord_changed(chord_index)` — fired on every chord advance in both the default harp path and the AudioStyle path, and also from `_reset_harmonic_state` when silence resets the progression. PlinkoBoard listens to fade chord-activated buckets back to their faded color. The signal is visual-only; audio is not faded by a chord change (see chord-gated bucket lifecycle below).
 - Listens: `ThemeProvider.theme_changed` (update lofi bus effects + re-select AudioStyle), `ChallengeManager.challenge_state_changed` (re-select style), `ChallengeManager.tick` (phase-lock beat grid + fire kick; final 10s schedules a second kick +0.5s later via `create_timer`).
 - AudioStyle routing: when `ThemeProvider.theme.audio_style` is set AND (not `active_during_challenge_only` OR a challenge is active), that style replaces the default harp path — different chord progression, beat-period from `beats_per_tick`, square-wave timbre via `_tonal_stream_and_pitch`. On any style transition, `_fade_all_drones(1s)` clears lingering drones so the outgoing world doesn't bleed into the new one.
-- Arcade-specific: kick is the only audible backing layer (once per second, doubled to 2/sec in the final 10 seconds). Sparkle audio is currently muted in arcade (`play_peg_sparkle` early-returns); peg ring VFX still fires through `should_sparkle`. Bucket drones play as usual.
+- Arcade-specific: kick is the only audible backing layer (once per second, doubled to 2/sec in the final 10 seconds). Peg sparkle audio is currently fully disabled (`play_peg_sparkle` is an unconditional early-return) because it clashed with the chord-gated bucket drone layer; peg ring VFX still fires through `should_sparkle`. A follow-up feature will redesign the sparkle voice. Bucket drones play as usual.
+- Chord-gated bucket drones use a three-state machine (`DroneState` enum on the drone dict entries): `ACTIVE` (current chord, gates re-hits on same bucket), `LINGERING` (previous chord still ringing naturally — no gating, pool slot released when the synthesized decay ends or when a new coin lands), and `SPARKLE` (timer-decayed peg sparkles, unchanged from before). `play_bucket` allocates ACTIVE drones with `timer = max(_chord_timer, MIN_BUCKET_RING_SECONDS)`; `_update_bucket_drones` skips ACTIVE drones so the timer never cuts them off mid-chord. `_handle_chord_advance` flips ACTIVE → LINGERING and sets `timer = HARP_DECAY_SECONDS` so `_update_bucket_drones` releases the pool slot once the sample has decayed. `_fade_lingering_drones` runs at the top of every `play_bucket` call: the new coin hands off from the old chord's tail by fading every LINGERING drone over `VisualTheme.linger_fade_duration`. Fade tweens are tracked in `_drone_fade_tweens` keyed by pool idx and killed before a slot is reused.
 
 #### Scene-level systems
 
@@ -151,6 +152,8 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Emits: `board_switched(board)`, `board_unlocked(type)`.
 - Per-tick: `_autodrop_timer` (wait=1.5s) fires `_on_autodrop_tick`, which calls `AudioManager.notify_autodropper_beat(wait_time)` to sync the beat grid, then dispatches to assigned boards.
 - Listens: `UpgradeManager.{autodropper_unlocked, advanced_autodropper_unlocked, upgrade_purchased}`, `CurrencyManager.currency_changed`, `LevelManager.rewards_claimed`, per-board `board_rebuilt` / `autodropper_adjust_requested`.
+
+Each `PlinkoBoard` additionally listens to `AudioManager.chord_changed` (AudioStyle mode) and fades all its buckets to their faded color on every chord advance.
 
 **PlinkoBoard** — `entities/plinko_board/plinko_board.gd`
 
@@ -171,8 +174,9 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Per-bucket visual: `MeshInstance3D` with a per-instance `StandardMaterial3D`, `Label3D` showing value.
 - Fields: `value` (setter updates label), `currency_type`, `is_prestige_bucket`, `_base_material`, `_is_hit`.
-- Methods: `setup(currency_type, position, value)`, `mark_hit`, `mark_target`, `mark_unhit`, `mark_forbidden`, `pulse`.
+- Methods: `setup(currency_type, position, value)`, `mark_hit`, `mark_target`, `mark_unhit`, `mark_forbidden`, `pulse`, `mark_active`, `mark_inactive(duration)`.
 - No signals (pure view).
+- Buckets always start in the faded color and light up only while activated by a coin landing. `mark_active` instantly snaps to full color when a coin lands; `mark_inactive(duration)` tweens back to faded (EASE_IN + TRANS_QUAD) on chord change. Both no-op when `_is_hit` is true (challenge markers win). All `mark_*` methods share `_apply_color(color)` + `_kill_color_tween()` to keep the six code paths consistent. `_color_tween` is bound to the node so board rebuilds auto-kill running tweens.
 
 **ChallengeClock** — `entities/challenge_clock/challenge_clock.gd` + `.tscn`
 
@@ -239,6 +243,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - **Theme → Audio:** `ThemeProvider.theme_changed` → `AudioManager._on_theme_changed` → `_reselect_audio_style` picks up `theme.audio_style`.
 - **Challenge → Audio:** `ChallengeManager.challenge_state_changed` → `AudioManager._reselect_audio_style` (activates arcade if theme has a style with `active_during_challenge_only`). Any style transition triggers `AudioManager._fade_all_drones(1s)`.
 - **Autodropper → Audio beat:** `BoardManager._on_autodrop_tick` → `AudioManager.notify_autodropper_beat(wait_time)` to sync the harp beat grid to the autodropper timer.
+- **Chord-gated buckets (all themes):** coin landing → `PlinkoBoard.finalize_coin_landing` → `Bucket.mark_active` on both the hit bucket and its mirror (symmetric buckets share a note) + `AudioManager.play_bucket` (drone allocated as `ACTIVE`; any `LINGERING` drones from the previous chord are hand-faded first over `linger_fade_duration`). Chord advance → `AudioManager._handle_chord_advance` flips ACTIVE drones to LINGERING (audio keeps ringing via the extended harp sample) and emits `chord_changed(chord_index)` → every `PlinkoBoard._on_chord_changed` → `Bucket.mark_inactive(bucket_fade_duration)` on each bucket. Idle silence (no activity for `CHORD_IDLE_RESET` seconds) fires `_reset_harmonic_state` which also calls `_handle_chord_advance` so visuals fade even when the player stops dropping.
 - **Coin lifecycle:** `PlinkoBoard.request_drop` → `Coin.start(target)` → per-row board queries → `Coin.final_bounce_started` → `PlinkoBoard.finalize_coin_landing` → `coin_landed` signal (ChallengeTracker, BoardManager listen) + `AudioManager.play_bucket` + `AudioManager.on_coin_landed`.
 - **Peg VFX:** `Coin._on_peg_hit` → `PlinkoBoard.flash_nearest_peg` → flash + pulse + halo (always) + ring (coin color, gated on `AudioManager.should_sparkle`).
 - **Save:** `SaveManager.save_game` serializes each manager in order. `load_game` deserializes in the order `PrestigeManager → ChallengeProgressManager → LevelManager → CurrencyManager → UpgradeManager → BoardManager` so signals fire against a consistent state.
