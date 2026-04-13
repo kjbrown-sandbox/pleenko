@@ -519,6 +519,9 @@ func on_coin_landed() -> void:
 ## drum pool. Rapid-fire drops within DRUM_RAPID_FIRE_WINDOW seconds are
 ## attenuated so button-mashing doesn't fatigue.
 func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
+	# Drums disabled while the harp timbre is being developed. Keeps the
+	# infrastructure (pools, bus, tick scheduling) intact for easy re-enable.
+	return
 	if board_type != _active_board:
 		return
 	if not ThemeProvider.theme.audio_lofi_enabled:
@@ -541,6 +544,9 @@ func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
 ## (on the offbeat), creating a boom-chk pattern when both are active.
 ## Rotates through the pool in order — not randomized.
 func play_autodropper_drum(board_type: Enums.BoardType, is_advanced: bool) -> void:
+	# Drums disabled while the harp timbre is being developed. Keeps the
+	# infrastructure (pools, bus, tick scheduling) intact for easy re-enable.
+	return
 	if board_type != _active_board:
 		return
 	if not ThemeProvider.theme.audio_lofi_enabled:
