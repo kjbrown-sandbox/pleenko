@@ -33,6 +33,7 @@ coin_halo_enabled = true
 coin_halo_radius = 2.5
 coin_halo_opacity = 1.0
 coin_silhouette = true
+coin_impact_squash_enabled = false
 button_font = ExtResource("1_fbp74")
 button_bg_source = 15
 button_disabled_text_source = 4

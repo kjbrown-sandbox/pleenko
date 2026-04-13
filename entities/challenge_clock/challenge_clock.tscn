@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://chcc000011001"]
+
+[ext_resource type="Script" path="res://entities/challenge_clock/challenge_clock.gd" id="1_cc"]
+
+[node name="ChallengeClock" type="Control"]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+script = ExtResource("1_cc")
