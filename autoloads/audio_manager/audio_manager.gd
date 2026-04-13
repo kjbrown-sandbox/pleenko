@@ -626,8 +626,10 @@ func _current_chord_entry(board_type: Enums.BoardType) -> Dictionary:
 
 
 ## Tape wobble: a tiny sine LFO applied to pitch for lofi's analog feel.
-## Returns pitch unchanged for non-lofi themes.
+## Disabled while the harp timbre is being developed — the pitch drift
+## reads as "old recording" and fights the clean harp character.
 func _apply_tape_wobble(pitch: float) -> float:
+	return pitch
 	if not ThemeProvider.theme.audio_lofi_enabled:
 		return pitch
 	var t: float = Time.get_ticks_msec() / 1000.0
@@ -745,11 +747,12 @@ func _get_ambient_pitch(board_type: Enums.BoardType) -> float:
 func _on_theme_changed() -> void:
 	if not ThemeProvider.theme:
 		return
-	var lofi: bool = ThemeProvider.theme.audio_lofi_enabled
 
-	# Toggle the Melody bus low-pass filter.
+	# Low-pass filter kept off while the harp is being developed — the 3 kHz
+	# cutoff was part of what made the sound read as "old movie." Re-enable
+	# by restoring the lofi gate: `var lofi := ...; set_bus_effect_enabled(..., lofi)`.
 	if _melody_bus_idx >= 0 and _melody_lowpass_effect_idx >= 0:
-		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, lofi)
+		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, false)
 
 
 # ── Audio bus setup ──────────────────────────────────────────────────
@@ -761,10 +764,13 @@ func _setup_buses() -> void:
 		AudioServer.add_bus()
 		AudioServer.set_bus_name(_melody_bus_idx, &"Melody")
 		AudioServer.set_bus_send(_melody_bus_idx, &"Master")
+		# Reverb muted while the harp is being developed — Godot's built-in
+		# room reverb has an 80s/90s digital character that fights the dry
+		# plucked tone. Re-enable by raising wet (e.g. 0.15-0.25).
 		var reverb := AudioEffectReverb.new()
 		reverb.room_size = 0.55
-		reverb.wet = 0.25
-		reverb.dry = 0.75
+		reverb.wet = 0.0
+		reverb.dry = 1.0
 		reverb.damping = 0.7
 		AudioServer.add_bus_effect(_melody_bus_idx, reverb)
 		# Low-pass filter for lofi warmth — disabled by default, toggled via
