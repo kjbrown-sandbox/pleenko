@@ -88,12 +88,6 @@ var _active_drones: Dictionary = {}  # String key -> { "idx": int, "timer": floa
 var _sine_drone_stream: AudioStreamWAV
 var _piano_drone_stream: AudioStream = preload("res://assets/sounds/instrument_samples/Ensoniq-ESQ-1-FM-Piano-C4.wav")
 
-# Vinyl crackle bed — continuous texture under the ambient pad when lofi
-# active. Fades in/out via the theme_changed handler.
-const CRACKLE_VOLUME_DB := -28.0
-const CRACKLE_FADE_DURATION := 1.0
-var _crackle_player: AudioStreamPlayer
-
 # Low-pass filter on the Melody bus — enabled when lofi active, disabled
 # otherwise. The index tracks where in the bus effect chain it sits.
 const MELODY_LOWPASS_CUTOFF := 3000.0
@@ -166,9 +160,6 @@ func _ready() -> void:
 	# preload. Generated here so the drone pool has a default stream on startup.
 	_sine_drone_stream = _generate_ambient_pad(2.0, 44100, [262.0, 392.0])
 
-	# Vinyl crackle bed — averaged white noise with occasional pops.
-	var crackle_stream := _generate_vinyl_crackle(6.0)
-
 	# ── Musical pools ───────────────────────────────────────────────
 	for i in MELODY_POOL_SIZE:
 		var cello := AudioStreamPlayer.new()
@@ -208,13 +199,6 @@ func _ready() -> void:
 	add_child(_ambient_b)
 
 	_ambient_active = _ambient_a
-
-	# ── Vinyl crackle player ────────────────────────────────────────
-	_crackle_player = AudioStreamPlayer.new()
-	_crackle_player.stream = crackle_stream
-	_crackle_player.bus = &"Ambient"
-	_crackle_player.volume_db = -80.0
-	add_child(_crackle_player)
 
 	# ── Bucket drone pool ───────────────────────────────────────────
 	# Each player's stream is (re)assigned per-play in play_bucket based on
@@ -274,9 +258,9 @@ func _ready() -> void:
 		add_child(p)
 		_hat_drum_players.append(p)
 
-	# Listen for theme swaps so lofi-gated effects (low-pass, crackle) can
-	# toggle at runtime. Call once to sync initial state against the loaded
-	# theme (via call_deferred so ThemeProvider autoload is fully ready).
+	# Listen for theme swaps so lofi-gated effects (low-pass) can toggle at
+	# runtime. Call once to sync initial state against the loaded theme (via
+	# call_deferred so ThemeProvider autoload is fully ready).
 	ThemeProvider.theme_changed.connect(_on_theme_changed)
 	_on_theme_changed.call_deferred()
 
@@ -581,18 +565,6 @@ func _on_theme_changed() -> void:
 	if _melody_bus_idx >= 0 and _melody_lowpass_effect_idx >= 0:
 		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, lofi)
 
-	# Fade the crackle bed in/out.
-	if _crackle_player:
-		var tween := create_tween()
-		if lofi:
-			if not _crackle_player.playing:
-				_crackle_player.volume_db = -80.0
-				_crackle_player.play()
-			tween.tween_property(_crackle_player, "volume_db", CRACKLE_VOLUME_DB, CRACKLE_FADE_DURATION)
-		else:
-			tween.tween_property(_crackle_player, "volume_db", -80.0, CRACKLE_FADE_DURATION)
-			tween.tween_callback(_crackle_player.stop)
-
 
 # ── Audio bus setup ──────────────────────────────────────────────────
 
@@ -836,56 +808,3 @@ func _generate_rim(freq: float, duration: float, mix_rate: int = 44100) -> Audio
 	return wav
 
 
-# ── Vinyl crackle generator ──────────────────────────────────────────
-
-## Generates a seamless loop of vinyl-crackle texture: pops and clicks at
-## varying amplitudes, with near-silent space between. No constant white-noise
-## hiss — just occasional crackle events, with a small chance of forming
-## clusters so it feels like actual vinyl defects rather than ambient noise.
-func _generate_vinyl_crackle(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	wav.loop_end = int(duration * mix_rate)
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-
-	# Pre-generate pop events. Each has a position and amplitude. Every pop
-	# has a 15% chance of spawning a short cluster of follow-up pops, which
-	# gives the impression of actual vinyl damage rather than evenly spaced ticks.
-	var pop_events: Array[Dictionary] = []
-	var pops_per_second: float = 7.0
-	var total_pops := int(duration * pops_per_second)
-	for i in total_pops:
-		var pos := randi() % num_samples
-		pop_events.append({ "pos": pos, "amp": randf_range(0.3, 1.0) })
-		if randf() < 0.15:
-			var cluster_size: int = randi_range(1, 3)
-			for j in cluster_size:
-				var delay := randi_range(int(mix_rate * 0.003), int(mix_rate * 0.015))
-				pop_events.append({
-					"pos": (pos + delay * (j + 1)) % num_samples,
-					"amp": randf_range(0.2, 0.6)
-				})
-
-	# Very subtle room presence — almost inaudible (0.015 amplitude vs the
-	# old 0.5). Provides a hint of texture without being a constant hiss.
-	var prev_sample: float = 0.0
-	for i in num_samples:
-		var raw: float = randf_range(-1.0, 1.0)
-		var hum: float = prev_sample * 0.85 + raw * 0.15
-		prev_sample = hum
-		var value: float = hum * 0.015
-
-		# Layer in any pop events that fire within the next 30 samples.
-		for event: Dictionary in pop_events:
-			var dist: int = i - event["pos"]
-			if dist >= 0 and dist < 30:
-				var pop_env: float = exp(-float(dist) * 0.25)
-				value += randf_range(-1.0, 1.0) * pop_env * event["amp"]
-
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav

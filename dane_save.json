@@ -1,0 +1,608 @@
+{
+	"boards": {
+		"advanced_autodroppers_unlocked": false,
+		"advanced_buckets": {
+			"GOLD": true,
+			"ORANGE": false
+		},
+		"assignments": {
+
+		},
+		"board_state": {
+			"GOLD": {
+				"advanced_coin_multiplier": 4.0,
+				"bucket_value_multiplier": 4,
+				"distance_for_advanced_buckets": 3,
+				"drop_delay": 0.94921875,
+				"multi_drop_count": 6,
+				"num_rows": 8
+			},
+			"ORANGE": {
+				"advanced_coin_multiplier": 2.0,
+				"bucket_value_multiplier": 1,
+				"distance_for_advanced_buckets": 3,
+				"drop_delay": 3.0,
+				"multi_drop_count": 4,
+				"num_rows": 2
+			}
+		},
+		"board_types": [
+			0,
+			1
+		],
+		"normal_autodroppers_unlocked": false
+	},
+	"challenges": {
+		"challenges_ever_visited": true,
+		"modifiers": [
+			{
+				"board_type": 0,
+				"currency_type": 0,
+				"modifier_amount": 0.5,
+				"modifier_type": 3,
+				"type": 1
+			},
+			{
+				"board_type": 0,
+				"currency_type": 0,
+				"modifier_amount": 5.0,
+				"modifier_type": 1,
+				"type": 1
+			},
+			{
+				"board_type": 0,
+				"currency_type": 0,
+				"modifier_amount": 5.0,
+				"modifier_type": 1,
+				"type": 1
+			},
+			{
+				"board_type": 0,
+				"currency_type": 0,
+				"modifier_amount": 0.5,
+				"modifier_type": 3,
+				"type": 1
+			},
+			{
+				"board_type": 0,
+				"currency_type": 0,
+				"modifier_amount": 0.5,
+				"modifier_type": 3,
+				"type": 1
+			},
+			{
+				"board_type": 0,
+				"currency_type": 0,
+				"modifier_amount": 0.5,
+				"modifier_type": 3,
+				"type": 1
+			},
+			{
+				"board_type": 0,
+				"currency_type": 0,
+				"modifier_amount": 1.0,
+				"modifier_type": 2,
+				"type": 1
+			}
+		],
+		"permanent_upgrades": [
+			{
+				"board_type": 0,
+				"modifier_amount": 1.0,
+				"upgrade_type": 1
+			},
+			{
+				"board_type": 0,
+				"modifier_amount": 1.0,
+				"upgrade_type": 2
+			},
+			{
+				"board_type": 0,
+				"modifier_amount": 1.0,
+				"upgrade_type": 1
+			},
+			{
+				"board_type": 0,
+				"modifier_amount": 1.0,
+				"upgrade_type": 2
+			},
+			{
+				"board_type": 0,
+				"modifier_amount": 1.0,
+				"upgrade_type": 1
+			}
+		],
+		"rewards_claimed": {
+			"gold_1": true,
+			"gold_10": true,
+			"gold_11": true,
+			"gold_12": true,
+			"gold_2": true,
+			"gold_3": true,
+			"gold_4": true,
+			"gold_5": true,
+			"gold_6": true,
+			"gold_7": true,
+			"gold_8": true,
+			"gold_9": true,
+			"gold_boss": true
+		},
+		"states": {
+			"blue_1": 1,
+			"blue_10": 0,
+			"blue_11": 0,
+			"blue_12": 0,
+			"blue_2": 1,
+			"blue_3": 0,
+			"blue_4": 0,
+			"blue_5": 0,
+			"blue_6": 0,
+			"blue_7": 0,
+			"blue_8": 0,
+			"blue_9": 0,
+			"blue_boss": 0,
+			"gold_1": 2,
+			"gold_10": 2,
+			"gold_11": 2,
+			"gold_12": 2,
+			"gold_2": 2,
+			"gold_3": 2,
+			"gold_4": 2,
+			"gold_5": 2,
+			"gold_6": 2,
+			"gold_7": 2,
+			"gold_8": 2,
+			"gold_9": 2,
+			"gold_boss": 2,
+			"green_1": 1,
+			"green_10": 0,
+			"green_11": 0,
+			"green_12": 0,
+			"green_2": 1,
+			"green_3": 0,
+			"green_4": 0,
+			"green_5": 0,
+			"green_6": 0,
+			"green_7": 0,
+			"green_8": 0,
+			"green_9": 0,
+			"green_boss": 0,
+			"orange_1": 1,
+			"orange_10": 0,
+			"orange_11": 0,
+			"orange_12": 0,
+			"orange_2": 1,
+			"orange_3": 0,
+			"orange_4": 0,
+			"orange_5": 0,
+			"orange_6": 0,
+			"orange_7": 0,
+			"orange_8": 0,
+			"orange_9": 0,
+			"orange_boss": 0,
+			"red_1": 1,
+			"red_10": 0,
+			"red_11": 0,
+			"red_12": 0,
+			"red_2": 1,
+			"red_3": 0,
+			"red_4": 0,
+			"red_5": 0,
+			"red_6": 0,
+			"red_7": 0,
+			"red_8": 0,
+			"red_9": 0,
+			"red_boss": 0,
+			"violet_1": 1,
+			"violet_10": 0,
+			"violet_11": 0,
+			"violet_12": 0,
+			"violet_2": 1,
+			"violet_3": 0,
+			"violet_4": 0,
+			"violet_5": 0,
+			"violet_6": 0,
+			"violet_7": 0,
+			"violet_8": 0,
+			"violet_9": 0,
+			"violet_boss": 0
+		},
+		"unlocks": [
+			0
+		]
+	},
+	"currency": {
+		"BLUE_COIN": {
+			"balance": 0,
+			"cap": 500,
+			"cap_raise_level": 0
+		},
+		"GOLD_COIN": {
+			"balance": 68,
+			"cap": 1000,
+			"cap_raise_level": 1
+		},
+		"GREEN_COIN": {
+			"balance": 0,
+			"cap": 500,
+			"cap_raise_level": 0
+		},
+		"ORANGE_COIN": {
+			"balance": 5,
+			"cap": 500,
+			"cap_raise_level": 0
+		},
+		"RAW_BLUE": {
+			"balance": 0,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"RAW_GREEN": {
+			"balance": 0,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"RAW_ORANGE": {
+			"balance": 3,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"RAW_RED": {
+			"balance": 0,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"RAW_VIOLET": {
+			"balance": 0,
+			"cap": 100,
+			"cap_raise_level": 0
+		},
+		"RED_COIN": {
+			"balance": 0,
+			"cap": 500,
+			"cap_raise_level": 0
+		},
+		"VIOLET_COIN": {
+			"balance": 0,
+			"cap": 500,
+			"cap_raise_level": 0
+		}
+	},
+	"level": {
+		"current_level": 10
+	},
+	"prestige": {
+		"BLUE": 1.0,
+		"ORANGE": 1.0,
+		"RED": 1.0,
+		"VIOLET": 1.0
+	},
+	"save_timestamp": 1776037127.19397,
+	"upgrades": {
+		"cap_raise_available": {
+			"BLUE": false,
+			"GOLD": true,
+			"GREEN": false,
+			"ORANGE": false,
+			"RED": false,
+			"VIOLET": false
+		},
+		"state": {
+			"BLUE": {
+				"ADD_ROW": {
+					"cap_level": 0,
+					"cost": 6,
+					"current_cap": 6,
+					"delta": 0,
+					"level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				},
+				"AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 100,
+					"current_cap": 10,
+					"delta": 100,
+					"level": 0
+				},
+				"BUCKET_VALUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 7,
+					"delta": 5,
+					"level": 0
+				},
+				"DROP_RATE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 6,
+					"delta": 20,
+					"level": 0
+				},
+				"QUEUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				}
+			},
+			"GOLD": {
+				"ADD_ROW": {
+					"cap_level": 0,
+					"cost": 6000,
+					"current_cap": 6,
+					"delta": 0,
+					"level": 3
+				},
+				"ADVANCED_AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				},
+				"AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 100,
+					"current_cap": 10,
+					"delta": 100,
+					"level": 0
+				},
+				"BUCKET_VALUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 7,
+					"delta": 5,
+					"level": 0
+				},
+				"DROP_RATE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 6,
+					"delta": 20,
+					"level": 0
+				},
+				"QUEUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				}
+			},
+			"GREEN": {
+				"ADD_ROW": {
+					"cap_level": 0,
+					"cost": 6,
+					"current_cap": 6,
+					"delta": 0,
+					"level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				},
+				"AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 100,
+					"current_cap": 10,
+					"delta": 100,
+					"level": 0
+				},
+				"BUCKET_VALUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 7,
+					"delta": 5,
+					"level": 0
+				},
+				"DROP_RATE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 6,
+					"delta": 20,
+					"level": 0
+				},
+				"QUEUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				}
+			},
+			"ORANGE": {
+				"ADD_ROW": {
+					"cap_level": 0,
+					"cost": 6,
+					"current_cap": 6,
+					"delta": 0,
+					"level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				},
+				"AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 100,
+					"current_cap": 10,
+					"delta": 100,
+					"level": 0
+				},
+				"BUCKET_VALUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 7,
+					"delta": 5,
+					"level": 0
+				},
+				"DROP_RATE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 6,
+					"delta": 20,
+					"level": 0
+				},
+				"QUEUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				}
+			},
+			"RED": {
+				"ADD_ROW": {
+					"cap_level": 0,
+					"cost": 6,
+					"current_cap": 6,
+					"delta": 0,
+					"level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				},
+				"AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 100,
+					"current_cap": 10,
+					"delta": 100,
+					"level": 0
+				},
+				"BUCKET_VALUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 7,
+					"delta": 5,
+					"level": 0
+				},
+				"DROP_RATE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 6,
+					"delta": 20,
+					"level": 0
+				},
+				"QUEUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				}
+			},
+			"VIOLET": {
+				"ADD_ROW": {
+					"cap_level": 0,
+					"cost": 6,
+					"current_cap": 6,
+					"delta": 0,
+					"level": 0
+				},
+				"ADVANCED_AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				},
+				"AUTODROPPER": {
+					"cap_level": 0,
+					"cost": 100,
+					"current_cap": 10,
+					"delta": 100,
+					"level": 0
+				},
+				"BUCKET_VALUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 7,
+					"delta": 5,
+					"level": 0
+				},
+				"DROP_RATE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 6,
+					"delta": 20,
+					"level": 0
+				},
+				"QUEUE": {
+					"cap_level": 0,
+					"cost": 10,
+					"current_cap": 10,
+					"delta": 10,
+					"level": 0
+				}
+			}
+		},
+		"unlocked": {
+			"BLUE": {
+				"ADD_ROW": false,
+				"ADVANCED_AUTODROPPER": false,
+				"AUTODROPPER": false,
+				"BUCKET_VALUE": false,
+				"DROP_RATE": false,
+				"QUEUE": false
+			},
+			"GOLD": {
+				"ADD_ROW": true,
+				"ADVANCED_AUTODROPPER": false,
+				"AUTODROPPER": false,
+				"BUCKET_VALUE": true,
+				"DROP_RATE": true,
+				"QUEUE": true
+			},
+			"GREEN": {
+				"ADD_ROW": false,
+				"ADVANCED_AUTODROPPER": false,
+				"AUTODROPPER": false,
+				"BUCKET_VALUE": false,
+				"DROP_RATE": false,
+				"QUEUE": false
+			},
+			"ORANGE": {
+				"ADD_ROW": false,
+				"ADVANCED_AUTODROPPER": false,
+				"AUTODROPPER": false,
+				"BUCKET_VALUE": false,
+				"DROP_RATE": false,
+				"QUEUE": false
+			},
+			"RED": {
+				"ADD_ROW": false,
+				"ADVANCED_AUTODROPPER": false,
+				"AUTODROPPER": false,
+				"BUCKET_VALUE": false,
+				"DROP_RATE": false,
+				"QUEUE": false
+			},
+			"VIOLET": {
+				"ADD_ROW": false,
+				"ADVANCED_AUTODROPPER": false,
+				"AUTODROPPER": false,
+				"BUCKET_VALUE": false,
+				"DROP_RATE": false,
+				"QUEUE": false
+			}
+		}
+	},
+	"version": 4
+}
