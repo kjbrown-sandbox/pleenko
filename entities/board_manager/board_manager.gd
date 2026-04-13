@@ -14,6 +14,8 @@ var _active_index: int = 0
 var _camera: Camera3D
 var _normal_autodroppers_unlocked: bool = false
 var _advanced_autodroppers_unlocked: bool = false
+var _normal_pool: int = 0
+var _advanced_pool: int = 0
 var _assignments: Dictionary = {}  # StringName -> int (button_id → assigned count)
 var _autodrop_timer: Timer
 
@@ -218,11 +220,11 @@ func _is_advanced_button(button_id: StringName) -> bool:
 
 
 func get_normal_pool() -> int:
-	return UpgradeManager.get_level(Enums.BoardType.ORANGE, Enums.UpgradeType.AUTODROPPER)
+	return _normal_pool
 
 
 func get_advanced_pool() -> int:
-	return UpgradeManager.get_level(Enums.BoardType.RED, Enums.UpgradeType.ADVANCED_AUTODROPPER)
+	return _advanced_pool
 
 
 func _get_assigned_for_pool(advanced: bool) -> int:
@@ -312,7 +314,11 @@ func _on_autodrop_tick() -> void:
 
 
 func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, _new_level: int) -> void:
-	if upgrade_type == Enums.UpgradeType.AUTODROPPER or upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
+	if upgrade_type == Enums.UpgradeType.AUTODROPPER:
+		_normal_pool += 1
+		_update_all_button_displays()
+	elif upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
+		_advanced_pool += 1
 		_update_all_button_displays()
 	if board_type == Enums.BoardType.GOLD:
 		_check_and_rescue_gold_soft_lock()
@@ -364,6 +370,8 @@ func serialize() -> Dictionary:
 	var data := {}
 	data["normal_autodroppers_unlocked"] = _normal_autodroppers_unlocked
 	data["advanced_autodroppers_unlocked"] = _advanced_autodroppers_unlocked
+	data["normal_pool"] = _normal_pool
+	data["advanced_pool"] = _advanced_pool
 
 	# Which boards are spawned
 	var board_types: Array[int] = []
@@ -426,6 +434,15 @@ func deserialize(data: Dictionary) -> void:
 	_normal_autodroppers_unlocked = data.get("normal_autodroppers_unlocked",
 		data.get("autodroppers_unlocked", false))  # backward compat
 	_advanced_autodroppers_unlocked = data.get("advanced_autodroppers_unlocked", false)
+
+	# Pool counters — backward compat: old saves derive from per-board upgrade levels.
+	if data.has("normal_pool"):
+		_normal_pool = data["normal_pool"]
+		_advanced_pool = data.get("advanced_pool", 0)
+	else:
+		for board_type in Enums.BoardType.values():
+			_normal_pool += UpgradeManager.get_level(board_type, Enums.UpgradeType.AUTODROPPER)
+			_advanced_pool += UpgradeManager.get_level(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER)
 	if _normal_autodroppers_unlocked:
 		for board in _boards:
 			board.set_normal_autodroppers_visible(true)

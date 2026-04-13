@@ -105,14 +105,14 @@ func _set_advanced_drop(data: LevelData, next_tier: TierData, board_type: Enums.
 
 
 func _set_special_slot(data: LevelData, board_type: Enums.BoardType, next_tier: TierData) -> void:
-	if board_type == Enums.BoardType.ORANGE:
+	if board_type == Enums.BoardType.GOLD:
 		data.message = "You have unlocked Autodropper."
 		data.rewards = [_unlock_autodropper(), _unlock_upgrade(Enums.UpgradeType.AUTODROPPER, board_type)]
-	elif board_type == Enums.BoardType.RED:
+	elif board_type == Enums.BoardType.ORANGE:
 		data.message = "You have unlocked Advanced Autodropper."
 		data.rewards = [_unlock_advanced_autodropper(), _unlock_upgrade(Enums.UpgradeType.ADVANCED_AUTODROPPER, board_type)]
 	else:
-		# Gold: drop advanced coin
+		# Red (and beyond): drop advanced coin (currently no next tier)
 		_set_advanced_drop(data, next_tier, board_type)
 
 
