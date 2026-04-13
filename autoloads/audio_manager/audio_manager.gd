@@ -32,6 +32,10 @@ var _sounds: Dictionary = {
 const CHORD_MAJ7 := [0, 4, 7, 11, 12, 16, 19, 23]   # 1, 3, 5, 7, 8ve, 8ve+3, 8ve+5, 8ve+7
 const CHORD_DOM7 := [0, 4, 7, 10, 12, 16, 19, 22]   # major 3, minor 7 (the V chord)
 const CHORD_MIN7 := [0, 3, 7, 10, 12, 15, 19, 22]   # minor 3, minor 7
+# Plain triads (no 7ths) — used by arcade / rock styles that want power-chord
+# clarity instead of jazz color. Voicing mirrors the 7th chords' 8-slot layout.
+const CHORD_MAJ := [0, 4, 7, 12, 16, 19, 24, 28]    # major triad + octave doubles
+const CHORD_MIN := [0, 3, 7, 12, 15, 19, 24, 27]    # minor triad + octave doubles
 
 # Per-board chord progressions. Each entry is { "root": int, "chord": Array }
 # and the active chord cycles on CHORD_DURATION while the active board sees
@@ -123,6 +127,23 @@ const HARP_BASE_FREQ := 261.63          # C4 — used by call sites as the seman
 const HARP_DECAY_SECONDS := 4.0
 var _harp_low_stream: AudioStreamWAV    # warm, C3-native
 var _harp_high_stream: AudioStreamWAV   # dark, C5-native
+
+# Arcade square-wave instrument — generated at startup, C4-native. One sample
+# covers the arcade range (~2 octaves). Also a short noise-burst kick for the
+# backing layer on challenge ticks.
+const SQUARE_BASE_FREQ := 261.63        # C4
+const SQUARE_DURATION := 0.35           # staccato decay
+const KICK_DURATION := 0.18
+var _square_stream: AudioStreamWAV
+var _kick_stream: AudioStreamWAV
+var _kick_player: AudioStreamPlayer
+
+# Currently-active AudioStyle — null means "use default harp behavior."
+# Reselected on theme change or challenge start/end.
+var _active_audio_style: AudioStyle = null
+# Chord index within the active style's progression (separate from the
+# per-board harp progression index).
+var _style_chord_index: int = 0
 
 # Low-pass filter on the Melody bus — enabled when lofi active, disabled
 # otherwise. The index tracks where in the bus effect chain it sits.
@@ -225,6 +246,16 @@ func _ready() -> void:
 	# doesn't brighten further when shifted up.
 	_harp_low_stream = _generate_harp(HARP_LOW_FREQ, HARP_DECAY_SECONDS, false)
 	_harp_high_stream = _generate_harp(HARP_HIGH_FREQ, HARP_DECAY_SECONDS, true)
+
+	# Arcade — square wave + noise-burst kick. Square is staccato (short
+	# envelope) so it reads as plucky/bleepy rather than sustained.
+	_square_stream = _generate_square(SQUARE_BASE_FREQ, SQUARE_DURATION)
+	_kick_stream = _generate_arcade_kick(KICK_DURATION)
+	_kick_player = AudioStreamPlayer.new()
+	_kick_player.stream = _kick_stream
+	_kick_player.bus = &"Melody"
+	_kick_player.volume_db = -4.0
+	add_child(_kick_player)
 
 	# ── Musical pools ───────────────────────────────────────────────
 	for i in MELODY_POOL_SIZE:
@@ -330,6 +361,12 @@ func _ready() -> void:
 	ThemeProvider.theme_changed.connect(_on_theme_changed)
 	_on_theme_changed.call_deferred()
 
+	# Arcade audio routing: re-select on theme changes, challenge start/end,
+	# and per-tick for the backing kick + beat-grid phase-lock.
+	ChallengeManager.challenge_state_changed.connect(_reselect_audio_style)
+	ChallengeManager.tick.connect(_on_challenge_tick)
+	_reselect_audio_style.call_deferred()
+
 	set_process(true)
 
 
@@ -356,6 +393,18 @@ func _process(delta: float) -> void:
 ## any sparkle firing (no pegs hit), also reset — the board is too quiet to
 ## sustain the progression and the listener loses the phrasing.
 func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
+	# When an AudioStyle is active, it owns the chord progression (one global
+	# index rather than per-board), advances on a fixed cadence (chord_duration)
+	# regardless of peg activity, and doesn't do the "no-sparkle reset" logic
+	# since arcade backing keeps the audio alive independent of pegs.
+	if _active_audio_style and not _active_audio_style.progression.is_empty():
+		_chord_timer -= delta
+		if _chord_timer <= 0.0:
+			_style_chord_index = (_style_chord_index + 1) % _active_audio_style.progression.size()
+			_motif_position = 0
+			_chord_timer = _active_audio_style.chord_duration
+		return
+
 	if has_activity:
 		_chord_idle_timer = 0.0
 		_chord_timer -= delta
@@ -386,6 +435,66 @@ func _reset_harmonic_state() -> void:
 	_chord_had_sparkle = false
 
 
+## Selects the applicable AudioStyle based on current theme + challenge state.
+## Called on theme changes and challenge start/end. A null result means the
+## default harp code path runs unchanged.
+func _reselect_audio_style() -> void:
+	var desired: AudioStyle = null
+	if ThemeProvider and ThemeProvider.theme:
+		var style: AudioStyle = ThemeProvider.theme.audio_style
+		if style and (not style.active_during_challenge_only or ChallengeManager.is_active_challenge):
+			desired = style
+	if desired == _active_audio_style:
+		return
+	_active_audio_style = desired
+	_style_chord_index = 0
+	_motif_position = 0
+	_beat_phase = 0.0
+	_beat_armed = true
+	if _active_audio_style:
+		_chord_timer = _active_audio_style.chord_duration
+		_beat_period = 1.0 / float(maxi(1, _active_audio_style.beats_per_tick))
+	else:
+		_chord_timer = CHORD_DURATION
+		_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
+
+
+## Called every second by ChallengeManager.tick. Fires the arcade backing
+## (kick + bass) and phase-locks the beat grid to the tick so the pulse is
+## tight even if _process delta has drifted.
+func _on_challenge_tick(_seconds_remaining: int) -> void:
+	if not _active_audio_style:
+		return
+	_beat_phase = 0.0
+	_beat_armed = true
+	if _active_audio_style.has_backing_kick:
+		_kick_player.play()
+	if _active_audio_style.has_backing_bass:
+		_fire_backing_bass()
+
+
+## Plays the current chord's root one octave below C4 through the drone pool
+## with a short sustain. Used as the arcade backing bass pulse on each tick.
+func _fire_backing_bass() -> void:
+	if _drone_free.is_empty():
+		return
+	var pitch: float = _get_pitch_scale(0, _active_board) * 0.5  # octave below chord root
+	var sp: Dictionary = _tonal_stream_and_pitch(pitch)
+	var idx: int = _drone_free.pop_back()
+	var player: AudioStreamPlayer = _drone_pool[idx]
+	player.stream = sp["stream"]
+	player.pitch_scale = sp["pitch_scale"]
+	player.volume_db = BUCKET_VOLUME_DB
+	player.play()
+	_sparkle_counter += 1
+	_active_drones["B_" + str(_sparkle_counter)] = {
+		"idx": idx,
+		"timer": 0.75,
+		"degree": 0,
+		"octave_mult": 0.5,
+	}
+
+
 ## Advances the beat grid on a 4/4 clock. Each beat boundary bumps the motif
 ## position and arms the next note for the next peg hit. If no peg hit arrives
 ## before the following beat, the note is skipped — the grid always advances.
@@ -406,13 +515,11 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 
 	var degree: int = bucket_distance_from_center
 	var key: String = ("A_" if is_advanced else "N_") + str(degree)
-	var lofi: bool = ThemeProvider.theme.audio_lofi_enabled
-
 	var octave_mult: float = 0.25 if is_advanced else 0.5
 	var pitch: float = _get_pitch_scale(degree, board_type) * octave_mult
 	var target_volume: float = BUCKET_VOLUME_DB + (4.0 if is_advanced else 0.0)
 
-	var sp: Dictionary = _harp_stream_and_pitch(pitch)
+	var sp: Dictionary = _tonal_stream_and_pitch(pitch)
 
 	# If this bucket is already ringing (sustain or fade), re-pluck it: reset
 	# the timer, restore full volume, and retrigger the sample so the attack
@@ -439,8 +546,6 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	player.pitch_scale = _apply_tape_wobble(sp["pitch_scale"])
 	player.volume_db = target_volume
 	player.play()
-	# Store degree + octave multiplier so the drone can be retuned on chord
-	# change via _retune_active_drones without re-triggering the sample.
 	_active_drones[key] = {
 		"idx": idx,
 		"timer": BUCKET_DRONE_SUSTAIN,
@@ -470,7 +575,7 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	var idx: int = _drone_free.pop_back()
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	var pitch := _get_pitch_scale(note, board_type)
-	var sp: Dictionary = _harp_stream_and_pitch(pitch)
+	var sp: Dictionary = _tonal_stream_and_pitch(pitch)
 	player.stream = sp["stream"]
 	player.pitch_scale = _apply_tape_wobble(sp["pitch_scale"])
 	player.volume_db = PEG_SPARKLE_VOLUME_DB
@@ -620,9 +725,24 @@ func _get_pitch_scale(scale_degree: int, board_type: Enums.BoardType) -> float:
 
 
 func _current_chord_entry(board_type: Enums.BoardType) -> Dictionary:
+	# When an AudioStyle is active, its own progression overrides the per-board
+	# harp progressions. The style is a single progression shared across boards
+	# (arcade doesn't need per-board chord variation today).
+	if _active_audio_style and not _active_audio_style.progression.is_empty():
+		var style_prog: Array = _active_audio_style.progression
+		return style_prog[_style_chord_index % style_prog.size()]
 	var progression: Array = _board_progressions.get(board_type, _board_progressions[Enums.BoardType.GOLD])
 	var idx: int = _current_chord_index.get(board_type, 0)
 	return progression[idx % progression.size()]
+
+
+## Picks the active tonal stream + pitch_scale. Branches on the active style's
+## timbre: "square" returns the arcade sample; default falls through to the
+## harp multi-sample picker.
+func _tonal_stream_and_pitch(pitch_mult: float) -> Dictionary:
+	if _active_audio_style and _active_audio_style.timbre == "square":
+		return { "stream": _square_stream, "pitch_scale": pitch_mult }
+	return _harp_stream_and_pitch(pitch_mult)
 
 
 ## Tape wobble: a tiny sine LFO applied to pitch for lofi's analog feel.
@@ -754,6 +874,8 @@ func _on_theme_changed() -> void:
 	if _melody_bus_idx >= 0 and _melody_lowpass_effect_idx >= 0:
 		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, false)
 
+	_reselect_audio_style()
+
 
 # ── Audio bus setup ──────────────────────────────────────────────────
 
@@ -844,6 +966,56 @@ func _harp_stream_and_pitch(pitch_mult: float) -> Dictionary:
 ## the "plucked" character. When `darker` is true, upper harmonics are further
 ## attenuated and decay even faster — used for the high-register sample so it
 ## doesn't sound tinny when pitch-shifted up another octave.
+## Procedural arcade square wave. Short envelope (sharp attack, brief sustain,
+## quick release) yields a staccato "bleep" rather than a sustained pad.
+func _generate_square(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	var num_samples := int(duration * mix_rate)
+	var data := PackedByteArray()
+	data.resize(num_samples * 2)
+	var attack: float = 0.004
+	var release_start: float = duration * 0.55
+	for i in num_samples:
+		var t: float = float(i) / mix_rate
+		var env: float = 1.0
+		if t < attack:
+			env = t / attack
+		elif t > release_start:
+			env = maxf(0.0, 1.0 - (t - release_start) / (duration - release_start))
+		var sq: float = 1.0 if sin(TAU * freq * t) >= 0.0 else -1.0
+		var value: float = sq * env * 0.22
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
+	wav.data = data
+	return wav
+
+
+## Procedural arcade kick: low-frequency sine with a downward pitch sweep and
+## a fast exponential decay. Evokes a classic "boom" without needing a sample.
+func _generate_arcade_kick(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	var num_samples := int(duration * mix_rate)
+	var data := PackedByteArray()
+	data.resize(num_samples * 2)
+	var phase: float = 0.0
+	for i in num_samples:
+		var t: float = float(i) / mix_rate
+		# Pitch sweep from 180 Hz down to 50 Hz over the sample length.
+		var freq: float = lerpf(180.0, 50.0, minf(1.0, t / duration))
+		phase += TAU * freq / float(mix_rate)
+		var env: float = exp(-t * 18.0)
+		# Tiny click at the very start for snap.
+		if t < 0.003:
+			env += (1.0 - t / 0.003) * 0.4
+		var value: float = sin(phase) * env * 0.55
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
+	wav.data = data
+	return wav
+
+
 func _generate_harp(freq: float, duration: float, darker: bool, mix_rate: int = 44100) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
