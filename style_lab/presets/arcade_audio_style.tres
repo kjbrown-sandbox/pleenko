@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="AudioStyle" format=3]
+[gd_resource type="Resource" script_class="AudioStyle" format=3 uid="uid://bn4v7rk3qz5ac"]
 
 [ext_resource type="Script" path="res://autoloads/audio_manager/audio_style.gd" id="1_as"]
 

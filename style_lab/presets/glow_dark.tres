@@ -2,6 +2,7 @@
 
 [ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_fbp74"]
 [ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
+[ext_resource type="Resource" path="res://style_lab/presets/arcade_audio_style.tres" id="2_arcade"]
 
 [resource]
 script = ExtResource("1_vt")
@@ -46,3 +47,4 @@ vignette_enabled = true
 vignette_intensity = 0.3
 vignette_radius = 0.65
 vignette_softness = 0.5
+audio_style = ExtResource("2_arcade")
