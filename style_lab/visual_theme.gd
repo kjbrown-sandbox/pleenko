@@ -258,6 +258,7 @@ const coin_shape := CoinShape.CYLINDER
 # ── Audio ────────────────────────────────────────────────────────────
 @export_group("Audio")
 @export var audio_lofi_enabled := false                   ## Full lofi audio: piano buckets, vinyl crackle, low-pass, tape wobble, drums
+@export var audio_style: AudioStyle = null                ## Optional audio style override (e.g. arcade during challenges). Null = default harp behavior.
 
 
 # ── Palette resolver ─────────────────────────────────────────────────

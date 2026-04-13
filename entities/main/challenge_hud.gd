@@ -1,5 +1,7 @@
 extends VBoxContainer
 
+const ChallengeClockScene: PackedScene = preload("res://entities/challenge_clock/challenge_clock.tscn")
+
 var _time_remaining: float = 0.0
 var _is_running: bool = false
 
@@ -7,6 +9,7 @@ var _is_running: bool = false
 @onready var _objective_label: Label = $ObjectiveLabel
 @onready var _result_label: Label = $ResultLabel
 var _progress_label: Label
+var _challenge_clock: ChallengeClock
 
 
 func start(challenge: ChallengeData) -> void:
@@ -20,6 +23,14 @@ func start(challenge: ChallengeData) -> void:
 	# Survive challenges have their own two-phase countdown rendered into the
 	# progress label, so the regular timer label is hidden to avoid duplication.
 	_timer_label.visible = not _challenge_has_survive(challenge)
+
+	# Lazily instance the visual clock above the timer label. It listens to
+	# ChallengeManager.tick itself, so we just need to show it here.
+	if not _challenge_clock:
+		_challenge_clock = ChallengeClockScene.instantiate()
+		add_child(_challenge_clock)
+		move_child(_challenge_clock, 0)
+	_challenge_clock.start()
 
 	# Create progress label between objective and result
 	if not _progress_label:

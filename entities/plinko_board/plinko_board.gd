@@ -1004,8 +1004,9 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 			"duration": t.peg_glow_duration,
 		}
 
-	# Pulse only on sparkle so the scale-pop serves as the visual cue for the chime.
-	if t.peg_pulse_enabled and is_sparkle:
+	# Pulse fires on every peg hit so the player always gets a scale-pop cue
+	# on contact. The expanding coin-colored ring below is the sparkle cue.
+	if t.peg_pulse_enabled:
 		_active_peg_pulses[closest_idx] = {
 			"elapsed": 0.0,
 			"duration": t.bucket_pulse_duration,
@@ -1013,8 +1014,10 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 
 	if t.peg_glow_halo_enabled:
 		_spawn_peg_halo(_peg_positions[closest_idx], glow_color, t)
+	# Ring is the sparkle visual — coin-colored so it reads as a rewarding
+	# accent rather than a generic ripple.
 	if t.peg_ring_enabled and is_sparkle:
-		_spawn_peg_ring(_peg_positions[closest_idx], _peg_base_color, t)
+		_spawn_peg_ring(_peg_positions[closest_idx], glow_color, t)
 
 
 func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) -> void:

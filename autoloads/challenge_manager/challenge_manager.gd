@@ -5,6 +5,12 @@ extends Node
 
 signal challenge_completed
 signal challenge_failed(reason: String)
+## Fired whenever is_active_challenge flips. AudioManager listens so it can
+## switch between default (harp) and style-specific (arcade) audio paths.
+signal challenge_state_changed
+## Emitted once per second during an active challenge as the integer
+## seconds-remaining decrements. Drives the visual clock and arcade audio.
+signal tick(seconds_remaining: int)
 
 var is_active_challenge: bool = false
 var _challenge: ChallengeData
@@ -15,6 +21,7 @@ var _tracker: ChallengeTracker
 func set_challenge(challenge: ChallengeData) -> void:
 	_challenge = challenge
 	is_active_challenge = true
+	challenge_state_changed.emit()
 
 
 func get_challenge() -> ChallengeData:
@@ -23,6 +30,12 @@ func get_challenge() -> ChallengeData:
 
 func get_time_remaining() -> float:
 	return _tracker.time_remaining if _tracker else 0.0
+
+
+func get_total_seconds() -> int:
+	if not _tracker or not _tracker.challenge:
+		return 0
+	return int(_tracker.challenge.time_limit_seconds)
 
 
 func get_total_drops() -> int:
@@ -180,6 +193,7 @@ static func get_objective_text_for(challenge: ChallengeData) -> String:
 func clear_challenge() -> void:
 	is_active_challenge = false
 	_challenge = null
+	challenge_state_changed.emit()
 
 	# Clear gates
 	UpgradeManager.upgrade_gate = Callable()

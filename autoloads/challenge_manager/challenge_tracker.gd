@@ -21,6 +21,9 @@ var _current_bucket_group: int = 0
 var _total_drops: int = 0
 var _has_failed: bool = false
 var _timer_started: bool = false
+# Last integer second-value emitted via ChallengeManager.tick. Tracks both the
+# regular and survive timers; -1 = nothing emitted yet.
+var _last_tick_seconds: int = -1
 
 # Survive-specific state. Survive challenges drive their own two-phase timing
 # and ignore challenge.time_limit_seconds entirely.
@@ -54,6 +57,7 @@ func setup(_challenge: ChallengeData, _board_manager: BoardManager) -> void:
 	_current_bucket_group = 0
 	_total_drops = 0
 	_timer_started = false
+	_last_tick_seconds = -1
 
 	# Detect a Survive objective and initialize the two-phase countdown.
 	_survive_objective = null
@@ -108,6 +112,19 @@ func _process(delta: float) -> void:
 		time_remaining = 0.0
 		_on_time_up()
 		set_process(false)
+	_maybe_emit_tick(time_remaining)
+
+
+## Emits ChallengeManager.tick(seconds_remaining) when the integer second
+## boundary crosses downward. Use for both the regular timer and the SURVIVING
+## phase so every challenge has a consistent per-second pulse for audio + UI.
+func _maybe_emit_tick(remaining: float) -> void:
+	var new_sec: int = int(ceil(remaining))
+	if new_sec < 0:
+		return
+	if new_sec != _last_tick_seconds:
+		_last_tick_seconds = new_sec
+		ChallengeManager.tick.emit(new_sec)
 
 
 func _process_survive(delta: float) -> void:
@@ -115,6 +132,8 @@ func _process_survive(delta: float) -> void:
 		return
 	_survive_elapsed += delta
 	_survive_phase_remaining -= delta
+	if _survive_phase == SurvivePhase.SURVIVING:
+		_maybe_emit_tick(_survive_phase_remaining)
 	if _survive_phase_remaining > 0.0:
 		return
 
