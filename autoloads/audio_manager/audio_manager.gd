@@ -169,8 +169,8 @@ func _ready() -> void:
 			_pools[sound_name].append(player)
 
 	# ── Per-board chord progressions ─────────────────────────────────
-	# Gold cycles Cmaj7 → Am7 → Fmaj7 → G7 (vi-IV-I-V flavor, 24s full cycle
-	# at 6s/chord). Each chord carries a hand-authored motif: an array of
+	# Gold cycles Cmaj7 → Em7 → Fmaj7 → G7 (I-iii-IV-V, 24s full cycle at
+	# 6s/chord). Each chord carries a hand-authored motif: an array of
 	# chord-tone indices (0..7) and rests (-1). Motifs advance on a 4/4
 	# beat grid derived from the autodropper tick. Orange/Red single-chord;
 	# placeholder motifs to tune later.
@@ -183,8 +183,8 @@ func _ready() -> void:
 	_board_progressions[Enums.BoardType.GOLD] = [
 		# Cmaj7 (I) — all halves, ascending outline: root · 5th · 8ve · 8ve+3
 		{ "root": 0, "chord": CHORD_MAJ7, "motif": [0, -1, 2, -1, 4, -1, 5, -1] },
-		# Am7 (vi) — contemplative descent: octave (half) · 5th (half) · root (whole)
-		{ "root": 9, "chord": CHORD_MIN7, "motif": [4, -1, 2, -1, 0, -1, -1, -1] },
+		# Em7 (iii) — falling cadence: 7th (half) · 5th (half) · root (whole)
+		{ "root": 4, "chord": CHORD_MIN7, "motif": [3, -1, 2, -1, 0, -1, -1, -1] },
 		# Fmaj7 — airy lift: 5th (dotted half) · octave (half) · 8ve+3 (dotted half)
 		{ "root": 5, "chord": CHORD_MAJ7, "motif": [2, -1, -1, 4, -1, 5, -1, -1] },
 		# G7 — tension with kinetic quarter: root (q) · 7th (half) · octave (half) · 5th (dotted half)
