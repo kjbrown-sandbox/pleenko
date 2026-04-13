@@ -454,6 +454,9 @@ func _reselect_audio_style() -> void:
 			desired = style
 	if desired == _active_audio_style:
 		return
+	# Fade any still-ringing drones from the previous musical world before
+	# switching over — avoids the outgoing style bleeding into the new one.
+	var transitioning: bool = _active_audio_style != desired
 	_active_audio_style = desired
 	_style_chord_index = 0
 	_motif_position = 0
@@ -466,6 +469,29 @@ func _reselect_audio_style() -> void:
 	else:
 		_chord_timer = CHORD_DURATION
 		_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
+	if transitioning:
+		_fade_all_drones(1.0)
+
+
+## Tweens every currently-playing drone's volume to -80 dB over `duration`
+## seconds, then stops the player and returns its pool slot. Used to clear the
+## previous musical world's lingering notes on style transitions.
+func _fade_all_drones(duration: float) -> void:
+	for drone_key in _active_drones.keys():
+		var drone: Dictionary = _active_drones[drone_key]
+		var idx: int = int(drone["idx"])
+		var player: AudioStreamPlayer = _drone_pool[idx]
+		var tween := create_tween()
+		tween.tween_property(player, "volume_db", -80.0, duration)
+		tween.tween_callback(_finish_drone_fade.bind(idx))
+	_active_drones.clear()
+
+
+func _finish_drone_fade(idx: int) -> void:
+	var player: AudioStreamPlayer = _drone_pool[idx]
+	player.stop()
+	if not _drone_free.has(idx):
+		_drone_free.append(idx)
 
 
 ## Called every second by ChallengeManager.tick. Fires the kick on the
