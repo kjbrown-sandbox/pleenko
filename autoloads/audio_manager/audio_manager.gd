@@ -103,7 +103,7 @@ var _active_coin_count: int = 0
 # Sparkles share the same pool so they ring with the same harp-like sustain.
 const BUCKET_DRONE_SUSTAIN := 5.0
 const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — 3s fade over the ~72 dB range
-const SPARKLE_DRONE_SUSTAIN := 2.5     # sparkles ring a bit shorter than bucket drones
+const SPARKLE_DRONE_SUSTAIN := 3.5     # sparkles ring a bit shorter than bucket drones
 const BUCKET_DRONE_POOL_SIZE := 24
 var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
@@ -128,30 +128,19 @@ const HARP_DECAY_SECONDS := 4.0
 var _harp_low_stream: AudioStreamWAV    # warm, C3-native
 var _harp_high_stream: AudioStreamWAV   # dark, C5-native
 
-# Arcade square-wave instrument — generated at startup, C4-native. One sample
-# covers the arcade range (~2 octaves). Also a short noise-burst kick for the
-# backing layer on challenge ticks.
+# Arcade square-wave instrument — generated at startup, C4-native. Duration
+# also governs how long each sparkle rings (sparkles use this same stream
+# through the drone pool). Bumped up so they don't feel clipped.
 const SQUARE_BASE_FREQ := 261.63        # C4
-const SQUARE_DURATION := 0.35           # staccato decay
+const SQUARE_DURATION := 1.0            # audible ring length for each note
 const KICK_DURATION := 0.18
 var _square_stream: AudioStreamWAV
 var _kick_stream: AudioStreamWAV
 var _kick_player: AudioStreamPlayer
-# Single-voice bass so repeated hits restart cleanly at 2–4 bps without voice
-# pileup in the drone pool. Pitch is set per-fire; stream swapped by timbre.
-var _bass_player: AudioStreamPlayer
 
-# In the final N seconds of a challenge, quadruple the beat density (2 → 4
-# beats per tick) and play a 1-3-5-3 arpeggio on the bass to accelerate tension.
+# In the final N seconds of a challenge, the kick drum doubles (2 per second)
+# for a visible intensity ramp. No other rhythmic changes happen in arcade.
 const FINAL_COUNTDOWN_SECONDS := 10
-const FINAL_COUNTDOWN_BEATS_PER_TICK := 4
-# Bass arpeggio patterns by beats-per-tick: scale-degree indices per beat in
-# the tick (beat 0 = downbeat, where the kick also lands).
-const BASS_PATTERN_2 := [0, 1]          # root · 3rd
-const BASS_PATTERN_4 := [0, 1, 2, 1]    # root · 3rd · 5th · 3rd
-# Intermediate bass (non-downbeat) plays softer so the kick-aligned downbeat
-# stays emphasized.
-const BACKING_BASS_OFFBEAT_DB := -4.0
 
 # Currently-active AudioStyle — null means "use default harp behavior."
 # Reselected on theme change or challenge start/end.
@@ -159,12 +148,10 @@ var _active_audio_style: AudioStyle = null
 # Chord index within the active style's progression (separate from the
 # per-board harp progression index).
 var _style_chord_index: int = 0
-# Counter of how many beats have elapsed since the most recent challenge tick
-# (0 on the tick boundary itself). Used to select the bass arpeggio step.
-var _beats_this_tick: int = 0
-# Effective beats-per-tick at the current second — pulled from the active
-# style normally; ramps to FINAL_COUNTDOWN_BEATS_PER_TICK in the last seconds.
-var _current_beats_per_tick: int = 2
+# Whether we've received at least one challenge tick since the active style
+# was selected. The arcade backing stays silent until the player's first coin
+# drop starts the challenge timer (which produces the first tick).
+var _challenge_tick_received: bool = false
 
 # Low-pass filter on the Melody bus — enabled when lofi active, disabled
 # otherwise. The index tracks where in the bus effect chain it sits.
@@ -277,11 +264,6 @@ func _ready() -> void:
 	_kick_player.bus = &"Melody"
 	_kick_player.volume_db = -4.0
 	add_child(_kick_player)
-
-	_bass_player = AudioStreamPlayer.new()
-	_bass_player.stream = _square_stream
-	_bass_player.bus = &"Melody"
-	add_child(_bass_player)
 
 	# ── Musical pools ───────────────────────────────────────────────
 	for i in MELODY_POOL_SIZE:
@@ -477,6 +459,7 @@ func _reselect_audio_style() -> void:
 	_motif_position = 0
 	_beat_phase = 0.0
 	_beat_armed = true
+	_challenge_tick_received = false
 	if _active_audio_style:
 		_chord_timer = _active_audio_style.chord_duration
 		_beat_period = 1.0 / float(maxi(1, _active_audio_style.beats_per_tick))
@@ -485,61 +468,31 @@ func _reselect_audio_style() -> void:
 		_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
 
 
-## Called every second by ChallengeManager.tick. Fires the backing kick + bass
-## root on the downbeat and phase-locks the beat grid. Also swaps the beat
-## density up to FINAL_COUNTDOWN_BEATS_PER_TICK in the final countdown so the
-## arpeggio gets busier as the challenge runs out.
+## Called every second by ChallengeManager.tick. Fires the kick on the
+## downbeat and phase-locks the beat grid. In the final 10 seconds a second
+## kick fires 0.5s later for a 2/sec intensity ramp.
 func _on_challenge_tick(seconds_remaining: int) -> void:
 	if not _active_audio_style:
 		return
-	var style_bpt: int = maxi(1, _active_audio_style.beats_per_tick)
-	_current_beats_per_tick = FINAL_COUNTDOWN_BEATS_PER_TICK if seconds_remaining <= FINAL_COUNTDOWN_SECONDS else style_bpt
-	_beat_period = 1.0 / float(_current_beats_per_tick)
+	_challenge_tick_received = true
 	_beat_phase = 0.0
 	_beat_armed = true
-	_beats_this_tick = 0
 	if _active_audio_style.has_backing_kick:
 		_kick_player.play()
-	if _active_audio_style.has_backing_bass:
-		_fire_backing_bass(_bass_degree_for_beat(0), false)
+		if seconds_remaining <= FINAL_COUNTDOWN_SECONDS:
+			get_tree().create_timer(0.5).timeout.connect(_kick_player.play, CONNECT_ONE_SHOT)
 
 
-## Selects the bass scale-degree for a given beat within the current tick.
-## Downbeat always = root. Offbeats cycle through the active arpeggio pattern.
-func _bass_degree_for_beat(beat_idx: int) -> int:
-	var pattern: Array = BASS_PATTERN_4 if _current_beats_per_tick >= 4 else BASS_PATTERN_2
-	return int(pattern[beat_idx % pattern.size()])
-
-
-## Plays the current chord's given scale-degree an octave below through the
-## single-voice bass player. Each call restarts the sample cleanly, which
-## keeps the pulse tight without voice pileup.
-func _fire_backing_bass(degree: int, offbeat: bool) -> void:
-	var pitch: float = _get_pitch_scale(degree, _active_board) * 0.5
-	var sp: Dictionary = _tonal_stream_and_pitch(pitch)
-	_bass_player.stream = sp["stream"]
-	_bass_player.pitch_scale = sp["pitch_scale"]
-	_bass_player.volume_db = BUCKET_VOLUME_DB + (BACKING_BASS_OFFBEAT_DB if offbeat else 0.0)
-	_bass_player.play()
-
-
-## Advances the beat grid on a 4/4 clock. Each beat boundary bumps the motif
-## position and arms the next note for the next peg hit. If no peg hit arrives
-## before the following beat, the note is skipped — the grid always advances.
+## Advances the beat grid. Each boundary bumps the motif position (sparkle
+## schedule in harp mode) and arms the next sparkle slot.
 func _tick_beat_grid(delta: float) -> void:
+	if _active_audio_style and not _challenge_tick_received:
+		return
 	_beat_phase += delta
 	while _beat_phase >= _beat_period:
 		_beat_phase -= _beat_period
 		_motif_position += 1
 		_beat_armed = true
-		# Arcade offbeat bass: each subdivision between challenge ticks plays
-		# the next scale-degree in the current bass pattern. Beat 0 (downbeat)
-		# was already fired by _on_challenge_tick, so only handle intermediates.
-		if _active_audio_style and _active_audio_style.has_backing_bass:
-			_beats_this_tick += 1
-			var beat_idx: int = _beats_this_tick % maxi(1, _current_beats_per_tick)
-			if beat_idx != 0:
-				_fire_backing_bass(_bass_degree_for_beat(beat_idx), true)
 
 
 # ── Public API: musical sounds ───────────────────────────────────────
@@ -592,6 +545,12 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 
 func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	if board_type != _active_board:
+		return
+	# Arcade mode mutes sparkle audio — the melody is bucket-driven now.
+	# Kept non-early-returning above so peg ring VFX still fires via
+	# should_sparkle / _beat_armed. Revisit to re-introduce a layered
+	# sparkle voice on top of the bucket melody.
+	if _active_audio_style:
 		return
 	_activity_detected = true
 	# Motif-driven: look up the note at the current beat-grid position. A
