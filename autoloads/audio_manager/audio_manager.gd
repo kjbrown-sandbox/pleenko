@@ -858,16 +858,24 @@ func _generate_harp(freq: float, duration: float, darker: bool, mix_rate: int = 
 	var decays: Array[float]
 	if darker:
 		harmonics = [1.0, 0.30, 0.08, 0.02, 0.006, 0.002, 0.0005, 0.0001, 0.00005, 0.00002]
-		decays    = [0.5, 1.5, 4.0, 8.0, 14.0, 20.0, 28.0, 35.0, 45.0, 60.0]
+		# Slow mid-harmonic decay so the tail keeps some body instead of
+		# collapsing to a pure sine (which reads as synthetic).
+		decays    = [0.5, 0.9, 1.5, 3.0, 6.0, 10.0, 16.0, 24.0, 35.0, 50.0]
 	else:
 		harmonics = [1.0, 0.45, 0.20, 0.08, 0.04, 0.02, 0.01, 0.005, 0.003, 0.002]
-		decays    = [0.5, 1.0, 2.5, 4.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0]
+		decays    = [0.5, 0.7, 1.2, 2.0, 3.0, 5.0, 7.0, 9.0, 12.0, 16.0]
+
+	# Inharmonicity coefficient — real plucked strings have partials slightly
+	# sharp of integer multiples (f · n · (1 + B·n²)). Using a small B value
+	# breaks the perfectly periodic waveform and reads as "organic."
+	const INHARMONICITY: float = 0.0003
 
 	for i in num_samples:
 		var t: float = float(i) / mix_rate
 		var value: float = 0.0
 		for h in harmonics.size():
-			var harmonic_freq: float = freq * (h + 1)
+			var n: float = float(h + 1)
+			var harmonic_freq: float = freq * n * (1.0 + INHARMONICITY * n * n)
 			var env: float = exp(-t * decays[h])
 			value += sin(TAU * harmonic_freq * t) * harmonics[h] * env
 		# Brief attack noise for pluck transient — kept subtle so it doesn't
