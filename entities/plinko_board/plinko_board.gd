@@ -5,7 +5,7 @@ extends Node3D
 var space_between_pegs: float
 var vertical_spacing: float
 @export var drop_delay: float = 2.0
-@export var drop_delay_reduction_factor: float = 0.75
+@export var drop_delay_reduction_factor: float = 0.85
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
 ## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
