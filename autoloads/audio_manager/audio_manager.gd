@@ -548,6 +548,12 @@ func should_sparkle(board_type: Enums.BoardType) -> bool:
 	return true
 
 
+## Called by BoardManager on each autodropper tick. Clears the sparkle cooldown
+## so the very next peg hit sparkles — any drift off the beat resets here.
+func notify_autodropper_beat() -> void:
+	_last_sparkle_time = (Time.get_ticks_msec() / 1000.0) - SPARKLE_COOLDOWN
+
+
 ## Deterministic arpeggio: ping-pongs up and down through the 8 chord tones
 ## (1, 3, 5, 7, 8ve, 8ve+3, 8ve+5, 8ve+7). When the chord changes, the index
 ## persists so the same arpeggio shape continues into the new harmony.

@@ -284,6 +284,8 @@ func _on_autodropper_adjust(button_id: StringName, delta: int, from_player: bool
 
 
 func _on_autodrop_tick() -> void:
+	AudioManager.notify_autodropper_beat()
+
 	# Track which boards have at least one normal / advanced autodropper
 	# assigned so we can fire one drum per board per kind (rather than one
 	# per assigned count — the drum beat is fixed regardless of pool size).
