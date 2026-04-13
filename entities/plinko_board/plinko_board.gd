@@ -640,18 +640,23 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		CurrencyManager.add(bucket.currency_type, amount)
 		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
 	bucket.pulse()
-	bucket.mark_active()
 	var num_buckets: int = buckets_container.get_child_count()
-	# Mirror: buckets symmetric across center share the same note, so light up
-	# the mirror too. (Skips when the hit bucket IS center — same index.)
-	var mirror_idx: int = num_buckets - 1 - bucket_idx
-	if mirror_idx != bucket_idx:
-		var mirror: Bucket = get_bucket(mirror_idx)
-		if mirror:
-			mirror.mark_active()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
-	AudioManager.play_bucket(board_type, bucket_distance, is_advanced)
+	# Rate-limit bucket activations so wave-landings (chord boundaries,
+	# multi-drop, high drop rate) don't slam every bucket at once — keeps the
+	# early-game arpeggio feel at any drop cadence. Activation is all-or-nothing:
+	# if we can't voice it, we don't light the bucket either.
+	if AudioManager.try_consume_bucket_activation():
+		bucket.mark_active()
+		# Mirror: buckets symmetric across center share the same note, so light
+		# up the mirror too. (Skips when the hit bucket IS center — same index.)
+		var mirror_idx: int = num_buckets - 1 - bucket_idx
+		if mirror_idx != bucket_idx:
+			var mirror: Bucket = get_bucket(mirror_idx)
+			if mirror:
+				mirror.mark_active()
+		AudioManager.play_bucket(board_type, bucket_distance, is_advanced)
 	AudioManager.on_coin_landed()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
