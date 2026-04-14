@@ -14,7 +14,6 @@ var currency_type: Enums.CurrencyType
 var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
-var _is_pulsing: bool = false
 var _color_tween: Tween
 
 @onready var _mesh: MeshInstance3D = $MeshInstance3D
@@ -26,10 +25,7 @@ func _ready() -> void:
 	set_process(false)
 
 
-## Scale pulse synced to the chord: all active buckets read the same global
-## phase from AudioManager and show the same scale at any moment. A bucket
-## activated at chord start shows full peak; one activated late in the chord
-## shows a near-1.0 scale. Uniform across the board.
+# So that singing buckets all shrink at the same size
 func _process(_delta: float) -> void:
 	var phase: float = AudioManager.get_chord_phase()
 	var peak: float = ThemeProvider.theme.bucket_active_scale_peak
@@ -62,10 +58,8 @@ func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) ->
 
 
 func mark_hit() -> void:
-	_stop_pulsing()
 	_kill_color_tween()
 	_is_hit = true
-	scale = Vector3.ONE
 	_apply_color(ThemeProvider.theme.hit_bucket_color)
 
 
@@ -122,7 +116,6 @@ func mark_active() -> void:
 	_kill_color_tween()
 	var t: VisualTheme = ThemeProvider.theme
 	_apply_color(t.get_bucket_color(currency_type))
-	_is_pulsing = true
 	set_process(true)
 	var chord_remaining: float = maxf(AudioManager.get_time_until_next_chord(), t.bucket_fade_duration)
 	var fade_duration: float = minf(t.bucket_fade_duration, chord_remaining)
@@ -169,7 +162,6 @@ func _apply_color(color: Color) -> void:
 
 
 func _stop_pulsing() -> void:
-	_is_pulsing = false
 	set_process(false)
 
 
