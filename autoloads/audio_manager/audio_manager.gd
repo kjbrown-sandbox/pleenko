@@ -66,6 +66,9 @@ const BEATS_PER_BAR := 4
 
 const MELODY_POOL_SIZE := 12
 const CLICK_POOL_SIZE := 8
+# DEPRECATED — ambient pad constants. The pad layer is dormant; `_fade_in_ambient`
+# early-returns. See the `DEPRECATED: Ambient pad` section below for the full
+# dormant code path and removal candidates.
 const AMBIENT_FADE_DURATION := 2.0
 const AMBIENT_IDLE_TIMEOUT := 2.0
 const AMBIENT_VOLUME_DB := -6.0
@@ -1061,7 +1064,23 @@ func notify_autodropper_beat(interval: float) -> void:
 	_beat_armed = true
 
 
-# ── Ambient pad ──────────────────────────────────────────────────────
+# ── DEPRECATED: Ambient pad (unused; kept for potential revival) ─────
+#
+# Per-board sustained harmonic beds, crossfaded on board switch and auto-
+# faded during idle. `_fade_in_ambient` early-returns so no audible pad ever
+# reaches the mixer. Kept because the planned audio refactor may resurrect
+# the pad as its own instrument role.
+#
+# Full removal would also delete: the `AMBIENT_*` constants, the
+# `_ambient_pad_streams` dict + its init in `_ready`, the `_ambient_a` /
+# `_ambient_b` / `_ambient_active` players + their init, the idle-timer hooks
+# in `_process` that call the two fade helpers, the `_crossfade_ambient` call
+# in `_on_board_switched`, and the `_generate_ambient_pad` synth.
+# NOTE: `_generate_ambient_pad` is also reused to build `_sine_drone_stream`
+# for the bucket drone pool — if you remove it, port that one call to its
+# own sine-synth helper first.
+# NOTE: `_get_ambient_pitch` lives in this section by legacy but is still
+# used by the drum layer to match board chords — do NOT remove with the pad.
 
 func _fade_in_ambient() -> void:
 	# Ambient pad disabled for now — was feeling over-dense with the drums
