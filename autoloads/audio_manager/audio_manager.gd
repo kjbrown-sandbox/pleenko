@@ -1,16 +1,12 @@
 extends Node
 
-## Pool of AudioStreamPlayers per sound for overlapping playback.
-## Bucket hits are capped at MAX_BUCKET_SOUNDS concurrent plays — extras are silently dropped.
-
-# Emitted when the active AudioStyle advances to the next chord in its progression.
-# Only fires in AudioStyle mode — the default per-board harp path doesn't emit.
-# PlinkoBoard listens and fades chord-activated buckets back to their faded color.
+# Fires when the active AudioStyle advances to its next chord. PlinkoBoard
+# listens and fades chord-activated buckets back to faded. Default per-board
+# harp path does not emit.
 signal chord_changed(chord_index: int)
 
-# Floor for chord-gated chime tail length. If a bucket is hit in the last ~0.5s
-# of a chord, the natural tail would clip before becoming audible — this keeps
-# at least one second of ring before the chord_changed fade starts.
+# Floor for chord-gated tail length so a late-chord hit still rings audibly
+# before the chord_changed fade starts.
 const MIN_BUCKET_RING_SECONDS := 1.0
 
 const POOL_SIZE := 10
@@ -35,32 +31,23 @@ var _sounds: Dictionary = {
 
 # ── Musical system ───────────────────────────────────────────────────
 
-# Chord quality: semitone offsets above the chord's root, stacked thirds.
-# Bucket distance from center maps to an index in this array — center = root,
-# ±1 = 3rd, ±2 = 5th, ±3 = 7th, ±4 = octave, etc. Multiple buckets landing
-# together build an actual jazz chord rather than a pentatonic cluster.
-const CHORD_MAJ7 := [0, 4, 7, 11, 12, 16, 19, 23]   # 1, 3, 5, 7, 8ve, 8ve+3, 8ve+5, 8ve+7
-const CHORD_DOM7 := [0, 4, 7, 10, 12, 16, 19, 22]   # major 3, minor 7 (the V chord)
-const CHORD_MIN7 := [0, 3, 7, 10, 12, 15, 19, 22]   # minor 3, minor 7
-# Plain triads (no 7ths) — used by arcade / rock styles that want power-chord
-# clarity instead of jazz color. Voicing mirrors the 7th chords' 8-slot layout.
-const CHORD_MAJ := [0, 4, 7, 12, 16, 19, 24, 28]    # major triad + octave doubles
-const CHORD_MIN := [0, 3, 7, 12, 15, 19, 24, 27]    # minor triad + octave doubles
+# Chord voicings: semitone offsets above the root, stacked thirds. Bucket
+# distance from center indexes into the array (center = root, ±1 = 3rd, etc).
+# Diatonic to C major so cross-board multi-drops stay consonant.
+const CHORD_MAJ7 := [0, 4, 7, 11, 12, 16, 19, 23]
+const CHORD_DOM7 := [0, 4, 7, 10, 12, 16, 19, 22]
+const CHORD_MIN7 := [0, 3, 7, 10, 12, 15, 19, 22]
+const CHORD_MAJ := [0, 4, 7, 12, 16, 19, 24, 28]
+const CHORD_MIN := [0, 3, 7, 12, 15, 19, 24, 27]
 
-# Per-board chord progressions. Each entry is { "root": int, "chord": Array }
-# and the active chord cycles on CHORD_DURATION while the active board sees
-# activity. All chord tones stay diatonic to C major so cross-board multi-drops
-# stay consonant.
-var _board_progressions: Dictionary = {}  # BoardType -> Array[{ "root", "chord" }]
+var _board_progressions: Dictionary = {}  # BoardType -> Array[{ "root", "chord", "motif" }]
 var _current_chord_index: Dictionary = {}  # BoardType -> int
 
-const CHORD_DURATION := 6.0           # seconds per chord before advancing
-const CHORD_IDLE_RESET := 2.0         # seconds of idle before harmonic rhythm resets
+const CHORD_DURATION := 6.0
+const CHORD_IDLE_RESET := 2.0
 
-# Beat grid: sparkles fire on a 4/4 grid derived from the autodropper tick.
-# Beat period = autodrop interval / BEATS_PER_BAR. The beat clock free-runs
-# from DEFAULT_AUTODROP_INTERVAL until the first real autodropper tick, which
-# snaps the phase and updates the interval.
+# Beat grid: 4/4 derived from the autodropper tick. Beat clock free-runs at
+# DEFAULT_AUTODROP_INTERVAL until the first real tick snaps the phase.
 const DEFAULT_AUTODROP_INTERVAL := 1.5
 const BEATS_PER_BAR := 4
 
@@ -85,21 +72,17 @@ var _click_idx: int = 0
 
 var _active_board: Enums.BoardType = Enums.BoardType.GOLD
 
-# Harmonic rhythm state.
 var _chord_timer: float = CHORD_DURATION
 var _chord_idle_timer: float = 0.0
-var _chord_had_sparkle: bool = false  # tracks whether any sparkle fired during the current chord
+var _chord_had_sparkle: bool = false
 
-# Beat grid + motif state.
 var _autodrop_interval: float = DEFAULT_AUTODROP_INTERVAL
 var _beat_period: float = DEFAULT_AUTODROP_INTERVAL / BEATS_PER_BAR
-var _beat_phase: float = 0.0       # time into current beat slot, 0.._beat_period
-var _beat_armed: bool = false      # current beat's note hasn't been consumed yet
-var _motif_position: int = 0       # index into the current chord's motif
+var _beat_phase: float = 0.0
+var _beat_armed: bool = false
+var _motif_position: int = 0
 
-# Ambient pad double-buffer. Each board has its own pre-generated pad stream
-# at the board's chord voicing (e.g., Cmaj7 for gold, G7 for orange). Board
-# switches assign the new stream to the inactive player before crossfading.
+# DEPRECATED — ambient pad double-buffer state. Pad layer is dormant.
 var _ambient_a: AudioStreamPlayer
 var _ambient_b: AudioStreamPlayer
 var _ambient_active: AudioStreamPlayer
@@ -107,76 +90,58 @@ var _ambient_pad_streams: Dictionary = {}  # BoardType -> AudioStreamWAV
 var _ambient_fading_in: bool = false
 var _idle_timer: float = 0.0
 var _activity_detected: bool = false
-# Tracks coins currently in-flight on active boards. Ambient pad stays alive
-# while this is > 0 and for AMBIENT_IDLE_TIMEOUT seconds after it hits 0.
+# Ambient pad stays alive while > 0 and for AMBIENT_IDLE_TIMEOUT after it hits 0.
 var _active_coin_count: int = 0
 
-# Bucket drones: one sustained note per unique bucket pitch. Shared with peg
-# sparkles so both get the same harp-like sustain profile. Drone lifecycle is
-# tracked via DroneState:
-#   SPARKLE   — peg sparkle note; timer-decayed by _update_bucket_drones.
-#   ACTIVE    — bucket note ringing in current chord; chord-managed, not
-#               timer-decayed (chord advance flips it to LINGERING instead).
-#   LINGERING — previous chord's bucket note carrying across silence; timer
-#               set to the synthesized sample length so the pool slot releases
-#               after the audible decay ends, even if no new coin hits.
-#
-# Three separate fade-duration knobs live on VisualTheme, each tied to a
-# different trigger:
-#   bucket_fade_duration    — visual bucket color tween on chord change.
-#   linger_fade_duration    — audio handoff fade when a new coin lands and
-#                             clears the previous chord's LINGERING drones.
-#   eviction_fade_duration  — audio fade when the voice cap steals an older
-#                             drone's slot to make room for a new allocation.
+# Drone lifecycle:
+#   SPARKLE   — peg sparkle; timer-decayed by _update_bucket_drones.
+#   ACTIVE    — bucket note in current chord; chord-managed (chord advance
+#               flips it to LINGERING), never timer-decayed.
+#   LINGERING — previous chord's note carrying across silence; timer = synth
+#               sample length so the slot releases after audible decay ends.
+# Fade-duration knobs live on VisualTheme: bucket_fade_duration (visual color
+# tween), linger_fade_duration (audio handoff), eviction_fade_duration.
 enum DroneState { SPARKLE, ACTIVE, LINGERING }
 
-# Per-coin-type voice caps (replaces the previous shared MAX_ACTIVE_DRONES).
-# Normal coins are the melodic top layer; advanced coins are the slower, deeper
-# bass punctuation layer. They occupy different registers so they don't dim or
-# evict each other — two independent pools, each tuned for its own role.
+# Per-coin-type voice caps. Normal = melodic top layer, advanced = deeper bass
+# punctuation. Independent pools so they don't dim or evict each other.
 const MAX_NORMAL_DRONES := 5
 const MAX_ADVANCED_DRONES := 3
 
-# Per-voice exponential attenuation ratio: voice N allocated while N-1 drones
-# are already ringing plays at VOICE_ATTENUATION_RATIO^(N-1) of base amplitude.
-# 0.75 = ~2.5 dB drop per additional voice. The compressor on the Drones bus
-# is tuned against this curve; retune both together if either changes.
+# Per-voice attenuation: voice N plays at VOICE_ATTENUATION_RATIO^(N-1) of
+# base amplitude (~2.5 dB drop per added voice at 0.75). The Drones-bus
+# compressor is tuned against this curve — retune both together.
 const VOICE_ATTENUATION_RATIO := 0.75
 
-const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — 3s fade over the ~72 dB range
-const SPARKLE_DRONE_SUSTAIN := 3.5     # sparkles ring a bit shorter than bucket drones
+const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — 3s fade over ~72 dB
+const SPARKLE_DRONE_SUSTAIN := 3.5
 const BUCKET_DRONE_POOL_SIZE := 24
 var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
 var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree", "octave_mult", "state" }
-# Active fade tweens keyed by drone pool idx. Reusing a pool slot kills any
-# in-flight fade tween first so it can't keep writing to the new drone's
-# volume_db after reassignment.
+# Keyed by drone pool idx. Killed before a slot is reused so an in-flight fade
+# can't keep writing to the new drone's volume_db.
 var _drone_fade_tweens: Dictionary = {}
 
-# Audio rate-limit for new drone voices, scaled to the autodropper interval
-# so pacing tracks gameplay tempo. Cooldown = _autodrop_interval /
-# RATE_DIVISOR. Per-type so normal and advanced never block each other.
-# Normal: up to 4 hits per autodrop cycle (~375 ms at default 1.5 s).
-# Advanced: 1 hit per full cycle (~1500 ms) — slow bass punctuation.
+# Per-type cooldown for new drone voices, scaled to autodrop tempo:
+# cooldown = _autodrop_interval / RATE_DIVISOR. Normal = 4 hits/cycle (~375 ms
+# at default 1.5s). Advanced = 1 hit/cycle (~1500 ms, slow bass punctuation).
 const NORMAL_RATE_DIVISOR := 4.0
 const ADVANCED_RATE_DIVISOR := 1.0
 
-# Harmony grace: if a second coin lands within this window of the previous
-# accepted activation, allow it through even though the normal cooldown
-# hasn't elapsed. Gives multi-drop its two-voice harmony chord without
-# opening the door to 3+ voices slamming together (grace is a one-shot
-# per burst — third hit still hits the normal cooldown).
-const HARMONY_GRACE_WINDOW := 0.2  # 200 ms
+# Harmony grace: a second coin within this window of the previous accepted
+# activation is allowed through despite the cooldown. One-shot per burst —
+# third hit hits the normal cooldown. Gives multi-drop its two-voice chord
+# without letting 3+ voices slam together.
+const HARMONY_GRACE_WINDOW := 0.2
 
 var _last_normal_activation_time: float = -999.0
 var _last_advanced_activation_time: float = -999.0
 var _normal_harmony_grace_used: bool = false
 var _advanced_harmony_grace_used: bool = false
-var _sparkle_counter: int = 0  # monotonic id for unique sparkle drone keys
-# Two drone streams — zen uses the sine pad loop (matches the ambient pad
-# texture); lofi uses the FM electric piano one-shot. Selected per-play in
-# play_bucket based on the active theme's audio_lofi_enabled flag.
+var _sparkle_counter: int = 0
+# Zen uses the sine pad loop; lofi swaps to the FM piano preload. Selected
+# per-play in play_bucket based on theme.audio_lofi_enabled.
 var _sine_drone_stream: AudioStreamWAV
 var _piano_drone_stream: AudioStream = preload("res://assets/sounds/instrument_samples/Ensoniq-ESQ-1-FM-Piano-C4.wav")
 
@@ -189,46 +154,38 @@ var _arcade_kick: ArcadeKick
 var _click: Click
 var _kick_player: AudioStreamPlayer
 
-# In the final N seconds of a challenge, the kick drum doubles (2 per second)
-# for a visible intensity ramp. No other rhythmic changes happen in arcade.
+# Last N seconds of a challenge: kick doubles to 2/sec for intensity ramp.
 const FINAL_COUNTDOWN_SECONDS := 10
 
-# Currently-active AudioStyle — null means "use default harp behavior."
-# Reselected on theme change or challenge start/end.
+# null = default harp path. Reselected on theme change / challenge start+end.
 var _active_audio_style: AudioStyle = null
-# Chord index within the active style's progression (separate from the
-# per-board harp progression index).
 var _style_chord_index: int = 0
-# Whether we've received at least one challenge tick since the active style
-# was selected. The arcade backing stays silent until the player's first coin
-# drop starts the challenge timer (which produces the first tick).
+# Arcade backing stays silent until the first challenge tick (which only fires
+# after the player's first drop starts the timer).
 var _challenge_tick_received: bool = false
 
-# Low-pass filter on the Melody bus — enabled when lofi active, disabled
-# otherwise. The index tracks where in the bus effect chain it sits.
+# Melody-bus low-pass filter. Toggled on/off with lofi theme.
 const MELODY_LOWPASS_CUTOFF := 3000.0
 var _melody_lowpass_effect_idx: int = -1
 
 # ── Lofi drum system ─────────────────────────────────────────────────
-# Player drops pick randomly from a pool of snare/clap/rim variants.
-# Normal autodropper cycles through a pool of kick variants.
-# Advanced autodropper cycles through a pool of hat/rim variants, delayed
-# by 0.5s from the tick so it lands on the offbeat.
+# Player drops: random pick from snare/clap/rim. Autodropper kicks cycle;
+# advanced autodropper hats cycle and fire offbeat (ADVANCED_DRUM_OFFSET after
+# the tick).
 const DRUM_POOL_PLAYER_VOLUME_DB := -2.0
 const DRUM_POOL_KICK_VOLUME_DB := 0.0
 const DRUM_POOL_HAT_VOLUME_DB := -6.0
-const DRUM_RAPID_FIRE_WINDOW := 0.25  # seconds — drops within this are attenuated
+const DRUM_RAPID_FIRE_WINDOW := 0.25
 const DRUM_RAPID_FIRE_ATTENUATION_DB := -6.0
-const ADVANCED_DRUM_OFFSET := 0.75  # seconds after the autodropper tick — half of 1.5s tick interval
+const ADVANCED_DRUM_OFFSET := 0.75  # half of default 1.5s tick
 
-var _player_drum_players: Array[AudioStreamPlayer] = []  # random pick
-var _kick_drum_players: Array[AudioStreamPlayer] = []    # cycle
-var _hat_drum_players: Array[AudioStreamPlayer] = []     # cycle
+var _player_drum_players: Array[AudioStreamPlayer] = []
+var _kick_drum_players: Array[AudioStreamPlayer] = []
+var _hat_drum_players: Array[AudioStreamPlayer] = []
 var _kick_rotation_idx: int = 0
 var _hat_rotation_idx: int = 0
 var _last_player_drum_time: float = -999.0
 
-# Bus indices (set in _ready)
 var _melody_bus_idx: int = -1
 var _drones_bus_idx: int = -1
 var _click_bus_idx: int = -1
@@ -250,26 +207,16 @@ func _ready() -> void:
 			_pools[sound_name].append(player)
 
 	# ── Per-board chord progressions ─────────────────────────────────
-	# Gold cycles Cmaj7 → Em7 → Fmaj7 → G7 (I-iii-IV-V, 24s full cycle at
-	# 6s/chord). Each chord carries a hand-authored motif: an array of
-	# chord-tone indices (0..7) and rests (-1). Motifs advance on a 4/4
-	# beat grid derived from the autodropper tick. Orange/Red single-chord;
-	# placeholder motifs to tune later.
-	# Motifs: each index is one beat (quarter note at 4/4). -1 = rest, which
-	# extends the prior note's ring (since sparkles share the drone pool and
-	# sustain). Rhythm language: note followed by 1 rest = half, 2 rests =
-	# dotted half, 3 rests = whole. Most common note length is a half, with
-	# occasional quarters for forward motion.
+	# Gold: I-iii-IV-V in C (Cmaj7 → Em7 → Fmaj7 → G7). Orange/Red single-chord.
+	# Each motif is 8 beats (quarter notes), chord-tone indices 0..7 with -1 =
+	# rest (note holds since sparkles share the sustaining drone pool). Rhythm
+	# language: note+N rests = (N+1)/2 note length (half, dotted half, whole).
 	var default_motif: Array = [0, -1, 2, -1, 4, -1, 5, -1]
 	_board_progressions[Enums.BoardType.GOLD] = [
-		# Cmaj7 (I) — all halves, ascending outline: root · 5th · 8ve · 8ve+3
-		{ "root": 0, "chord": CHORD_MAJ7, "motif": [0, -1, 2, -1, 4, -1, 5, -1] },
-		# Em7 (iii) — falling cadence: 7th (half) · 5th (half) · root (whole)
-		{ "root": 4, "chord": CHORD_MIN7, "motif": [3, -1, 2, -1, 0, -1, -1, -1] },
-		# Fmaj7 — airy lift: 5th (dotted half) · octave (half) · 8ve+3 (dotted half)
-		{ "root": 5, "chord": CHORD_MAJ7, "motif": [2, -1, -1, 4, -1, 5, -1, -1] },
-		# G7 — tension with kinetic quarter: root (q) · 7th (half) · octave (half) · 5th (dotted half)
-		{ "root": 7, "chord": CHORD_DOM7, "motif": [0, 3, -1, 4, -1, 2, -1, -1] },
+		{ "root": 0, "chord": CHORD_MAJ7, "motif": [0, -1, 2, -1, 4, -1, 5, -1] },     # Cmaj7
+		{ "root": 4, "chord": CHORD_MIN7, "motif": [3, -1, 2, -1, 0, -1, -1, -1] },    # Em7
+		{ "root": 5, "chord": CHORD_MAJ7, "motif": [2, -1, -1, 4, -1, 5, -1, -1] },    # Fmaj7
+		{ "root": 7, "chord": CHORD_DOM7, "motif": [0, 3, -1, 4, -1, 2, -1, -1] },     # G7
 	]
 	_board_progressions[Enums.BoardType.ORANGE] = [
 		{ "root": 7, "chord": CHORD_DOM7, "motif": default_motif },  # G7
@@ -289,22 +236,20 @@ func _ready() -> void:
 	_arcade_kick = ArcadeKick.new()
 	_click = Click.new()
 
-	# ── Placeholder tones (swap for real samples later) ──────────────
+	# Placeholder cello/chime streams — legacy pools, unused by active paths.
 	var cello_stream := _generate_tone(196.0, 0.8)      # G3
 	var chime_stream := _generate_chime(784.0, 0.6)      # G5 + shimmer
 	var click_stream: AudioStream = _click.resolve(0.0).stream
 
-	# Per-board ambient pad voicings — each board's chord as a 4-note stack.
-	# Frequencies chosen to keep the overall pad in the bass/low-mid range.
+	# DEPRECATED — ambient pad streams per board (4-note stacks of each chord).
 	_ambient_pad_streams[Enums.BoardType.GOLD] = _generate_ambient_pad(4.0, 44100,
-		[130.81, 164.81, 196.00, 246.94])  # Cmaj7: C3 E3 G3 B3
+		[130.81, 164.81, 196.00, 246.94])  # Cmaj7
 	_ambient_pad_streams[Enums.BoardType.ORANGE] = _generate_ambient_pad(4.0, 44100,
-		[98.00, 123.47, 146.83, 174.61])   # G7:    G2 B2 D3 F3
+		[98.00, 123.47, 146.83, 174.61])   # G7
 	_ambient_pad_streams[Enums.BoardType.RED] = _generate_ambient_pad(4.0, 44100,
-		[110.00, 130.81, 164.81, 196.00])  # Am7:   A2 C3 E3 G3
+		[110.00, 130.81, 164.81, 196.00])  # Am7
 
-	# Zen uses a simple sine drone for bucket notes; lofi swaps to the FM piano
-	# preload. Generated here so the drone pool has a default stream on startup.
+	# Zen default drone stream. Lofi swaps to _piano_drone_stream per-play.
 	_sine_drone_stream = _generate_ambient_pad(2.0, 44100, [262.0, 392.0])
 
 	_kick_player = AudioStreamPlayer.new()
@@ -354,10 +299,7 @@ func _ready() -> void:
 	_ambient_active = _ambient_a
 
 	# ── Bucket drone pool ───────────────────────────────────────────
-	# Each player's stream is (re)assigned per-play in play_bucket based on
-	# the active theme: sine drone for zen, FM piano one-shot for lofi. The
-	# default here is the sine stream so players have something valid at
-	# construction time.
+	# Stream is reassigned per-play in play_bucket based on theme.audio_lofi_enabled.
 	for i in BUCKET_DRONE_POOL_SIZE:
 		var drone := AudioStreamPlayer.new()
 		drone.stream = _sine_drone_stream
@@ -368,7 +310,7 @@ func _ready() -> void:
 		_drone_free.append(i)
 
 	# ── Lofi drum pools ─────────────────────────────────────────────
-	# Player drops: snare, clap, rim shot — random pick per drop.
+	# Player drops: random pick from snare/clap/rim.
 	var player_drum_instruments: Array[Instrument] = [
 		DrumSnare.new(180.0, 0.18),
 		DrumClap.new(0.2),
@@ -382,12 +324,10 @@ func _ready() -> void:
 		add_child(p)
 		_player_drum_players.append(p)
 
-	# Normal autodropper: kick variants — rotating pattern.
-	# First = deep foundation. Second = noticeably thinner, higher-pitched,
-	# shorter — more of a ticky kick than a boomy one.
+	# Autodropper kicks — rotating: deep foundation, thin/ticky.
 	var kick_instruments: Array[Instrument] = [
-		DrumKick.new(60.0, 0.22),     # deeper
-		DrumKick.new(100.0, 0.09),    # thin & ticky
+		DrumKick.new(60.0, 0.22),
+		DrumKick.new(100.0, 0.09),
 	]
 	for inst in kick_instruments:
 		var p := AudioStreamPlayer.new()
@@ -397,11 +337,9 @@ func _ready() -> void:
 		add_child(p)
 		_kick_drum_players.append(p)
 
-	# Advanced autodropper: single closed hat. Same sound every tick — light
-	# and consistent on the offbeat. If we add more variants here later,
-	# rotation still works because we reference the array by index.
+	# Advanced autodropper: closed hat. Array so new variants can be added.
 	var hat_instruments: Array[Instrument] = [
-		DrumHat.new(6000.0, 0.05),    # closed
+		DrumHat.new(6000.0, 0.05),
 	]
 	for inst in hat_instruments:
 		var p := AudioStreamPlayer.new()
@@ -411,14 +349,10 @@ func _ready() -> void:
 		add_child(p)
 		_hat_drum_players.append(p)
 
-	# Listen for theme swaps so lofi-gated effects (low-pass) can toggle at
-	# runtime. Call once to sync initial state against the loaded theme (via
-	# call_deferred so ThemeProvider autoload is fully ready).
+	# call_deferred so ThemeProvider autoload is fully ready.
 	ThemeProvider.theme_changed.connect(_on_theme_changed)
 	_on_theme_changed.call_deferred()
 
-	# Arcade audio routing: re-select on theme changes, challenge start/end,
-	# and per-tick for the backing kick + beat-grid phase-lock.
 	ChallengeManager.challenge_state_changed.connect(_reselect_audio_style)
 	ChallengeManager.tick.connect(_on_challenge_tick)
 	_reselect_audio_style.call_deferred()
@@ -443,16 +377,12 @@ func _process(delta: float) -> void:
 	_update_bucket_drones(delta)
 
 
-## Advances the active board's chord index while activity is present. After
-## CHORD_IDLE_RESET seconds of inactivity, resets the progression so each new
-## session starts grounded on the root chord. If a whole chord elapsed without
-## any sparkle firing (no pegs hit), also reset — the board is too quiet to
-## sustain the progression and the listener loses the phrasing.
+## Advances the active chord. Idle > CHORD_IDLE_RESET resets to the root
+## chord; a whole chord without sparkles also resets (board too quiet to
+## sustain the progression).
 func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
-	# When an AudioStyle is active, it owns the chord progression (one global
-	# index rather than per-board), advances on a fixed cadence (chord_duration)
-	# regardless of peg activity, and doesn't do the "no-sparkle reset" logic
-	# since arcade backing keeps the audio alive independent of pegs.
+	# AudioStyle owns one global chord index on a fixed cadence, independent
+	# of peg activity — arcade backing keeps the beat alive on its own.
 	if _active_audio_style and not _active_audio_style.progression.is_empty():
 		_chord_timer -= delta
 		if _chord_timer <= 0.0:
@@ -468,7 +398,6 @@ func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
 		if _chord_timer <= 0.0:
 			var progression: Array = _board_progressions.get(_active_board, [])
 			if not _chord_had_sparkle:
-				# Whole chord elapsed with no sparkles — reset to root chord.
 				_reset_harmonic_state()
 			elif progression.size() > 1:
 				_current_chord_index[_active_board] = (_current_chord_index[_active_board] + 1) % progression.size()
@@ -491,14 +420,12 @@ func _reset_harmonic_state() -> void:
 	_beat_phase = 0.0
 	_beat_armed = true
 	_chord_had_sparkle = false
-	# Treat the idle reset as a chord change for visuals — buckets need to
-	# fade back to their faded color even when silence triggered the reset.
+	# Idle reset counts as a chord change for visuals (buckets need to fade).
 	_handle_chord_advance()
 
 
-## Selects the applicable AudioStyle based on current theme + challenge state.
-## Called on theme changes and challenge start/end. A null result means the
-## default harp code path runs unchanged.
+## Picks the applicable AudioStyle for the current theme + challenge state.
+## null = default harp path unchanged.
 func _reselect_audio_style() -> void:
 	var desired: AudioStyle = null
 	if ThemeProvider and ThemeProvider.theme:
@@ -507,8 +434,6 @@ func _reselect_audio_style() -> void:
 			desired = style
 	if desired == _active_audio_style:
 		return
-	# Fade any still-ringing drones from the previous musical world before
-	# switching over — avoids the outgoing style bleeding into the new one.
 	var transitioning: bool = _active_audio_style != desired
 	_active_audio_style = desired
 	_style_chord_index = 0
@@ -523,12 +448,10 @@ func _reselect_audio_style() -> void:
 		_chord_timer = CHORD_DURATION
 		_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
 	if transitioning:
+		# Clear the previous musical world's lingering drones before switching.
 		_fade_all_drones(1.0)
 
 
-## Tweens every currently-playing drone's volume to -80 dB over `duration`
-## seconds, then stops the player and returns its pool slot. Used to clear the
-## previous musical world's lingering notes on style transitions.
 func _fade_all_drones(duration: float) -> void:
 	for drone_key in _active_drones.keys():
 		var drone: Dictionary = _active_drones[drone_key]
@@ -540,18 +463,16 @@ func _fade_drone(idx: int, duration: float) -> void:
 	_kill_fade_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	var tween := create_tween()
-	# EASE_OUT on volume_db matches loudness perception — drop fast early,
-	# trail off slowly. (Visual fades on Bucket use EASE_IN to match the
-	# bucket_pulse motion feel; the asymmetry is intentional.)
+	# EASE_OUT matches loudness perception (drop fast, trail off slowly).
+	# Bucket visual fades use EASE_IN — the asymmetry is intentional.
 	tween.tween_property(player, "volume_db", -80.0, duration) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	tween.tween_callback(_finish_drone_fade.bind(idx))
 	_drone_fade_tweens[idx] = tween
 
 
-## Kills any fade tween targeting the given pool slot. Called before a slot
-## is reassigned (play_bucket / play_peg_sparkle) or restarted (_fade_drone).
-## Prevents an old tween from continuing to drive volume_db on a reused player.
+## Kill before reassigning a pool slot so an in-flight fade can't keep driving
+## the new drone's volume_db.
 func _kill_fade_tween(idx: int) -> void:
 	var tween: Tween = _drone_fade_tweens.get(idx)
 	if tween and tween.is_valid():
@@ -559,15 +480,11 @@ func _kill_fade_tween(idx: int) -> void:
 	_drone_fade_tweens.erase(idx)
 
 
-## Converts a voice count into the dB attenuation for the next allocated
-## voice: VOICE_ATTENUATION_RATIO^N expressed in decibels.
+## dB equivalent of VOICE_ATTENUATION_RATIO^N.
 func _voice_attenuation_db(voice_count: int) -> float:
 	return 20.0 * log(pow(VOICE_ATTENUATION_RATIO, voice_count)) / log(10.0)
 
 
-## Counts currently-allocated drones matching the requested coin type.
-## Used by per-type voice caps + attenuation so normal and advanced pools
-## don't interfere with each other.
 func _count_drones_of_type(is_advanced: bool) -> int:
 	var count: int = 0
 	for drone_key in _active_drones:
@@ -579,10 +496,8 @@ func _count_drones_of_type(is_advanced: bool) -> int:
 	return count
 
 
-## Factory for `_active_drones` entries. Every allocation site goes through
-## this so `created_at`, `is_advanced`, and the other fields can't drift
-## per-site. `is_advanced` defaults to false so sparkle allocations (which
-## never take the parameter) get correct bookkeeping automatically.
+## Factory for `_active_drones` entries — centralized so field shape can't
+## drift per-site. Sparkle allocations get is_advanced=false by default.
 func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, state: int, is_advanced: bool = false) -> Dictionary:
 	return {
 		"idx": idx,
@@ -595,9 +510,8 @@ func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, 
 	}
 
 
-## Eviction priority for the voice cap: fade LINGERING (trailing tails) before
-## SPARKLE (decorative plucks) before ACTIVE (melody in the current chord).
-## Higher return value = evict first. Decoupled from enum declaration order.
+## Eviction priority: LINGERING (trailing) > SPARKLE (decorative) > ACTIVE
+## (melody in current chord). Higher = evict first.
 func _eviction_priority(state: int) -> int:
 	match state:
 		DroneState.LINGERING: return 2
@@ -606,16 +520,9 @@ func _eviction_priority(state: int) -> int:
 		_: return 0
 
 
-## Voice cap enforcement (per coin-type pool): when the matching pool is at
-## its cap, pick the drone with the highest eviction priority from THAT pool
-## (oldest first as tiebreaker) and fade it over `eviction_fade_duration` so
-## the caller has a free pool slot. No-op below cap.
-##
-## NOTE: chord advances flip many ACTIVE drones to LINGERING in one frame
-## without allocating, so a pool can transiently exceed its cap immediately
-## after. That's by design — the compressor on the Drones bus is the safety
-## net for that burst; the cap bites on the next allocation and brings the
-## count back under.
+## Per-coin-type voice cap. NOTE: chord advances can flip many ACTIVE→LINGERING
+## at once and transiently exceed the cap — the Drones-bus compressor handles
+## that burst; the cap bites on the next allocation.
 func _evict_oldest_drone_if_full(is_advanced: bool) -> void:
 	var cap: int = MAX_ADVANCED_DRONES if is_advanced else MAX_NORMAL_DRONES
 	if _count_drones_of_type(is_advanced) < cap:
@@ -642,8 +549,7 @@ func _evict_oldest_drone_if_full(is_advanced: bool) -> void:
 	var fade_duration: float = 0.4
 	if ThemeProvider and ThemeProvider.theme:
 		fade_duration = ThemeProvider.theme.eviction_fade_duration
-	# Erase first so any subsequent lookups (e.g. during the fade tween's
-	# tick callback) can't see a half-dead entry.
+	# Erase first so fade-tween callbacks can't see a half-dead entry.
 	_active_drones.erase(victim_key)
 	_fade_drone(int(victim["idx"]), fade_duration)
 
@@ -656,24 +562,19 @@ func _finish_drone_fade(idx: int) -> void:
 		_drone_free.append(idx)
 
 
-## How long the current chord has left before the next chord_changed emit.
 func get_time_until_next_chord() -> float:
 	return _chord_timer
 
 
-## Total length of the current chord (AudioStyle override if active, else
-## the default harp-path CHORD_DURATION). Used alongside get_time_until_
-## next_chord to compute a normalized 0..1 phase for visual animations.
+## Total chord length (AudioStyle override if active, else CHORD_DURATION).
 func get_chord_duration() -> float:
 	if _active_audio_style:
 		return _active_audio_style.chord_duration
 	return CHORD_DURATION
 
 
-## Current position within the chord as a 0..1 fraction (0 = chord just
-## started, 1 = chord about to change). Global — all readers see the same
-## value at the same moment, so a shared visual pulse stays in sync across
-## every bucket regardless of when each was activated.
+## 0..1 position within the current chord. Global — all readers see the same
+## value at the same moment, so visual pulses stay in sync across buckets.
 func get_chord_phase() -> float:
 	var duration: float = get_chord_duration()
 	if duration <= 0.0:
@@ -681,19 +582,15 @@ func get_chord_phase() -> float:
 	return clampf(1.0 - (_chord_timer / duration), 0.0, 1.0)
 
 
-## Rate-limit gate for new drone voices. Returns true if the caller should
-## proceed with mark_active + play_bucket; false if still inside the per-type
-## cooldown window. Visual activation is intentionally coupled to this gate
-## in PlinkoBoard.finalize_coin_landing — a rate-limited hit leaves the
-## bucket faded so the next tone-producing coin owns the activation.
-## Independent cooldowns per coin type so a normal cadence never blocks an
-## advanced hit. A one-shot harmony grace admits a second voice within the
-## HARMONY_GRACE_WINDOW (~200 ms) of the previous accepted activation so
-## multi-drop produces a two-note chord; the third hit of the same type is
-## always gated by the normal cooldown. Grace resets on fresh accept AND in
-## the rejection path once elapsed leaves the grace sub-window — without
-## the latter, sustained sub-cooldown activity would keep grace permanently
-## consumed and kill future bursts' harmony.
+## Rate-limit gate for new drone voices. True = proceed with mark_active +
+## play_bucket; false = inside cooldown. Independent per coin type. Visual
+## activation is intentionally coupled to this gate in PlinkoBoard.finalize_
+## coin_landing — a rate-limited hit leaves the bucket faded so the next
+## tone-producing coin owns the activation. A one-shot harmony grace admits
+## a second voice within HARMONY_GRACE_WINDOW of the previous accept so
+## multi-drop produces a two-note chord; third hit hits the normal cooldown.
+## Grace also resets in the rejection path once past the grace sub-window —
+## otherwise sustained sub-cooldown activity keeps grace permanently consumed.
 func try_consume_bucket_activation(is_advanced: bool = false) -> bool:
 	var now: float = Time.get_ticks_msec() / 1000.0
 	var divisor: float = ADVANCED_RATE_DIVISOR if is_advanced else NORMAL_RATE_DIVISOR
@@ -702,8 +599,6 @@ func try_consume_bucket_activation(is_advanced: bool = false) -> bool:
 	var grace_used: bool = _advanced_harmony_grace_used if is_advanced else _normal_harmony_grace_used
 	var elapsed: float = now - last
 	if elapsed < window:
-		# Inside cooldown — but a brief grace admits one second voice
-		# for the harmony case (multi-drop).
 		if elapsed < HARMONY_GRACE_WINDOW and not grace_used:
 			if is_advanced:
 				_advanced_harmony_grace_used = true
@@ -712,19 +607,14 @@ func try_consume_bucket_activation(is_advanced: bool = false) -> bool:
 				_normal_harmony_grace_used = true
 				_last_normal_activation_time = now
 			return true
-		# Rejected. Once we're past the grace sub-window the burst is
-		# effectively over — reset the grace flag so the *next* burst
-		# (starting on a future fresh accept) gets its harmony voice
-		# back. Doesn't admit a voice here because elapsed >=
-		# HARMONY_GRACE_WINDOW already disqualifies the grace branch
-		# above.
+		# Past the grace sub-window — reset so the next burst gets its harmony.
 		if elapsed >= HARMONY_GRACE_WINDOW and grace_used:
 			if is_advanced:
 				_advanced_harmony_grace_used = false
 			else:
 				_normal_harmony_grace_used = false
 		return false
-	# Fresh accept outside cooldown — reset the grace budget for the next burst.
+	# Fresh accept — reset grace budget for the next burst.
 	if is_advanced:
 		_last_advanced_activation_time = now
 		_advanced_harmony_grace_used = false
@@ -734,29 +624,23 @@ func try_consume_bucket_activation(is_advanced: bool = false) -> bool:
 	return true
 
 
-## Runs on chord advance (default harp path + AudioStyle path). Chord changes
-## are a VISUAL event here — they fire chord_changed so buckets revert to their
-## faded color, and flip ACTIVE drones to LINGERING so the bucket-activation
-## gate no longer suppresses re-hits. They do NOT fade audio. Lingering drones
-## keep ringing naturally via the synthesized decay until a new coin lands
-## (handed off by `_fade_lingering_drones`), or until the sample runs out
-## (pool slot released by `_update_bucket_drones`).
+## Chord advance is a VISUAL event: emits chord_changed so buckets revert to
+## faded, and flips ACTIVE→LINGERING so the activation gate no longer
+## suppresses re-hits. Does NOT fade audio — lingering drones ring via their
+## natural decay until a new coin hands off (_fade_lingering_drones) or the
+## synth sample ends (_update_bucket_drones releases the slot).
 func _handle_chord_advance() -> void:
 	for drone_key in _active_drones.keys():
 		var drone: Dictionary = _active_drones[drone_key]
 		if drone["state"] == DroneState.ACTIVE:
 			drone["state"] = DroneState.LINGERING
-			# Pool slot will release once the synthesized decay has run its
-			# course, even if no new coin ever lands.
 			drone["timer"] = Harp.DECAY_SECONDS
 	var idx: int = _style_chord_index if _active_audio_style else _current_chord_index.get(_active_board, 0)
 	chord_changed.emit(idx)
 
 
-## Fades every lingering drone. Called when a new coin lands after a chord
-## advance — the new note hands off from the old chord's tail. Audio fade is
-## longer than the visual fade so the handoff doesn't feel abrupt against the
-## sustained linger; tuned via theme.linger_fade_duration.
+## New coin landing after chord advance — hands off from the old chord's tail.
+## Audio fade (theme.linger_fade_duration) is longer than the visual fade.
 func _fade_lingering_drones() -> void:
 	if _active_drones.is_empty():
 		return
@@ -773,9 +657,8 @@ func _fade_lingering_drones() -> void:
 		_active_drones.erase(drone_key)
 
 
-## Called every second by ChallengeManager.tick. Fires the kick on the
-## downbeat and phase-locks the beat grid. In the final 10 seconds a second
-## kick fires 0.5s later for a 2/sec intensity ramp.
+## Called every second by ChallengeManager.tick. Phase-locks the beat grid
+## and fires the kick; final 10s doubles to 2/sec.
 func _on_challenge_tick(seconds_remaining: int) -> void:
 	if not _active_audio_style:
 		return
@@ -788,8 +671,6 @@ func _on_challenge_tick(seconds_remaining: int) -> void:
 			get_tree().create_timer(0.5).timeout.connect(_kick_player.play, CONNECT_ONE_SHOT)
 
 
-## Advances the beat grid. Each boundary bumps the motif position (sparkle
-## schedule in harp mode) and arms the next sparkle slot.
 func _tick_beat_grid(delta: float) -> void:
 	if _active_audio_style and not _challenge_tick_received:
 		return
@@ -815,39 +696,24 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 
 	var sp: Dictionary = _tonal_stream_and_pitch(pitch)
 
-	# First hit of a new chord: fade any drones left lingering from the
-	# previous chord. The new note acts as the handoff signal so silence
-	# between chords gets filled by the old chord's tones until activity
-	# resumes.
+	# New coin hands off from the previous chord's lingering drones.
 	_fade_lingering_drones()
 
-	# Each bucket rings once per chord — re-hits during the same chord are
-	# visual-only (PlinkoBoard re-flashes the bucket). Restarting the sample
-	# here would create a double-attack inside a still-ringing note.
-	# Lingering drones don't gate — _fade_lingering_drones above already
-	# cleared them so this branch only sees ACTIVE drones.
+	# Each bucket rings once per chord — re-hits are visual-only. Restarting
+	# the sample here would create a double-attack inside a still-ringing note.
 	if key in _active_drones and _active_drones[key]["state"] == DroneState.ACTIVE:
 		return
 
-	# Eviction runs AFTER _fade_lingering_drones (above) so the linger-clear's
-	# natural reduction is counted first — we only evict when genuinely full.
-	# Per-type: normal and advanced pools are capped independently.
+	# Eviction runs AFTER linger-clear so freed slots are counted first.
 	_evict_oldest_drone_if_full(is_advanced)
 	if _drone_free.is_empty():
 		return
-	# Exponential per-voice attenuation, filtered by coin type — normal voices
-	# only dim behind other normals, advanced only behind other advanceds.
-	# Keeps each pool self-limiting without cross-interference between the
-	# melodic top layer and the bass punctuation layer.
 	var voice_count: int = _count_drones_of_type(is_advanced)
 	var voice_attenuation_db: float = _voice_attenuation_db(voice_count)
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stream = sp["stream"]
-	# Drop buckets one octave below their chord-tone position so they feel
-	# like the foundation of the mix rather than a melodic voice up top.
-	# Advanced coins drop another octave for extra punch.
 	player.pitch_scale = _apply_tape_wobble(sp["pitch_scale"])
 	player.volume_db = target_volume + voice_attenuation_db
 	player.play()
@@ -855,10 +721,9 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	_active_drones[key] = _make_drone_entry(idx, tail, degree, octave_mult, DroneState.ACTIVE, is_advanced)
 
 
-## Peg sparkle audio is currently suppressed — it clashes with the chord-gated
-## bucket drone layer that carries the melody. Peg ring VFX still fires via
-## `should_sparkle` / `_beat_armed`; a follow-up feature will redesign the
-## sparkle voice to layer cleanly on top of the bucket melody.
+## DISABLED — sparkle audio clashes with the chord-gated bucket layer. Peg
+## ring VFX still fires via should_sparkle/_beat_armed. A follow-up feature
+## will redesign the sparkle voice to layer on top of the bucket melody.
 func play_peg_sparkle(_board_type: Enums.BoardType) -> void:
 	return
 
@@ -880,26 +745,20 @@ func set_active_board(board_type: Enums.BoardType) -> void:
 	_crossfade_ambient(board_type)
 
 
-## Called when a coin is launched on any board. Keeps the ambient pad alive
-## for the whole descent even on large boards where the 2s idle timeout
-## would otherwise fade it out between sparkles.
+## Keeps the ambient pad alive for the whole descent even on large boards
+## where the 2s idle timeout would otherwise fade between sparkles.
 func on_coin_dropped() -> void:
 	_active_coin_count += 1
 	_activity_detected = true
 
 
-## Called when a coin finishes landing. Ambient pad starts its fade-out
-## timer once this drops the count to 0.
 func on_coin_landed() -> void:
 	_active_coin_count = maxi(0, _active_coin_count - 1)
 
 
-## Plays a lofi drum on manual drop button press. Random pick from the player
-## drum pool. Rapid-fire drops within DRUM_RAPID_FIRE_WINDOW seconds are
-## attenuated so button-mashing doesn't fatigue.
+## DISABLED — drums parked while harp timbre is being developed. Pools,
+## buses, and tick scheduling stay intact for easy re-enable.
 func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
-	# Drums disabled while the harp timbre is being developed. Keeps the
-	# infrastructure (pools, bus, tick scheduling) intact for easy re-enable.
 	return
 	if board_type != _active_board:
 		return
@@ -918,13 +777,10 @@ func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
 	player.play()
 
 
-## Plays a lofi drum on autodropper tick. Normal autodroppers fire a kick
-## immediately (on the beat). Advanced autodroppers fire a hat/rim 0.5s later
-## (on the offbeat), creating a boom-chk pattern when both are active.
-## Rotates through the pool in order — not randomized.
+## DISABLED — see play_manual_drop_drum. Normal autodropper → kick on the
+## beat; advanced → hat on the offbeat (ADVANCED_DRUM_OFFSET later). Rotates
+## through the pool in order.
 func play_autodropper_drum(board_type: Enums.BoardType, is_advanced: bool) -> void:
-	# Drums disabled while the harp timbre is being developed. Keeps the
-	# infrastructure (pools, bus, tick scheduling) intact for easy re-enable.
 	return
 	if board_type != _active_board:
 		return
@@ -948,7 +804,7 @@ func _play_kick_now(board_type: Enums.BoardType) -> void:
 
 
 func _play_advanced_drum_now(board_type: Enums.BoardType) -> void:
-	# Re-check active board in case the player switched during the 0.5s delay.
+	# Re-check active board — player may have switched during the delay.
 	if board_type != _active_board:
 		return
 	if _hat_drum_players.is_empty():
@@ -999,9 +855,7 @@ func _get_pitch_scale(scale_degree: int, board_type: Enums.BoardType) -> float:
 
 
 func _current_chord_entry(board_type: Enums.BoardType) -> Dictionary:
-	# When an AudioStyle is active, its own progression overrides the per-board
-	# harp progressions. The style is a single progression shared across boards
-	# (arcade doesn't need per-board chord variation today).
+	# AudioStyle's single progression overrides the per-board harp progressions.
 	if _active_audio_style and not _active_audio_style.progression.is_empty():
 		var style_prog: Array = _active_audio_style.progression
 		return style_prog[_style_chord_index % style_prog.size()]
@@ -1010,18 +864,15 @@ func _current_chord_entry(board_type: Enums.BoardType) -> Dictionary:
 	return progression[idx % progression.size()]
 
 
-## Picks the active tonal instrument and resolves pitch_mult to a stream +
-## pitch_scale. Branches on the active style's timbre: "square" uses the
-## arcade square instrument; default falls through to the harp.
+## Picks the active tonal instrument. Square for arcade timbre, harp otherwise.
 func _tonal_stream_and_pitch(pitch_mult: float) -> Dictionary:
 	if _active_audio_style and _active_audio_style.timbre == "square":
 		return _square.resolve(pitch_mult)
 	return _harp.resolve(pitch_mult)
 
 
-## Tape wobble: a tiny sine LFO applied to pitch for lofi's analog feel.
-## Disabled while the harp timbre is being developed — the pitch drift
-## reads as "old recording" and fights the clean harp character.
+## DISABLED — tape wobble was adding "old recording" character that fought
+## the clean harp timbre. Kept for potential revival with a different instrument.
 func _apply_tape_wobble(pitch: float) -> float:
 	return pitch
 	if not ThemeProvider.theme.audio_lofi_enabled:
@@ -1030,17 +881,14 @@ func _apply_tape_wobble(pitch: float) -> float:
 	return pitch * (1.0 + sin(t * 3.0) * 0.004)
 
 
-## Whether the given board is the one currently in view. Used by non-audio
-## systems (peg VFX, sparkle triggers) to silence inactive boards.
 func is_active_board(board_type: Enums.BoardType) -> bool:
 	return board_type == _active_board
 
 
-## Beat-grid sparkle gate. Returns true at most once per beat slot, the first
-## time a peg hits while the beat is armed AND the motif position has a real
-## note (not a rest). Rests consume the beat but return false so peg VFX stay
-## silent on rest beats. Always flags _chord_had_sparkle on a consumed beat
-## so the progression doesn't mistake a rest-heavy chord for "no activity."
+## Beat-grid sparkle gate. True at most once per beat slot — the first peg
+## hit while the beat is armed AND the motif position has a real note (not -1).
+## Rests consume the beat silently. Always flags _chord_had_sparkle so a
+## rest-heavy chord isn't mistaken for "no activity."
 func should_sparkle(board_type: Enums.BoardType) -> bool:
 	if board_type != _active_board:
 		return false
@@ -1053,9 +901,8 @@ func should_sparkle(board_type: Enums.BoardType) -> bool:
 	return note >= 0
 
 
-## Called by BoardManager on each autodropper tick. Snaps the beat grid phase
-## to this moment and refreshes the beat period from the current tick interval
-## so sparkle cadence stays derived from (not hardcoded relative to) the drum.
+## Snap the beat grid to this autodropper tick. Beat period is derived from
+## the interval so sparkle cadence tracks the drum (not hardcoded).
 func notify_autodropper_beat(interval: float) -> void:
 	_autodrop_interval = interval
 	_beat_period = interval / float(BEATS_PER_BAR)
@@ -1083,13 +930,10 @@ func notify_autodropper_beat(interval: float) -> void:
 # used by the drum layer to match board chords — do NOT remove with the pad.
 
 func _fade_in_ambient() -> void:
-	# Ambient pad disabled for now — was feeling over-dense with the drums
-	# and bucket drones already in the mix. Early-return keeps the rest of
-	# the pad infrastructure intact for easy re-enable later.
+	# Over-dense with drums + bucket drones. Re-enable by removing this return.
 	return
 	_ambient_fading_in = true
 	if not _ambient_active.playing:
-		# Stream is pre-voiced per board; no pitch shift needed.
 		_ambient_active.stream = _ambient_pad_streams.get(_active_board, _ambient_pad_streams[Enums.BoardType.GOLD])
 		_ambient_active.pitch_scale = 1.0
 		_ambient_active.play()
@@ -1110,13 +954,11 @@ func _crossfade_ambient(board_type: Enums.BoardType) -> void:
 	var new_player := _ambient_b if _ambient_active == _ambient_a else _ambient_a
 	_ambient_active = new_player
 
-	# Fade out old
 	if old_player.playing:
 		var out_tween := create_tween()
 		out_tween.tween_property(old_player, "volume_db", -80.0, AMBIENT_FADE_DURATION)
 		out_tween.tween_callback(old_player.stop)
 
-	# Fade in new with the new board's pre-voiced chord stream.
 	if _ambient_fading_in:
 		new_player.stream = _ambient_pad_streams.get(board_type, _ambient_pad_streams[Enums.BoardType.GOLD])
 		new_player.pitch_scale = 1.0
@@ -1130,9 +972,8 @@ func _update_bucket_drones(delta: float) -> void:
 	var expired: Array[String] = []
 	for drone_key: String in _active_drones:
 		var drone: Dictionary = _active_drones[drone_key]
-		# ACTIVE drones are chord-managed (chord advance flips to LINGERING);
-		# the timer-based ramp would cut them off mid-chord if a coin landed
-		# near the chord's end, so skip them entirely.
+		# ACTIVE drones are chord-managed — skip so the timer can't cut them
+		# off mid-chord.
 		if drone["state"] == DroneState.ACTIVE:
 			continue
 		drone.timer -= delta
@@ -1148,10 +989,8 @@ func _update_bucket_drones(delta: float) -> void:
 		_active_drones.erase(key)
 
 
-## Returns the pitch multiplier for an instrument rooted at C4 to play at the
-## given board's root note. Used by drums to stay consonant with the chord
-## progression. The ambient pad no longer uses this — each board has its
-## own pre-voiced pad stream.
+## Pitch multiplier for a C4-rooted instrument to match the board's current
+## root. Still used by the drum layer (name is legacy — no longer ambient).
 func _get_ambient_pitch(board_type: Enums.BoardType) -> float:
 	var entry: Dictionary = _current_chord_entry(board_type)
 	var semitones: int = int(entry["root"])
@@ -1164,9 +1003,8 @@ func _on_theme_changed() -> void:
 	if not ThemeProvider.theme:
 		return
 
-	# Low-pass filter kept off while the harp is being developed — the 3 kHz
-	# cutoff was part of what made the sound read as "old movie." Re-enable
-	# by restoring the lofi gate: `var lofi := ...; set_bus_effect_enabled(..., lofi)`.
+	# Low-pass kept off while the harp is being developed. Re-enable with the
+	# lofi gate: `var lofi := ...; set_bus_effect_enabled(..., lofi)`.
 	if _melody_bus_idx >= 0 and _melody_lowpass_effect_idx >= 0:
 		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, false)
 
@@ -1182,17 +1020,15 @@ func _setup_buses() -> void:
 		AudioServer.add_bus()
 		AudioServer.set_bus_name(_melody_bus_idx, &"Melody")
 		AudioServer.set_bus_send(_melody_bus_idx, &"Master")
-		# Reverb muted while the harp is being developed — Godot's built-in
-		# room reverb has an 80s/90s digital character that fights the dry
-		# plucked tone. Re-enable by raising wet (e.g. 0.15-0.25).
+		# Reverb muted (wet=0) — Godot's built-in reverb fights the dry harp.
+		# Re-enable by raising wet (e.g. 0.15–0.25).
 		var reverb := AudioEffectReverb.new()
 		reverb.room_size = 0.55
 		reverb.wet = 0.0
 		reverb.dry = 1.0
 		reverb.damping = 0.7
 		AudioServer.add_bus_effect(_melody_bus_idx, reverb)
-		# Low-pass filter for lofi warmth — disabled by default, toggled via
-		# _on_theme_changed when the lofi theme is active.
+		# Low-pass for lofi warmth — toggled in _on_theme_changed.
 		var lowpass := AudioEffectLowPassFilter.new()
 		lowpass.cutoff_hz = MELODY_LOWPASS_CUTOFF
 		lowpass.resonance = 0.5
@@ -1218,10 +1054,9 @@ func _setup_buses() -> void:
 	else:
 		_ambient_bus_idx = AudioServer.get_bus_index(&"Ambient")
 
-	# Dedicated drone-voice bus. Compressor first (tames the dry stack as
-	# voice count grows), then reverb (small-room "glue", blooms off the
-	# compressed signal — order matters; reverb-before-comp would pump the
-	# tail with every new hit).
+	# Drone-voice bus. Compressor first (tames the dry stack as voice count
+	# grows), then reverb. Order matters — reverb-before-comp would pump the
+	# tail with every new hit.
 	if AudioServer.get_bus_index(&"Drones") < 0:
 		_drones_bus_idx = AudioServer.bus_count
 		AudioServer.add_bus()
@@ -1230,7 +1065,7 @@ func _setup_buses() -> void:
 		var comp := AudioEffectCompressor.new()
 		comp.threshold = -18.0
 		comp.ratio = 3.0
-		comp.attack_us = 10000.0  # 10 ms
+		comp.attack_us = 10000.0
 		comp.release_ms = 500.0
 		AudioServer.add_bus_effect(_drones_bus_idx, comp)
 		var reverb := AudioEffectReverb.new()
@@ -1238,14 +1073,13 @@ func _setup_buses() -> void:
 		reverb.damping = 0.5
 		reverb.wet = 0.2
 		reverb.dry = 0.8
-		reverb.hipass = 0.2  # cut muddy low-end buildup on dense stacks
+		reverb.hipass = 0.2  # cut muddy buildup on dense stacks
 		AudioServer.add_bus_effect(_drones_bus_idx, reverb)
 	else:
 		_drones_bus_idx = AudioServer.get_bus_index(&"Drones")
 
 
 # ── Placeholder tone generation ──────────────────────────────────────
-# These are replaced with preloaded samples once real audio arrives.
 
 func _generate_tone(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
@@ -1277,7 +1111,6 @@ func _generate_chime(freq: float, duration: float, mix_rate: int = 44100) -> Aud
 	for i in num_samples:
 		var t: float = float(i) / mix_rate
 		var env: float = exp(-t * 5.0)
-		# Fundamental + 3rd harmonic for shimmer
 		var value: float = (sin(TAU * freq * t) * 0.6 + sin(TAU * freq * 3.0 * t) * 0.2) * env * 0.35
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
@@ -1293,12 +1126,9 @@ func _generate_ambient_pad(duration: float, mix_rate: int = 44100, frequencies: 
 	var num_samples := int(duration * mix_rate)
 	var data := PackedByteArray()
 	data.resize(num_samples * 2)
-	# Each frequency's cycles should land on zero-crossings at the loop
-	# boundary to avoid pops. For a 4-second loop, any integer-Hz
-	# frequency auto-aligns (since N seconds * F Hz = integer cycles).
-	# Slow 0.25 Hz amplitude modulation adds a gentle breath so the pad
-	# doesn't feel static.
-	# Amplitude per voice scales so the sum doesn't clip.
+	# Integer-Hz frequencies auto-align to zero-crossings at loop boundary.
+	# 0.25 Hz amplitude modulation adds a gentle breath so the pad doesn't
+	# feel static. Per-voice amplitude scales so the sum doesn't clip.
 	var amplitude: float = 0.3 / sqrt(float(frequencies.size()))
 	for i in num_samples:
 		var t: float = float(i) / mix_rate
@@ -1311,6 +1141,4 @@ func _generate_ambient_pad(duration: float, mix_rate: int = 44100, frequencies: 
 	wav.data = data
 	return wav
 
-
-# ── Drum generators ──────────────────────────────────────────────────
 
