@@ -177,7 +177,6 @@ const coin_shape := CoinShape.CYLINDER
 @export var coin_land_particle_duration := 0.6                    # how long particles live
 @export var bucket_pulse_scale := 1.15                            # scale on receive
 @export var bucket_pulse_duration := 0.15
-@export var bucket_active_scale_peak := 1.2                       # scale snap on coin landing, settles back to 1.0 over the chord's remaining duration
 @export var bucket_fade_duration := 0.5                           # chord-change color fade duration; also doubles as the pre-chord fade lead time
 @export var linger_fade_duration := 2.5                           # chord-gated audio handoff fade (new-coin to previous-chord drones)
 @export var eviction_fade_duration := 0.4                         # voice-stolen audio fade when the drone voice cap is exceeded

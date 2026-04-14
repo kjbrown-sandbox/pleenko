@@ -15,7 +15,6 @@ var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
 var _color_tween: Tween
-var _scale_tween: Tween
 
 @onready var _mesh: MeshInstance3D = $MeshInstance3D
 @onready var _label: Label3D = $BucketValue
@@ -49,9 +48,8 @@ func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) ->
 
 
 func mark_hit() -> void:
-	_kill_tweens()
+	_kill_color_tween()
 	_is_hit = true
-	scale = Vector3.ONE
 	_apply_color(ThemeProvider.theme.hit_bucket_color)
 
 
@@ -60,9 +58,8 @@ func mark_target() -> void:
 
 
 func mark_unhit() -> void:
-	_kill_tweens()
+	_kill_color_tween()
 	_is_hit = false
-	scale = Vector3.ONE
 	_apply_color(_resolve_default_color())
 	_label.visible = true
 	var skull := get_node_or_null("SkullIcon")
@@ -96,29 +93,21 @@ func pulse() -> void:
 	t.pulse_node3d(self, true, _base_material, currency_type, _is_hit)
 
 
-## Chord-gated activation: snap to full color + 1.2× scale, then schedule a
-## smooth settle. Scale tweens 1.2 → 1.0 over the current chord's remaining
-## duration (a bucket hit at chord start settles over the whole chord; a hit
-## late in the chord settles quickly). Color stays at full until `bucket_fade_duration`
-## seconds before the chord change, then fades over the same window — so the
-## bucket is fully faded at the exact moment the next chord begins and is
-## ready to receive a new hit. No-op if the bucket is already marked as
-## hit/forbidden by a challenge.
+## Chord-gated activation: snap to full color, then schedule a delayed fade
+## that completes exactly as the chord change begins. Color stays at full
+## until `bucket_fade_duration` seconds before the chord change, then fades
+## over the same window — so the bucket is fully faded at the exact moment
+## the next chord starts and is ready to receive a new hit. No-op if the
+## bucket is already marked as hit/forbidden by a challenge.
 func mark_active() -> void:
 	if _is_hit:
 		return
-	_kill_tweens()
+	_kill_color_tween()
 	var t: VisualTheme = ThemeProvider.theme
 	_apply_color(t.get_bucket_color(currency_type))
-	scale = Vector3.ONE * t.bucket_active_scale_peak
 	var chord_remaining: float = maxf(AudioManager.get_time_until_next_chord(), t.bucket_fade_duration)
 	var fade_duration: float = minf(t.bucket_fade_duration, chord_remaining)
 	var delay: float = maxf(0.0, chord_remaining - fade_duration)
-
-	_scale_tween = create_tween()
-	_scale_tween.bind_node(self)
-	_scale_tween.tween_property(self, "scale", Vector3.ONE, chord_remaining) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 	_color_tween = create_tween()
 	_color_tween.bind_node(self)
@@ -132,12 +121,12 @@ func mark_active() -> void:
 ## Backstop: called on chord_changed from PlinkoBoard. In the normal path
 ## mark_active's own scheduled fade has already completed by now; this just
 ## covers edge cases (idle reset before the scheduled fade starts, chord
-## advancing earlier than expected). Kills any running tweens and fades
+## advancing earlier than expected). Kills any running tween and fades
 ## whatever state the bucket is currently in.
 func mark_inactive(duration: float) -> void:
 	if _is_hit:
 		return
-	_kill_tweens()
+	_kill_color_tween()
 	var target: Color = ThemeProvider.theme.get_bucket_color_faded(currency_type)
 	_color_tween = create_tween()
 	_color_tween.bind_node(self)
@@ -145,8 +134,6 @@ func mark_inactive(duration: float) -> void:
 	_color_tween.tween_property(_base_material, "albedo_color", target, duration) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	_color_tween.tween_property(_label, "modulate", target, duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	_color_tween.tween_property(self, "scale", Vector3.ONE, duration) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 
 
@@ -159,10 +146,7 @@ func _apply_color(color: Color) -> void:
 	_label.modulate = color
 
 
-func _kill_tweens() -> void:
+func _kill_color_tween() -> void:
 	if _color_tween and _color_tween.is_valid():
 		_color_tween.kill()
 	_color_tween = null
-	if _scale_tween and _scale_tween.is_valid():
-		_scale_tween.kill()
-	_scale_tween = null

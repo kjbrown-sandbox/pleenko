@@ -39,6 +39,7 @@ button_font = ExtResource("1_fbp74")
 button_bg_source = 15
 button_disabled_text_source = 4
 button_border_source = 4
+bucket_fade_duration = 1.0
 board_glow_opacity = 0.06
 peg_glow_halo_enabled = true
 peg_glow_halo_radius = 2.0
