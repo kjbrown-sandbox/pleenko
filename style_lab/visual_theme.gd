@@ -527,10 +527,7 @@ func blink_scale_fade(control: Control, max_scale: float = 1.5, min_alpha: float
 	return tween
 
 
-func pulse_node3d(node: Node3D, flash_white: bool = false,
-		material: StandardMaterial3D = null,
-		currency: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN,
-		is_hit: bool = false) -> void:
+func pulse_node3d(node: Node3D, material: StandardMaterial3D = null) -> void:
 	# Scale pop
 	var scale_tween := node.create_tween()
 	var target_scale := Vector3.ONE * bucket_pulse_scale
@@ -540,8 +537,9 @@ func pulse_node3d(node: Node3D, flash_white: bool = false,
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUAD)
 
 	# Color flash
-	if flash_white and material:
-		var flash_color := get_coin_color(currency).lightened(0.3)
+	if material:
+		var rest_color: Color = material.albedo_color
+		var flash_color := rest_color.lightened(0.3)
 		material.albedo_color = flash_color
 		var rest_color: Color = hit_bucket_color if is_hit else get_bucket_color(currency)
 		var color_tween := node.create_tween()
