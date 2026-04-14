@@ -127,12 +127,12 @@ var _active_coin_count: int = 0
 #                             drone's slot to make room for a new allocation.
 enum DroneState { SPARKLE, ACTIVE, LINGERING }
 
-# Hard cap on simultaneous drone voices (ACTIVE + LINGERING + SPARKLE). Tuned
-# empirically against the bus compressor: 8 voices is where the compressor
-# hits meaningful gain reduction without pumping, and where density still
-# feels rich rather than sparse. Raising this weakens the compressor's
-# density response; lowering thins the texture.
-const MAX_ACTIVE_DRONES := 8
+# Per-coin-type voice caps (replaces the previous shared MAX_ACTIVE_DRONES).
+# Normal coins are the melodic top layer; advanced coins are the slower, deeper
+# bass punctuation layer. They occupy different registers so they don't dim or
+# evict each other — two independent pools, each tuned for its own role.
+const MAX_NORMAL_DRONES := 5
+const MAX_ADVANCED_DRONES := 3
 
 # Per-voice exponential attenuation ratio: voice N allocated while N-1 drones
 # are already ringing plays at VOICE_ATTENUATION_RATIO^(N-1) of base amplitude.
@@ -151,15 +151,25 @@ var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree",
 # volume_db after reassignment.
 var _drone_fade_tweens: Dictionary = {}
 
-# Bucket activation rate limit. Coins can land many-per-frame at high drop
-# rates (advanced + normal + multi-drop + chord boundaries), which slammed
-# the soundfield with simultaneous chimes. Any activation within the cooldown
-# window of the previous one is silently dropped (visual and audio both).
-# Window is ACTIVATION_RATE_DIVISOR-ths of the autodropper interval so the
-# musical pacing scales with gameplay tempo: ~375 ms at the default 1.5 s
-# autodrop, tightening as drop-rate upgrades shorten the interval.
-const ACTIVATION_RATE_DIVISOR := 4.0
-var _last_activation_time: float = -999.0
+# Audio rate-limit for new drone voices, scaled to the autodropper interval
+# so pacing tracks gameplay tempo. Cooldown = _autodrop_interval /
+# RATE_DIVISOR. Per-type so normal and advanced never block each other.
+# Normal: up to 4 hits per autodrop cycle (~375 ms at default 1.5 s).
+# Advanced: 1 hit per full cycle (~1500 ms) — slow bass punctuation.
+const NORMAL_RATE_DIVISOR := 4.0
+const ADVANCED_RATE_DIVISOR := 1.0
+
+# Harmony grace: if a second coin lands within this window of the previous
+# accepted activation, allow it through even though the normal cooldown
+# hasn't elapsed. Gives multi-drop its two-voice harmony chord without
+# opening the door to 3+ voices slamming together (grace is a one-shot
+# per burst — third hit still hits the normal cooldown).
+const HARMONY_GRACE_WINDOW := 0.2  # 200 ms
+
+var _last_normal_activation_time: float = -999.0
+var _last_advanced_activation_time: float = -999.0
+var _normal_harmony_grace_used: bool = false
+var _advanced_harmony_grace_used: bool = false
 var _sparkle_counter: int = 0  # monotonic id for unique sparkle drone keys
 # Two drone streams — zen uses the sine pad loop (matches the ambient pad
 # texture); lofi uses the FM electric piano one-shot. Selected per-play in
@@ -570,15 +580,32 @@ func _voice_attenuation_db(voice_count: int) -> float:
 	return 20.0 * log(pow(VOICE_ATTENUATION_RATIO, voice_count)) / log(10.0)
 
 
+## Counts currently-allocated drones matching the requested coin type.
+## Used by per-type voice caps + attenuation so normal and advanced pools
+## don't interfere with each other.
+func _count_drones_of_type(is_advanced: bool) -> int:
+	var count: int = 0
+	for drone_key in _active_drones:
+		var drone: Dictionary = _active_drones[drone_key]
+		if drone["state"] == DroneState.SPARKLE:
+			continue
+		if drone.get("is_advanced", false) == is_advanced:
+			count += 1
+	return count
+
+
 ## Factory for `_active_drones` entries. Every allocation site goes through
-## this so `created_at` and the other fields can't drift per-site.
-func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, state: int) -> Dictionary:
+## this so `created_at`, `is_advanced`, and the other fields can't drift
+## per-site. `is_advanced` defaults to false so sparkle allocations (which
+## never take the parameter) get correct bookkeeping automatically.
+func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, state: int, is_advanced: bool = false) -> Dictionary:
 	return {
 		"idx": idx,
 		"timer": timer,
 		"degree": degree,
 		"octave_mult": octave_mult,
 		"state": state,
+		"is_advanced": is_advanced,
 		"created_at": Time.get_ticks_msec(),
 	}
 
@@ -594,18 +621,19 @@ func _eviction_priority(state: int) -> int:
 		_: return 0
 
 
-## Voice cap enforcement: when `_active_drones` is at `MAX_ACTIVE_DRONES`,
-## pick the drone with the highest eviction priority (oldest first as tie-
-## breaker) and fade it over `eviction_fade_duration` so the caller has a
-## free pool slot. No-op below cap.
+## Voice cap enforcement (per coin-type pool): when the matching pool is at
+## its cap, pick the drone with the highest eviction priority from THAT pool
+## (oldest first as tiebreaker) and fade it over `eviction_fade_duration` so
+## the caller has a free pool slot. No-op below cap.
 ##
 ## NOTE: chord advances flip many ACTIVE drones to LINGERING in one frame
-## without allocating, so `_active_drones.size()` can transiently exceed
-## the cap immediately after. That's by design — the compressor on the
-## Drones bus is the safety net for that burst; the cap bites on the
-## next allocation and brings the count back under.
-func _evict_oldest_drone_if_full() -> void:
-	if _active_drones.size() < MAX_ACTIVE_DRONES:
+## without allocating, so a pool can transiently exceed its cap immediately
+## after. That's by design — the compressor on the Drones bus is the safety
+## net for that burst; the cap bites on the next allocation and brings the
+## count back under.
+func _evict_oldest_drone_if_full(is_advanced: bool) -> void:
+	var cap: int = MAX_ADVANCED_DRONES if is_advanced else MAX_NORMAL_DRONES
+	if _count_drones_of_type(is_advanced) < cap:
 		return
 	var victim_key: String = ""
 	var victim_priority: int = -1
@@ -613,6 +641,10 @@ func _evict_oldest_drone_if_full() -> void:
 	var now: int = Time.get_ticks_msec()
 	for drone_key in _active_drones:
 		var drone: Dictionary = _active_drones[drone_key]
+		if drone["state"] == DroneState.SPARKLE:
+			continue
+		if drone.get("is_advanced", false) != is_advanced:
+			continue
 		var priority: int = _eviction_priority(drone["state"])
 		var age: int = now - int(drone.get("created_at", now))
 		if priority > victim_priority or (priority == victim_priority and age > victim_age):
@@ -644,19 +676,76 @@ func get_time_until_next_chord() -> float:
 	return _chord_timer
 
 
-## Rate-limit gate for new bucket activations. Returns true if the caller
-## should proceed with the activation (visual mark_active + play_bucket);
-## returns false if still inside the cooldown window from the previous
-## accepted activation. Caller must treat a false return as "drop this
-## activation entirely" — do NOT fall back to visual-only, since part of
-## the goal is to preserve the early-game arpeggio feel where bucket
-## lights follow the musical pulse, not the coin-landing rate.
-func try_consume_bucket_activation() -> bool:
+## Total length of the current chord (AudioStyle override if active, else
+## the default harp-path CHORD_DURATION). Used alongside get_time_until_
+## next_chord to compute a normalized 0..1 phase for visual animations.
+func get_chord_duration() -> float:
+	if _active_audio_style:
+		return _active_audio_style.chord_duration
+	return CHORD_DURATION
+
+
+## Current position within the chord as a 0..1 fraction (0 = chord just
+## started, 1 = chord about to change). Global — all readers see the same
+## value at the same moment, so a shared visual pulse stays in sync across
+## every bucket regardless of when each was activated.
+func get_chord_phase() -> float:
+	var duration: float = get_chord_duration()
+	if duration <= 0.0:
+		return 0.0
+	return clampf(1.0 - (_chord_timer / duration), 0.0, 1.0)
+
+
+## Rate-limit gate for new drone voices. Returns true if the caller should
+## proceed with mark_active + play_bucket; false if still inside the per-type
+## cooldown window. Visual activation is intentionally coupled to this gate
+## in PlinkoBoard.finalize_coin_landing — a rate-limited hit leaves the
+## bucket faded so the next tone-producing coin owns the activation.
+## Independent cooldowns per coin type so a normal cadence never blocks an
+## advanced hit. A one-shot harmony grace admits a second voice within the
+## HARMONY_GRACE_WINDOW (~200 ms) of the previous accepted activation so
+## multi-drop produces a two-note chord; the third hit of the same type is
+## always gated by the normal cooldown. Grace resets on fresh accept AND in
+## the rejection path once elapsed leaves the grace sub-window — without
+## the latter, sustained sub-cooldown activity would keep grace permanently
+## consumed and kill future bursts' harmony.
+func try_consume_bucket_activation(is_advanced: bool = false) -> bool:
 	var now: float = Time.get_ticks_msec() / 1000.0
-	var window: float = _autodrop_interval / ACTIVATION_RATE_DIVISOR
-	if now - _last_activation_time < window:
+	var divisor: float = ADVANCED_RATE_DIVISOR if is_advanced else NORMAL_RATE_DIVISOR
+	var window: float = _autodrop_interval / divisor
+	var last: float = _last_advanced_activation_time if is_advanced else _last_normal_activation_time
+	var grace_used: bool = _advanced_harmony_grace_used if is_advanced else _normal_harmony_grace_used
+	var elapsed: float = now - last
+	if elapsed < window:
+		# Inside cooldown — but a brief grace admits one second voice
+		# for the harmony case (multi-drop).
+		if elapsed < HARMONY_GRACE_WINDOW and not grace_used:
+			if is_advanced:
+				_advanced_harmony_grace_used = true
+				_last_advanced_activation_time = now
+			else:
+				_normal_harmony_grace_used = true
+				_last_normal_activation_time = now
+			return true
+		# Rejected. Once we're past the grace sub-window the burst is
+		# effectively over — reset the grace flag so the *next* burst
+		# (starting on a future fresh accept) gets its harmony voice
+		# back. Doesn't admit a voice here because elapsed >=
+		# HARMONY_GRACE_WINDOW already disqualifies the grace branch
+		# above.
+		if elapsed >= HARMONY_GRACE_WINDOW and grace_used:
+			if is_advanced:
+				_advanced_harmony_grace_used = false
+			else:
+				_normal_harmony_grace_used = false
 		return false
-	_last_activation_time = now
+	# Fresh accept outside cooldown — reset the grace budget for the next burst.
+	if is_advanced:
+		_last_advanced_activation_time = now
+		_advanced_harmony_grace_used = false
+	else:
+		_last_normal_activation_time = now
+		_normal_harmony_grace_used = false
 	return true
 
 
@@ -757,13 +846,15 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 
 	# Eviction runs AFTER _fade_lingering_drones (above) so the linger-clear's
 	# natural reduction is counted first — we only evict when genuinely full.
-	_evict_oldest_drone_if_full()
+	# Per-type: normal and advanced pools are capped independently.
+	_evict_oldest_drone_if_full(is_advanced)
 	if _drone_free.is_empty():
 		return
-	# Exponential per-voice attenuation — keeps the aggregate mix self-limiting
-	# by construction: late voices settle behind the first-voice melody rather
-	# than stacking into a wall.
-	var voice_count: int = _active_drones.size()
+	# Exponential per-voice attenuation, filtered by coin type — normal voices
+	# only dim behind other normals, advanced only behind other advanceds.
+	# Keeps each pool self-limiting without cross-interference between the
+	# melodic top layer and the bass punctuation layer.
+	var voice_count: int = _count_drones_of_type(is_advanced)
 	var voice_attenuation_db: float = _voice_attenuation_db(voice_count)
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
@@ -776,7 +867,7 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	player.volume_db = target_volume + voice_attenuation_db
 	player.play()
 	var tail: float = maxf(_chord_timer, MIN_BUCKET_RING_SECONDS)
-	_active_drones[key] = _make_drone_entry(idx, tail, degree, octave_mult, DroneState.ACTIVE)
+	_active_drones[key] = _make_drone_entry(idx, tail, degree, octave_mult, DroneState.ACTIVE, is_advanced)
 
 
 ## Peg sparkle audio is currently suppressed — it clashes with the chord-gated
@@ -1273,6 +1364,13 @@ func _generate_harp(freq: float, duration: float, darker: bool, mix_rate: int = 
 	# breaks the perfectly periodic waveform and reads as "organic."
 	const INHARMONICITY: float = 0.0003
 
+	# Linear tail fade over the last TAIL_FADE seconds of the sample so the
+	# stream ends at true zero amplitude. Without this, the fundamental's slow
+	# exponential decay is still ~14% loud when the 4-second sample file ends,
+	# and the player cuts off mid-tone producing an audible click/snap.
+	const TAIL_FADE: float = 0.3
+	var tail_start: float = duration - TAIL_FADE
+
 	for i in num_samples:
 		var t: float = float(i) / mix_rate
 		var value: float = 0.0
@@ -1286,6 +1384,8 @@ func _generate_harp(freq: float, duration: float, darker: bool, mix_rate: int = 
 		if t < 0.015:
 			value += randf_range(-1.0, 1.0) * (1.0 - t / 0.015) * 0.15
 		value *= 0.45
+		if t > tail_start:
+			value *= (duration - t) / TAIL_FADE
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
 	return wav

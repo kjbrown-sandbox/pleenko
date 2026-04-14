@@ -643,14 +643,14 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var num_buckets: int = buckets_container.get_child_count()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
-	# Rate-limit bucket activations so wave-landings (chord boundaries,
-	# multi-drop, high drop rate) don't slam every bucket at once — keeps the
-	# early-game arpeggio feel at any drop cadence. Activation is all-or-nothing:
-	# if we can't voice it, we don't light the bucket either.
-	if AudioManager.try_consume_bucket_activation():
+	# Visual and audio activation are coupled: a bucket only lights up when
+	# its tone actually plays. A rate-limited hit (audio cooldown still
+	# active, or same bucket already ringing this chord) leaves the bucket
+	# in its faded state so the next coin that does voice a tone gets to
+	# own the activation. Mirror: buckets symmetric across center share the
+	# same note, so they light up together.
+	if AudioManager.try_consume_bucket_activation(is_advanced):
 		bucket.mark_active()
-		# Mirror: buckets symmetric across center share the same note, so light
-		# up the mirror too. (Skips when the hit bucket IS center — same index.)
 		var mirror_idx: int = num_buckets - 1 - bucket_idx
 		if mirror_idx != bucket_idx:
 			var mirror: Bucket = get_bucket(mirror_idx)

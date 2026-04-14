@@ -44,8 +44,8 @@ enum Palette {
 
 # Per-currency colors: main (prominent) and faded (muted/disabled)
 @export_group("Colors – Gold")
-@export var gold_main := Color(0.85, 0.75, 0.25)
-@export var gold_faded := Color(0.55, 0.45, 0.10)
+@export var gold_main := Color(0.98, 0.86, 0.12)
+@export var gold_faded := Color(0.45, 0.42, 0.28)
 
 @export_group("Colors – Orange")
 @export var orange_main := Color(0.85, 0.45, 0.3)
@@ -177,7 +177,8 @@ const coin_shape := CoinShape.CYLINDER
 @export var coin_land_particle_duration := 0.6                    # how long particles live
 @export var bucket_pulse_scale := 1.15                            # scale on receive
 @export var bucket_pulse_duration := 0.15
-@export var bucket_fade_duration := 1.0                           # chord-change visual tween duration
+@export var bucket_active_scale_peak := 1.2                       # scale at chord start; all active buckets lerp down to 1.0 together as the chord progresses
+@export var bucket_fade_duration := 0.5                           # chord-change color fade duration; also doubles as the pre-chord fade lead time
 @export var linger_fade_duration := 2.5                           # chord-gated audio handoff fade (new-coin to previous-chord drones)
 @export var eviction_fade_duration := 0.4                         # voice-stolen audio fade when the drone voice cap is exceeded
 @export var floating_text_rise := 1.5                             # units upward
