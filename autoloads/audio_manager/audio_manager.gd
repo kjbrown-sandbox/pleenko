@@ -134,6 +134,12 @@ enum DroneState { SPARKLE, ACTIVE, LINGERING }
 # density response; lowering thins the texture.
 const MAX_ACTIVE_DRONES := 8
 
+# Per-voice exponential attenuation ratio: voice N allocated while N-1 drones
+# are already ringing plays at VOICE_ATTENUATION_RATIO^(N-1) of base amplitude.
+# 0.75 = ~2.5 dB drop per additional voice. The compressor on the Drones bus
+# is tuned against this curve; retune both together if either changes.
+const VOICE_ATTENUATION_RATIO := 0.75
+
 const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — 3s fade over the ~72 dB range
 const SPARKLE_DRONE_SUSTAIN := 3.5     # sparkles ring a bit shorter than bucket drones
 const BUCKET_DRONE_POOL_SIZE := 24
@@ -558,6 +564,12 @@ func _kill_fade_tween(idx: int) -> void:
 	_drone_fade_tweens.erase(idx)
 
 
+## Converts a voice count into the dB attenuation for the next allocated
+## voice: VOICE_ATTENUATION_RATIO^N expressed in decibels.
+func _voice_attenuation_db(voice_count: int) -> float:
+	return 20.0 * log(pow(VOICE_ATTENUATION_RATIO, voice_count)) / log(10.0)
+
+
 ## Factory for `_active_drones` entries. Every allocation site goes through
 ## this so `created_at` and the other fields can't drift per-site.
 func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, state: int) -> Dictionary:
@@ -748,13 +760,11 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 	_evict_oldest_drone_if_full()
 	if _drone_free.is_empty():
 		return
-	# Exponential per-voice attenuation: each new voice allocated while N
-	# drones are already ringing plays at (3/4)^N of the base amplitude.
-	# Keeps the aggregate mix self-limiting by construction — each additional
-	# voice is ~2.5 dB quieter than the one before it, so late voices settle
-	# behind the first-voice melody rather than stacking into a wall.
+	# Exponential per-voice attenuation — keeps the aggregate mix self-limiting
+	# by construction: late voices settle behind the first-voice melody rather
+	# than stacking into a wall.
 	var voice_count: int = _active_drones.size()
-	var voice_attenuation_db: float = 20.0 * log(pow(0.75, voice_count)) / log(10.0)
+	var voice_attenuation_db: float = _voice_attenuation_db(voice_count)
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
