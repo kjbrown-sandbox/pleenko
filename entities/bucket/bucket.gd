@@ -15,6 +15,8 @@ var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
 var _color_tween: Tween
+var _press_tween: Tween
+var _rest_y: float
 
 @onready var _mesh: MeshInstance3D = $MeshInstance3D
 @onready var _label: Label3D = $BucketValue
@@ -41,6 +43,7 @@ func _label_text() -> String:
 func setup(bucket_color: Enums.CurrencyType, _position: Vector3, _value: int) -> void:
 	currency_type = bucket_color
 	position = _position
+	_rest_y = _position.y
 	value = _value
 
 	var t: VisualTheme = ThemeProvider.theme
@@ -103,7 +106,12 @@ func mark_forbidden() -> void:
 ## scale pulse.
 func mark_singing() -> void:
 	_kill_color_tween()
-	set_process(true)
+	# set_process(true)
+
+	var tween := create_tween()
+	tween.tween_property(self, "scale", Vector3.ONE * ThemeProvider.theme.bucket_active_scale_peak, 0.2) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
 	if not _is_hit:
 		_apply_color(ThemeProvider.theme.get_bucket_color(currency_type))
 
@@ -127,11 +135,22 @@ func mark_stop_singing(duration: float) -> void:
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 
 
+## Trampoline press: punch down on Y, spring back with a slight overshoot.
 func pulse() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	if not t.bucket_pulse_enabled:
 		return
-	t.pulse_node3d(self)
+	const PRESS_DURATION: float = 1.1
+	const PRESS_DEPTH: float = 0.1
+	if _press_tween and _press_tween.is_valid():
+		_press_tween.kill()
+	position.y = _rest_y
+	_press_tween = create_tween()
+	_press_tween.bind_node(self)
+	_press_tween.tween_property(self, "position:y", _rest_y - PRESS_DEPTH, PRESS_DURATION * 0.25) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_press_tween.tween_property(self, "position:y", _rest_y, PRESS_DURATION * 0.75) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 
 func _resolve_default_color() -> Color:
