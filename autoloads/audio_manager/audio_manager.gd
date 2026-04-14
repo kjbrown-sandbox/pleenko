@@ -89,11 +89,6 @@ var _chord_had_sparkle: bool = false  # tracks whether any sparkle fired during 
 
 # Beat grid + motif state.
 var _autodrop_interval: float = DEFAULT_AUTODROP_INTERVAL
-# Reference timestamp (ms since boot) of the most recent autodropper tick.
-# Drives get_autodrop_phase for beat-synced visual animations like the
-# bucket breathing pulse. -1 before the first tick — phase falls back to
-# wall-clock modulo in that case.
-var _last_autodrop_tick_msec: int = -1
 var _beat_period: float = DEFAULT_AUTODROP_INTERVAL / BEATS_PER_BAR
 var _beat_phase: float = 0.0       # time into current beat slot, 0.._beat_period
 var _beat_armed: bool = false      # current beat's note hasn't been consumed yet
@@ -1022,23 +1017,6 @@ func notify_autodropper_beat(interval: float) -> void:
 	_beat_phase = 0.0
 	_motif_position += 1
 	_beat_armed = true
-	_last_autodrop_tick_msec = Time.get_ticks_msec()
-
-
-## Returns the current position within the autodropper cycle as a 0..1 fraction:
-## 0.0 = just ticked, 0.5 = offbeat (halfway to next tick), 1.0 = about to tick
-## again. Drives the beat-synced bucket breathing pulse. Falls back to wall-
-## clock modulo before any autodrop tick has been received.
-func get_autodrop_phase() -> float:
-	if _autodrop_interval <= 0.0:
-		return 0.0
-	var now_ms: int = Time.get_ticks_msec()
-	var elapsed_sec: float
-	if _last_autodrop_tick_msec < 0:
-		elapsed_sec = float(now_ms) / 1000.0
-	else:
-		elapsed_sec = float(now_ms - _last_autodrop_tick_msec) / 1000.0
-	return fposmod(elapsed_sec, _autodrop_interval) / _autodrop_interval
 
 
 # ── Ambient pad ──────────────────────────────────────────────────────
