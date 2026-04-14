@@ -698,11 +698,17 @@ func get_chord_phase() -> float:
 
 ## Rate-limit gate for new drone voices. Returns true if the caller should
 ## proceed with mark_active + play_bucket; false if still inside the per-type
-## cooldown window. Independent cooldowns per coin type so a normal cadence
-## never blocks an advanced hit. A one-shot harmony grace admits a second
-## voice within ~20 ms of the previous accepted activation so multi-drop
-## produces a two-note chord; the third hit of the same type is always gated
-## by the normal cooldown.
+## cooldown window. Visual activation is intentionally coupled to this gate
+## in PlinkoBoard.finalize_coin_landing — a rate-limited hit leaves the
+## bucket faded so the next tone-producing coin owns the activation.
+## Independent cooldowns per coin type so a normal cadence never blocks an
+## advanced hit. A one-shot harmony grace admits a second voice within the
+## HARMONY_GRACE_WINDOW (~200 ms) of the previous accepted activation so
+## multi-drop produces a two-note chord; the third hit of the same type is
+## always gated by the normal cooldown. Grace resets on fresh accept AND in
+## the rejection path once elapsed leaves the grace sub-window — without
+## the latter, sustained sub-cooldown activity would keep grace permanently
+## consumed and kill future bursts' harmony.
 func try_consume_bucket_activation(is_advanced: bool = false) -> bool:
 	var now: float = Time.get_ticks_msec() / 1000.0
 	var divisor: float = ADVANCED_RATE_DIVISOR if is_advanced else NORMAL_RATE_DIVISOR
@@ -721,6 +727,17 @@ func try_consume_bucket_activation(is_advanced: bool = false) -> bool:
 				_normal_harmony_grace_used = true
 				_last_normal_activation_time = now
 			return true
+		# Rejected. Once we're past the grace sub-window the burst is
+		# effectively over — reset the grace flag so the *next* burst
+		# (starting on a future fresh accept) gets its harmony voice
+		# back. Doesn't admit a voice here because elapsed >=
+		# HARMONY_GRACE_WINDOW already disqualifies the grace branch
+		# above.
+		if elapsed >= HARMONY_GRACE_WINDOW and grace_used:
+			if is_advanced:
+				_advanced_harmony_grace_used = false
+			else:
+				_normal_harmony_grace_used = false
 		return false
 	# Fresh accept outside cooldown — reset the grace budget for the next burst.
 	if is_advanced:
