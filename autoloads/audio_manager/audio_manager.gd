@@ -177,27 +177,13 @@ var _sparkle_counter: int = 0  # monotonic id for unique sparkle drone keys
 var _sine_drone_stream: AudioStreamWAV
 var _piano_drone_stream: AudioStream = preload("res://assets/sounds/instrument_samples/Ensoniq-ESQ-1-FM-Piano-C4.wav")
 
-# Procedural harp — multi-sampled at two pitches so notes never pitch-shift
-# more than about an octave from their native sample. This keeps high notes
-# from turning tinny (huge upshift amplifies upper harmonics into sibilance)
-# and low notes from turning muddy. HIGH sample uses a darker harmonic profile
-# so it doesn't sound bright when shifted up to C6-ish territory.
-const HARP_LOW_FREQ := 130.81           # C3 — native frequency of low sample
-const HARP_HIGH_FREQ := 523.25          # C5 — native frequency of high sample
-const HARP_CROSSOVER_FREQ := 261.63     # C4 — below uses low, at/above uses high
-const HARP_BASE_FREQ := 261.63          # C4 — used by call sites as the semantic anchor
-const HARP_DECAY_SECONDS := 4.0
-var _harp_low_stream: AudioStreamWAV    # warm, C3-native
-var _harp_high_stream: AudioStreamWAV   # dark, C5-native
-
-# Arcade square-wave instrument — generated at startup, C4-native. Duration
-# also governs how long each sparkle rings (sparkles use this same stream
-# through the drone pool). Bumped up so they don't feel clipped.
-const SQUARE_BASE_FREQ := 261.63        # C4
-const SQUARE_DURATION := 1.0            # audible ring length for each note
-const KICK_DURATION := 0.18
-var _square_stream: AudioStreamWAV
-var _kick_stream: AudioStreamWAV
+# Instruments — each owns its synthesis (sample or procedural) and exposes
+# resolve(pitch_mult) -> { stream, pitch_scale }. AudioManager keeps voice
+# pooling, fades, chord-gated lifecycle, and bus routing.
+var _harp: Harp
+var _square: Square
+var _arcade_kick: ArcadeKick
+var _click: Click
 var _kick_player: AudioStreamPlayer
 
 # In the final N seconds of a challenge, the kick drum doubles (2 per second)
@@ -294,10 +280,16 @@ func _ready() -> void:
 	# ── Audio buses ──────────────────────────────────────────────────
 	_setup_buses()
 
+	# ── Instruments ─────────────────────────────────────────────────
+	_harp = Harp.new()
+	_square = Square.new()
+	_arcade_kick = ArcadeKick.new()
+	_click = Click.new()
+
 	# ── Placeholder tones (swap for real samples later) ──────────────
 	var cello_stream := _generate_tone(196.0, 0.8)      # G3
 	var chime_stream := _generate_chime(784.0, 0.6)      # G5 + shimmer
-	var click_stream := _generate_click(0.05)
+	var click_stream: AudioStream = _click.resolve(0.0).stream
 
 	# Per-board ambient pad voicings — each board's chord as a 4-note stack.
 	# Frequencies chosen to keep the overall pad in the bass/low-mid range.
@@ -312,18 +304,8 @@ func _ready() -> void:
 	# preload. Generated here so the drone pool has a default stream on startup.
 	_sine_drone_stream = _generate_ambient_pad(2.0, 44100, [262.0, 392.0])
 
-	# Procedural harp — two samples so notes never pitch-shift more than ~1
-	# octave from their source. The high sample uses a darker profile so it
-	# doesn't brighten further when shifted up.
-	_harp_low_stream = _generate_harp(HARP_LOW_FREQ, HARP_DECAY_SECONDS, false)
-	_harp_high_stream = _generate_harp(HARP_HIGH_FREQ, HARP_DECAY_SECONDS, true)
-
-	# Arcade — square wave + noise-burst kick. Square is staccato (short
-	# envelope) so it reads as plucky/bleepy rather than sustained.
-	_square_stream = _generate_square(SQUARE_BASE_FREQ, SQUARE_DURATION)
-	_kick_stream = _generate_arcade_kick(KICK_DURATION)
 	_kick_player = AudioStreamPlayer.new()
-	_kick_player.stream = _kick_stream
+	_kick_player.stream = _arcade_kick.resolve(0.0).stream
 	_kick_player.bus = &"Melody"
 	_kick_player.volume_db = -4.0
 	add_child(_kick_player)
@@ -763,7 +745,7 @@ func _handle_chord_advance() -> void:
 			drone["state"] = DroneState.LINGERING
 			# Pool slot will release once the synthesized decay has run its
 			# course, even if no new coin ever lands.
-			drone["timer"] = HARP_DECAY_SECONDS
+			drone["timer"] = Harp.DECAY_SECONDS
 	var idx: int = _style_chord_index if _active_audio_style else _current_chord_index.get(_active_board, 0)
 	chord_changed.emit(idx)
 
@@ -1025,13 +1007,13 @@ func _current_chord_entry(board_type: Enums.BoardType) -> Dictionary:
 	return progression[idx % progression.size()]
 
 
-## Picks the active tonal stream + pitch_scale. Branches on the active style's
-## timbre: "square" returns the arcade sample; default falls through to the
-## harp multi-sample picker.
+## Picks the active tonal instrument and resolves pitch_mult to a stream +
+## pitch_scale. Branches on the active style's timbre: "square" uses the
+## arcade square instrument; default falls through to the harp.
 func _tonal_stream_and_pitch(pitch_mult: float) -> Dictionary:
 	if _active_audio_style and _active_audio_style.timbre == "square":
-		return { "stream": _square_stream, "pitch_scale": pitch_mult }
-	return _harp_stream_and_pitch(pitch_mult)
+		return _square.resolve(pitch_mult)
+	return _harp.resolve(pitch_mult)
 
 
 ## Tape wobble: a tiny sine LFO applied to pitch for lofi's analog feel.
@@ -1266,131 +1248,6 @@ func _generate_tone(freq: float, duration: float, mix_rate: int = 44100) -> Audi
 	return wav
 
 
-## Picks the closer-pitched harp sample for the target pitch multiplier (where
-## 1.0 = C4), and returns the pitch_scale needed on that sample to hit it.
-## Keeps pitch-shifting to under one octave in either direction.
-func _harp_stream_and_pitch(pitch_mult: float) -> Dictionary:
-	var target_freq: float = HARP_BASE_FREQ * pitch_mult
-	var use_high: bool = target_freq >= HARP_CROSSOVER_FREQ
-	var native_freq: float = HARP_HIGH_FREQ if use_high else HARP_LOW_FREQ
-	return {
-		"stream": _harp_high_stream if use_high else _harp_low_stream,
-		"pitch_scale": target_freq / native_freq,
-	}
-
-
-## Procedural harp: additive synthesis of the harmonic series with per-harmonic
-## exponential decay. The fundamental sustains slowly (seconds); upper harmonics
-## decay fast, which gives the initial attack brightness that mellows into a
-## pure-ish sustained tone. A very brief noise burst in the first ~15ms sells
-## the "plucked" character. When `darker` is true, upper harmonics are further
-## attenuated and decay even faster — used for the high-register sample so it
-## doesn't sound tinny when pitch-shifted up another octave.
-## Procedural arcade square wave. Short envelope (sharp attack, brief sustain,
-## quick release) yields a staccato "bleep" rather than a sustained pad.
-func _generate_square(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	var attack: float = 0.004
-	var release_start: float = duration * 0.55
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var env: float = 1.0
-		if t < attack:
-			env = t / attack
-		elif t > release_start:
-			env = maxf(0.0, 1.0 - (t - release_start) / (duration - release_start))
-		var sq: float = 1.0 if sin(TAU * freq * t) >= 0.0 else -1.0
-		var value: float = sq * env * 0.22
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
-
-## Procedural arcade kick: low-frequency sine with a downward pitch sweep and
-## a fast exponential decay. Evokes a classic "boom" without needing a sample.
-func _generate_arcade_kick(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	var phase: float = 0.0
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		# Pitch sweep from 180 Hz down to 50 Hz over the sample length.
-		var freq: float = lerpf(180.0, 50.0, minf(1.0, t / duration))
-		phase += TAU * freq / float(mix_rate)
-		var env: float = exp(-t * 18.0)
-		# Tiny click at the very start for snap.
-		if t < 0.003:
-			env += (1.0 - t / 0.003) * 0.4
-		var value: float = sin(phase) * env * 0.55
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
-
-func _generate_harp(freq: float, duration: float, darker: bool, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-
-	# Harmonic weights — warm profile keeps some body in uppers; dark profile
-	# rolls off hard so the high-register sample stays round even at C6.
-	var harmonics: Array[float]
-	var decays: Array[float]
-	# Fundamental decay constants tuned against the 4-second HARP_DECAY_SECONDS
-	# window — fundamental rings most of the sample, upper partials fade fast
-	# so the attack is bright but the tail settles into a pure-ish sustained
-	# tone. Darker profile rolls upper partials off harder.
-	if darker:
-		harmonics = [1.0, 0.30, 0.08, 0.02, 0.006, 0.002, 0.0005, 0.0001, 0.00005, 0.00002]
-		decays    = [0.5, 0.9, 1.5, 3.0, 6.0, 10.0, 16.0, 24.0, 35.0, 50.0]
-	else:
-		harmonics = [1.0, 0.45, 0.20, 0.08, 0.04, 0.02, 0.01, 0.005, 0.003, 0.002]
-		decays    = [0.5, 0.7, 1.2, 2.0, 3.0, 5.0, 7.0, 9.0, 12.0, 16.0]
-
-	# Inharmonicity coefficient — real plucked strings have partials slightly
-	# sharp of integer multiples (f · n · (1 + B·n²)). Using a small B value
-	# breaks the perfectly periodic waveform and reads as "organic."
-	const INHARMONICITY: float = 0.0003
-
-	# Linear tail fade over the last TAIL_FADE seconds of the sample so the
-	# stream ends at true zero amplitude. Without this, the fundamental's slow
-	# exponential decay is still ~14% loud when the 4-second sample file ends,
-	# and the player cuts off mid-tone producing an audible click/snap.
-	const TAIL_FADE: float = 0.3
-	var tail_start: float = duration - TAIL_FADE
-
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var value: float = 0.0
-		for h in harmonics.size():
-			var n: float = float(h + 1)
-			var harmonic_freq: float = freq * n * (1.0 + INHARMONICITY * n * n)
-			var env: float = exp(-t * decays[h])
-			value += sin(TAU * harmonic_freq * t) * harmonics[h] * env
-		# Brief attack noise for pluck transient — kept subtle so it doesn't
-		# add to the overall brightness of the sustained tone.
-		if t < 0.015:
-			value += randf_range(-1.0, 1.0) * (1.0 - t / 0.015) * 0.15
-		value *= 0.45
-		if t > tail_start:
-			value *= (duration - t) / TAIL_FADE
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
-
 func _generate_chime(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
@@ -1403,22 +1260,6 @@ func _generate_chime(freq: float, duration: float, mix_rate: int = 44100) -> Aud
 		var env: float = exp(-t * 5.0)
 		# Fundamental + 3rd harmonic for shimmer
 		var value: float = (sin(TAU * freq * t) * 0.6 + sin(TAU * freq * 3.0 * t) * 0.2) * env * 0.35
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
-
-func _generate_click(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var env: float = exp(-t * 60.0)
-		var value: float = randf_range(-1.0, 1.0) * env * 0.3
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
 	return wav
