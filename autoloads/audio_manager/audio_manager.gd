@@ -151,18 +151,25 @@ var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree",
 # volume_db after reassignment.
 var _drone_fade_tweens: Dictionary = {}
 
-# Audio-only rate-limit for new drone voices, scaled to the autodropper
-# interval so pacing tracks gameplay tempo. Cooldown = _autodrop_interval /
-# RATE_DIVISOR. Per-type so normal and advanced never block each other: a
-# fast-firing normal cadence doesn't suppress a simultaneous advanced hit.
+# Audio rate-limit for new drone voices, scaled to the autodropper interval
+# so pacing tracks gameplay tempo. Cooldown = _autodrop_interval /
+# RATE_DIVISOR. Per-type so normal and advanced never block each other.
 # Normal: up to 4 hits per autodrop cycle (~375 ms at default 1.5 s).
 # Advanced: 1 hit per full cycle (~1500 ms) — slow bass punctuation.
-# Note: this gates audio only. Visual mark_active always fires on coin landing
-# so gameplay feedback stays responsive regardless of musical pacing.
 const NORMAL_RATE_DIVISOR := 4.0
 const ADVANCED_RATE_DIVISOR := 1.0
+
+# Harmony grace: if a second coin lands within this window of the previous
+# accepted activation, allow it through even though the normal cooldown
+# hasn't elapsed. Gives multi-drop its two-voice harmony chord without
+# opening the door to 3+ voices slamming together (grace is a one-shot
+# per burst — third hit still hits the normal cooldown).
+const HARMONY_GRACE_WINDOW := 0.02  # 20 ms
+
 var _last_normal_activation_time: float = -999.0
 var _last_advanced_activation_time: float = -999.0
+var _normal_harmony_grace_used: bool = false
+var _advanced_harmony_grace_used: bool = false
 var _sparkle_counter: int = 0  # monotonic id for unique sparkle drone keys
 # Two drone streams — zen uses the sine pad loop (matches the ambient pad
 # texture); lofi uses the FM electric piano one-shot. Selected per-play in
@@ -689,23 +696,39 @@ func get_chord_phase() -> float:
 	return clampf(1.0 - (_chord_timer / duration), 0.0, 1.0)
 
 
-## Rate-limit gate for new drone voices. Gates audio only — callers should
-## always fire bucket visuals on coin landing regardless of this result, since
-## gameplay feedback is decoupled from musical pacing. Returns true if the
-## caller should proceed with play_bucket; false if still inside the per-type
+## Rate-limit gate for new drone voices. Returns true if the caller should
+## proceed with mark_active + play_bucket; false if still inside the per-type
 ## cooldown window. Independent cooldowns per coin type so a normal cadence
-## never blocks an advanced hit.
+## never blocks an advanced hit. A one-shot harmony grace admits a second
+## voice within ~20 ms of the previous accepted activation so multi-drop
+## produces a two-note chord; the third hit of the same type is always gated
+## by the normal cooldown.
 func try_consume_bucket_activation(is_advanced: bool = false) -> bool:
 	var now: float = Time.get_ticks_msec() / 1000.0
 	var divisor: float = ADVANCED_RATE_DIVISOR if is_advanced else NORMAL_RATE_DIVISOR
 	var window: float = _autodrop_interval / divisor
 	var last: float = _last_advanced_activation_time if is_advanced else _last_normal_activation_time
-	if now - last < window:
+	var grace_used: bool = _advanced_harmony_grace_used if is_advanced else _normal_harmony_grace_used
+	var elapsed: float = now - last
+	if elapsed < window:
+		# Inside cooldown — but a brief grace admits one second voice
+		# for the harmony case (multi-drop).
+		if elapsed < HARMONY_GRACE_WINDOW and not grace_used:
+			if is_advanced:
+				_advanced_harmony_grace_used = true
+				_last_advanced_activation_time = now
+			else:
+				_normal_harmony_grace_used = true
+				_last_normal_activation_time = now
+			return true
 		return false
+	# Fresh accept outside cooldown — reset the grace budget for the next burst.
 	if is_advanced:
 		_last_advanced_activation_time = now
+		_advanced_harmony_grace_used = false
 	else:
 		_last_normal_activation_time = now
+		_normal_harmony_grace_used = false
 	return true
 
 
