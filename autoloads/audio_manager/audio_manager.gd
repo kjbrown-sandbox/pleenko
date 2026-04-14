@@ -164,7 +164,7 @@ const ADVANCED_RATE_DIVISOR := 1.0
 # hasn't elapsed. Gives multi-drop its two-voice harmony chord without
 # opening the door to 3+ voices slamming together (grace is a one-shot
 # per burst — third hit still hits the normal cooldown).
-const HARMONY_GRACE_WINDOW := 0.02  # 20 ms
+const HARMONY_GRACE_WINDOW := 0.2  # 200 ms
 
 var _last_normal_activation_time: float = -999.0
 var _last_advanced_activation_time: float = -999.0
