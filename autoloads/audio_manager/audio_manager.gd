@@ -366,14 +366,14 @@ func _ready() -> void:
 
 	# ── Lofi drum pools ─────────────────────────────────────────────
 	# Player drops: snare, clap, rim shot — random pick per drop.
-	var player_drum_streams: Array[AudioStreamWAV] = [
-		_generate_snare(180.0, 0.18),
-		_generate_clap(0.2),
-		_generate_rim(400.0, 0.08),
+	var player_drum_instruments: Array[Instrument] = [
+		DrumSnare.new(180.0, 0.18),
+		DrumClap.new(0.2),
+		DrumRim.new(400.0, 0.08),
 	]
-	for stream in player_drum_streams:
+	for inst in player_drum_instruments:
 		var p := AudioStreamPlayer.new()
-		p.stream = stream
+		p.stream = inst.resolve(0.0).stream
 		p.bus = &"Click"
 		p.volume_db = DRUM_POOL_PLAYER_VOLUME_DB
 		add_child(p)
@@ -382,13 +382,13 @@ func _ready() -> void:
 	# Normal autodropper: kick variants — rotating pattern.
 	# First = deep foundation. Second = noticeably thinner, higher-pitched,
 	# shorter — more of a ticky kick than a boomy one.
-	var kick_streams: Array[AudioStreamWAV] = [
-		_generate_kick(60.0, 0.22),      # deeper
-		_generate_kick(100.0, 0.09),     # thin & ticky
+	var kick_instruments: Array[Instrument] = [
+		DrumKick.new(60.0, 0.22),     # deeper
+		DrumKick.new(100.0, 0.09),    # thin & ticky
 	]
-	for stream in kick_streams:
+	for inst in kick_instruments:
 		var p := AudioStreamPlayer.new()
-		p.stream = stream
+		p.stream = inst.resolve(0.0).stream
 		p.bus = &"Click"
 		p.volume_db = DRUM_POOL_KICK_VOLUME_DB
 		add_child(p)
@@ -397,12 +397,12 @@ func _ready() -> void:
 	# Advanced autodropper: single closed hat. Same sound every tick — light
 	# and consistent on the offbeat. If we add more variants here later,
 	# rotation still works because we reference the array by index.
-	var hat_streams: Array[AudioStreamWAV] = [
-		_generate_hat(6000.0, 0.05),     # closed
+	var hat_instruments: Array[Instrument] = [
+		DrumHat.new(6000.0, 0.05),    # closed
 	]
-	for stream in hat_streams:
+	for inst in hat_instruments:
 		var p := AudioStreamPlayer.new()
-		p.stream = stream
+		p.stream = inst.resolve(0.0).stream
 		p.bus = &"Click"
 		p.volume_db = DRUM_POOL_HAT_VOLUME_DB
 		add_child(p)
@@ -1294,117 +1294,4 @@ func _generate_ambient_pad(duration: float, mix_rate: int = 44100, frequencies: 
 
 
 # ── Drum generators ──────────────────────────────────────────────────
-
-func _generate_kick(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	# Pitch-swept sine from freq*2.5 down to freq over first 15% of duration,
-	# then sustained + exponential decay. Short click noise burst at t=0 for attack.
-	var sweep_len: float = duration * 0.15
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var freq_at_t: float
-		if t < sweep_len:
-			freq_at_t = lerpf(freq * 2.5, freq, t / sweep_len)
-		else:
-			freq_at_t = freq
-		var env: float = exp(-t * 8.0)
-		var body: float = sin(TAU * freq_at_t * t) * env
-		var click: float = 0.0
-		if t < 0.003:
-			click = randf_range(-1.0, 1.0) * (1.0 - t / 0.003) * 0.3
-		var value: float = (body + click) * 0.7
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
-
-func _generate_snare(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	# Tonal body at freq + mid-range noise burst, both with exponential decay.
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var env: float = exp(-t * 15.0)
-		var body: float = sin(TAU * freq * t) * env * 0.3
-		var noise: float = randf_range(-1.0, 1.0) * env * 0.5
-		var value: float = (body + noise) * 0.6
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
-
-func _generate_hat(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	# High-freq noise burst with fast decay. Slight tonal shimmer at freq.
-	var decay_rate: float = 4.0 / duration
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var env: float = exp(-t * decay_rate)
-		var noise: float = randf_range(-1.0, 1.0) * env * 0.6
-		var shimmer: float = sin(TAU * freq * t) * env * 0.1
-		var value: float = (noise + shimmer) * 0.5
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
-
-func _generate_clap(duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	# 3 layered noise bursts ~15ms apart for a "clap" impression, then sustain.
-	var burst_offsets: Array[float] = [0.0, 0.013, 0.026]
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var value: float = 0.0
-		for offset in burst_offsets:
-			var dt: float = t - offset
-			if dt >= 0.0:
-				var env: float = exp(-dt * 40.0)
-				value += randf_range(-1.0, 1.0) * env * 0.35
-		# Trailing noise tail for body
-		var tail_env: float = exp(-t * 20.0) * 0.2
-		value += randf_range(-1.0, 1.0) * tail_env
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
-
-func _generate_rim(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	# Tight tonal click — narrow sine + very brief noise.
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var env: float = exp(-t * 35.0)
-		var tonal: float = sin(TAU * freq * t) * env * 0.5
-		var click: float = 0.0
-		if t < 0.005:
-			click = randf_range(-1.0, 1.0) * (1.0 - t / 0.005) * 0.4
-		var value: float = (tonal + click) * 0.55
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
 
