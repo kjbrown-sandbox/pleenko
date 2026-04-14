@@ -119,7 +119,7 @@ func mark_active() -> void:
 	if _is_hit:
 		return
 	_kill_fade_tween()
-	_apply_color(_resolve_active_color())
+	_apply_color(ThemeProvider.theme.get_bucket_color(currency_type))
 	if ThemeProvider.theme.bucket_active_pulse_enabled:
 		_is_pulsing = true
 		set_process(true)
@@ -150,18 +150,6 @@ func mark_inactive(duration: float) -> void:
 
 func _resolve_default_color() -> Color:
 	return ThemeProvider.theme.get_bucket_color_faded(currency_type)
-
-
-## Full bucket color, optionally multiplied by the theme's active-brightness
-## knob to read as "lit up" against the faded baseline. Unshaded-friendly —
-## emission would be ignored on unshaded materials, so we bump albedo instead.
-func _resolve_active_color() -> Color:
-	var t: VisualTheme = ThemeProvider.theme
-	var base: Color = t.get_bucket_color(currency_type)
-	if not t.bucket_active_brightness_enabled:
-		return base
-	var m: float = t.bucket_active_brightness
-	return Color(minf(base.r * m, 1.0), minf(base.g * m, 1.0), minf(base.b * m, 1.0), base.a)
 
 
 func _apply_color(color: Color) -> void:

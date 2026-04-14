@@ -177,8 +177,6 @@ const coin_shape := CoinShape.CYLINDER
 @export var coin_land_particle_duration := 0.6                    # how long particles live
 @export var bucket_pulse_scale := 1.15                            # scale on receive
 @export var bucket_pulse_duration := 0.15
-@export var bucket_active_brightness_enabled := true              # toggle the active-color brightness boost
-@export var bucket_active_brightness := 1.4                       # multiplier on bucket color when active (unshaded-compatible "glow")
 @export var bucket_active_pulse_enabled := true                   # toggle the beat-synced breathing pulse on active buckets
 @export var bucket_active_pulse_amplitude := 1.08                 # peak scale during breathing pulse (1.0 = no pulse)
 @export var bucket_fade_duration := 1.0                           # chord-change visual tween duration

@@ -1326,6 +1326,13 @@ func _generate_harp(freq: float, duration: float, darker: bool, mix_rate: int = 
 	# breaks the perfectly periodic waveform and reads as "organic."
 	const INHARMONICITY: float = 0.0003
 
+	# Linear tail fade over the last TAIL_FADE seconds of the sample so the
+	# stream ends at true zero amplitude. Without this, the fundamental's slow
+	# exponential decay is still ~14% loud when the 4-second sample file ends,
+	# and the player cuts off mid-tone producing an audible click/snap.
+	const TAIL_FADE: float = 0.3
+	var tail_start: float = duration - TAIL_FADE
+
 	for i in num_samples:
 		var t: float = float(i) / mix_rate
 		var value: float = 0.0
@@ -1339,6 +1346,8 @@ func _generate_harp(freq: float, duration: float, darker: bool, mix_rate: int = 
 		if t < 0.015:
 			value += randf_range(-1.0, 1.0) * (1.0 - t / 0.015) * 0.15
 		value *= 0.45
+		if t > tail_start:
+			value *= (duration - t) / TAIL_FADE
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
 	return wav
