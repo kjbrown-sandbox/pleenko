@@ -92,7 +92,7 @@ func _on_chord_changed(_chord_index: int) -> void:
 	var duration: float = ThemeProvider.theme.bucket_fade_duration
 	for child in buckets_container.get_children():
 		if child is Bucket:
-			child.mark_inactive(duration)
+			child.mark_stop_singing(duration)
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -650,12 +650,12 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	# own the activation. Mirror: buckets symmetric across center share the
 	# same note, so they light up together.
 	if AudioManager.try_consume_bucket_activation(is_advanced):
-		bucket.mark_active()
+		bucket.mark_singing()
 		var mirror_idx: int = num_buckets - 1 - bucket_idx
 		if mirror_idx != bucket_idx:
 			var mirror: Bucket = get_bucket(mirror_idx)
 			if mirror:
-				mirror.mark_active()
+				mirror.mark_singing()
 		AudioManager.play_bucket(board_type, bucket_distance, is_advanced)
 	AudioManager.on_coin_landed()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:

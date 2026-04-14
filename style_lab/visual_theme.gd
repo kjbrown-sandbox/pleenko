@@ -541,7 +541,6 @@ func pulse_node3d(node: Node3D, material: StandardMaterial3D = null) -> void:
 		var rest_color: Color = material.albedo_color
 		var flash_color := rest_color.lightened(0.3)
 		material.albedo_color = flash_color
-		var rest_color: Color = hit_bucket_color if is_hit else get_bucket_color(currency)
 		var color_tween := node.create_tween()
 		color_tween.tween_property(material, "albedo_color", rest_color, bucket_pulse_duration) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)

@@ -63,10 +63,6 @@ func mark_hit() -> void:
 	_apply_color(ThemeProvider.theme.hit_bucket_color)
 
 
-func mark_target() -> void:
-	mark_hit()
-
-
 func mark_unhit() -> void:
 	_kill_color_tween()
 	_is_hit = false
@@ -76,6 +72,10 @@ func mark_unhit() -> void:
 	var skull := get_node_or_null("SkullIcon")
 	if skull:
 		skull.queue_free()
+
+
+func mark_target() -> void:
+	mark_hit()
 
 
 func mark_forbidden() -> void:
@@ -97,59 +97,41 @@ func mark_forbidden() -> void:
 	add_child(skull)
 
 
+## Snap to full color and start the chord-synced scale pulse. The fade back
+## is driven externally by PlinkoBoard on chord_changed via mark_stop_singing.
+## Hit/forbidden buckets keep their marker color but still participate in the
+## scale pulse.
+func mark_singing() -> void:
+	_kill_color_tween()
+	set_process(true)
+	if not _is_hit:
+		_apply_color(ThemeProvider.theme.get_bucket_color(currency_type))
+
+
+## Called on chord_changed from PlinkoBoard. Stops the scale pulse and fades
+## color back to the faded rest color. Hit/forbidden buckets fade scale only;
+## their marker color is preserved.
+func mark_stop_singing(duration: float) -> void:
+	_kill_color_tween()
+	set_process(false)
+	_color_tween = create_tween()
+	_color_tween.bind_node(self)
+	_color_tween.set_parallel(true)
+	_color_tween.tween_property(self, "scale", Vector3.ONE, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	if not _is_hit:
+		var faded: Color = ThemeProvider.theme.get_bucket_color_faded(currency_type)
+		_color_tween.tween_property(_base_material, "albedo_color", faded, duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		_color_tween.tween_property(_label, "modulate", faded, duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+
 func pulse() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	if not t.bucket_pulse_enabled:
 		return
-	t.pulse_node3d(self, _base_material)
-
-
-## Chord-gated activation: snap to full color, then schedule a delayed fade
-## that completes exactly as the chord change begins. Color stays at full
-## until `bucket_fade_duration` seconds before the chord change, then fades
-## over the same window — so the bucket is fully faded at the exact moment
-## the next chord starts and is ready to receive a new hit. No-op if the
-## bucket is already marked as hit/forbidden by a challenge.
-func mark_active() -> void:
-	if _is_hit:
-		return
-	_kill_color_tween()
-	var t: VisualTheme = ThemeProvider.theme
-	_apply_color(t.get_bucket_color(currency_type))
-	set_process(true)
-	var chord_remaining: float = maxf(AudioManager.get_time_until_next_chord(), t.bucket_fade_duration)
-	var fade_duration: float = minf(t.bucket_fade_duration, chord_remaining)
-	var delay: float = maxf(0.0, chord_remaining - fade_duration)
-
-	_color_tween = create_tween()
-	_color_tween.bind_node(self)
-	_color_tween.tween_interval(delay)
-	var faded: Color = t.get_bucket_color_faded(currency_type)
-	_color_tween.tween_method(_apply_color,
-		t.get_bucket_color(currency_type), faded, fade_duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-
-
-## Backstop: called on chord_changed from PlinkoBoard. In the normal path
-## mark_active's own scheduled fade has already completed by now; this just
-## covers edge cases (idle reset before the scheduled fade starts, chord
-## advancing earlier than expected). Kills any running tween and fades
-## whatever state the bucket is currently in.
-func mark_inactive(duration: float) -> void:
-	if _is_hit:
-		return
-	_stop_pulsing()
-	_kill_color_tween()
-	var target: Color = ThemeProvider.theme.get_bucket_color_faded(currency_type)
-	_color_tween = create_tween()
-	_color_tween.bind_node(self)
-	_color_tween.set_parallel(true)
-	_color_tween.tween_property(_base_material, "albedo_color", target, duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	_color_tween.tween_property(_label, "modulate", target, duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	_color_tween.tween_property(self, "scale", Vector3.ONE, duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	t.pulse_node3d(self)
 
 
 func _resolve_default_color() -> Color:
@@ -159,10 +141,6 @@ func _resolve_default_color() -> Color:
 func _apply_color(color: Color) -> void:
 	_base_material.albedo_color = color
 	_label.modulate = color
-
-
-func _stop_pulsing() -> void:
-	set_process(false)
 
 
 func _kill_color_tween() -> void:
