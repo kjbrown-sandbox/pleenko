@@ -669,6 +669,26 @@ func get_time_until_next_chord() -> float:
 	return _chord_timer
 
 
+## Total length of the current chord (AudioStyle override if active, else
+## the default harp-path CHORD_DURATION). Used alongside get_time_until_
+## next_chord to compute a normalized 0..1 phase for visual animations.
+func get_chord_duration() -> float:
+	if _active_audio_style:
+		return _active_audio_style.chord_duration
+	return CHORD_DURATION
+
+
+## Current position within the chord as a 0..1 fraction (0 = chord just
+## started, 1 = chord about to change). Global — all readers see the same
+## value at the same moment, so a shared visual pulse stays in sync across
+## every bucket regardless of when each was activated.
+func get_chord_phase() -> float:
+	var duration: float = get_chord_duration()
+	if duration <= 0.0:
+		return 0.0
+	return clampf(1.0 - (_chord_timer / duration), 0.0, 1.0)
+
+
 ## Rate-limit gate for new drone voices. Gates audio only — callers should
 ## always fire bucket visuals on coin landing regardless of this result, since
 ## gameplay feedback is decoupled from musical pacing. Returns true if the
