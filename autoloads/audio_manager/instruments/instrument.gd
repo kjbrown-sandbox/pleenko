@@ -1,13 +1,25 @@
 class_name Instrument extends RefCounted
 
-## Base class for audio instruments. Each subclass owns a synthesis strategy
-## (sample-based or procedural) and a pre-rendered stream (or set of streams).
-##
-## AudioManager asks the instrument for a stream + pitch_scale to play at a
-## given pitch multiplier (1.0 = C4). Voice pooling, voice caps, fades, and
-## chord-gated lifecycle stay owned by AudioManager — the instrument just
-## supplies the sound source.
-##
+## Base class for audio instruments. Subclasses own a synthesis strategy and
+## expose `resolve(pitch_mult) -> { stream, pitch_scale }`. AudioManager owns
+## pooling, voice caps, fades, and chord-gated lifecycle.
 ## Percussive instruments ignore pitch_mult and return pitch_scale = 1.0.
+
+## Single flat enum for theme-level instrument slot selection.
+## SILENT = no instrument (that role plays nothing for this theme).
+enum Type {
+	SILENT,
+	HARP,
+	SQUARE,
+	ARCADE_KICK,
+	DRUM_KICK_DEEP,
+	DRUM_KICK_THIN,
+	DRUM_SNARE,
+	DRUM_CLAP,
+	DRUM_RIM,
+	DRUM_HAT,
+}
+
+
 func resolve(_pitch_mult: float) -> Dictionary:
 	return { "stream": null, "pitch_scale": 1.0 }

@@ -261,8 +261,20 @@ const coin_shape := CoinShape.CYLINDER
 
 # ── Audio ────────────────────────────────────────────────────────────
 @export_group("Audio")
-@export var audio_lofi_enabled := false                   ## Full lofi audio: piano buckets, vinyl crackle, low-pass, tape wobble, drums
-@export var audio_style: AudioStyle = null                ## Optional audio style override (e.g. arcade during challenges). Null = default harp behavior.
+
+## Per-role instrument slots. Values match Instrument.Type ordinals so
+## AudioManager can pass the int directly to _instrument_for(). Values:
+##   0 SILENT · 1 HARP · 2 SQUARE · 3 ARCADE_KICK · 4 DRUM_KICK_DEEP
+##   5 DRUM_KICK_THIN · 6 DRUM_SNARE · 7 DRUM_CLAP · 8 DRUM_RIM · 9 DRUM_HAT
+@export_enum("SILENT", "HARP", "SQUARE", "ARCADE_KICK", "DRUM_KICK_DEEP", "DRUM_KICK_THIN", "DRUM_SNARE", "DRUM_CLAP", "DRUM_RIM", "DRUM_HAT") var bucket_instrument: int = 0
+@export_enum("SILENT", "HARP", "SQUARE", "ARCADE_KICK", "DRUM_KICK_DEEP", "DRUM_KICK_THIN", "DRUM_SNARE", "DRUM_CLAP", "DRUM_RIM", "DRUM_HAT") var sparkle_instrument: int = 0
+@export_enum("SILENT", "HARP", "SQUARE", "ARCADE_KICK", "DRUM_KICK_DEEP", "DRUM_KICK_THIN", "DRUM_SNARE", "DRUM_CLAP", "DRUM_RIM", "DRUM_HAT") var kick_instrument: int = 0
+
+## Shared chord progression for all tonal slots. Each entry:
+##   { "root": int (semitones from C), "chord": Array[int], "motif": Array[int] }
+## Empty = no tonal progression driving.
+@export var progression: Array = []
+@export var chord_duration: float = 6.0
 
 
 # ── Palette resolver ─────────────────────────────────────────────────

@@ -85,9 +85,8 @@ func _exit_tree() -> void:
 		AudioManager.chord_changed.disconnect(_on_chord_changed)
 
 
-## Chord advanced in AudioStyle mode: fade every bucket on this board back to
-## its faded color. Buckets marked as challenge hit/forbidden are skipped by
-## Bucket.mark_inactive itself.
+## Chord advance: fade every bucket back to its faded color. Buckets marked
+## as challenge hit/forbidden are skipped by Bucket.mark_stop_singing itself.
 func _on_chord_changed(_chord_index: int) -> void:
 	var duration: float = ThemeProvider.theme.bucket_fade_duration
 	for child in buckets_container.get_children():

@@ -2,7 +2,6 @@
 
 [ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_fbp74"]
 [ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
-[ext_resource type="Resource" uid="uid://bn4v7rk3q05ac" path="res://style_lab/presets/arcade_audio_style.tres" id="2_arcade"]
 
 [resource]
 script = ExtResource("1_vt")
@@ -49,4 +48,23 @@ vignette_enabled = true
 vignette_intensity = 0.3
 vignette_radius = 0.65
 vignette_softness = 0.5
-audio_style = ExtResource("2_arcade")
+bucket_instrument = 2
+kick_instrument = 3
+progression = [{
+"chord": [0, 3, 7, 12, 15, 19, 24, 27],
+"motif": [0, 2, 4, 2, 0, 2, 4, -1],
+"root": 9
+}, {
+"chord": [0, 4, 7, 12, 16, 19, 24, 28],
+"motif": [0, 2, 4, 2, 0, 2, 4, -1],
+"root": 5
+}, {
+"chord": [0, 4, 7, 12, 16, 19, 24, 28],
+"motif": [0, 2, 4, 2, 0, 2, 4, -1],
+"root": 7
+}, {
+"chord": [0, 3, 7, 12, 15, 19, 24, 27],
+"motif": [0, 4, 2, 5, 4, 2, 0, -1],
+"root": 9
+}]
+chord_duration = 4.0

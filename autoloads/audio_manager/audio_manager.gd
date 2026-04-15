@@ -1,8 +1,7 @@
 extends Node
 
-# Fires when the active AudioStyle advances to its next chord. PlinkoBoard
-# listens and fades chord-activated buckets back to faded. Default per-board
-# harp path does not emit.
+# Fires when the chord progression advances. PlinkoBoard listens and fades
+# chord-activated buckets back to faded.
 signal chord_changed(chord_index: int)
 
 # Floor for chord-gated tail length so a late-chord hit still rings audibly
@@ -31,19 +30,15 @@ var _sounds: Dictionary = {
 
 # ── Musical system ───────────────────────────────────────────────────
 
-# Chord voicings: semitone offsets above the root, stacked thirds. Bucket
-# distance from center indexes into the array (center = root, ±1 = 3rd, etc).
-# Diatonic to C major so cross-board multi-drops stay consonant.
-const CHORD_MAJ7 := [0, 4, 7, 11, 12, 16, 19, 23]
-const CHORD_DOM7 := [0, 4, 7, 10, 12, 16, 19, 22]
-const CHORD_MIN7 := [0, 3, 7, 10, 12, 15, 19, 22]
-const CHORD_MAJ := [0, 4, 7, 12, 16, 19, 24, 28]
-const CHORD_MIN := [0, 3, 7, 12, 15, 19, 24, 27]
+# Chord voicings (semitone offsets above root) — reference for .tres authors.
+# Bucket distance from center indexes into the array (center = root, ±1 = 3rd).
+#   maj7: [0, 4, 7, 11, 12, 16, 19, 23]
+#   dom7: [0, 4, 7, 10, 12, 16, 19, 22]
+#   min7: [0, 3, 7, 10, 12, 15, 19, 22]
+#   maj:  [0, 4, 7, 12, 16, 19, 24, 28]
+#   min:  [0, 3, 7, 12, 15, 19, 24, 27]
 
-var _board_progressions: Dictionary = {}  # BoardType -> Array[{ "root", "chord", "motif" }]
-var _current_chord_index: Dictionary = {}  # BoardType -> int
-
-const CHORD_DURATION := 6.0
+var _chord_index: int = 0
 const CHORD_IDLE_RESET := 2.0
 
 # Beat grid: 4/4 derived from the autodropper tick. Beat clock free-runs at
@@ -72,7 +67,7 @@ var _click_idx: int = 0
 
 var _active_board: Enums.BoardType = Enums.BoardType.GOLD
 
-var _chord_timer: float = CHORD_DURATION
+var _chord_timer: float = 6.0  # overwritten from theme.chord_duration on _ready
 var _chord_idle_timer: float = 0.0
 var _chord_had_sparkle: bool = false
 
@@ -140,8 +135,8 @@ var _last_advanced_activation_time: float = -999.0
 var _normal_harmony_grace_used: bool = false
 var _advanced_harmony_grace_used: bool = false
 var _sparkle_counter: int = 0
-# Zen uses the sine pad loop; lofi swaps to the FM piano preload. Selected
-# per-play in play_bucket based on theme.audio_lofi_enabled.
+# Default streams assigned to drone pool slots at startup. Individual plays
+# may override via instrument.resolve().
 var _sine_drone_stream: AudioStreamWAV
 var _piano_drone_stream: AudioStream = preload("res://assets/sounds/instrument_samples/Ensoniq-ESQ-1-FM-Piano-C4.wav")
 
@@ -152,16 +147,18 @@ var _harp: Harp
 var _square: Square
 var _arcade_kick: ArcadeKick
 var _click: Click
+var _drum_kick_deep: DrumKick
+var _drum_kick_thin: DrumKick
+var _drum_snare: DrumSnare
+var _drum_clap: DrumClap
+var _drum_rim: DrumRim
+var _drum_hat: DrumHat
 var _kick_player: AudioStreamPlayer
 
 # Last N seconds of a challenge: kick doubles to 2/sec for intensity ramp.
 const FINAL_COUNTDOWN_SECONDS := 10
 
-# null = default harp path. Reselected on theme change / challenge start+end.
-var _active_audio_style: AudioStyle = null
-var _style_chord_index: int = 0
-# Arcade backing stays silent until the first challenge tick (which only fires
-# after the player's first drop starts the timer).
+# Arcade backing stays silent until the first challenge tick.
 var _challenge_tick_received: bool = false
 
 # Melody-bus low-pass filter. Toggled on/off with lofi theme.
@@ -206,27 +203,6 @@ func _ready() -> void:
 			add_child(player)
 			_pools[sound_name].append(player)
 
-	# ── Per-board chord progressions ─────────────────────────────────
-	# Gold: I-iii-IV-V in C (Cmaj7 → Em7 → Fmaj7 → G7). Orange/Red single-chord.
-	# Each motif is 8 beats (quarter notes), chord-tone indices 0..7 with -1 =
-	# rest (note holds since sparkles share the sustaining drone pool). Rhythm
-	# language: note+N rests = (N+1)/2 note length (half, dotted half, whole).
-	var default_motif: Array = [0, -1, 2, -1, 4, -1, 5, -1]
-	_board_progressions[Enums.BoardType.GOLD] = [
-		{ "root": 0, "chord": CHORD_MAJ7, "motif": [0, -1, 2, -1, 4, -1, 5, -1] },     # Cmaj7
-		{ "root": 4, "chord": CHORD_MIN7, "motif": [3, -1, 2, -1, 0, -1, -1, -1] },    # Em7
-		{ "root": 5, "chord": CHORD_MAJ7, "motif": [2, -1, -1, 4, -1, 5, -1, -1] },    # Fmaj7
-		{ "root": 7, "chord": CHORD_DOM7, "motif": [0, 3, -1, 4, -1, 2, -1, -1] },     # G7
-	]
-	_board_progressions[Enums.BoardType.ORANGE] = [
-		{ "root": 7, "chord": CHORD_DOM7, "motif": default_motif },  # G7
-	]
-	_board_progressions[Enums.BoardType.RED] = [
-		{ "root": 9, "chord": CHORD_MIN7, "motif": default_motif },  # Am7
-	]
-	for bt in _board_progressions:
-		_current_chord_index[bt] = 0
-
 	# ── Audio buses ──────────────────────────────────────────────────
 	_setup_buses()
 
@@ -235,6 +211,12 @@ func _ready() -> void:
 	_square = Square.new()
 	_arcade_kick = ArcadeKick.new()
 	_click = Click.new()
+	_drum_kick_deep = DrumKick.new(60.0, 0.22)
+	_drum_kick_thin = DrumKick.new(100.0, 0.09)
+	_drum_snare = DrumSnare.new(180.0, 0.18)
+	_drum_clap = DrumClap.new(0.2)
+	_drum_rim = DrumRim.new(400.0, 0.08)
+	_drum_hat = DrumHat.new(6000.0, 0.05)
 
 	# Placeholder cello/chime streams — legacy pools, unused by active paths.
 	var cello_stream := _generate_tone(196.0, 0.8)      # G3
@@ -299,7 +281,7 @@ func _ready() -> void:
 	_ambient_active = _ambient_a
 
 	# ── Bucket drone pool ───────────────────────────────────────────
-	# Stream is reassigned per-play in play_bucket based on theme.audio_lofi_enabled.
+	# Stream is (re)assigned per-play via instrument.resolve() in play_bucket.
 	for i in BUCKET_DRONE_POOL_SIZE:
 		var drone := AudioStreamPlayer.new()
 		drone.stream = _sine_drone_stream
@@ -310,13 +292,7 @@ func _ready() -> void:
 		_drone_free.append(i)
 
 	# ── Lofi drum pools ─────────────────────────────────────────────
-	# Player drops: random pick from snare/clap/rim.
-	var player_drum_instruments: Array[Instrument] = [
-		DrumSnare.new(180.0, 0.18),
-		DrumClap.new(0.2),
-		DrumRim.new(400.0, 0.08),
-	]
-	for inst in player_drum_instruments:
+	for inst: Instrument in [_drum_snare, _drum_clap, _drum_rim]:
 		var p := AudioStreamPlayer.new()
 		p.stream = inst.resolve(0.0).stream
 		p.bus = &"Click"
@@ -324,12 +300,7 @@ func _ready() -> void:
 		add_child(p)
 		_player_drum_players.append(p)
 
-	# Autodropper kicks — rotating: deep foundation, thin/ticky.
-	var kick_instruments: Array[Instrument] = [
-		DrumKick.new(60.0, 0.22),
-		DrumKick.new(100.0, 0.09),
-	]
-	for inst in kick_instruments:
+	for inst: Instrument in [_drum_kick_deep, _drum_kick_thin]:
 		var p := AudioStreamPlayer.new()
 		p.stream = inst.resolve(0.0).stream
 		p.bus = &"Click"
@@ -337,11 +308,7 @@ func _ready() -> void:
 		add_child(p)
 		_kick_drum_players.append(p)
 
-	# Advanced autodropper: closed hat. Array so new variants can be added.
-	var hat_instruments: Array[Instrument] = [
-		DrumHat.new(6000.0, 0.05),
-	]
-	for inst in hat_instruments:
+	for inst: Instrument in [_drum_hat]:
 		var p := AudioStreamPlayer.new()
 		p.stream = inst.resolve(0.0).stream
 		p.bus = &"Click"
@@ -353,9 +320,8 @@ func _ready() -> void:
 	ThemeProvider.theme_changed.connect(_on_theme_changed)
 	_on_theme_changed.call_deferred()
 
-	ChallengeManager.challenge_state_changed.connect(_reselect_audio_style)
 	ChallengeManager.tick.connect(_on_challenge_tick)
-	_reselect_audio_style.call_deferred()
+	_on_theme_swap.call_deferred()
 
 	set_process(true)
 
@@ -377,32 +343,24 @@ func _process(delta: float) -> void:
 	_update_bucket_drones(delta)
 
 
-## Advances the active chord. Idle > CHORD_IDLE_RESET resets to the root
-## chord; a whole chord without sparkles also resets (board too quiet to
-## sustain the progression).
+## Advances the chord index through theme.progression while there's activity.
+## Idle > CHORD_IDLE_RESET resets to the root chord; a whole chord without
+## sparkles also resets (board too quiet to sustain the progression).
 func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
-	# AudioStyle owns one global chord index on a fixed cadence, independent
-	# of peg activity — arcade backing keeps the beat alive on its own.
-	if _active_audio_style and not _active_audio_style.progression.is_empty():
-		_chord_timer -= delta
-		if _chord_timer <= 0.0:
-			_style_chord_index = (_style_chord_index + 1) % _active_audio_style.progression.size()
-			_motif_position = 0
-			_chord_timer = _active_audio_style.chord_duration
-			_handle_chord_advance()
+	var prog: Array = _theme_progression()
+	if prog.is_empty():
 		return
 
 	if has_activity:
 		_chord_idle_timer = 0.0
 		_chord_timer -= delta
 		if _chord_timer <= 0.0:
-			var progression: Array = _board_progressions.get(_active_board, [])
 			if not _chord_had_sparkle:
 				_reset_harmonic_state()
-			elif progression.size() > 1:
-				_current_chord_index[_active_board] = (_current_chord_index[_active_board] + 1) % progression.size()
+			elif prog.size() > 1:
+				_chord_index = (_chord_index + 1) % prog.size()
 				_motif_position = 0
-			_chord_timer = CHORD_DURATION
+			_chord_timer = _theme_chord_duration()
 			_chord_had_sparkle = false
 			_handle_chord_advance()
 	else:
@@ -413,9 +371,8 @@ func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
 
 
 func _reset_harmonic_state() -> void:
-	for bt in _current_chord_index:
-		_current_chord_index[bt] = 0
-	_chord_timer = CHORD_DURATION
+	_chord_index = 0
+	_chord_timer = _theme_chord_duration()
 	_motif_position = 0
 	_beat_phase = 0.0
 	_beat_armed = true
@@ -424,32 +381,58 @@ func _reset_harmonic_state() -> void:
 	_handle_chord_advance()
 
 
-## Picks the applicable AudioStyle for the current theme + challenge state.
-## null = default harp path unchanged.
-func _reselect_audio_style() -> void:
-	var desired: AudioStyle = null
-	if ThemeProvider and ThemeProvider.theme:
-		var style: AudioStyle = ThemeProvider.theme.audio_style
-		if style and (not style.active_during_challenge_only or ChallengeManager.is_active_challenge):
-			desired = style
-	if desired == _active_audio_style:
-		return
-	var transitioning: bool = _active_audio_style != desired
-	_active_audio_style = desired
-	_style_chord_index = 0
+## Theme swap: fade lingering drones, reset chord state, rebind kick stream.
+func _on_theme_swap() -> void:
+	_chord_index = 0
 	_motif_position = 0
 	_beat_phase = 0.0
 	_beat_armed = true
 	_challenge_tick_received = false
-	if _active_audio_style:
-		_chord_timer = _active_audio_style.chord_duration
-		_beat_period = 1.0 / float(maxi(1, _active_audio_style.beats_per_tick))
-	else:
-		_chord_timer = CHORD_DURATION
-		_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
-	if transitioning:
-		# Clear the previous musical world's lingering drones before switching.
-		_fade_all_drones(1.0)
+	_chord_timer = _theme_chord_duration()
+	_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
+	_fade_all_drones(1.0)
+	var kick: Instrument = _instrument_for(_theme_kick_type())
+	if kick:
+		_kick_player.stream = kick.resolve(0.0).stream
+
+
+## Maps the Instrument.Type enum to the singleton instance. null = SILENT.
+func _instrument_for(type: int) -> Instrument:
+	match type:
+		Instrument.Type.HARP: return _harp
+		Instrument.Type.SQUARE: return _square
+		Instrument.Type.ARCADE_KICK: return _arcade_kick
+		Instrument.Type.DRUM_KICK_DEEP: return _drum_kick_deep
+		Instrument.Type.DRUM_KICK_THIN: return _drum_kick_thin
+		Instrument.Type.DRUM_SNARE: return _drum_snare
+		Instrument.Type.DRUM_CLAP: return _drum_clap
+		Instrument.Type.DRUM_RIM: return _drum_rim
+		Instrument.Type.DRUM_HAT: return _drum_hat
+	return null
+
+
+func _theme_progression() -> Array:
+	if ThemeProvider and ThemeProvider.theme:
+		return ThemeProvider.theme.progression
+	return []
+
+
+func _theme_chord_duration() -> float:
+	if ThemeProvider and ThemeProvider.theme:
+		return ThemeProvider.theme.chord_duration
+	return 6.0
+
+
+func _theme_bucket_type() -> int:
+	if ThemeProvider and ThemeProvider.theme:
+		return ThemeProvider.theme.bucket_instrument
+	return Instrument.Type.SILENT
+
+
+func _theme_kick_type() -> int:
+	if ThemeProvider and ThemeProvider.theme:
+		return ThemeProvider.theme.kick_instrument
+	return Instrument.Type.SILENT
 
 
 func _fade_all_drones(duration: float) -> void:
@@ -566,11 +549,9 @@ func get_time_until_next_chord() -> float:
 	return _chord_timer
 
 
-## Total chord length (AudioStyle override if active, else CHORD_DURATION).
+## Total chord length from the active theme.
 func get_chord_duration() -> float:
-	if _active_audio_style:
-		return _active_audio_style.chord_duration
-	return CHORD_DURATION
+	return _theme_chord_duration()
 
 
 ## 0..1 position within the current chord. Global — all readers see the same
@@ -635,8 +616,7 @@ func _handle_chord_advance() -> void:
 		if drone["state"] == DroneState.ACTIVE:
 			drone["state"] = DroneState.LINGERING
 			drone["timer"] = Harp.DECAY_SECONDS
-	var idx: int = _style_chord_index if _active_audio_style else _current_chord_index.get(_active_board, 0)
-	chord_changed.emit(idx)
+	chord_changed.emit(_chord_index)
 
 
 ## New coin landing after chord advance — hands off from the old chord's tail.
@@ -658,22 +638,19 @@ func _fade_lingering_drones() -> void:
 
 
 ## Called every second by ChallengeManager.tick. Phase-locks the beat grid
-## and fires the kick; final 10s doubles to 2/sec.
+## and fires the kick (if this theme has one); final 10s doubles to 2/sec.
 func _on_challenge_tick(seconds_remaining: int) -> void:
-	if not _active_audio_style:
+	if _theme_kick_type() == Instrument.Type.SILENT:
 		return
 	_challenge_tick_received = true
 	_beat_phase = 0.0
 	_beat_armed = true
-	if _active_audio_style.has_backing_kick:
-		_kick_player.play()
-		if seconds_remaining <= FINAL_COUNTDOWN_SECONDS:
-			get_tree().create_timer(0.5).timeout.connect(_kick_player.play, CONNECT_ONE_SHOT)
+	_kick_player.play()
+	if seconds_remaining <= FINAL_COUNTDOWN_SECONDS:
+		get_tree().create_timer(0.5).timeout.connect(_kick_player.play, CONNECT_ONE_SHOT)
 
 
 func _tick_beat_grid(delta: float) -> void:
-	if _active_audio_style and not _challenge_tick_received:
-		return
 	_beat_phase += delta
 	while _beat_phase >= _beat_period:
 		_beat_phase -= _beat_period
@@ -688,13 +665,17 @@ func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, 
 		return
 	_activity_detected = true
 
+	var instrument: Instrument = _instrument_for(_theme_bucket_type())
+	if not instrument or _theme_progression().is_empty():
+		return
+
 	var degree: int = bucket_distance_from_center
 	var key: String = ("A_" if is_advanced else "N_") + str(degree)
 	var octave_mult: float = 0.25 if is_advanced else 0.5
-	var pitch: float = _get_pitch_scale(degree, board_type) * octave_mult
+	var pitch: float = _get_pitch_scale(degree) * octave_mult
 	var target_volume: float = BUCKET_VOLUME_DB + (4.0 if is_advanced else 0.0)
 
-	var sp: Dictionary = _tonal_stream_and_pitch(pitch)
+	var sp: Dictionary = instrument.resolve(pitch)
 
 	# New coin hands off from the previous chord's lingering drones.
 	_fade_lingering_drones()
@@ -762,8 +743,6 @@ func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
 	return
 	if board_type != _active_board:
 		return
-	if not ThemeProvider.theme.audio_lofi_enabled:
-		return
 	if _player_drum_players.is_empty():
 		return
 
@@ -783,8 +762,6 @@ func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
 func play_autodropper_drum(board_type: Enums.BoardType, is_advanced: bool) -> void:
 	return
 	if board_type != _active_board:
-		return
-	if not ThemeProvider.theme.audio_lofi_enabled:
 		return
 
 	if is_advanced:
@@ -847,36 +824,27 @@ func play_prestige(play_duration: float = 3.0, fade_duration: float = 2.0) -> vo
 
 # ── Musical internals ────────────────────────────────────────────────
 
-func _get_pitch_scale(scale_degree: int, board_type: Enums.BoardType) -> float:
-	var entry: Dictionary = _current_chord_entry(board_type)
+func _get_pitch_scale(scale_degree: int) -> float:
+	var entry: Dictionary = _current_chord_entry()
+	if entry.is_empty():
+		return 1.0
 	var chord: Array = entry["chord"]
 	var semitones: int = chord[scale_degree % chord.size()] + int(entry["root"])
 	return pow(2.0, semitones / 12.0)
 
 
-func _current_chord_entry(board_type: Enums.BoardType) -> Dictionary:
-	# AudioStyle's single progression overrides the per-board harp progressions.
-	if _active_audio_style and not _active_audio_style.progression.is_empty():
-		var style_prog: Array = _active_audio_style.progression
-		return style_prog[_style_chord_index % style_prog.size()]
-	var progression: Array = _board_progressions.get(board_type, _board_progressions[Enums.BoardType.GOLD])
-	var idx: int = _current_chord_index.get(board_type, 0)
-	return progression[idx % progression.size()]
+## Current chord entry from theme.progression. Empty dict if no progression.
+func _current_chord_entry() -> Dictionary:
+	var prog: Array = _theme_progression()
+	if prog.is_empty():
+		return {}
+	return prog[_chord_index % prog.size()]
 
 
-## Picks the active tonal instrument. Square for arcade timbre, harp otherwise.
-func _tonal_stream_and_pitch(pitch_mult: float) -> Dictionary:
-	if _active_audio_style and _active_audio_style.timbre == "square":
-		return _square.resolve(pitch_mult)
-	return _harp.resolve(pitch_mult)
-
-
-## DISABLED — tape wobble was adding "old recording" character that fought
-## the clean harp timbre. Kept for potential revival with a different instrument.
+## DISABLED — tape wobble added "old recording" character that fought the
+## clean harp timbre. Kept for potential revival.
 func _apply_tape_wobble(pitch: float) -> float:
 	return pitch
-	if not ThemeProvider.theme.audio_lofi_enabled:
-		return pitch
 	var t: float = Time.get_ticks_msec() / 1000.0
 	return pitch * (1.0 + sin(t * 3.0) * 0.004)
 
@@ -895,7 +863,7 @@ func should_sparkle(board_type: Enums.BoardType) -> bool:
 	if not _beat_armed:
 		return false
 	_beat_armed = false
-	var motif: Array = _current_chord_entry(board_type).get("motif", [0])
+	var motif: Array = _current_chord_entry().get("motif", [0])
 	var note: int = motif[_motif_position % motif.size()]
 	_chord_had_sparkle = true
 	return note >= 0
@@ -991,8 +959,10 @@ func _update_bucket_drones(delta: float) -> void:
 
 ## Pitch multiplier for a C4-rooted instrument to match the board's current
 ## root. Still used by the drum layer (name is legacy — no longer ambient).
-func _get_ambient_pitch(board_type: Enums.BoardType) -> float:
-	var entry: Dictionary = _current_chord_entry(board_type)
+func _get_ambient_pitch(_board_type: Enums.BoardType) -> float:
+	var entry: Dictionary = _current_chord_entry()
+	if entry.is_empty():
+		return 1.0
 	var semitones: int = int(entry["root"])
 	return pow(2.0, semitones / 12.0)
 
@@ -1008,7 +978,7 @@ func _on_theme_changed() -> void:
 	if _melody_bus_idx >= 0 and _melody_lowpass_effect_idx >= 0:
 		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, false)
 
-	_reselect_audio_style()
+	_on_theme_swap()
 
 
 # ── Audio bus setup ──────────────────────────────────────────────────

@@ -44,4 +44,21 @@ peg_ring_enabled = true
 vignette_enabled = true
 vignette_radius = 0.7
 vignette_softness = 0.5
-audio_lofi_enabled = true
+bucket_instrument = 1
+progression = [{
+"chord": [0, 4, 7, 11, 12, 16, 19, 23],
+"motif": [0, -1, 2, -1, 4, -1, 5, -1],
+"root": 0
+}, {
+"chord": [0, 3, 7, 10, 12, 15, 19, 22],
+"motif": [3, -1, 2, -1, 0, -1, -1, -1],
+"root": 4
+}, {
+"chord": [0, 4, 7, 11, 12, 16, 19, 23],
+"motif": [2, -1, -1, 4, -1, 5, -1, -1],
+"root": 5
+}, {
+"chord": [0, 4, 7, 10, 12, 16, 19, 22],
+"motif": [0, 3, -1, 4, -1, 2, -1, -1],
+"root": 7
+}]
