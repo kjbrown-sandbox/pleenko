@@ -118,22 +118,15 @@ var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree",
 # can't keep writing to the new drone's volume_db.
 var _drone_fade_tweens: Dictionary = {}
 
-# Per-type cooldown for new drone voices, scaled to autodrop tempo:
-# cooldown = _autodrop_interval / RATE_DIVISOR. Normal = 4 hits/cycle (~375 ms
-# at default 1.5s). Advanced = 1 hit/cycle (~1500 ms, slow bass punctuation).
-const NORMAL_RATE_DIVISOR := 4.0
-const ADVANCED_RATE_DIVISOR := 1.0
+# Bucket audio queue: hits dispatch immediately if BUCKET_WAIT has elapsed
+# since the last play; otherwise they stack and drain one every BUCKET_WAIT.
+# Each bucket may sing at most once per chord (deduped via _chord_activated_
+# buckets). Cleared on chord advance.
+const BUCKET_WAIT := 0.5
+var _bucket_queue: Array[Dictionary] = []
+var _chord_activated_buckets: Dictionary = {}
+var _last_bucket_play_time: float = -999.0
 
-# Harmony grace: a second coin within this window of the previous accepted
-# activation is allowed through despite the cooldown. One-shot per burst —
-# third hit hits the normal cooldown. Gives multi-drop its two-voice chord
-# without letting 3+ voices slam together.
-const HARMONY_GRACE_WINDOW := 0.2
-
-var _last_normal_activation_time: float = -999.0
-var _last_advanced_activation_time: float = -999.0
-var _normal_harmony_grace_used: bool = false
-var _advanced_harmony_grace_used: bool = false
 var _sparkle_counter: int = 0
 # Default streams assigned to drone pool slots at startup. Individual plays
 # may override via instrument.resolve().
@@ -340,6 +333,7 @@ func _process(delta: float) -> void:
 
 	_tick_harmonic_rhythm(delta, has_activity)
 	_tick_beat_grid(delta)
+	_pump_bucket_queue()
 	_update_bucket_drones(delta)
 
 
@@ -563,48 +557,6 @@ func get_chord_phase() -> float:
 	return clampf(1.0 - (_chord_timer / duration), 0.0, 1.0)
 
 
-## Rate-limit gate for new drone voices. True = proceed with mark_active +
-## play_bucket; false = inside cooldown. Independent per coin type. Visual
-## activation is intentionally coupled to this gate in PlinkoBoard.finalize_
-## coin_landing — a rate-limited hit leaves the bucket faded so the next
-## tone-producing coin owns the activation. A one-shot harmony grace admits
-## a second voice within HARMONY_GRACE_WINDOW of the previous accept so
-## multi-drop produces a two-note chord; third hit hits the normal cooldown.
-## Grace also resets in the rejection path once past the grace sub-window —
-## otherwise sustained sub-cooldown activity keeps grace permanently consumed.
-func try_consume_bucket_activation(is_advanced: bool = false) -> bool:
-	var now: float = Time.get_ticks_msec() / 1000.0
-	var divisor: float = ADVANCED_RATE_DIVISOR if is_advanced else NORMAL_RATE_DIVISOR
-	var window: float = _autodrop_interval / divisor
-	var last: float = _last_advanced_activation_time if is_advanced else _last_normal_activation_time
-	var grace_used: bool = _advanced_harmony_grace_used if is_advanced else _normal_harmony_grace_used
-	var elapsed: float = now - last
-	if elapsed < window:
-		if elapsed < HARMONY_GRACE_WINDOW and not grace_used:
-			if is_advanced:
-				_advanced_harmony_grace_used = true
-				_last_advanced_activation_time = now
-			else:
-				_normal_harmony_grace_used = true
-				_last_normal_activation_time = now
-			return true
-		# Past the grace sub-window — reset so the next burst gets its harmony.
-		if elapsed >= HARMONY_GRACE_WINDOW and grace_used:
-			if is_advanced:
-				_advanced_harmony_grace_used = false
-			else:
-				_normal_harmony_grace_used = false
-		return false
-	# Fresh accept — reset grace budget for the next burst.
-	if is_advanced:
-		_last_advanced_activation_time = now
-		_advanced_harmony_grace_used = false
-	else:
-		_last_normal_activation_time = now
-		_normal_harmony_grace_used = false
-	return true
-
-
 ## Chord advance is a VISUAL event: emits chord_changed so buckets revert to
 ## faded, and flips ACTIVE→LINGERING so the activation gate no longer
 ## suppresses re-hits. Does NOT fade audio — lingering drones ring via their
@@ -616,6 +568,9 @@ func _handle_chord_advance() -> void:
 		if drone["state"] == DroneState.ACTIVE:
 			drone["state"] = DroneState.LINGERING
 			drone["timer"] = Harp.DECAY_SECONDS
+	_bucket_queue.clear()
+	_chord_activated_buckets.clear()
+	_last_bucket_play_time = -999.0
 	chord_changed.emit(_chord_index)
 
 
@@ -660,30 +615,57 @@ func _tick_beat_grid(delta: float) -> void:
 
 # ── Public API: musical sounds ───────────────────────────────────────
 
-func play_bucket(board_type: Enums.BoardType, bucket_distance_from_center: int, is_advanced: bool = false) -> void:
+## Dispatch or enqueue a bucket play. Returns true if the request was
+## accepted — the caller should light up the bucket visually. Returns false
+## if this isn't the active board, or the bucket already sang this chord.
+func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> bool:
 	if board_type != _active_board:
-		return
+		return false
+	var dedup_key: String = str(bucket_idx) + "_" + ("A" if is_advanced else "N")
+	if dedup_key in _chord_activated_buckets:
+		return false
+	_chord_activated_buckets[dedup_key] = true
 	_activity_detected = true
 
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if _bucket_queue.is_empty() and now - _last_bucket_play_time >= BUCKET_WAIT:
+		_play_bucket_now(bucket_idx, degree, is_advanced)
+		_last_bucket_play_time = now
+	else:
+		_bucket_queue.push_back({
+			"bucket_idx": bucket_idx,
+			"degree": degree,
+			"is_advanced": is_advanced,
+		})
+	return true
+
+
+## Dequeues pending bucket plays spaced by BUCKET_WAIT. Called from _process.
+func _pump_bucket_queue() -> void:
+	if _bucket_queue.is_empty():
+		return
+	var now: float = Time.get_ticks_msec() / 1000.0
+	while not _bucket_queue.is_empty() and now - _last_bucket_play_time >= BUCKET_WAIT:
+		var entry: Dictionary = _bucket_queue.pop_front()
+		_play_bucket_now(int(entry["bucket_idx"]), int(entry["degree"]), bool(entry["is_advanced"]))
+		_last_bucket_play_time = now
+
+
+## Allocates a drone slot for a bucket hit and starts playing. Drone key is
+## per-bucket so mirror buckets sharing a pitch get independent entries.
+func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 	var instrument: Instrument = _instrument_for(_theme_bucket_type())
 	if not instrument or _theme_progression().is_empty():
 		return
 
-	var degree: int = bucket_distance_from_center
-	var key: String = ("A_" if is_advanced else "N_") + str(degree)
+	var key: String = ("A_" if is_advanced else "N_") + str(bucket_idx)
 	var octave_mult: float = 0.25 if is_advanced else 0.5
 	var pitch: float = _get_pitch_scale(degree) * octave_mult
 	var target_volume: float = BUCKET_VOLUME_DB + (4.0 if is_advanced else 0.0)
-
 	var sp: Dictionary = instrument.resolve(pitch)
 
 	# New coin hands off from the previous chord's lingering drones.
 	_fade_lingering_drones()
-
-	# Each bucket rings once per chord — re-hits are visual-only. Restarting
-	# the sample here would create a double-attack inside a still-ringing note.
-	if key in _active_drones and _active_drones[key]["state"] == DroneState.ACTIVE:
-		return
 
 	# Eviction runs AFTER linger-clear so freed slots are counted first.
 	_evict_oldest_drone_if_full(is_advanced)
@@ -812,10 +794,6 @@ func play(sound_name: StringName, pitch: float = 0.0, max_duration: float = 0.0)
 			if player.playing:
 				player.stop()
 		)
-
-
-func play_bucket_hit() -> void:
-	play_bucket(_active_board, 0)
 
 
 func play_prestige(play_duration: float = 3.0, fade_duration: float = 2.0) -> void:

@@ -642,20 +642,10 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var num_buckets: int = buckets_container.get_child_count()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
-	# Visual and audio activation are coupled: a bucket only lights up when
-	# its tone actually plays. A rate-limited hit (audio cooldown still
-	# active, or same bucket already ringing this chord) leaves the bucket
-	# in its faded state so the next coin that does voice a tone gets to
-	# own the activation. Mirror: buckets symmetric across center share the
-	# same note, so they light up together.
-	if AudioManager.try_consume_bucket_activation(is_advanced):
+	# Each bucket sings at most once per chord. request_bucket_play returns
+	# false if this bucket already sang this chord — keep it faded.
+	if AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced):
 		bucket.mark_singing()
-		var mirror_idx: int = num_buckets - 1 - bucket_idx
-		if mirror_idx != bucket_idx:
-			var mirror: Bucket = get_bucket(mirror_idx)
-			if mirror:
-				mirror.mark_singing()
-		AudioManager.play_bucket(board_type, bucket_distance, is_advanced)
 	AudioManager.on_coin_landed()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
