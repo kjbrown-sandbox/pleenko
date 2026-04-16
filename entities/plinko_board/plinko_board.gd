@@ -34,6 +34,7 @@ var _normal_autodroppers_visible: bool = false
 var _advanced_autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
+var _drum_singing_positions: Dictionary = {}  # int (x*1000 rounded) -> true. Tracks specific buckets currently singing in drum-layer mode so they survive rebuilds.
 var multi_drop_count: int = -1
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 # True while the mouse is hovering either drop button — used by the tooltip
@@ -78,20 +79,57 @@ func _ready() -> void:
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
 	AudioManager.chord_changed.connect(_on_chord_changed)
+	AudioManager.drum_tier_fired.connect(_on_drum_tier_fired)
+	AudioManager.drum_tier_expired.connect(_on_drum_tier_expired)
 
 
 func _exit_tree() -> void:
 	if AudioManager.chord_changed.is_connected(_on_chord_changed):
 		AudioManager.chord_changed.disconnect(_on_chord_changed)
+	if AudioManager.drum_tier_fired.is_connected(_on_drum_tier_fired):
+		AudioManager.drum_tier_fired.disconnect(_on_drum_tier_fired)
+	if AudioManager.drum_tier_expired.is_connected(_on_drum_tier_expired):
+		AudioManager.drum_tier_expired.disconnect(_on_drum_tier_expired)
 
 
-## Chord advance: fade every bucket back to its faded color. Buckets marked
-## as challenge hit/forbidden are skipped by Bucket.mark_stop_singing itself.
+## Chord advance: fade every bucket back to its faded color. Skipped when the
+## theme is in drum-layer mode — those buckets fade on tier expiration
+## instead (see _on_drum_tier_expired). Challenge hit/forbidden buckets are
+## skipped by Bucket.mark_stop_singing itself.
 func _on_chord_changed(_chord_index: int) -> void:
+	if ThemeProvider.theme.drum_instruments.size() > 0:
+		return
 	var duration: float = ThemeProvider.theme.bucket_fade_duration
 	for child in buckets_container.get_children():
 		if child is Bucket:
 			child.mark_stop_singing(duration)
+
+
+## Drum beat fired: pulse every bucket at this tier's distance-from-center
+## so the player sees the rhythm on the buckets they've activated.
+func _on_drum_tier_fired(tier: int) -> void:
+	var num_buckets: int = buckets_container.get_child_count()
+	var center: int = num_buckets / 2
+	for i in num_buckets:
+		if absi(i - center) == tier:
+			var bucket: Bucket = get_bucket(i)
+			if bucket:
+				bucket.pulse()
+
+
+## Drum tier expired: fade every bucket at this tier's distance back to faded.
+## Only buckets currently tracked as singing get stopped — avoids touching
+## buckets that were never activated this lifetime.
+func _on_drum_tier_expired(tier: int) -> void:
+	var duration: float = ThemeProvider.theme.bucket_fade_duration
+	var num_buckets: int = buckets_container.get_child_count()
+	var center: int = num_buckets / 2
+	for i in num_buckets:
+		if absi(i - center) == tier:
+			var bucket: Bucket = get_bucket(i)
+			if bucket:
+				bucket.mark_stop_singing(duration)
+				_drum_singing_positions.erase(roundi(bucket.position.x * 1000.0))
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -646,6 +684,9 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	# false if this bucket already sang this chord — keep it faded.
 	if AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced):
 		bucket.mark_singing()
+		# Drum-layer mode: track this bucket's position so it survives rebuilds.
+		if ThemeProvider.theme.drum_instruments.size() > 0:
+			_drum_singing_positions[roundi(bucket.position.x * 1000.0)] = true
 	AudioManager.on_coin_landed()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
@@ -915,6 +956,15 @@ func build_board() -> void:
 				&"hit": bucket.mark_hit()
 				&"target": bucket.mark_target()
 				&"forbidden": bucket.mark_forbidden()
+
+	# Drum-layer mode: re-apply singing visuals for the exact buckets that
+	# were singing before the rebuild (matched by world x-position).
+	if not _drum_singing_positions.is_empty():
+		for child in buckets_container.get_children():
+			if child is Bucket:
+				var key: int = roundi(child.position.x * 1000.0)
+				if _drum_singing_positions.has(key):
+					child.mark_singing()
 
 	board_rebuilt.emit()
 

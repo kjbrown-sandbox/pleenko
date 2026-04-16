@@ -13,7 +13,7 @@ bg_shade_4 = Color(0.3, 0.3, 0.3, 1)
 bg_shade_5 = Color(0.55, 0.55, 0.55, 1)
 bg_shade_6 = Color(0.95, 0.96, 0.98, 1)
 gold_main = Color(1, 0.85, 0.2, 1)
-gold_faded = Color(0.85, 0.72, 0.17, 1)
+gold_faded = Color(0.35, 0.28, 0.06, 1)
 orange_main = Color(1, 0.55, 0.25, 1)
 orange_faded = Color(0.85, 0.42, 0.12, 1)
 red_main = Color(1, 0.35, 0.3, 1)
@@ -27,7 +27,7 @@ green_faded = Color(0.28, 0.85, 0.32, 1)
 ambient_light_source = 1
 directional_light_source = 2
 peg_color_source = 2
-body_text_source = 4
+body_text_source = 5
 label_font = ExtResource("1_fbp74")
 coin_halo_enabled = true
 coin_halo_radius = 2.5
@@ -38,6 +38,7 @@ button_font = ExtResource("1_fbp74")
 button_bg_source = 15
 button_disabled_text_source = 4
 button_border_source = 4
+bucket_pulse_duration = 0.8
 bucket_fade_duration = 1.0
 board_glow_opacity = 0.06
 peg_glow_halo_enabled = true
@@ -49,7 +50,6 @@ vignette_intensity = 0.3
 vignette_radius = 0.65
 vignette_softness = 0.5
 bucket_instrument = 2
-kick_instrument = 3
 progression = [{
 "chord": [0, 3, 7, 12, 15, 19, 24, 27],
 "motif": [0, 2, 4, 2, 0, 2, 4, -1],
@@ -68,3 +68,9 @@ progression = [{
 "root": 9
 }]
 chord_duration = 4.0
+arpeggio_pattern = "x-xxxxxxx-xxxx-x"
+melody_sequence = PackedInt32Array(48, 51, 55, 51, 60, 55, 51, 50, 48, 51, 55, 51, 60, 55, 62, 63, 60, 56, 51, 56, 60, 56, 51, 50, 60, 56, 51, 56, 60, 56, 67, 65, 62, 58, 53, 51, 50, 53, 56, 58, 62, 58, 65, 63, 62, 58, 56, 58, 59, 55, 62, 59, 67, 62, 71, 67, 79, 77, 74, 71, 67, 62, 55, 50)
+drum_instruments = PackedInt32Array(5, 5, 5, 8, 9, 8)
+drum_patterns = PackedStringArray("x---x---x---x---", "--x---x---x---x-", "xx-xx---xx-xx---", "----x-------x---", "x-x-x-x-x-x-x-x", "--x-----x---x---")
+drum_volumes = PackedFloat32Array(-6, -12, -18, -14, -14, -12)
+melody_volume_offset = 6.0

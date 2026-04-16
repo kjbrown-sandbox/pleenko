@@ -4,6 +4,14 @@ extends Node
 # chord-activated buckets back to faded.
 signal chord_changed(chord_index: int)
 
+# Fired when a drum-layer tier plays a beat. PlinkoBoard listens to pulse
+# every bucket at the given distance-from-center.
+signal drum_tier_fired(tier: int)
+
+# Fired when a drum-layer tier's active lifetime runs out. PlinkoBoard fades
+# every bucket at that distance back to faded.
+signal drum_tier_expired(tier: int)
+
 # Floor for chord-gated tail length so a late-chord hit still rings audibly
 # before the chord_changed fade starts.
 const MIN_BUCKET_RING_SECONDS := 1.0
@@ -118,14 +126,35 @@ var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree",
 # can't keep writing to the new drone's volume_db.
 var _drone_fade_tweens: Dictionary = {}
 
-# Bucket audio queue: hits dispatch immediately if BUCKET_WAIT has elapsed
-# since the last play; otherwise they stack and drain one every BUCKET_WAIT.
-# Each bucket may sing at most once per chord (deduped via _chord_activated_
-# buckets). Cleared on chord advance.
+# Bucket audio — three modes, selected by theme data:
+#   Drum-layer mode (drum_instruments non-empty): coin landings activate
+#     percussion tiers; a global sequencer plays their beat patterns.
+#   Arpeggio mode (arpeggio_pattern non-empty): pattern picks from activated
+#     bucket pool (FIFO-then-random). First hit of a chord is immediate.
+#   Queue mode (default): hits dispatch BUCKET_WAIT apart, coin-driven.
 const BUCKET_WAIT := 0.5
 var _bucket_queue: Array[Dictionary] = []
 var _chord_activated_buckets: Dictionary = {}
 var _last_bucket_play_time: float = -999.0
+
+# Arpeggio-mode only. Cleared on chord advance.
+var _activated_buckets_order: Array[Dictionary] = []
+var _unplayed_buckets: Array[Dictionary] = []
+var _pattern_slot_idx: int = -1
+var _pattern_slot_timer: float = 0.0
+
+# Sequencer (drum-layer mode): drives both melody and drum-layer playback.
+# Starts on first challenge tick, ticks at SLOT_DURATION (0.25s = 4/sec).
+const SLOT_DURATION := 0.25
+var _sequencer_running: bool = false
+var _global_slot_idx: int = 0
+var _slot_timer: float = 0.0
+var _melody_player: AudioStreamPlayer
+var _melody_idx: int = 0
+var _active_drum_tiers: Dictionary = {}  # tier_index -> expiration time (sec)
+const DRUM_POOL_SIZE := 6
+var _drum_seq_pool: Array[AudioStreamPlayer] = []
+var _drum_seq_idx: int = 0
 
 var _sparkle_counter: int = 0
 # Default streams assigned to drone pool slots at startup. Individual plays
@@ -137,11 +166,12 @@ var _piano_drone_stream: AudioStream = preload("res://assets/sounds/instrument_s
 # resolve(pitch_mult) -> { stream, pitch_scale }. AudioManager keeps voice
 # pooling, fades, chord-gated lifecycle, and bus routing.
 var _harp: Harp
-var _square: Square
+var _triangle: Triangle
 var _arcade_kick: ArcadeKick
 var _click: Click
 var _drum_kick_deep: DrumKick
 var _drum_kick_thin: DrumKick
+var _drum_kick_bass: DrumKick
 var _drum_snare: DrumSnare
 var _drum_clap: DrumClap
 var _drum_rim: DrumRim
@@ -201,11 +231,12 @@ func _ready() -> void:
 
 	# ── Instruments ─────────────────────────────────────────────────
 	_harp = Harp.new()
-	_square = Square.new()
+	_triangle = Triangle.new()
 	_arcade_kick = ArcadeKick.new()
 	_click = Click.new()
 	_drum_kick_deep = DrumKick.new(60.0, 0.22)
 	_drum_kick_thin = DrumKick.new(100.0, 0.09)
+	_drum_kick_bass = DrumKick.new(40.0, 0.3)
 	_drum_snare = DrumSnare.new(180.0, 0.18)
 	_drum_clap = DrumClap.new(0.2)
 	_drum_rim = DrumRim.new(400.0, 0.08)
@@ -309,6 +340,19 @@ func _ready() -> void:
 		add_child(p)
 		_hat_drum_players.append(p)
 
+	# ── Sequencer players (melody + drum-layer dispatch) ────────────
+	_melody_player = AudioStreamPlayer.new()
+	_melody_player.bus = &"Melody"
+	_melody_player.volume_db = BUCKET_VOLUME_DB
+	add_child(_melody_player)
+
+	for i in DRUM_POOL_SIZE:
+		var p := AudioStreamPlayer.new()
+		p.bus = &"Click"
+		p.volume_db = 0.0
+		add_child(p)
+		_drum_seq_pool.append(p)
+
 	# call_deferred so ThemeProvider autoload is fully ready.
 	ThemeProvider.theme_changed.connect(_on_theme_changed)
 	_on_theme_changed.call_deferred()
@@ -334,6 +378,8 @@ func _process(delta: float) -> void:
 	_tick_harmonic_rhythm(delta, has_activity)
 	_tick_beat_grid(delta)
 	_pump_bucket_queue()
+	_tick_pattern(delta)
+	_tick_sequencer(delta)
 	_update_bucket_drones(delta)
 
 
@@ -349,7 +395,11 @@ func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
 		_chord_idle_timer = 0.0
 		_chord_timer -= delta
 		if _chord_timer <= 0.0:
-			if not _chord_had_sparkle:
+			# Themes with a melody self-sustain the progression; harp-mode
+			# themes depend on peg sparkles to keep the chord cycling.
+			var has_melody: bool = ThemeProvider.theme \
+					and ThemeProvider.theme.melody_sequence.size() > 0
+			if not has_melody and not _chord_had_sparkle:
 				_reset_harmonic_state()
 			elif prog.size() > 1:
 				_chord_index = (_chord_index + 1) % prog.size()
@@ -385,6 +435,7 @@ func _on_theme_swap() -> void:
 	_chord_timer = _theme_chord_duration()
 	_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
 	_fade_all_drones(1.0)
+	_stop_sequencer()
 	var kick: Instrument = _instrument_for(_theme_kick_type())
 	if kick:
 		_kick_player.stream = kick.resolve(0.0).stream
@@ -394,7 +445,7 @@ func _on_theme_swap() -> void:
 func _instrument_for(type: int) -> Instrument:
 	match type:
 		Instrument.Type.HARP: return _harp
-		Instrument.Type.SQUARE: return _square
+		Instrument.Type.TRIANGLE: return _triangle
 		Instrument.Type.ARCADE_KICK: return _arcade_kick
 		Instrument.Type.DRUM_KICK_DEEP: return _drum_kick_deep
 		Instrument.Type.DRUM_KICK_THIN: return _drum_kick_thin
@@ -402,6 +453,7 @@ func _instrument_for(type: int) -> Instrument:
 		Instrument.Type.DRUM_CLAP: return _drum_clap
 		Instrument.Type.DRUM_RIM: return _drum_rim
 		Instrument.Type.DRUM_HAT: return _drum_hat
+		Instrument.Type.DRUM_KICK_BASS: return _drum_kick_bass
 	return null
 
 
@@ -427,6 +479,12 @@ func _theme_kick_type() -> int:
 	if ThemeProvider and ThemeProvider.theme:
 		return ThemeProvider.theme.kick_instrument
 	return Instrument.Type.SILENT
+
+
+func _theme_pattern() -> String:
+	if not ThemeProvider or not ThemeProvider.theme:
+		return ""
+	return ThemeProvider.theme.arpeggio_pattern
 
 
 func _fade_all_drones(duration: float) -> void:
@@ -571,6 +629,12 @@ func _handle_chord_advance() -> void:
 	_bucket_queue.clear()
 	_chord_activated_buckets.clear()
 	_last_bucket_play_time = -999.0
+	_activated_buckets_order.clear()
+	_unplayed_buckets.clear()
+	_pattern_slot_idx = -1
+	_pattern_slot_timer = 0.0
+	# Drum tiers are time-based (one chord_duration from activation) and
+	# NOT cleared here — they persist past chord boundaries until expiration.
 	chord_changed.emit(_chord_index)
 
 
@@ -592,17 +656,26 @@ func _fade_lingering_drones() -> void:
 		_active_drones.erase(drone_key)
 
 
-## Called every second by ChallengeManager.tick. Phase-locks the beat grid
-## and fires the kick (if this theme has one); final 10s doubles to 2/sec.
+## Called every second by ChallengeManager.tick. Starts the sequencer on
+## the first tick. Phase-locks the beat grid. Fires the kick if the theme
+## has one; final 10s doubles to 2/sec.
 func _on_challenge_tick(seconds_remaining: int) -> void:
-	if _theme_kick_type() == Instrument.Type.SILENT:
-		return
+	# Start sequencer on first tick (which fires on first coin drop).
+	if not _sequencer_running and _theme_drum_instruments().size() > 0:
+		_sequencer_running = true
+		_global_slot_idx = 0
+		_melody_idx = 0
+		_slot_timer = SLOT_DURATION
+		_play_slot()
+
 	_challenge_tick_received = true
 	_beat_phase = 0.0
 	_beat_armed = true
-	_kick_player.play()
-	if seconds_remaining <= FINAL_COUNTDOWN_SECONDS:
-		get_tree().create_timer(0.5).timeout.connect(_kick_player.play, CONNECT_ONE_SHOT)
+
+	if _theme_kick_type() != Instrument.Type.SILENT:
+		_kick_player.play()
+		if seconds_remaining <= FINAL_COUNTDOWN_SECONDS:
+			get_tree().create_timer(0.5).timeout.connect(_kick_player.play, CONNECT_ONE_SHOT)
 
 
 func _tick_beat_grid(delta: float) -> void:
@@ -615,28 +688,53 @@ func _tick_beat_grid(delta: float) -> void:
 
 # ── Public API: musical sounds ───────────────────────────────────────
 
-## Dispatch or enqueue a bucket play. Returns true if the request was
-## accepted — the caller should light up the bucket visually. Returns false
-## if this isn't the active board, or the bucket already sang this chord.
+## Register a bucket hit. Returns true if the caller should light up the
+## bucket visually. Three modes, selected by theme data:
+##   1. Drum-layer (drum_instruments non-empty): activate the tier's drum
+##      pattern; audio waits for the tier's next beat slot.
+##   2. Arpeggio (arpeggio_pattern non-empty): register + first-hit-immediate.
+##   3. Queue (default): BUCKET_WAIT-spaced dispatch.
 func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> bool:
 	if board_type != _active_board:
 		return false
+	_activity_detected = true
+
+	# Drum-layer mode: activate the tier. Tier stays active for one chord
+	# duration from this activation.
+	if _theme_drum_instruments().size() > 0:
+		var tier: int = degree
+		if tier < _theme_drum_instruments().size():
+			var now: float = Time.get_ticks_msec() / 1000.0
+			_active_drum_tiers[tier] = now + _theme_chord_duration()
+		return true
+
+	# Arpeggio / queue modes: per-bucket-per-chord dedup.
 	var dedup_key: String = str(bucket_idx) + "_" + ("A" if is_advanced else "N")
 	if dedup_key in _chord_activated_buckets:
 		return false
 	_chord_activated_buckets[dedup_key] = true
-	_activity_detected = true
 
+	var entry: Dictionary = {
+		"bucket_idx": bucket_idx,
+		"degree": degree,
+		"is_advanced": is_advanced,
+	}
+
+	if _theme_pattern().length() > 0:
+		_activated_buckets_order.push_back(entry)
+		if _activated_buckets_order.size() == 1:
+			_play_bucket_now(bucket_idx, degree, is_advanced)
+		else:
+			_unplayed_buckets.push_back(entry)
+		return true
+
+	# Queue mode.
 	var now: float = Time.get_ticks_msec() / 1000.0
 	if _bucket_queue.is_empty() and now - _last_bucket_play_time >= BUCKET_WAIT:
 		_play_bucket_now(bucket_idx, degree, is_advanced)
 		_last_bucket_play_time = now
 	else:
-		_bucket_queue.push_back({
-			"bucket_idx": bucket_idx,
-			"degree": degree,
-			"is_advanced": is_advanced,
-		})
+		_bucket_queue.push_back(entry)
 	return true
 
 
@@ -651,14 +749,138 @@ func _pump_bucket_queue() -> void:
 		_last_bucket_play_time = now
 
 
+## Pattern mode: advance the slot timer, pick and play on "x" slots, rest on
+## "-" slots. No-op if the active theme has no pattern (queue mode).
+func _tick_pattern(delta: float) -> void:
+	var pattern: String = _theme_pattern()
+	if pattern.length() == 0:
+		return
+	var slot_duration: float = _theme_chord_duration() / float(pattern.length())
+	if slot_duration <= 0.0:
+		return
+	_pattern_slot_timer -= delta
+	while _pattern_slot_timer <= 0.0:
+		_pattern_slot_idx = (_pattern_slot_idx + 1) % pattern.length()
+		_pattern_slot_timer += slot_duration
+		if pattern[_pattern_slot_idx] == "x":
+			_play_pattern_slot()
+
+
+## Picks one entry from the activation pool. FIFO through _unplayed_buckets
+## first (every newly activated bucket gets a guaranteed play), then falls
+## back to random across the whole pool.
+func _play_pattern_slot() -> void:
+	var entry: Dictionary
+	if not _unplayed_buckets.is_empty():
+		entry = _unplayed_buckets.pop_front()
+	elif not _activated_buckets_order.is_empty():
+		entry = _activated_buckets_order.pick_random()
+	else:
+		return
+	_play_bucket_now(int(entry["bucket_idx"]), int(entry["degree"]), bool(entry["is_advanced"]))
+
+
+## Sequencer: drives background melody + drum-layer dispatch. Ticks at
+## SLOT_DURATION (0.25s). Starts on first challenge tick, stops on theme swap.
+func _tick_sequencer(delta: float) -> void:
+	if not _sequencer_running:
+		return
+	_slot_timer -= delta
+	while _slot_timer <= 0.0:
+		_global_slot_idx += 1
+		_slot_timer += SLOT_DURATION
+		_play_slot()
+
+
+func _play_slot() -> void:
+	if not ThemeProvider or not ThemeProvider.theme:
+		return
+	var theme: VisualTheme = ThemeProvider.theme
+
+	# Melody
+	var seq: PackedInt32Array = theme.melody_sequence
+	if seq.size() > 0:
+		var midi: int = seq[_melody_idx % seq.size()]
+		_melody_idx += 1
+		if midi >= 0:
+			var pitch_mult: float = pow(2.0, float(midi - 60) / 12.0)
+			var sp: Dictionary = _triangle.resolve(pitch_mult)
+			_melody_player.stream = sp["stream"]
+			_melody_player.pitch_scale = sp["pitch_scale"]
+			_melody_player.volume_db = BUCKET_VOLUME_DB + theme.melody_volume_offset
+			_melody_player.play()
+
+	# Drum layers — prune expired tiers, play active ones on "x" slots.
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var expired: Array[int] = []
+	for tier: int in _active_drum_tiers:
+		if _active_drum_tiers[tier] <= now:
+			expired.append(tier)
+			continue
+		if tier >= theme.drum_patterns.size():
+			continue
+		var pattern: String = theme.drum_patterns[tier]
+		if pattern.length() == 0:
+			continue
+		var slot_in_pattern: int = _global_slot_idx % pattern.length()
+		if pattern[slot_in_pattern] == "x":
+			var inst_type: int = theme.drum_instruments[tier] if tier < theme.drum_instruments.size() else 0
+			var inst: Instrument = _instrument_for(inst_type)
+			if inst:
+				var vol_offset: float = theme.drum_volumes[tier] if tier < theme.drum_volumes.size() else 0.0
+				_play_drum_hit(inst, vol_offset)
+			drum_tier_fired.emit(tier)
+	for tier: int in expired:
+		_active_drum_tiers.erase(tier)
+		drum_tier_expired.emit(tier)
+
+
+
+func _play_drum_hit(inst: Instrument, volume_offset: float) -> void:
+	var sp: Dictionary = inst.resolve(0.0)
+	var player: AudioStreamPlayer = _drum_seq_pool[_drum_seq_idx]
+	_drum_seq_idx = (_drum_seq_idx + 1) % _drum_seq_pool.size()
+	player.stream = sp["stream"]
+	player.pitch_scale = sp["pitch_scale"]
+	player.volume_db = DRUM_POOL_PLAYER_VOLUME_DB + volume_offset
+	player.play()
+
+
+func _stop_sequencer() -> void:
+	_sequencer_running = false
+	_global_slot_idx = 0
+	_slot_timer = 0.0
+	_melody_idx = 0
+	_active_drum_tiers.clear()
+	_melody_player.stop()
+
+
+func _theme_drum_instruments() -> PackedInt32Array:
+	if not ThemeProvider or not ThemeProvider.theme:
+		return PackedInt32Array()
+	return ThemeProvider.theme.drum_instruments
+
+
 ## Allocates a drone slot for a bucket hit and starts playing. Drone key is
 ## per-bucket so mirror buckets sharing a pitch get independent entries.
+## Re-picks of the same bucket (pattern repeats) free the old slot first so
+## each attack is distinct.
 func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 	var instrument: Instrument = _instrument_for(_theme_bucket_type())
 	if not instrument or _theme_progression().is_empty():
 		return
 
 	var key: String = ("A_" if is_advanced else "N_") + str(bucket_idx)
+
+	# Re-attack: free any existing drone for this key before reallocating.
+	if key in _active_drones:
+		var old_idx: int = int(_active_drones[key]["idx"])
+		_kill_fade_tween(old_idx)
+		_drone_pool[old_idx].stop()
+		if not _drone_free.has(old_idx):
+			_drone_free.append(old_idx)
+		_active_drones.erase(key)
+
 	var octave_mult: float = 0.25 if is_advanced else 0.5
 	var pitch: float = _get_pitch_scale(degree) * octave_mult
 	var target_volume: float = BUCKET_VOLUME_DB + (4.0 if is_advanced else 0.0)

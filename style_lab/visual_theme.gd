@@ -158,7 +158,7 @@ const coin_shape := CoinShape.CYLINDER
 @export var button_disabled_text_source: Palette = Palette.BG_3
 @export var button_border_source: Palette = Palette.BG_4
 @export var button_pulse_scale := 1.03
-@export var button_pulse_duration := 0.12
+@export var button_pulse_duration := 0.11
 
 # ── Spacing / Layout ────────────────────────────────────────────────
 @export_group("Spacing")
@@ -264,17 +264,42 @@ const coin_shape := CoinShape.CYLINDER
 
 ## Per-role instrument slots. Values match Instrument.Type ordinals so
 ## AudioManager can pass the int directly to _instrument_for(). Values:
-##   0 SILENT · 1 HARP · 2 SQUARE · 3 ARCADE_KICK · 4 DRUM_KICK_DEEP
+##   0 SILENT · 1 HARP · 2 TRIANGLE · 3 ARCADE_KICK · 4 DRUM_KICK_DEEP
 ##   5 DRUM_KICK_THIN · 6 DRUM_SNARE · 7 DRUM_CLAP · 8 DRUM_RIM · 9 DRUM_HAT
-@export_enum("SILENT", "HARP", "SQUARE", "ARCADE_KICK", "DRUM_KICK_DEEP", "DRUM_KICK_THIN", "DRUM_SNARE", "DRUM_CLAP", "DRUM_RIM", "DRUM_HAT") var bucket_instrument: int = 0
-@export_enum("SILENT", "HARP", "SQUARE", "ARCADE_KICK", "DRUM_KICK_DEEP", "DRUM_KICK_THIN", "DRUM_SNARE", "DRUM_CLAP", "DRUM_RIM", "DRUM_HAT") var sparkle_instrument: int = 0
-@export_enum("SILENT", "HARP", "SQUARE", "ARCADE_KICK", "DRUM_KICK_DEEP", "DRUM_KICK_THIN", "DRUM_SNARE", "DRUM_CLAP", "DRUM_RIM", "DRUM_HAT") var kick_instrument: int = 0
+##   10 DRUM_KICK_BASS
+@export_enum("SILENT", "HARP", "TRIANGLE", "ARCADE_KICK", "DRUM_KICK_DEEP", "DRUM_KICK_THIN", "DRUM_SNARE", "DRUM_CLAP", "DRUM_RIM", "DRUM_HAT", "DRUM_KICK_BASS") var bucket_instrument: int = 0
+@export_enum("SILENT", "HARP", "TRIANGLE", "ARCADE_KICK", "DRUM_KICK_DEEP", "DRUM_KICK_THIN", "DRUM_SNARE", "DRUM_CLAP", "DRUM_RIM", "DRUM_HAT", "DRUM_KICK_BASS") var sparkle_instrument: int = 0
+@export_enum("SILENT", "HARP", "TRIANGLE", "ARCADE_KICK", "DRUM_KICK_DEEP", "DRUM_KICK_THIN", "DRUM_SNARE", "DRUM_CLAP", "DRUM_RIM", "DRUM_HAT", "DRUM_KICK_BASS") var kick_instrument: int = 0
 
 ## Shared chord progression for all tonal slots. Each entry:
 ##   { "root": int (semitones from C), "chord": Array[int], "motif": Array[int] }
 ## Empty = no tonal progression driving.
 @export var progression: Array = []
 @export var chord_duration: float = 6.0
+
+## Non-empty = pattern mode for the bucket layer. Each char is one slot
+## spanning chord_duration / length seconds:
+##   'x' = play one singing-bucket note (FIFO-then-random pick)
+##   '-' = extend/rest (no new note)
+## Empty = queue mode (BUCKET_WAIT-spaced dispatch, coin-driven).
+@export var arpeggio_pattern: String = ""
+
+## Background melody: MIDI note numbers played one per 0.25s slot via the
+## Triangle instrument. Loops. -1 = rest. Empty = no melody.
+@export var melody_sequence: PackedInt32Array = PackedInt32Array()
+
+## Drum-layer config: parallel arrays indexed by bucket tier (distance from
+## center). When a coin activates a tier, that drum pattern starts playing
+## on the global beat grid. Empty = no drum layers (buckets use queue/arpeggio
+## mode instead).
+@export var drum_instruments: PackedInt32Array = PackedInt32Array()
+@export var drum_patterns: PackedStringArray = PackedStringArray()
+@export var drum_volumes: PackedFloat32Array = PackedFloat32Array()
+
+## dB offset applied on top of BUCKET_VOLUME_DB when the melody plays.
+## Positive = louder melody relative to the base. Useful for making the
+## melody pop over dense drum layers on arcade/challenge themes.
+@export var melody_volume_offset: float = 0.0
 
 
 # ── Palette resolver ─────────────────────────────────────────────────

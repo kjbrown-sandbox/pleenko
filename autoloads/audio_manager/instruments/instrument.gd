@@ -10,7 +10,7 @@ class_name Instrument extends RefCounted
 enum Type {
 	SILENT,
 	HARP,
-	SQUARE,
+	TRIANGLE,
 	ARCADE_KICK,
 	DRUM_KICK_DEEP,
 	DRUM_KICK_THIN,
@@ -18,6 +18,7 @@ enum Type {
 	DRUM_CLAP,
 	DRUM_RIM,
 	DRUM_HAT,
+	DRUM_KICK_BASS,
 }
 
 

@@ -140,16 +140,16 @@ func pulse() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	if not t.bucket_pulse_enabled:
 		return
-	const PRESS_DURATION: float = 1.1
+	# const PRESS_DURATION: float = t.bucket_pulse_duration
 	const PRESS_DEPTH: float = 0.1
 	if _press_tween and _press_tween.is_valid():
 		_press_tween.kill()
 	position.y = _rest_y
 	_press_tween = create_tween()
 	_press_tween.bind_node(self)
-	_press_tween.tween_property(self, "position:y", _rest_y - PRESS_DEPTH, PRESS_DURATION * 0.25) \
+	_press_tween.tween_property(self, "position:y", _rest_y - PRESS_DEPTH, t.bucket_pulse_duration * 0.25) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	_press_tween.tween_property(self, "position:y", _rest_y, PRESS_DURATION * 0.75) \
+	_press_tween.tween_property(self, "position:y", _rest_y, t.bucket_pulse_duration * 0.75) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 
