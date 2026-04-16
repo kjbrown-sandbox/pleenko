@@ -4,12 +4,14 @@ extends Node
 # chord-activated buckets back to faded.
 signal chord_changed(chord_index: int)
 
-# Fired when a drum-layer tier plays a beat. PlinkoBoard listens to pulse
-# every bucket at the given distance-from-center.
+# Fired only on slots where the tier's pattern has an "x" (a drum hit). Rest
+# slots ("-") don't emit — the bucket shouldn't pulse when there's no sound.
+# PlinkoBoard listens to pulse every bucket at the given distance-from-center.
 signal drum_tier_fired(tier: int)
 
-# Fired when a drum-layer tier's active lifetime runs out. PlinkoBoard fades
-# every bucket at that distance back to faded.
+# Fired once when a tier's active lifetime runs out (chord_duration after the
+# last activation). PlinkoBoard fades every bucket at that distance back to
+# faded. Independent of drum_tier_fired (which emits many times per lifetime).
 signal drum_tier_expired(tier: int)
 
 # Floor for chord-gated tail length so a late-chord hit still rings audibly
@@ -694,6 +696,10 @@ func _tick_beat_grid(delta: float) -> void:
 ##      pattern; audio waits for the tier's next beat slot.
 ##   2. Arpeggio (arpeggio_pattern non-empty): register + first-hit-immediate.
 ##   3. Queue (default): BUCKET_WAIT-spaced dispatch.
+## NOTE: `degree` = bucket's distance from center. Drum-layer mode indexes
+## its parallel arrays (drum_instruments, drum_patterns, drum_volumes) by
+## this same value, where it's called a "tier." Arpeggio / harp modes use
+## it as a chord-tone offset via _get_pitch_scale. Three words, one concept.
 func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> bool:
 	if board_type != _active_board:
 		return false
@@ -702,10 +708,9 @@ func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: i
 	# Drum-layer mode: activate the tier. Tier stays active for one chord
 	# duration from this activation.
 	if _theme_drum_instruments().size() > 0:
-		var tier: int = degree
-		if tier < _theme_drum_instruments().size():
+		if degree < _theme_drum_instruments().size():
 			var now: float = Time.get_ticks_msec() / 1000.0
-			_active_drum_tiers[tier] = now + _theme_chord_duration()
+			_active_drum_tiers[degree] = now + _theme_chord_duration()
 		return true
 
 	# Arpeggio / queue modes: per-bucket-per-chord dedup.

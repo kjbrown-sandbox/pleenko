@@ -34,7 +34,11 @@ var _normal_autodroppers_visible: bool = false
 var _advanced_autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
-var _drum_singing_positions: Dictionary = {}  # int (x*1000 rounded) -> true. Tracks specific buckets currently singing in drum-layer mode so they survive rebuilds.
+# Tracks specific buckets currently singing in drum-layer mode so they survive
+# rebuilds. Keyed by bucket world-x scaled to integer millimeters (float → int
+# rounded to 1mm). Scale factor must match between insert/lookup/erase.
+const BUCKET_POSITION_KEY_SCALE := 1000.0
+var _drum_singing_positions: Dictionary = {}  # _bucket_position_key(x) -> true
 var multi_drop_count: int = -1
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 # True while the mouse is hovering either drop button — used by the tooltip
@@ -81,6 +85,7 @@ func _ready() -> void:
 	AudioManager.chord_changed.connect(_on_chord_changed)
 	AudioManager.drum_tier_fired.connect(_on_drum_tier_fired)
 	AudioManager.drum_tier_expired.connect(_on_drum_tier_expired)
+	ThemeProvider.theme_changed.connect(_on_theme_changed)
 
 
 func _exit_tree() -> void:
@@ -90,6 +95,8 @@ func _exit_tree() -> void:
 		AudioManager.drum_tier_fired.disconnect(_on_drum_tier_fired)
 	if AudioManager.drum_tier_expired.is_connected(_on_drum_tier_expired):
 		AudioManager.drum_tier_expired.disconnect(_on_drum_tier_expired)
+	if ThemeProvider.theme_changed.is_connected(_on_theme_changed):
+		ThemeProvider.theme_changed.disconnect(_on_theme_changed)
 
 
 ## Chord advance: fade every bucket back to its faded color. Skipped when the
@@ -97,9 +104,10 @@ func _exit_tree() -> void:
 ## instead (see _on_drum_tier_expired). Challenge hit/forbidden buckets are
 ## skipped by Bucket.mark_stop_singing itself.
 func _on_chord_changed(_chord_index: int) -> void:
-	if ThemeProvider.theme.drum_instruments.size() > 0:
+	var theme: VisualTheme = ThemeProvider.theme if ThemeProvider else null
+	if not theme or theme.drum_instruments.size() > 0:
 		return
-	var duration: float = ThemeProvider.theme.bucket_fade_duration
+	var duration: float = theme.bucket_fade_duration
 	for child in buckets_container.get_children():
 		if child is Bucket:
 			child.mark_stop_singing(duration)
@@ -117,6 +125,13 @@ func _on_drum_tier_fired(tier: int) -> void:
 				bucket.pulse()
 
 
+## Theme swap: drop any drum-layer tracking from the old theme. Next theme
+## starts with a clean set; stale entries from the previous theme's drums
+## don't bleed into rebuilds under the new theme.
+func _on_theme_changed() -> void:
+	_drum_singing_positions.clear()
+
+
 ## Drum tier expired: fade every bucket at this tier's distance back to faded.
 ## Only buckets currently tracked as singing get stopped — avoids touching
 ## buckets that were never activated this lifetime.
@@ -129,7 +144,7 @@ func _on_drum_tier_expired(tier: int) -> void:
 			var bucket: Bucket = get_bucket(i)
 			if bucket:
 				bucket.mark_stop_singing(duration)
-				_drum_singing_positions.erase(roundi(bucket.position.x * 1000.0))
+				_drum_singing_positions.erase(_bucket_position_key(bucket.position.x))
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -686,7 +701,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		bucket.mark_singing()
 		# Drum-layer mode: track this bucket's position so it survives rebuilds.
 		if ThemeProvider.theme.drum_instruments.size() > 0:
-			_drum_singing_positions[roundi(bucket.position.x * 1000.0)] = true
+			_drum_singing_positions[_bucket_position_key(bucket.position.x)] = true
 	AudioManager.on_coin_landed()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
@@ -720,6 +735,13 @@ func get_bucket(index: int) -> Bucket:
 	if index >= 0 and index < children.size():
 		return children[index]
 	return null
+
+
+## Stable integer key for a bucket's world x-position. Survives board rebuilds
+## because x-positions are geometry-derived (they stay the same for the same
+## board slot even as bucket_idx shifts when rows are added).
+func _bucket_position_key(world_x: float) -> int:
+	return roundi(world_x * BUCKET_POSITION_KEY_SCALE)
 
 
 func mark_bucket_hit(index: int) -> void:
@@ -962,7 +984,7 @@ func build_board() -> void:
 	if not _drum_singing_positions.is_empty():
 		for child in buckets_container.get_children():
 			if child is Bucket:
-				var key: int = roundi(child.position.x * 1000.0)
+				var key: int = _bucket_position_key(child.position.x)
 				if _drum_singing_positions.has(key):
 					child.mark_singing()
 

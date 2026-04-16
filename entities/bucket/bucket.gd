@@ -137,10 +137,9 @@ func mark_stop_singing(duration: float) -> void:
 
 ## Trampoline press: punch down on Y, spring back with a slight overshoot.
 func pulse() -> void:
-	var t: VisualTheme = ThemeProvider.theme
-	if not t.bucket_pulse_enabled:
+	var t: VisualTheme = ThemeProvider.theme if ThemeProvider else null
+	if not t or not t.bucket_pulse_enabled:
 		return
-	# const PRESS_DURATION: float = t.bucket_pulse_duration
 	const PRESS_DEPTH: float = 0.1
 	if _press_tween and _press_tween.is_valid():
 		_press_tween.kill()
