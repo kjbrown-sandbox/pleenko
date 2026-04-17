@@ -1099,7 +1099,7 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 	if t.peg_pulse_enabled:
 		_active_peg_pulses[closest_idx] = {
 			"elapsed": 0.0,
-			"duration": t.bucket_pulse_duration,
+			"duration": t.peg_pulse_duration,
 		}
 
 	if t.peg_glow_halo_enabled:
