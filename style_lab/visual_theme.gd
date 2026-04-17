@@ -193,6 +193,7 @@ const coin_shape := CoinShape.CYLINDER
 @export var peg_glow_halo_opacity := 0.06
 @export var peg_flash_enabled := true                             # peg briefly takes coin color on contact
 @export var peg_pulse_enabled := true                             # peg scale-pulse on coin contact
+@export var peg_pulse_duration := 0.15                            # seconds from peg-pulse start to full settle
 @export var bucket_pulse_enabled := true                          # bucket scale-pulse on receive
 @export var drop_burst_enabled := true                            # particle burst at drop point
 
