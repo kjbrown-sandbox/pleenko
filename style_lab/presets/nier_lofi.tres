@@ -37,6 +37,7 @@ button_font = ExtResource("1_fbp74")
 button_bg_source = 5
 button_fill_text_source = 5
 button_border_source = 2
+bucket_pulse_duration = 1.15
 bucket_fade_duration = 1.0
 board_glow_opacity = 0.03
 peg_flash_enabled = false
@@ -62,3 +63,7 @@ progression = [{
 "motif": [0, 3, -1, 4, -1, 2, -1, -1],
 "root": 7
 }]
+melody_sequence = PackedInt32Array()
+drum_instruments = PackedInt32Array()
+drum_patterns = PackedStringArray()
+drum_volumes = PackedFloat32Array()
