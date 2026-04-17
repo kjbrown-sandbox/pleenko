@@ -2,9 +2,8 @@
 .godot/
 /android/
 
-# Stray .import files in build output (Godot regenerates these when run
-# from the build directory — they're not real project files).
-builds/**/*.import
+# Build output (exported via build.sh, pushed to itch via butler)
+builds/
 
 # GdUnit4 (dev dependency, installed via AssetLib)
 addons/gdUnit4/
