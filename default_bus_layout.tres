@@ -1,0 +1,61 @@
+[gd_resource type="AudioBusLayout" format=3]
+
+[sub_resource type="AudioEffectReverb" id="melody_reverb"]
+room_size = 0.55
+damping = 0.7
+wet = 0.0
+dry = 1.0
+
+[sub_resource type="AudioEffectLowPassFilter" id="melody_lowpass"]
+cutoff_hz = 3000.0
+resonance = 0.5
+
+[sub_resource type="AudioEffectCompressor" id="drones_compressor"]
+threshold = -18.0
+ratio = 3.0
+attack_us = 10000.0
+release_ms = 500.0
+
+[sub_resource type="AudioEffectReverb" id="drones_reverb"]
+room_size = 0.4
+damping = 0.5
+wet = 0.2
+dry = 0.8
+hipass = 0.2
+
+[resource]
+bus/1/name = &"Melody"
+bus/1/solo = false
+bus/1/mute = false
+bus/1/bypass_fx = false
+bus/1/volume_db = 0.0
+bus/1/send = &"Master"
+bus/1/effect/0/effect = SubResource("melody_reverb")
+bus/1/effect/0/enabled = true
+bus/1/effect/1/effect = SubResource("melody_lowpass")
+bus/1/effect/1/enabled = false
+
+bus/2/name = &"Click"
+bus/2/solo = false
+bus/2/mute = false
+bus/2/bypass_fx = false
+bus/2/volume_db = 0.0
+bus/2/send = &"Master"
+
+bus/3/name = &"Ambient"
+bus/3/solo = false
+bus/3/mute = false
+bus/3/bypass_fx = false
+bus/3/volume_db = 0.0
+bus/3/send = &"Master"
+
+bus/4/name = &"Drones"
+bus/4/solo = false
+bus/4/mute = false
+bus/4/bypass_fx = false
+bus/4/volume_db = 0.0
+bus/4/send = &"Master"
+bus/4/effect/0/effect = SubResource("drones_compressor")
+bus/4/effect/0/enabled = true
+bus/4/effect/1/effect = SubResource("drones_reverb")
+bus/4/effect/1/enabled = true
