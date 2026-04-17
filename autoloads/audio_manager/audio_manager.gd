@@ -187,7 +187,6 @@ const FINAL_COUNTDOWN_SECONDS := 10
 var _challenge_tick_received: bool = false
 
 # Melody-bus low-pass filter. Toggled on/off with lofi theme.
-const MELODY_LOWPASS_CUTOFF := 3000.0
 var _melody_lowpass_effect_idx: int = -1
 
 # ── Lofi drum system ─────────────────────────────────────────────────
@@ -212,8 +211,6 @@ var _melody_bus_idx: int = -1
 var _drones_bus_idx: int = -1
 var _click_bus_idx: int = -1
 var _ambient_bus_idx: int = -1
-
-
 func _ready() -> void:
 	# ── Legacy sound pools ───────────────────────────────────────────
 	var pool_overrides := {&"coin_flip": MAX_BUCKET_SOUNDS}
@@ -229,7 +226,15 @@ func _ready() -> void:
 			_pools[sound_name].append(player)
 
 	# ── Audio buses ──────────────────────────────────────────────────
-	_setup_buses()
+	# Buses are defined in default_bus_layout.tres (loaded at startup).
+	# Adding buses at runtime via AudioServer.add_bus() breaks web audio.
+	_melody_bus_idx = AudioServer.get_bus_index(&"Melody")
+	if _melody_bus_idx >= 0:
+		# Low-pass is the last effect on the Melody bus — see default_bus_layout.tres
+		_melody_lowpass_effect_idx = AudioServer.get_bus_effect_count(_melody_bus_idx) - 1
+	_click_bus_idx = AudioServer.get_bus_index(&"Click")
+	_ambient_bus_idx = AudioServer.get_bus_index(&"Ambient")
+	_drones_bus_idx = AudioServer.get_bus_index(&"Drones")
 
 	# ── Instruments ─────────────────────────────────────────────────
 	_harp = Harp.new()
@@ -1184,75 +1189,6 @@ func _on_theme_changed() -> void:
 		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, false)
 
 	_on_theme_swap()
-
-
-# ── Audio bus setup ──────────────────────────────────────────────────
-
-func _setup_buses() -> void:
-	# Add buses if they don't already exist
-	if AudioServer.get_bus_index(&"Melody") < 0:
-		_melody_bus_idx = AudioServer.bus_count
-		AudioServer.add_bus()
-		AudioServer.set_bus_name(_melody_bus_idx, &"Melody")
-		AudioServer.set_bus_send(_melody_bus_idx, &"Master")
-		# Reverb muted (wet=0) — Godot's built-in reverb fights the dry harp.
-		# Re-enable by raising wet (e.g. 0.15–0.25).
-		var reverb := AudioEffectReverb.new()
-		reverb.room_size = 0.55
-		reverb.wet = 0.0
-		reverb.dry = 1.0
-		reverb.damping = 0.7
-		AudioServer.add_bus_effect(_melody_bus_idx, reverb)
-		# Low-pass for lofi warmth — toggled in _on_theme_changed.
-		var lowpass := AudioEffectLowPassFilter.new()
-		lowpass.cutoff_hz = MELODY_LOWPASS_CUTOFF
-		lowpass.resonance = 0.5
-		AudioServer.add_bus_effect(_melody_bus_idx, lowpass)
-		_melody_lowpass_effect_idx = AudioServer.get_bus_effect_count(_melody_bus_idx) - 1
-		AudioServer.set_bus_effect_enabled(_melody_bus_idx, _melody_lowpass_effect_idx, false)
-	else:
-		_melody_bus_idx = AudioServer.get_bus_index(&"Melody")
-
-	if AudioServer.get_bus_index(&"Click") < 0:
-		_click_bus_idx = AudioServer.bus_count
-		AudioServer.add_bus()
-		AudioServer.set_bus_name(_click_bus_idx, &"Click")
-		AudioServer.set_bus_send(_click_bus_idx, &"Master")
-	else:
-		_click_bus_idx = AudioServer.get_bus_index(&"Click")
-
-	if AudioServer.get_bus_index(&"Ambient") < 0:
-		_ambient_bus_idx = AudioServer.bus_count
-		AudioServer.add_bus()
-		AudioServer.set_bus_name(_ambient_bus_idx, &"Ambient")
-		AudioServer.set_bus_send(_ambient_bus_idx, &"Master")
-	else:
-		_ambient_bus_idx = AudioServer.get_bus_index(&"Ambient")
-
-	# Drone-voice bus. Compressor first (tames the dry stack as voice count
-	# grows), then reverb. Order matters — reverb-before-comp would pump the
-	# tail with every new hit.
-	if AudioServer.get_bus_index(&"Drones") < 0:
-		_drones_bus_idx = AudioServer.bus_count
-		AudioServer.add_bus()
-		AudioServer.set_bus_name(_drones_bus_idx, &"Drones")
-		AudioServer.set_bus_send(_drones_bus_idx, &"Master")
-		var comp := AudioEffectCompressor.new()
-		comp.threshold = -18.0
-		comp.ratio = 3.0
-		comp.attack_us = 10000.0
-		comp.release_ms = 500.0
-		AudioServer.add_bus_effect(_drones_bus_idx, comp)
-		var reverb := AudioEffectReverb.new()
-		reverb.room_size = 0.4
-		reverb.damping = 0.5
-		reverb.wet = 0.2
-		reverb.dry = 0.8
-		reverb.hipass = 0.2  # cut muddy buildup on dense stacks
-		AudioServer.add_bus_effect(_drones_bus_idx, reverb)
-	else:
-		_drones_bus_idx = AudioServer.get_bus_index(&"Drones")
-
 
 # ── Placeholder tone generation ──────────────────────────────────────
 
