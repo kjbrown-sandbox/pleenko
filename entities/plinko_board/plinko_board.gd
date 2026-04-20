@@ -147,7 +147,7 @@ func _on_drum_tier_expired(tier: int) -> void:
 			var bucket: Bucket = get_bucket(i)
 			if bucket:
 				bucket.mark_stop_singing(duration)
-				_singing_positions.erase(_bucket_position_key(bucket.position.x))
+				_singing_positions.erase(_bucket_position_key(bucket.position.x + buckets_container.position.x))
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -656,22 +656,20 @@ func _spawn_ripple_particles(from: Vector3, to: Vector3, travel_time: float, col
 
 
 ## Firework splash at the edge buckets. direction is -1 (left) or +1 (right).
-## 6 particles fan outward in a half-arc away from center.
-func _spawn_edge_splash(origin: Vector3, direction: float, delay: float, color: Color, t: VisualTheme) -> void:
-	var count: int = 6
+## 10 particles burst in all directions from the edge bucket.
+func _spawn_edge_splash(origin: Vector3, _direction: float, delay: float, color: Color, t: VisualTheme) -> void:
+	var count: int = 10
 	var particle_size: float = t.drop_burst_particle_size
 	var spread: float = t.drop_burst_spread * 1.5
 	var duration: float = 0.4
-	# Fan from roughly -60° to +60° around the outward direction
 	for i in count:
 		if _drop_burst_free_indices.is_empty():
 			return
 		var idx: int = _drop_burst_free_indices.pop_back()
-		var angle_frac: float = float(i) / float(count - 1) - 0.5  # -0.5 to +0.5
-		var angle: float = angle_frac * PI * 0.67  # ~120° arc
-		var dist: float = spread * randf_range(0.6, 1.0)
+		var angle: float = randf() * TAU
+		var dist: float = spread * randf_range(0.5, 1.0)
 		var target: Vector3 = origin + Vector3(
-			cos(angle) * direction * dist,
+			cos(angle) * dist,
 			sin(angle) * dist,
 			0.0
 		)
@@ -765,7 +763,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		# false if this bucket already sang this chord — keep it faded.
 		if AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced):
 			bucket.mark_singing()
-			_singing_positions[_bucket_position_key(bucket.position.x)] = true
+			_singing_positions[_bucket_position_key(bucket.position.x + buckets_container.position.x)] = true
 	AudioManager.on_coin_landed()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
@@ -1048,7 +1046,7 @@ func build_board() -> void:
 	if not _singing_positions.is_empty():
 		for child in buckets_container.get_children():
 			if child is Bucket:
-				var key: int = _bucket_position_key(child.position.x)
+				var key: int = _bucket_position_key(child.position.x + buckets_container.position.x)
 				if _singing_positions.has(key):
 					child.mark_singing()
 
