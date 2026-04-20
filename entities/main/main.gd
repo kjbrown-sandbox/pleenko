@@ -94,6 +94,7 @@ func _setup_normal() -> void:
 
 
 func _setup_challenge() -> void:
+	ThemeProvider.set_theme(ThemeProvider.Kind.CHALLENGE)
 	challenge_hud.visible = true
 	ChallengeManager.setup(board_manager)
 	ChallengeManager.challenge_completed.connect(_on_challenge_completed)

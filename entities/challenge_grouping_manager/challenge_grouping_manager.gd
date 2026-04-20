@@ -151,7 +151,6 @@ func _on_challenge_pressed(btn: ChallengeButton) -> void:
 	if state == ChallengeProgressManager.ChallengeState.LOCKED:
 		return
 	ChallengeManager.set_challenge(btn.challenge)
-	ThemeProvider.set_theme(ThemeProvider.Kind.CHALLENGE)
 	SceneManager.set_new_scene(load("res://entities/main/main.tscn"))
 
 
