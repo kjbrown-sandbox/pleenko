@@ -1,10 +1,12 @@
 extends Node
 
 
-func set_new_scene(new_scene: PackedScene, instant: bool = false) -> void:
+func set_new_scene(new_scene: PackedScene, instant: bool = false, before_ready: Callable = Callable()) -> void:
 	var current_scene := get_tree().current_scene
 
 	if instant:
+		if before_ready.is_valid():
+			before_ready.call()
 		var instant_scene := new_scene.instantiate()
 		if current_scene:
 			current_scene.queue_free()
@@ -21,8 +23,6 @@ func set_new_scene(new_scene: PackedScene, instant: bool = false) -> void:
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	canvas_layer.add_child(overlay)
 
-	var new_scene_instantiated := new_scene.instantiate()
-
 	AudioManager.silence(1.0)
 
 	var tween_fade_out := create_tween()
@@ -32,6 +32,9 @@ func set_new_scene(new_scene: PackedScene, instant: bool = false) -> void:
 		if current_scene:
 			current_scene.queue_free()
 
+		if before_ready.is_valid():
+			before_ready.call()
+		var new_scene_instantiated := new_scene.instantiate()
 		get_tree().root.add_child(new_scene_instantiated)
 		get_tree().current_scene = new_scene_instantiated
 		AudioManager.unsilence()
