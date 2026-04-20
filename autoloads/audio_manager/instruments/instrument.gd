@@ -20,6 +20,7 @@ enum Type {
 	DRUM_HAT,
 	DRUM_KICK_BASS,
 	BELL,
+	HARP_LONG,
 }
 
 

@@ -139,6 +139,17 @@ var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree",
 # can't keep writing to the new drone's volume_db.
 var _drone_fade_tweens: Dictionary = {}
 
+# Prestige audio — ascending maj7 arpeggio from bass to bell at contact.
+const PRESTIGE_ARPEGGIO_INTERVAL := 0.125  # seconds between arpeggio notes (real-time)
+const PRESTIGE_BASS_VOLUME_DB := -10.0
+const PRESTIGE_BELL_VOLUME_DB := -12.0
+const PRESTIGE_ARPEGGIO_VOLUME_DB := -14.0
+var _prestige_silencing: bool = false  # gates request_bucket_play during prestige
+var _prestige_arpeggio_active: bool = false
+var _prestige_arpeggio_step: int = 0
+var _prestige_arpeggio_last_ms: int = 0
+var _prestige_arpeggio_notes: Array[float] = []  # pre-computed pitch_mult values
+
 # Bucket audio — three modes, selected by theme data:
 #   Drum-layer mode (drum_instruments non-empty): coin landings activate
 #     percussion tiers; a global sequencer plays their beat patterns.
@@ -179,6 +190,7 @@ var _piano_drone_stream: AudioStream = preload("res://assets/sounds/instrument_s
 # resolve(pitch_mult) -> { stream, pitch_scale }. AudioManager keeps voice
 # pooling, fades, chord-gated lifecycle, and bus routing.
 var _harp: Harp
+var _harp_long: HarpLong
 var _triangle: Triangle
 var _bell: Bell
 var _arcade_kick: ArcadeKick
@@ -250,6 +262,7 @@ func _ready() -> void:
 
 	# ── Instruments ─────────────────────────────────────────────────
 	_harp = Harp.new()
+	_harp_long = HarpLong.new()
 	_triangle = Triangle.new()
 	_bell = Bell.new()
 	_arcade_kick = ArcadeKick.new()
@@ -378,6 +391,7 @@ func _ready() -> void:
 	_on_theme_changed.call_deferred()
 
 	ChallengeManager.tick.connect(_on_challenge_tick)
+	PrestigeManager.prestige_phase_changed.connect(_on_prestige_phase_changed)
 	_on_theme_swap.call_deferred()
 
 	set_process(true)
@@ -401,6 +415,7 @@ func _process(delta: float) -> void:
 	_tick_pattern(delta)
 	_tick_sequencer(delta)
 	_update_bucket_drones(delta)
+	_tick_prestige_arpeggio()
 
 
 ## Advances the chord index through theme.progression while there's activity.
@@ -467,6 +482,7 @@ func _instrument_for(type: int) -> Instrument:
 		Instrument.Type.HARP: return _harp
 		Instrument.Type.TRIANGLE: return _triangle
 		Instrument.Type.BELL: return _bell
+		Instrument.Type.HARP_LONG: return _harp_long
 		Instrument.Type.ARCADE_KICK: return _arcade_kick
 		Instrument.Type.DRUM_KICK_DEEP: return _drum_kick_deep
 		Instrument.Type.DRUM_KICK_THIN: return _drum_kick_thin
@@ -750,6 +766,8 @@ func _tick_beat_grid(delta: float) -> void:
 ## this same value, where it's called a "tier." Arpeggio / harp modes use
 ## it as a chord-tone offset via _get_pitch_scale. Three words, one concept.
 func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> bool:
+	if _prestige_silencing:
+		return false
 	if board_type != _active_board:
 		return false
 	_activity_detected = true
@@ -795,6 +813,8 @@ func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: i
 ## Plays a bucket immediately, bypassing the queue and BUCKET_WAIT cooldown.
 ## Used by the bucket-value upgrade ripple which orchestrates its own timing.
 func force_play_bucket(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> void:
+	if _prestige_silencing:
+		return
 	if board_type != _active_board:
 		return
 	_activity_detected = true
@@ -1123,8 +1143,84 @@ func play(sound_name: StringName, pitch: float = 0.0, max_duration: float = 0.0)
 		)
 
 
-func play_prestige(play_duration: float = 3.0, fade_duration: float = 2.0) -> void:
-	pass
+func play_prestige(_play_duration: float = 3.0, _fade_duration: float = 2.0) -> void:
+	# Always use the first chord (I) so prestige is a I maj7, not whatever chord
+	# the progression happened to be on.
+	var prog: Array = _theme_progression()
+	var root_semitones: int = int(prog[0]["root"]) if not prog.is_empty() else 0
+	var root_pitch: float = pow(2.0, root_semitones / 12.0)
+
+	# Bass: long harp at advanced-coin register (2 octaves below C4)
+	var bass_pitch: float = root_pitch * 0.25
+	var bass_sp: Dictionary = _harp_long.resolve(bass_pitch)
+	_play_prestige_voice(bass_sp, PRESTIGE_BASS_VOLUME_DB, "prestige_bass")
+
+	# Bell: 3 octaves above bass (1 octave above C4)
+	var bell_pitch: float = root_pitch * 2.0
+	var bell_sp: Dictionary = _bell.resolve(bell_pitch)
+	_play_prestige_voice(bell_sp, PRESTIGE_BELL_VOLUME_DB, "prestige_bell")
+
+	# Build ascending maj7 arpeggio from bass to bell (3 octaves)
+	var maj7_semitones: Array[int] = [0, 4, 7, 11]  # I maj7 chord tones
+	_prestige_arpeggio_notes.clear()
+	for octave in 3:
+		for semitone in maj7_semitones:
+			var pitch: float = bass_pitch * pow(2.0, octave) * pow(2.0, semitone / 12.0)
+			_prestige_arpeggio_notes.append(pitch)
+
+	# Step 0 (root) was already played as bass — arpeggio starts at step 1
+	_prestige_arpeggio_step = 1
+	_prestige_arpeggio_last_ms = Time.get_ticks_msec()
+	_prestige_arpeggio_active = true
+
+
+## Allocates a drone pool voice for a prestige note. Fire-and-forget: registers
+## as LINGERING so _update_bucket_drones reclaims the slot after natural decay.
+func _play_prestige_voice(sp: Dictionary, volume_db: float, key: String) -> void:
+	if _drone_free.is_empty():
+		return
+	var idx: int = _drone_free.pop_back()
+	_kill_fade_tween(idx)
+	var player: AudioStreamPlayer = _drone_pool[idx]
+	player.stream = sp["stream"]
+	player.pitch_scale = sp["pitch_scale"]
+	player.volume_db = volume_db
+	player.play()
+	_active_drones[key] = _make_drone_entry(idx, 10.0, 0, 1.0, DroneState.LINGERING, false)
+
+
+## Fires one arpeggio note per PRESTIGE_ARPEGGIO_INTERVAL using wall-clock time.
+## Engine.time_scale is ~0.001 during prestige, so delta-based timing won't work.
+func _tick_prestige_arpeggio() -> void:
+	if not _prestige_arpeggio_active:
+		return
+	var now_ms: int = Time.get_ticks_msec()
+	if (now_ms - _prestige_arpeggio_last_ms) / 1000.0 < PRESTIGE_ARPEGGIO_INTERVAL:
+		return
+	_prestige_arpeggio_last_ms = now_ms
+
+	if _prestige_arpeggio_step >= _prestige_arpeggio_notes.size():
+		_prestige_arpeggio_active = false
+		return
+
+	var pitch: float = _prestige_arpeggio_notes[_prestige_arpeggio_step]
+	var sp: Dictionary = _harp_long.resolve(pitch)
+	var key: String = "prestige_arp_" + str(_prestige_arpeggio_step)
+	_play_prestige_voice(sp, PRESTIGE_ARPEGGIO_VOLUME_DB, key)
+	_prestige_arpeggio_step += 1
+
+
+func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
+	match phase:
+		PrestigeManager.PrestigePhase.SLOW_MO:
+			_prestige_silencing = true
+			_fade_all_drones(0.5)
+			_fade_out_ambient()
+			_bucket_queue.clear()
+		PrestigeManager.PrestigePhase.NONE:
+			_prestige_silencing = false
+			_prestige_arpeggio_active = false
+			_prestige_arpeggio_notes.clear()
 
 
 # ── Musical internals ────────────────────────────────────────────────
