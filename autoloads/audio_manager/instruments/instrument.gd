@@ -19,6 +19,7 @@ enum Type {
 	DRUM_RIM,
 	DRUM_HAT,
 	DRUM_KICK_BASS,
+	BELL,
 }
 
 
