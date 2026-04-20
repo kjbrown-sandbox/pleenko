@@ -98,6 +98,13 @@ var _activity_detected: bool = false
 # Ambient pad stays alive while > 0 and for AMBIENT_IDLE_TIMEOUT after it hits 0.
 var _active_coin_count: int = 0
 
+# Sparkle state — pegs sparkle only within 100ms of a bucket drone firing.
+# Each sparkle walks up the chord from the root, climbing into higher octaves
+# across successive bucket fires. Resets on chord advance.
+var _last_bucket_fire_ms: float = -1000.0
+var _sparkles_this_fire: int = 0
+var _sparkle_step: int = 0
+
 # Drone lifecycle:
 #   SPARKLE   — peg sparkle; timer-decayed by _update_bucket_drones.
 #   ACTIVE    — bucket note in current chord; chord-managed (chord advance
@@ -112,6 +119,10 @@ enum DroneState { SPARKLE, ACTIVE, LINGERING }
 # punctuation. Independent pools so they don't dim or evict each other.
 const MAX_NORMAL_DRONES := 5
 const MAX_ADVANCED_DRONES := 3
+const MAX_SPARKLE_DRONES := 5
+const SPARKLE_VOLUME_DB := -22.0
+const SPARKLE_PROXIMITY_MS := 100.0
+const MAX_SPARKLES_PER_FIRE := 2
 
 # Per-voice attenuation: voice N plays at VOICE_ATTENUATION_RATIO^(N-1) of
 # base amplitude (~2.5 dB drop per added voice at 0.75). The Drones-bus
@@ -119,7 +130,7 @@ const MAX_ADVANCED_DRONES := 3
 const VOICE_ATTENUATION_RATIO := 0.75
 
 const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — 3s fade over ~72 dB
-const SPARKLE_DRONE_SUSTAIN := 3.5
+const SPARKLE_DRONE_SUSTAIN := 2.5
 const BUCKET_DRONE_POOL_SIZE := 24
 var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
@@ -169,6 +180,7 @@ var _piano_drone_stream: AudioStream = preload("res://assets/sounds/instrument_s
 # pooling, fades, chord-gated lifecycle, and bus routing.
 var _harp: Harp
 var _triangle: Triangle
+var _bell: Bell
 var _arcade_kick: ArcadeKick
 var _click: Click
 var _drum_kick_deep: DrumKick
@@ -239,6 +251,7 @@ func _ready() -> void:
 	# ── Instruments ─────────────────────────────────────────────────
 	_harp = Harp.new()
 	_triangle = Triangle.new()
+	_bell = Bell.new()
 	_arcade_kick = ArcadeKick.new()
 	_click = Click.new()
 	_drum_kick_deep = DrumKick.new(60.0, 0.22)
@@ -453,6 +466,7 @@ func _instrument_for(type: int) -> Instrument:
 	match type:
 		Instrument.Type.HARP: return _harp
 		Instrument.Type.TRIANGLE: return _triangle
+		Instrument.Type.BELL: return _bell
 		Instrument.Type.ARCADE_KICK: return _arcade_kick
 		Instrument.Type.DRUM_KICK_DEEP: return _drum_kick_deep
 		Instrument.Type.DRUM_KICK_THIN: return _drum_kick_thin
@@ -604,6 +618,35 @@ func _finish_drone_fade(idx: int) -> void:
 		_drone_free.append(idx)
 
 
+func _count_sparkle_drones() -> int:
+	var count: int = 0
+	for drone_key in _active_drones:
+		if _active_drones[drone_key]["state"] == DroneState.SPARKLE:
+			count += 1
+	return count
+
+
+func _evict_oldest_sparkle_if_full() -> void:
+	if _count_sparkle_drones() < MAX_SPARKLE_DRONES:
+		return
+	var victim_key: String = ""
+	var victim_age: int = -1
+	var now: int = Time.get_ticks_msec()
+	for drone_key in _active_drones:
+		var drone: Dictionary = _active_drones[drone_key]
+		if drone["state"] != DroneState.SPARKLE:
+			continue
+		var age: int = now - int(drone.get("created_at", now))
+		if age > victim_age:
+			victim_age = age
+			victim_key = drone_key
+	if victim_key == "":
+		return
+	var victim: Dictionary = _active_drones[victim_key]
+	_active_drones.erase(victim_key)
+	_fade_drone(int(victim["idx"]), 0.3)
+
+
 func get_time_until_next_chord() -> float:
 	return _chord_timer
 
@@ -640,6 +683,7 @@ func _handle_chord_advance() -> void:
 	_unplayed_buckets.clear()
 	_pattern_slot_idx = -1
 	_pattern_slot_timer = 0.0
+	_sparkle_step = 0
 	# Drum tiers are time-based (one chord_duration from activation) and
 	# NOT cleared here — they persist past chord boundaries until expiration.
 	chord_changed.emit(_chord_index)
@@ -876,6 +920,9 @@ func _theme_drum_instruments() -> PackedInt32Array:
 ## Re-picks of the same bucket (pattern repeats) free the old slot first so
 ## each attack is distinct.
 func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
+	_last_bucket_fire_ms = Time.get_ticks_msec()
+	_sparkles_this_fire = 0
+
 	var instrument: Instrument = _instrument_for(_theme_bucket_type())
 	if not instrument or _theme_progression().is_empty():
 		return
@@ -916,11 +963,50 @@ func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 	_active_drones[key] = _make_drone_entry(idx, tail, degree, octave_mult, DroneState.ACTIVE, is_advanced)
 
 
-## DISABLED — sparkle audio clashes with the chord-gated bucket layer. Peg
-## ring VFX still fires via should_sparkle/_beat_armed. A follow-up feature
-## will redesign the sparkle voice to layer on top of the bucket melody.
-func play_peg_sparkle(_board_type: Enums.BoardType) -> void:
-	return
+## Plays a bell sparkle that walks up the chord from the root. Each sparkle
+## within a chord advances one step, climbing into higher octaves as it wraps.
+## Resets to root on chord advance (see _handle_chord_advance).
+func play_peg_sparkle(board_type: Enums.BoardType) -> void:
+	if board_type != _active_board:
+		return
+	if not _bell or _theme_progression().is_empty():
+		return
+
+	var entry: Dictionary = _current_chord_entry()
+	var chord: Array = entry["chord"]
+	if chord.is_empty():
+		return
+
+	# Walk up: step 0 = root, step 1 = 3rd, step 2 = 5th, ... wrapping into
+	# higher octaves. Start one octave above the middle bucket register (0.5).
+	# Second sparkle from the same bucket fire plays an octave above the first
+	# without advancing the melody step.
+	var degree: int = _sparkle_step % chord.size()
+	var extra_octaves: int = _sparkle_step / chord.size()
+	var sparkle_octave: float = 1.0 * pow(2.0, extra_octaves + _sparkles_this_fire)
+	var pitch: float = _get_pitch_scale(degree) * sparkle_octave
+	var sp: Dictionary = _bell.resolve(pitch)
+
+	_evict_oldest_sparkle_if_full()
+	if _drone_free.is_empty():
+		return
+
+	var sparkle_count: int = _count_sparkle_drones()
+	var voice_attenuation_db: float = _voice_attenuation_db(sparkle_count)
+
+	var idx: int = _drone_free.pop_back()
+	_kill_fade_tween(idx)
+	var player: AudioStreamPlayer = _drone_pool[idx]
+	player.stream = sp["stream"]
+	player.pitch_scale = _apply_tape_wobble(sp["pitch_scale"])
+	player.volume_db = SPARKLE_VOLUME_DB + voice_attenuation_db
+	player.play()
+
+	if _sparkles_this_fire == 0:
+		_sparkle_step += 1
+	_sparkles_this_fire += 1
+	var key: String = "SP_" + str(Time.get_ticks_msec()) + "_" + str(idx)
+	_active_drones[key] = _make_drone_entry(idx, SPARKLE_DRONE_SUSTAIN, degree, sparkle_octave, DroneState.SPARKLE, false)
 
 
 func play_peg_click(board_type: Enums.BoardType) -> void:
@@ -1063,20 +1149,21 @@ func is_active_board(board_type: Enums.BoardType) -> bool:
 	return board_type == _active_board
 
 
-## Beat-grid sparkle gate. True at most once per beat slot — the first peg
-## hit while the beat is armed AND the motif position has a real note (not -1).
-## Rests consume the beat silently. Always flags _chord_had_sparkle so a
-## rest-heavy chord isn't mistaken for "no activity."
+## Sparkle gate: peg hit must land in the window halfway between bucket sings
+## (BUCKET_WAIT/2 to BUCKET_WAIT/2 + 100ms after the last fire). Harp theme
+## only — other themes (e.g. glow_dark/triangle) don't sparkle.
 func should_sparkle(board_type: Enums.BoardType) -> bool:
 	if board_type != _active_board:
 		return false
-	if not _beat_armed:
+	if _theme_bucket_type() != Instrument.Type.HARP:
 		return false
-	_beat_armed = false
-	var motif: Array = _current_chord_entry().get("motif", [0])
-	var note: int = motif[_motif_position % motif.size()]
+	if _sparkles_this_fire >= MAX_SPARKLES_PER_FIRE:
+		return false
+	var elapsed_ms: float = Time.get_ticks_msec() - _last_bucket_fire_ms
+	if elapsed_ms > SPARKLE_PROXIMITY_MS:
+		return false
 	_chord_had_sparkle = true
-	return note >= 0
+	return true
 
 
 ## Snap the beat grid to this autodropper tick. Beat period is derived from
