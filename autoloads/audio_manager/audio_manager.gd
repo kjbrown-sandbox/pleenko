@@ -792,6 +792,15 @@ func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: i
 	return true
 
 
+## Plays a bucket immediately, bypassing the queue and BUCKET_WAIT cooldown.
+## Used by the bucket-value upgrade ripple which orchestrates its own timing.
+func force_play_bucket(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> void:
+	if board_type != _active_board:
+		return
+	_activity_detected = true
+	_play_bucket_now(bucket_idx, degree, is_advanced)
+
+
 ## Dequeues pending bucket plays spaced by BUCKET_WAIT. Called from _process.
 func _pump_bucket_queue() -> void:
 	if _bucket_queue.is_empty():

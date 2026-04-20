@@ -39,6 +39,8 @@ var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit"
 # rounded to 1mm). Scale factor must match between insert/lookup/erase.
 const BUCKET_POSITION_KEY_SCALE := 1000.0
 var _drum_singing_positions: Dictionary = {}  # _bucket_position_key(x) -> true
+var _upgrade_animating: bool = false
+var _upgrade_ripple_tween: Tween
 var multi_drop_count: int = -1
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 # True while the mouse is hovering either drop button — used by the tooltip
@@ -695,13 +697,15 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var num_buckets: int = buckets_container.get_child_count()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
-	# Each bucket sings at most once per chord. request_bucket_play returns
-	# false if this bucket already sang this chord — keep it faded.
-	if AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced):
-		bucket.mark_singing()
-		# Drum-layer mode: track this bucket's position so it survives rebuilds.
-		if ThemeProvider.theme.drum_instruments.size() > 0:
-			_drum_singing_positions[_bucket_position_key(bucket.position.x)] = true
+	# Suppress singing during upgrade ripple — the ripple owns the arpeggio.
+	if not _upgrade_animating:
+		# Each bucket sings at most once per chord. request_bucket_play returns
+		# false if this bucket already sang this chord — keep it faded.
+		if AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced):
+			bucket.mark_singing()
+			# Drum-layer mode: track this bucket's position so it survives rebuilds.
+			if ThemeProvider.theme.drum_instruments.size() > 0:
+				_drum_singing_positions[_bucket_position_key(bucket.position.x)] = true
 	AudioManager.on_coin_landed()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
@@ -1006,7 +1010,97 @@ func add_two_rows() -> void:
 
 func increase_bucket_values() -> void:
 	bucket_value_multiplier += 1
-	build_board()
+	_play_bucket_value_upgrade_ripple()
+
+
+func _play_bucket_value_upgrade_ripple() -> void:
+	_upgrade_animating = true
+	if _upgrade_ripple_tween and _upgrade_ripple_tween.is_valid():
+		_upgrade_ripple_tween.kill()
+
+	var num_buckets: int = buckets_container.get_child_count()
+	@warning_ignore("integer_division")
+	var center: int = num_buckets / 2
+	var max_distance: int = center
+
+	# Group buckets by distance from center, compute new values
+	var distance_groups: Dictionary = {}  # int -> Array[Dictionary]
+	for i in num_buckets:
+		var bucket: Bucket = get_bucket(i)
+		if not bucket:
+			continue
+		var distance: int = absi(i - center)
+		if not distance_groups.has(distance):
+			distance_groups[distance] = []
+
+		# Same value formula as build_board()
+		var effective_distance: int = distance
+		var is_adv: bool = false
+		if distance >= distance_for_advanced_buckets and should_show_advanced_buckets:
+			effective_distance = distance - distance_for_advanced_buckets
+			is_adv = true
+		var new_value: int = 1 + effective_distance * bucket_value_multiplier
+		var pct_bonus := ChallengeProgressManager.get_bucket_value_percent_bonus(board_type)
+		if pct_bonus > 0.0:
+			new_value = roundi(new_value * (1.0 + pct_bonus))
+
+		distance_groups[distance].append({
+			"bucket": bucket,
+			"index": i,
+			"distance": distance,
+			"old_value": bucket.value,
+			"new_value": new_value,
+			"is_advanced": is_adv,
+		})
+
+	var t: VisualTheme = ThemeProvider.theme
+	var ripple_interval: float = AudioManager.BUCKET_WAIT / 2.0
+	var label_duration: float = ripple_interval * 0.8
+	var pulse_down_duration: float = t.bucket_pulse_duration * 0.25 if t else 0.05
+
+	_upgrade_ripple_tween = create_tween()
+	_upgrade_ripple_tween.bind_node(self)
+
+	for distance in range(0, max_distance + 1):
+		if not distance_groups.has(distance):
+			continue
+		var group: Array = distance_groups[distance]
+
+		# Fire all buckets at this distance simultaneously
+		_upgrade_ripple_tween.tween_callback(func() -> void:
+			for entry in group:
+				var bucket: Bucket = entry["bucket"]
+				var old_val: int = entry["old_value"]
+				var new_val: int = entry["new_value"]
+				var idx: int = entry["index"]
+				var d: int = entry["distance"]
+				var is_adv: bool = entry["is_advanced"]
+
+				bucket.value = new_val
+				bucket.pulse_down()
+				bucket.animate_value_upgrade(old_val, new_val, label_duration)
+				AudioManager.force_play_bucket(board_type, idx, d, is_adv)
+				bucket.mark_singing()
+		)
+
+		# Wait for the press to bottom out, then spring back up
+		_upgrade_ripple_tween.tween_interval(pulse_down_duration)
+		var group_ref: Array = group
+		_upgrade_ripple_tween.tween_callback(func() -> void:
+			for entry in group_ref:
+				entry["bucket"].pulse_up()
+		)
+
+		# Wait the remainder of the ripple interval before the next group
+		if distance < max_distance:
+			var remaining: float = ripple_interval - pulse_down_duration
+			if remaining > 0.0:
+				_upgrade_ripple_tween.tween_interval(remaining)
+
+	# Clean up after the full ripple
+	_upgrade_ripple_tween.tween_callback(func() -> void:
+		_upgrade_animating = false
+	)
 
 func decrease_drop_delay() -> void:
 	var old_delay := drop_delay

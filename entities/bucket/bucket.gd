@@ -13,9 +13,12 @@ const SpriteTintShader := preload("res://entities/bucket/sprite_tint.gdshader")
 var currency_type: Enums.CurrencyType
 var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
+const PRESS_DEPTH: float = 0.1
+
 var _is_hit: bool = false
 var _color_tween: Tween
 var _press_tween: Tween
+var _upgrade_label_tween: Tween
 var _rest_y: float
 
 @onready var _mesh: MeshInstance3D = $MeshInstance3D
@@ -140,7 +143,6 @@ func pulse() -> void:
 	var t: VisualTheme = ThemeProvider.theme if ThemeProvider else null
 	if not t or not t.bucket_pulse_enabled:
 		return
-	const PRESS_DEPTH: float = 0.1
 	if _press_tween and _press_tween.is_valid():
 		_press_tween.kill()
 	position.y = _rest_y
@@ -150,6 +152,49 @@ func pulse() -> void:
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	_press_tween.tween_property(self, "position:y", _rest_y, t.bucket_pulse_duration * 0.75) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+
+## First half of pulse: press down.
+func pulse_down() -> void:
+	var t: VisualTheme = ThemeProvider.theme if ThemeProvider else null
+	if not t or not t.bucket_pulse_enabled:
+		return
+	if _press_tween and _press_tween.is_valid():
+		_press_tween.kill()
+	position.y = _rest_y
+	_press_tween = create_tween()
+	_press_tween.bind_node(self)
+	_press_tween.tween_property(self, "position:y", _rest_y - PRESS_DEPTH, t.bucket_pulse_duration * 0.25) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+
+## Second half of pulse: spring back up with overshoot.
+func pulse_up() -> void:
+	var t: VisualTheme = ThemeProvider.theme if ThemeProvider else null
+	if not t or not t.bucket_pulse_enabled:
+		return
+	if _press_tween and _press_tween.is_valid():
+		_press_tween.kill()
+	_press_tween = create_tween()
+	_press_tween.bind_node(self)
+	_press_tween.tween_property(self, "position:y", _rest_y, t.bucket_pulse_duration * 0.75) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+
+## Rapidly increments the label from old_value to new_value over duration seconds.
+## The internal value property should already be set before calling this.
+func animate_value_upgrade(old_value: int, new_value: int, duration: float) -> void:
+	if old_value == new_value or is_prestige_bucket:
+		return
+	if _upgrade_label_tween and _upgrade_label_tween.is_valid():
+		_upgrade_label_tween.kill()
+	var steps: int = new_value - old_value
+	_upgrade_label_tween = create_tween()
+	_upgrade_label_tween.bind_node(self)
+	_upgrade_label_tween.tween_method(func(t: float) -> void:
+		var current: int = old_value + roundi(t * steps)
+		_label.text = str(current)
+	, 0.0, 1.0, duration)
 
 
 func _resolve_default_color() -> Color:
