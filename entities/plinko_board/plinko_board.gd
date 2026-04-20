@@ -846,6 +846,11 @@ func get_nearest_bucket(x_position: float) -> Bucket:
 	return buckets_container.get_children()[0]
 
 func build_board() -> void:
+	# Kill any in-flight upgrade ripple — its bucket references become stale.
+	if _upgrade_ripple_tween and _upgrade_ripple_tween.is_valid():
+		_upgrade_ripple_tween.kill()
+	_upgrade_animating = false
+
 	# Clear old pegs (MultiMesh)
 	if _peg_multimesh_instance:
 		_peg_multimesh_instance.queue_free()
@@ -960,16 +965,11 @@ func build_board() -> void:
 
 		var distance_from_center = (abs(i - floor(num_buckets / 2))) 
 
-		var value = 1
 		var bucket_currency: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
 		if distance_from_center >= distance_for_advanced_buckets and should_show_advanced_buckets:
 			bucket_currency = advanced_bucket_type
-			distance_from_center -= distance_for_advanced_buckets
 
-		value += distance_from_center * bucket_value_multiplier
-		var pct_bonus := ChallengeProgressManager.get_bucket_value_percent_bonus(board_type)
-		if pct_bonus > 0.0:
-			value = roundi(value * (1.0 + pct_bonus))
+		var value: int = _bucket_value_for_distance(distance_from_center)
 		bucket.is_prestige_bucket = _will_trigger_prestige(bucket_currency)
 		buckets_container.add_child(bucket)
 		bucket.setup(bucket_currency, Vector3(i * space_between_pegs, 0, 0), value)
@@ -1008,11 +1008,26 @@ func add_two_rows() -> void:
 	num_rows += 2
 	build_board()
 
+## Computes the value for a bucket at a given distance from center.
+## Used by both build_board() and the upgrade ripple to keep the formula in one place.
+func _bucket_value_for_distance(distance: int) -> int:
+	var effective_distance: int = distance
+	if distance >= distance_for_advanced_buckets and should_show_advanced_buckets:
+		effective_distance = distance - distance_for_advanced_buckets
+	var val: int = 1 + effective_distance * bucket_value_multiplier
+	var pct_bonus := ChallengeProgressManager.get_bucket_value_percent_bonus(board_type)
+	if pct_bonus > 0.0:
+		val = roundi(val * (1.0 + pct_bonus))
+	return val
+
+
 func increase_bucket_values() -> void:
 	bucket_value_multiplier += 1
 	_play_bucket_value_upgrade_ripple()
 
 
+## Animates bucket value changes as a center-outward ripple with split pulse,
+## ticket-counter labels, and a harp arpeggio at half BUCKET_WAIT intervals.
 func _play_bucket_value_upgrade_ripple() -> void:
 	_upgrade_animating = true
 	if _upgrade_ripple_tween and _upgrade_ripple_tween.is_valid():
@@ -1033,16 +1048,8 @@ func _play_bucket_value_upgrade_ripple() -> void:
 		if not distance_groups.has(distance):
 			distance_groups[distance] = []
 
-		# Same value formula as build_board()
-		var effective_distance: int = distance
-		var is_adv: bool = false
-		if distance >= distance_for_advanced_buckets and should_show_advanced_buckets:
-			effective_distance = distance - distance_for_advanced_buckets
-			is_adv = true
-		var new_value: int = 1 + effective_distance * bucket_value_multiplier
-		var pct_bonus := ChallengeProgressManager.get_bucket_value_percent_bonus(board_type)
-		if pct_bonus > 0.0:
-			new_value = roundi(new_value * (1.0 + pct_bonus))
+		var is_adv: bool = distance >= distance_for_advanced_buckets and should_show_advanced_buckets
+		var new_value: int = _bucket_value_for_distance(distance)
 
 		distance_groups[distance].append({
 			"bucket": bucket,

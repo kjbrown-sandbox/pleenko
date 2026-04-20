@@ -10,11 +10,11 @@ extends Node3D
 const SkullTexture := preload("res://assets/icons/skull.png")
 const SpriteTintShader := preload("res://entities/bucket/sprite_tint.gdshader")
 
+const PRESS_DEPTH: float = 0.1
+
 var currency_type: Enums.CurrencyType
 var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
-const PRESS_DEPTH: float = 0.1
-
 var _is_hit: bool = false
 var _color_tween: Tween
 var _press_tween: Tween
