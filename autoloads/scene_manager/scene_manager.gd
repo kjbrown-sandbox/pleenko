@@ -6,6 +6,7 @@ extends Node
 ## so the old scene never shows the new theme and the new scene initializes
 ## with the correct theme already active.
 func set_new_scene(new_scene: PackedScene, instant: bool = false, theme: ThemeProvider.Kind = -1) -> void:
+	SaveManager.save_game()
 	var current_scene := get_tree().current_scene
 
 	if instant:
