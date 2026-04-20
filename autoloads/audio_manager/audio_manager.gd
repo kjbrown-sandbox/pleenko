@@ -810,7 +810,8 @@ func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: i
 	return true
 
 
-## Plays a bucket immediately, bypassing the queue and BUCKET_WAIT cooldown.
+## Activates a bucket immediately, bypassing the queue and BUCKET_WAIT cooldown.
+## In drum-layer mode, activates the drum tier so it plays on its next beat.
 ## Used by the bucket-value upgrade ripple which orchestrates its own timing.
 func force_play_bucket(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> void:
 	if _silenced:
@@ -818,7 +819,12 @@ func force_play_bucket(board_type: Enums.BoardType, bucket_idx: int, degree: int
 	if board_type != _active_board:
 		return
 	_activity_detected = true
-	_play_bucket_now(bucket_idx, degree, is_advanced)
+	if _theme_drum_instruments().size() > 0:
+		if degree < _theme_drum_instruments().size():
+			var now: float = Time.get_ticks_msec() / 1000.0
+			_active_drum_tiers[degree] = now + _theme_chord_duration()
+	else:
+		_play_bucket_now(bucket_idx, degree, is_advanced)
 
 
 ## Dequeues pending bucket plays spaced by BUCKET_WAIT. Called from _process.
