@@ -23,6 +23,8 @@ func set_new_scene(new_scene: PackedScene, instant: bool = false) -> void:
 
 	var new_scene_instantiated := new_scene.instantiate()
 
+	AudioManager.silence(1.0)
+
 	var tween_fade_out := create_tween()
 	tween_fade_out.tween_property(overlay, "color:a", 1.0, 1.0) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
@@ -32,6 +34,7 @@ func set_new_scene(new_scene: PackedScene, instant: bool = false) -> void:
 
 		get_tree().root.add_child(new_scene_instantiated)
 		get_tree().current_scene = new_scene_instantiated
+		AudioManager.unsilence()
 
 		var tween_fade_in := create_tween()
 		tween_fade_in.tween_property(overlay, "color:a", 0.0, 1.0) \

@@ -136,7 +136,7 @@ func _on_challenge_completed() -> void:
 
 	SaveManager.reset_state()
 	ThemeProvider.set_theme(ThemeProvider.Kind.NORMAL)
-	get_tree().reload_current_scene()
+	SceneManager.set_new_scene(load("res://entities/main/main.tscn"))
 
 
 func _format_reward(reward: ChallengeRewardData) -> String:
@@ -175,7 +175,7 @@ func _on_challenge_failed(reason: String) -> void:
 	ChallengeManager.clear_challenge()
 	SaveManager.reset_state()
 	ThemeProvider.set_theme(ThemeProvider.Kind.NORMAL)
-	get_tree().reload_current_scene()
+	SceneManager.set_new_scene(load("res://entities/main/main.tscn"))
 
 
 func _input(event: InputEvent) -> void:

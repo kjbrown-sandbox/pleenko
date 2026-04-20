@@ -144,7 +144,7 @@ const PRESTIGE_ARPEGGIO_INTERVAL := 0.125  # seconds between arpeggio notes (rea
 const PRESTIGE_BASS_VOLUME_DB := -10.0
 const PRESTIGE_BELL_VOLUME_DB := -12.0
 const PRESTIGE_ARPEGGIO_VOLUME_DB := -14.0
-var _prestige_silencing: bool = false  # gates request_bucket_play during prestige
+var _silenced: bool = false  # gates all new sounds (prestige, scene transitions)
 var _prestige_arpeggio_active: bool = false
 var _prestige_arpeggio_step: int = 0
 var _prestige_arpeggio_last_ms: int = 0
@@ -766,7 +766,7 @@ func _tick_beat_grid(delta: float) -> void:
 ## this same value, where it's called a "tier." Arpeggio / harp modes use
 ## it as a chord-tone offset via _get_pitch_scale. Three words, one concept.
 func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> bool:
-	if _prestige_silencing:
+	if _silenced:
 		return false
 	if board_type != _active_board:
 		return false
@@ -813,7 +813,7 @@ func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: i
 ## Plays a bucket immediately, bypassing the queue and BUCKET_WAIT cooldown.
 ## Used by the bucket-value upgrade ripple which orchestrates its own timing.
 func force_play_bucket(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> void:
-	if _prestige_silencing:
+	if _silenced:
 		return
 	if board_type != _active_board:
 		return
@@ -1143,6 +1143,20 @@ func play(sound_name: StringName, pitch: float = 0.0, max_duration: float = 0.0)
 		)
 
 
+## Fades all active sounds and prevents new ones from starting.
+## Used by scene transitions and prestige sequences.
+func silence(fade_duration: float = 0.5) -> void:
+	_silenced = true
+	_fade_all_drones(fade_duration)
+	_fade_out_ambient()
+	_bucket_queue.clear()
+
+
+## Re-enables sound production after a silence() call.
+func unsilence() -> void:
+	_silenced = false
+
+
 func play_prestige(_play_duration: float = 3.0, _fade_duration: float = 2.0) -> void:
 	# Always use the first chord (I) so prestige is a I maj7, not whatever chord
 	# the progression happened to be on.
@@ -1213,12 +1227,9 @@ func _tick_prestige_arpeggio() -> void:
 func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
 	match phase:
 		PrestigeManager.PrestigePhase.SLOW_MO:
-			_prestige_silencing = true
-			_fade_all_drones(0.5)
-			_fade_out_ambient()
-			_bucket_queue.clear()
+			silence(0.5)
 		PrestigeManager.PrestigePhase.NONE:
-			_prestige_silencing = false
+			unsilence()
 			_prestige_arpeggio_active = false
 			_prestige_arpeggio_notes.clear()
 
