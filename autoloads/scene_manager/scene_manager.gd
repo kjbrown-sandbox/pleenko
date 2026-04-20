@@ -1,12 +1,16 @@
 extends Node
 
 
-func set_new_scene(new_scene: PackedScene, instant: bool = false, before_ready: Callable = Callable()) -> void:
+## Transitions to a new scene with an optional visual fade and theme swap.
+## If theme is provided, it is applied at the midpoint (screen fully black)
+## so the old scene never shows the new theme and the new scene initializes
+## with the correct theme already active.
+func set_new_scene(new_scene: PackedScene, instant: bool = false, theme: ThemeProvider.Kind = -1) -> void:
 	var current_scene := get_tree().current_scene
 
 	if instant:
-		if before_ready.is_valid():
-			before_ready.call()
+		if theme >= 0:
+			ThemeProvider.set_theme(theme)
 		var instant_scene := new_scene.instantiate()
 		if current_scene:
 			current_scene.queue_free()
@@ -32,8 +36,8 @@ func set_new_scene(new_scene: PackedScene, instant: bool = false, before_ready: 
 		if current_scene:
 			current_scene.queue_free()
 
-		if before_ready.is_valid():
-			before_ready.call()
+		if theme >= 0:
+			ThemeProvider.set_theme(theme)
 		var new_scene_instantiated := new_scene.instantiate()
 		get_tree().root.add_child(new_scene_instantiated)
 		get_tree().current_scene = new_scene_instantiated
@@ -44,4 +48,3 @@ func set_new_scene(new_scene: PackedScene, instant: bool = false, before_ready: 
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 		tween_fade_in.tween_callback(canvas_layer.queue_free)
 	)
-

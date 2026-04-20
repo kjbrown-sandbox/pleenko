@@ -134,13 +134,8 @@ func _on_challenge_completed() -> void:
 	_challenge_complete_dialog.show_with_results(stats, reward_lines)
 	await _challenge_complete_dialog.closed
 
-	SceneManager.set_new_scene(
-		load("res://entities/main/main.tscn"),
-		false,
-		func() -> void:
-			SaveManager.reset_state()
-			ThemeProvider.set_theme(ThemeProvider.Kind.NORMAL)
-	)
+	SaveManager.reset_state()
+	SceneManager.set_new_scene(load("res://entities/main/main.tscn"), false, ThemeProvider.Kind.NORMAL)
 
 
 func _format_reward(reward: ChallengeRewardData) -> String:
@@ -176,14 +171,9 @@ func _format_starting_modifier(reward: ChallengeRewardData) -> String:
 func _on_challenge_failed(reason: String) -> void:
 	challenge_hud.show_result("Failed: %s" % reason)
 	await get_tree().create_timer(2.0).timeout
-	SceneManager.set_new_scene(
-		load("res://entities/main/main.tscn"),
-		false,
-		func() -> void:
-			ChallengeManager.clear_challenge()
-			SaveManager.reset_state()
-			ThemeProvider.set_theme(ThemeProvider.Kind.NORMAL)
-	)
+	ChallengeManager.clear_challenge()
+	SaveManager.reset_state()
+	SceneManager.set_new_scene(load("res://entities/main/main.tscn"), false, ThemeProvider.Kind.NORMAL)
 
 
 func _input(event: InputEvent) -> void:

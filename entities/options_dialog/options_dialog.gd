@@ -70,5 +70,4 @@ func _on_return_pressed() -> void:
 	else:
 		ChallengeManager.clear_challenge()
 		SaveManager.reset_state()
-		ThemeProvider.set_theme(ThemeProvider.Kind.NORMAL)
-	SceneManager.set_new_scene(load(MAIN_MENU_PATH))
+	SceneManager.set_new_scene(load(MAIN_MENU_PATH), false, ThemeProvider.Kind.NORMAL)
