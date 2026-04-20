@@ -829,7 +829,7 @@ func force_play_bucket(board_type: Enums.BoardType, bucket_idx: int, degree: int
 
 ## Dequeues pending bucket plays spaced by BUCKET_WAIT. Called from _process.
 func _pump_bucket_queue() -> void:
-	if _bucket_queue.is_empty():
+	if _silenced or _bucket_queue.is_empty():
 		return
 	var now: float = Time.get_ticks_msec() / 1000.0
 	while not _bucket_queue.is_empty() and now - _last_bucket_play_time >= BUCKET_WAIT:
@@ -841,6 +841,8 @@ func _pump_bucket_queue() -> void:
 ## Pattern mode: advance the slot timer, pick and play on "x" slots, rest on
 ## "-" slots. No-op if the active theme has no pattern (queue mode).
 func _tick_pattern(delta: float) -> void:
+	if _silenced:
+		return
 	var pattern: String = _theme_pattern()
 	if pattern.length() == 0:
 		return
@@ -872,7 +874,7 @@ func _play_pattern_slot() -> void:
 ## Sequencer: drives background melody + drum-layer dispatch. Ticks at
 ## SLOT_DURATION (0.25s). Starts on first challenge tick, stops on theme swap.
 func _tick_sequencer(delta: float) -> void:
-	if not _sequencer_running:
+	if _silenced or not _sequencer_running:
 		return
 	_slot_timer -= delta
 	while _slot_timer <= 0.0:
@@ -955,6 +957,8 @@ func _theme_drum_instruments() -> PackedInt32Array:
 ## Re-picks of the same bucket (pattern repeats) free the old slot first so
 ## each attack is distinct.
 func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
+	if _silenced:
+		return
 	_last_bucket_fire_ms = Time.get_ticks_msec()
 	_sparkles_this_fire = 0
 
@@ -1002,6 +1006,8 @@ func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 ## within a chord advances one step, climbing into higher octaves as it wraps.
 ## Resets to root on chord advance (see _handle_chord_advance).
 func play_peg_sparkle(board_type: Enums.BoardType) -> void:
+	if _silenced:
+		return
 	if board_type != _active_board:
 		return
 	if not _bell or _theme_progression().is_empty():
@@ -1045,6 +1051,8 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 
 
 func play_peg_click(board_type: Enums.BoardType) -> void:
+	if _silenced:
+		return
 	if board_type != _active_board:
 		return
 	_activity_detected = true
@@ -1075,6 +1083,8 @@ func on_coin_landed() -> void:
 ## DISABLED — drums parked while harp timbre is being developed. Pools,
 ## buses, and tick scheduling stay intact for easy re-enable.
 func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
+	if _silenced:
+		return
 	return
 	if board_type != _active_board:
 		return
@@ -1095,6 +1105,8 @@ func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
 ## beat; advanced → hat on the offbeat (ADVANCED_DRUM_OFFSET later). Rotates
 ## through the pool in order.
 func play_autodropper_drum(board_type: Enums.BoardType, is_advanced: bool) -> void:
+	if _silenced:
+		return
 	return
 	if board_type != _active_board:
 		return
@@ -1130,6 +1142,8 @@ func _play_advanced_drum_now(board_type: Enums.BoardType) -> void:
 # ── Legacy API (kept for backward compatibility) ─────────────────────
 
 func play(sound_name: StringName, pitch: float = 0.0, max_duration: float = 0.0) -> void:
+	if _silenced:
+		return
 	if sound_name not in _pools:
 		return
 	var pool: Array = _pools[sound_name]
