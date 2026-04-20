@@ -38,7 +38,7 @@ var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit"
 # rebuilds. Keyed by bucket world-x scaled to integer millimeters (float → int
 # rounded to 1mm). Scale factor must match between insert/lookup/erase.
 const BUCKET_POSITION_KEY_SCALE := 1000.0
-var _drum_singing_positions: Dictionary = {}  # _bucket_position_key(x) -> true
+var _singing_positions: Dictionary = {}  # _bucket_position_key(x) -> true, survives rebuilds
 var _upgrade_animating: bool = false
 var _upgrade_ripple_tween: Tween
 var multi_drop_count: int = -1
@@ -109,6 +109,7 @@ func _on_chord_changed(_chord_index: int) -> void:
 	var theme: VisualTheme = ThemeProvider.theme if ThemeProvider else null
 	if not theme or theme.drum_instruments.size() > 0:
 		return
+	_singing_positions.clear()
 	var duration: float = theme.bucket_fade_duration
 	for child in buckets_container.get_children():
 		if child is Bucket:
@@ -131,7 +132,7 @@ func _on_drum_tier_fired(tier: int) -> void:
 ## starts with a clean set; stale entries from the previous theme's drums
 ## don't bleed into rebuilds under the new theme.
 func _on_theme_changed() -> void:
-	_drum_singing_positions.clear()
+	_singing_positions.clear()
 
 
 ## Drum tier expired: fade every bucket at this tier's distance back to faded.
@@ -146,7 +147,7 @@ func _on_drum_tier_expired(tier: int) -> void:
 			var bucket: Bucket = get_bucket(i)
 			if bucket:
 				bucket.mark_stop_singing(duration)
-				_drum_singing_positions.erase(_bucket_position_key(bucket.position.x))
+				_singing_positions.erase(_bucket_position_key(bucket.position.x))
 
 
 func setup(type: Enums.BoardType) -> void:
@@ -602,6 +603,10 @@ func _sync_drop_burst(delta: float) -> void:
 	while i < _active_drop_bursts.size():
 		var p: Dictionary = _active_drop_bursts[i]
 		p.elapsed += delta
+		if p.elapsed < 0.0:
+			mm.set_instance_transform(p.idx, hidden)
+			i += 1
+			continue
 		var k: float = clampf(p.elapsed / p.duration, 0.0, 1.0)
 
 		if k >= 1.0:
@@ -622,6 +627,63 @@ func _sync_drop_burst(delta: float) -> void:
 		mm.set_instance_color(p.idx, c)
 
 		i += 1
+
+
+## Spawns a stream of particles traveling from center to a target bucket
+## position, arriving in travel_time seconds. Reuses the drop burst MultiMesh.
+func _spawn_ripple_particles(from: Vector3, to: Vector3, travel_time: float, color: Color, t: VisualTheme) -> void:
+	var count: int = 3
+	var particle_size: float = t.drop_burst_particle_size * 0.8
+	for i in count:
+		if _drop_burst_free_indices.is_empty():
+			return
+		var idx: int = _drop_burst_free_indices.pop_back()
+		# Stagger particles slightly and add perpendicular scatter
+		var stagger: float = float(i) / float(count) * travel_time * 0.3
+		var dir: Vector3 = (to - from).normalized()
+		var perp: Vector3 = Vector3(-dir.y, dir.x, 0.0)
+		var scatter: float = randf_range(-0.15, 0.15)
+		var scattered_target: Vector3 = to + perp * scatter
+		_active_drop_bursts.append({
+			"idx": idx,
+			"start": from,
+			"target": scattered_target,
+			"elapsed": -stagger,
+			"duration": travel_time,
+			"size": particle_size,
+			"color": color,
+		})
+
+
+## Firework splash at the edge buckets. direction is -1 (left) or +1 (right).
+## 6 particles fan outward in a half-arc away from center.
+func _spawn_edge_splash(origin: Vector3, direction: float, delay: float, color: Color, t: VisualTheme) -> void:
+	var count: int = 6
+	var particle_size: float = t.drop_burst_particle_size
+	var spread: float = t.drop_burst_spread * 1.5
+	var duration: float = 0.4
+	# Fan from roughly -60° to +60° around the outward direction
+	for i in count:
+		if _drop_burst_free_indices.is_empty():
+			return
+		var idx: int = _drop_burst_free_indices.pop_back()
+		var angle_frac: float = float(i) / float(count - 1) - 0.5  # -0.5 to +0.5
+		var angle: float = angle_frac * PI * 0.67  # ~120° arc
+		var dist: float = spread * randf_range(0.6, 1.0)
+		var target: Vector3 = origin + Vector3(
+			cos(angle) * direction * dist,
+			sin(angle) * dist,
+			0.0
+		)
+		_active_drop_bursts.append({
+			"idx": idx,
+			"start": origin,
+			"target": target,
+			"elapsed": -delay - randf_range(0.0, 0.05),
+			"duration": duration * randf_range(0.8, 1.0),
+			"size": particle_size,
+			"color": color,
+		})
 
 
 func _drop_from_queue() -> void:
@@ -703,9 +765,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		# false if this bucket already sang this chord — keep it faded.
 		if AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced):
 			bucket.mark_singing()
-			# Drum-layer mode: track this bucket's position so it survives rebuilds.
-			if ThemeProvider.theme.drum_instruments.size() > 0:
-				_drum_singing_positions[_bucket_position_key(bucket.position.x)] = true
+			_singing_positions[_bucket_position_key(bucket.position.x)] = true
 	AudioManager.on_coin_landed()
 	if coin.multiplier > 1 and not coin.is_prestige_coin:
 		_show_floating_text(coin.global_position, coin.multiplier, amount)
@@ -983,13 +1043,13 @@ func build_board() -> void:
 				&"target": bucket.mark_target()
 				&"forbidden": bucket.mark_forbidden()
 
-	# Drum-layer mode: re-apply singing visuals for the exact buckets that
-	# were singing before the rebuild (matched by world x-position).
-	if not _drum_singing_positions.is_empty():
+	# Re-apply singing visuals for buckets that were singing before the rebuild
+	# (matched by world x-position so they survive index shifts from row adds).
+	if not _singing_positions.is_empty():
 		for child in buckets_container.get_children():
 			if child is Bucket:
 				var key: int = _bucket_position_key(child.position.x)
-				if _drum_singing_positions.has(key):
+				if _singing_positions.has(key):
 					child.mark_singing()
 
 	board_rebuilt.emit()
@@ -1064,6 +1124,33 @@ func _play_bucket_value_upgrade_ripple() -> void:
 	var ripple_interval: float = AudioManager.BUCKET_WAIT / 2.0
 	var label_duration: float = ripple_interval * 0.8
 	var pulse_down_duration: float = t.bucket_pulse_duration * 0.25 if t else 0.05
+
+	# Particle wavefront: spawn bursts from center toward each distance tier,
+	# timed so particles arrive when the tier activates.
+	var center_bucket: Bucket = get_bucket(center)
+	var center_pos: Vector3 = buckets_container.position + center_bucket.position if center_bucket else buckets_container.position
+	var ripple_color: Color = t.get_coin_color(TierRegistry.primary_currency(board_type))
+	for distance in range(1, max_distance + 1):
+		if not distance_groups.has(distance):
+			continue
+		var group_for_particles: Array = distance_groups[distance]
+		var travel_time: float = ripple_interval * distance
+		for entry in group_for_particles:
+			var bucket: Bucket = entry["bucket"]
+			var target_pos: Vector3 = buckets_container.position + bucket.position
+			_spawn_ripple_particles(center_pos, target_pos, travel_time, ripple_color, t)
+
+	# Splash at the edges: when the wavefront reaches the outermost buckets,
+	# particles burst outward like water hitting the end of a pipe.
+	var splash_delay: float = ripple_interval * max_distance
+	var left_bucket: Bucket = get_bucket(0)
+	var right_bucket: Bucket = get_bucket(num_buckets - 1)
+	if left_bucket:
+		var left_pos: Vector3 = buckets_container.position + left_bucket.position
+		_spawn_edge_splash(left_pos, -1.0, splash_delay, ripple_color, t)
+	if right_bucket:
+		var right_pos: Vector3 = buckets_container.position + right_bucket.position
+		_spawn_edge_splash(right_pos, 1.0, splash_delay, ripple_color, t)
 
 	_upgrade_ripple_tween = create_tween()
 	_upgrade_ripple_tween.bind_node(self)
