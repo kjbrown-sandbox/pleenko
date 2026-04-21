@@ -7,3 +7,4 @@ builds/
 
 # GdUnit4 (dev dependency, installed via AssetLib)
 addons/gdUnit4/
+movies/
