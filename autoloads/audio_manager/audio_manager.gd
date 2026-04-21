@@ -79,7 +79,7 @@ var _active_board: Enums.BoardType = Enums.BoardType.GOLD
 
 var _chord_timer: float = 6.0  # overwritten from theme.chord_duration on _ready
 var _chord_idle_timer: float = 0.0
-var _chord_had_sparkle: bool = false
+var _chord_had_landing: bool = false
 
 var _autodrop_interval: float = DEFAULT_AUTODROP_INTERVAL
 var _beat_period: float = DEFAULT_AUTODROP_INTERVAL / BEATS_PER_BAR
@@ -419,8 +419,8 @@ func _process(delta: float) -> void:
 
 
 ## Advances the chord index through theme.progression while there's activity.
-## Idle > CHORD_IDLE_RESET resets to the root chord; a whole chord without
-## sparkles also resets (board too quiet to sustain the progression).
+## Idle > CHORD_IDLE_RESET resets to the root chord; a full chord with no
+## bucket landings also resets (board too quiet to sustain the progression).
 func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
 	var prog: Array = _theme_progression()
 	if prog.is_empty():
@@ -430,17 +430,13 @@ func _tick_harmonic_rhythm(delta: float, has_activity: bool) -> void:
 		_chord_idle_timer = 0.0
 		_chord_timer -= delta
 		if _chord_timer <= 0.0:
-			# Themes with a melody self-sustain the progression; harp-mode
-			# themes depend on peg sparkles to keep the chord cycling.
-			var has_melody: bool = ThemeProvider.theme \
-					and ThemeProvider.theme.melody_sequence.size() > 0
-			if not has_melody and not _chord_had_sparkle:
+			if not _chord_had_landing:
 				_reset_harmonic_state()
 			elif prog.size() > 1:
 				_chord_index = (_chord_index + 1) % prog.size()
 				_motif_position = 0
 			_chord_timer = _theme_chord_duration()
-			_chord_had_sparkle = false
+			_chord_had_landing = false
 			_handle_chord_advance()
 	else:
 		_chord_idle_timer += delta
@@ -455,7 +451,7 @@ func _reset_harmonic_state() -> void:
 	_motif_position = 0
 	_beat_phase = 0.0
 	_beat_armed = true
-	_chord_had_sparkle = false
+	_chord_had_landing = false
 	# Idle reset counts as a chord change for visuals (buckets need to fade).
 	_handle_chord_advance()
 
@@ -778,6 +774,7 @@ func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: i
 		if degree < _theme_drum_instruments().size():
 			var now: float = Time.get_ticks_msec() / 1000.0
 			_active_drum_tiers[degree] = now + _theme_chord_duration()
+		_chord_had_landing = true
 		return true
 
 	# Arpeggio / queue modes: per-bucket-per-chord dedup.
@@ -961,6 +958,7 @@ func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 		return
 	_last_bucket_fire_ms = Time.get_ticks_msec()
 	_sparkles_this_fire = 0
+	_chord_had_landing = true
 
 	var instrument: Instrument = _instrument_for(_theme_bucket_type())
 	if not instrument or _theme_progression().is_empty():
@@ -1298,7 +1296,6 @@ func should_sparkle(board_type: Enums.BoardType) -> bool:
 	var elapsed_ms: float = Time.get_ticks_msec() - _last_bucket_fire_ms
 	if elapsed_ms > SPARKLE_PROXIMITY_MS:
 		return false
-	_chord_had_sparkle = true
 	return true
 
 
