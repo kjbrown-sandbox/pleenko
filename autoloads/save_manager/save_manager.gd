@@ -6,6 +6,9 @@ const AUTO_SAVE_INTERVAL := 30.0
 
 var _auto_save_timer: Timer
 var _board_manager: BoardManager
+## Offline earnings from the last load_game() call. Keyed by CurrencyType string
+## name -> amount earned. Empty if no offline time elapsed. Cleared after reading.
+var last_offline_earnings: Dictionary = {}
 
 
 func setup(board_manager: BoardManager, should_autosave: bool) -> void:
@@ -74,11 +77,20 @@ func load_game() -> bool:
 	data = _migrate(data, version)
 
 	# Compute offline earnings before deserializing into managers
+	last_offline_earnings = {}
 	var saved_time: float = data.get("save_timestamp", 0.0)
 	if saved_time > 0.0:
 		var elapsed: float = Time.get_unix_time_from_system() - saved_time
+		var old_currency: Dictionary = data.get("currency", {}).duplicate(true)
 		var updated := OfflineCalculator.calculate(data, elapsed)
 		data["currency"] = updated["currency"]
+		# Compute per-currency deltas
+		for key in updated["currency"]:
+			var new_bal: int = updated["currency"][key].get("balance", 0)
+			var old_bal: int = old_currency.get(key, {}).get("balance", 0)
+			var earned: int = new_bal - old_bal
+			if earned > 0:
+				last_offline_earnings[key] = earned
 		print("[SaveManager] Applied offline earnings for %.0f seconds." % elapsed)
 
 	# Deserialize prestige first — BoardManager queries it during deserialize

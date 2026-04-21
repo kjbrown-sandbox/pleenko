@@ -59,7 +59,7 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 		var board_index: int = board_type
 		var board_str: String = _board_key(board_type)
 
-		if board_index not in board_types:
+		if float(board_index) not in board_types:
 			continue
 
 		var bs: Dictionary = board_state.get(board_str, {})

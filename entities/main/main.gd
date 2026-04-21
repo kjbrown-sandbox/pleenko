@@ -3,11 +3,12 @@ extends Node3D
 const OptionsDialogScript := preload("res://entities/options_dialog/options_dialog.gd")
 const ComingSoonOverlayScript := preload("res://entities/coming_soon_overlay/coming_soon_overlay.gd")
 const ChallengeCompleteDialogScene := preload("res://entities/challenge_complete_dialog/challenge_complete_dialog.tscn")
+const OfflineEarningsDialogScene := preload("res://entities/offline_earnings_dialog/offline_earnings_dialog.tscn")
 
 ## Demo lockdown toggle. When true, the red board and orange/red challenge
 ## groups are blocked behind a "More coming soon!" overlay. Toggle from the
 ## Inspector on the Main node to switch between demo and full play.
-@export var demo_mode: bool = false
+@export var demo_mode: bool = true
 
 @onready var board_manager: BoardManager = $BoardManager
 @onready var challenge_grouping_manager: ChallengeGroupingManager = $ChallengeGroupingManager
@@ -27,6 +28,7 @@ const ChallengeCompleteDialogScene := preload("res://entities/challenge_complete
 var _options_dialog: CanvasLayer
 var _coming_soon_overlay: CanvasLayer
 var _challenge_complete_dialog: CanvasLayer
+var _offline_earnings_dialog: CanvasLayer
 
 # Nav arrow blink state
 var _boards_with_unseen_upgrades: Dictionary = {}  # BoardType -> true
@@ -56,6 +58,7 @@ func _ready() -> void:
 	_setup_options_dialog()
 	_setup_coming_soon_overlay()
 	_setup_challenge_complete_dialog()
+	_setup_offline_earnings_dialog()
 	_setup_prestige_animator()
 
 	_setup_vignette()
@@ -89,6 +92,9 @@ func _setup_normal() -> void:
 		_loading_from_save = false
 		coin_values.refresh_visible_currencies()
 		challenge_grouping_manager.refresh_challenge_progress()
+
+		if not SaveManager.last_offline_earnings.is_empty():
+			_show_offline_earnings.call_deferred()
 
 	challenge_grouping_manager.update_group_visibility()
 
@@ -254,6 +260,18 @@ func _setup_coming_soon_overlay() -> void:
 func _setup_challenge_complete_dialog() -> void:
 	_challenge_complete_dialog = ChallengeCompleteDialogScene.instantiate()
 	add_child(_challenge_complete_dialog)
+
+
+func _setup_offline_earnings_dialog() -> void:
+	_offline_earnings_dialog = OfflineEarningsDialogScene.instantiate()
+	add_child(_offline_earnings_dialog)
+
+
+func _show_offline_earnings() -> void:
+	var earnings: Dictionary = SaveManager.last_offline_earnings
+	SaveManager.last_offline_earnings = {}
+	_offline_earnings_dialog.show_earnings(earnings)
+	await _offline_earnings_dialog.closed
 
 
 ## Demo lockdown: shows the "More coming soon!" overlay when the active board
