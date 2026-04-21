@@ -42,6 +42,7 @@ var _singing_positions: Dictionary = {}  # _bucket_position_key(x) -> true, surv
 var _upgrade_animating: bool = false
 var _upgrade_ripple_tween: Tween
 var multi_drop_count: int = -1
+@export var hack_space: bool = true
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 # True while the mouse is hovering either drop button — used by the tooltip
 # refresh logic so the persistent "Needs X" message is suppressed in favor of
@@ -263,6 +264,11 @@ func _on_drop_side_hover(text: String) -> void:
 
 
 func _process(delta: float) -> void:
+	# TEMP: performance test — spam coins while holding spacebar
+	if hack_space and Input.is_action_pressed("drop_coin") and drop_section.visible:
+		is_waiting = false
+		_drop_timer_remaining = 0.0
+		request_drop()
 	if is_waiting:
 		_drop_timer_remaining = maxf(0.0, _drop_timer_remaining - delta)
 		_update_drop_fill()
