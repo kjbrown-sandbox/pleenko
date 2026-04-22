@@ -20,6 +20,10 @@ config/auto_accept_quit=false
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
+[audio]
+
+buses/default_bus_layout="uid://s2v3yih5ktwq"
+
 [autoload]
 
 TierRegistry="*res://autoloads/tier_registry/tier_registry.tscn"
@@ -39,6 +43,7 @@ AudioManager="*res://autoloads/audio_manager/audio_manager.gd"
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
+window/size/resizable=false
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
