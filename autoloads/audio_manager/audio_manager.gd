@@ -1471,5 +1471,3 @@ func _generate_ambient_pad(duration: float, mix_rate: int = 44100, frequencies: 
 		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
 	wav.data = data
 	return wav
-
-
