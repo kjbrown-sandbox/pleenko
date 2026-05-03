@@ -788,11 +788,10 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		_pick_new_gameplay_target()
 	var amount: int = roundi(bucket.value * coin.multiplier * target_multiplier)
 	var was_already_singing := bucket.is_singing()
+	var singing_bonus: int = 1 if was_already_singing else 0
 	if not coin.is_prestige_coin:
-		CurrencyManager.add(bucket.currency_type, amount)
-		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
-		if was_already_singing:
-			CurrencyManager.add(bucket.currency_type, 1)
+		CurrencyManager.add(bucket.currency_type, amount + singing_bonus)
+		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount + singing_bonus, coin.multiplier)
 	bucket.pulse()
 	var num_buckets: int = buckets_container.get_child_count()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)

@@ -466,6 +466,11 @@ func deserialize(data: Dictionary) -> void:
 	_snap_camera_to_active_board()
 
 
+func _exit_tree() -> void:
+	if ChallengeManager.challenge_state_changed.is_connected(_on_challenge_state_changed_for_targets):
+		ChallengeManager.challenge_state_changed.disconnect(_on_challenge_state_changed_for_targets)
+
+
 func _on_challenge_state_changed_for_targets() -> void:
 	var enabled := not ChallengeManager.uses_target_buckets()
 	for board in _boards:

@@ -212,6 +212,7 @@ func mark_gameplay_target() -> void:
 
 func start_gameplay_target_fade(duration: float) -> void:
 	_kill_color_tween()
+	_is_hit = false
 	var faded_color: Color = _resolve_default_color()
 	_color_tween = create_tween()
 	_color_tween.bind_node(self)

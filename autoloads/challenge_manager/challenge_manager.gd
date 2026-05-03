@@ -62,15 +62,15 @@ func setup(board_manager: BoardManager) -> void:
 	UpgradeManager.upgrade_gate = is_upgrade_allowed
 	_board_manager.board_gate = is_board_allowed
 
-	# Set gates on individual boards
+	# Apply starting conditions before tracker connects (may spawn new boards)
+	_apply_starting_conditions()
+
+	# Set gates on individual boards (after starting conditions, which may create boards)
 	var _drop_blocked := func() -> bool: return has_failed()
 	var _upgrade_gate := is_upgrade_allowed
 	for board in _board_manager.get_boards():
 		board.drop_blocked = _drop_blocked
 		board.upgrade_allowed = _upgrade_gate
-
-	# Apply starting conditions before tracker connects
-	_apply_starting_conditions()
 
 	# Create and start the tracker
 	_tracker = ChallengeTracker.new()
