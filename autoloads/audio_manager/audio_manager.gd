@@ -14,9 +14,6 @@ signal drum_tier_fired(tier: int)
 # faded. Independent of drum_tier_fired (which emits many times per lifetime).
 signal drum_tier_expired(tier: int)
 
-# Floor for chord-gated tail length so a late-chord hit still rings audibly
-# before the chord_changed fade starts.
-const MIN_BUCKET_RING_SECONDS := 1.0
 
 const POOL_SIZE := 10
 const MAX_BUCKET_SOUNDS := 30
@@ -49,6 +46,7 @@ var _sounds: Dictionary = {
 #   min:  [0, 3, 7, 12, 15, 19, 24, 27]
 
 var _chord_index: int = 0
+var _chord_generation: int = 0  # incremented on chord advance; per-chord attenuation scope
 const CHORD_IDLE_RESET := 2.0
 
 # Beat grid: 4/4 derived from the autodropper tick. Beat clock free-runs at
@@ -87,20 +85,11 @@ var _sparkles_this_fire: int = 0
 var _sparkle_step: int = 0
 
 # Drone lifecycle:
-#   SPARKLE   — peg sparkle; timer-decayed by _update_bucket_drones.
-#   ACTIVE    — bucket note in current chord; chord-managed (chord advance
-#               flips it to LINGERING), never timer-decayed.
-#   LINGERING — previous chord's note carrying across silence; timer = synth
-#               sample length so the slot releases after audible decay ends.
-# Fade-duration knobs live on VisualTheme: bucket_fade_duration (visual color
-# tween), linger_fade_duration (audio handoff), eviction_fade_duration.
-enum DroneState { SPARKLE, ACTIVE, LINGERING }
+#   SPARKLE — peg sparkle; timer-decayed by _update_bucket_drones.
+#   ACTIVE  — bucket or prestige note; timer-decayed, plays to natural end.
+# No voice caps — pool exhaustion is the only limit (graceful silent drop).
+enum DroneState { SPARKLE, ACTIVE }
 
-# Per-coin-type voice caps. Normal = melodic top layer, advanced = deeper bass
-# punctuation. Independent pools so they don't dim or evict each other.
-const MAX_NORMAL_DRONES := 5
-const MAX_ADVANCED_DRONES := 3
-const MAX_SPARKLE_DRONES := 5
 const SPARKLE_VOLUME_DB := -22.0
 const SPARKLE_PROXIMITY_MS := 100.0
 const MAX_SPARKLES_PER_FIRE := 2
@@ -110,7 +99,6 @@ const MAX_SPARKLES_PER_FIRE := 2
 # compressor is tuned against this curve — retune both together.
 const VOICE_ATTENUATION_RATIO := 0.75
 
-const BUCKET_DRONE_FADE_RATE := 24.0  # dB/sec — 3s fade over ~72 dB
 const SPARKLE_DRONE_SUSTAIN := 2.5
 const BUCKET_DRONE_POOL_SIZE := 24
 var _drone_pool: Array[AudioStreamPlayer] = []
@@ -341,7 +329,7 @@ func _reset_harmonic_state() -> void:
 	_handle_chord_advance()
 
 
-## Theme swap: fade lingering drones, reset chord state, rebind kick stream.
+## Theme swap: hard-stop all drones, reset chord state, rebind kick stream.
 func _on_theme_swap() -> void:
 	_chord_index = 0
 	_motif_position = 0
@@ -350,7 +338,7 @@ func _on_theme_swap() -> void:
 	_challenge_tick_received = false
 	_chord_timer = _theme_chord_duration()
 	_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
-	_fade_all_drones(1.0)
+	_hard_stop_all_drones()
 	_stop_sequencer()
 	var kick: Instrument = _instrument_for(_theme_kick_type())
 	if kick:
@@ -405,6 +393,18 @@ func _theme_pattern() -> String:
 	return ThemeProvider.theme.arpeggio_pattern
 
 
+## Immediately stops all drones without fading. Used by theme swaps.
+func _hard_stop_all_drones() -> void:
+	for drone_key in _active_drones.keys():
+		var drone: Dictionary = _active_drones[drone_key]
+		var idx: int = int(drone["idx"])
+		_kill_fade_tween(idx)
+		_drone_pool[idx].stop()
+		if not _drone_free.has(idx):
+			_drone_free.append(idx)
+	_active_drones.clear()
+
+
 func _fade_all_drones(duration: float) -> void:
 	for drone_key in _active_drones.keys():
 		var drone: Dictionary = _active_drones[drone_key]
@@ -438,14 +438,20 @@ func _voice_attenuation_db(voice_count: int) -> float:
 	return 20.0 * log(pow(VOICE_ATTENUATION_RATIO, voice_count)) / log(10.0)
 
 
+## Counts bucket drones of the given type in the CURRENT chord only.
+## Old-chord drones still ringing don't count toward attenuation, so the
+## first hit of a new chord plays at full volume.
 func _count_drones_of_type(is_advanced: bool) -> int:
 	var count: int = 0
 	for drone_key in _active_drones:
 		var drone: Dictionary = _active_drones[drone_key]
 		if drone["state"] == DroneState.SPARKLE:
 			continue
-		if drone.get("is_advanced", false) == is_advanced:
-			count += 1
+		if drone.get("is_advanced", false) != is_advanced:
+			continue
+		if drone.get("chord_gen", -1) != _chord_generation:
+			continue
+		count += 1
 	return count
 
 
@@ -460,51 +466,10 @@ func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, 
 		"state": state,
 		"is_advanced": is_advanced,
 		"created_at": Time.get_ticks_msec(),
+		"chord_gen": _chord_generation,
 	}
 
 
-## Eviction priority: LINGERING (trailing) > SPARKLE (decorative) > ACTIVE
-## (melody in current chord). Higher = evict first.
-func _eviction_priority(state: int) -> int:
-	match state:
-		DroneState.LINGERING: return 2
-		DroneState.SPARKLE: return 1
-		DroneState.ACTIVE: return 0
-		_: return 0
-
-
-## Per-coin-type voice cap. NOTE: chord advances can flip many ACTIVE→LINGERING
-## at once and transiently exceed the cap — the Drones-bus compressor handles
-## that burst; the cap bites on the next allocation.
-func _evict_oldest_drone_if_full(is_advanced: bool) -> void:
-	var cap: int = MAX_ADVANCED_DRONES if is_advanced else MAX_NORMAL_DRONES
-	if _count_drones_of_type(is_advanced) < cap:
-		return
-	var victim_key: String = ""
-	var victim_priority: int = -1
-	var victim_age: int = -1  # higher = older
-	var now: int = Time.get_ticks_msec()
-	for drone_key in _active_drones:
-		var drone: Dictionary = _active_drones[drone_key]
-		if drone["state"] == DroneState.SPARKLE:
-			continue
-		if drone.get("is_advanced", false) != is_advanced:
-			continue
-		var priority: int = _eviction_priority(drone["state"])
-		var age: int = now - int(drone.get("created_at", now))
-		if priority > victim_priority or (priority == victim_priority and age > victim_age):
-			victim_priority = priority
-			victim_age = age
-			victim_key = drone_key
-	if victim_key == "":
-		return
-	var victim: Dictionary = _active_drones[victim_key]
-	var fade_duration: float = 0.4
-	if ThemeProvider and ThemeProvider.theme:
-		fade_duration = ThemeProvider.theme.eviction_fade_duration
-	# Erase first so fade-tween callbacks can't see a half-dead entry.
-	_active_drones.erase(victim_key)
-	_fade_drone(int(victim["idx"]), fade_duration)
 
 
 func _finish_drone_fade(idx: int) -> void:
@@ -515,33 +480,6 @@ func _finish_drone_fade(idx: int) -> void:
 		_drone_free.append(idx)
 
 
-func _count_sparkle_drones() -> int:
-	var count: int = 0
-	for drone_key in _active_drones:
-		if _active_drones[drone_key]["state"] == DroneState.SPARKLE:
-			count += 1
-	return count
-
-
-func _evict_oldest_sparkle_if_full() -> void:
-	if _count_sparkle_drones() < MAX_SPARKLE_DRONES:
-		return
-	var victim_key: String = ""
-	var victim_age: int = -1
-	var now: int = Time.get_ticks_msec()
-	for drone_key in _active_drones:
-		var drone: Dictionary = _active_drones[drone_key]
-		if drone["state"] != DroneState.SPARKLE:
-			continue
-		var age: int = now - int(drone.get("created_at", now))
-		if age > victim_age:
-			victim_age = age
-			victim_key = drone_key
-	if victim_key == "":
-		return
-	var victim: Dictionary = _active_drones[victim_key]
-	_active_drones.erase(victim_key)
-	_fade_drone(int(victim["idx"]), 0.3)
 
 
 func get_time_until_next_chord() -> float:
@@ -562,17 +500,12 @@ func get_chord_phase() -> float:
 	return clampf(1.0 - (_chord_timer / duration), 0.0, 1.0)
 
 
-## Chord advance is a VISUAL event: emits chord_changed so buckets revert to
-## faded, and flips ACTIVE→LINGERING so the activation gate no longer
-## suppresses re-hits. Does NOT fade audio — lingering drones ring via their
-## natural decay until a new coin hands off (_fade_lingering_drones) or the
-## synth sample ends (_update_bucket_drones releases the slot).
+## Chord advance: resets per-chord state (queue, attenuation generation,
+## activated set). Drones from the previous chord keep playing on their
+## fixed timers — no state flip, no fade. Emits chord_changed for any
+## remaining visual listeners (drum-layer mode).
 func _handle_chord_advance() -> void:
-	for drone_key in _active_drones.keys():
-		var drone: Dictionary = _active_drones[drone_key]
-		if drone["state"] == DroneState.ACTIVE:
-			drone["state"] = DroneState.LINGERING
-			drone["timer"] = Harp.DECAY_SECONDS
+	_chord_generation += 1
 	_bucket_queue.clear()
 	_chord_activated_buckets.clear()
 	_last_bucket_play_time = -999.0
@@ -585,23 +518,6 @@ func _handle_chord_advance() -> void:
 	# NOT cleared here — they persist past chord boundaries until expiration.
 	chord_changed.emit(_chord_index)
 
-
-## New coin landing after chord advance — hands off from the old chord's tail.
-## Audio fade (theme.linger_fade_duration) is longer than the visual fade.
-func _fade_lingering_drones() -> void:
-	if _active_drones.is_empty():
-		return
-	var fade_duration: float = 2.5
-	if ThemeProvider and ThemeProvider.theme:
-		fade_duration = ThemeProvider.theme.linger_fade_duration
-	var keys: Array = []
-	for drone_key in _active_drones.keys():
-		if _active_drones[drone_key]["state"] == DroneState.LINGERING:
-			keys.append(drone_key)
-	for drone_key in keys:
-		var drone: Dictionary = _active_drones[drone_key]
-		_fade_drone(int(drone["idx"]), fade_duration)
-		_active_drones.erase(drone_key)
 
 
 ## Called every second by ChallengeManager.tick. Starts the sequencer on
@@ -660,12 +576,6 @@ func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: i
 			_active_drum_tiers[degree] = now + _theme_chord_duration()
 		_chord_had_landing = true
 		return true
-
-	# Arpeggio / queue modes: per-bucket-per-chord dedup.
-	var dedup_key: String = str(bucket_idx) + "_" + ("A" if is_advanced else "N")
-	if dedup_key in _chord_activated_buckets:
-		return false
-	_chord_activated_buckets[dedup_key] = true
 
 	var entry: Dictionary = {
 		"bucket_idx": bucket_idx,
@@ -847,27 +757,14 @@ func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 	if not instrument or _theme_progression().is_empty():
 		return
 
-	var key: String = ("A_" if is_advanced else "N_") + str(bucket_idx)
-
-	# Re-attack: free any existing drone for this key before reallocating.
-	if key in _active_drones:
-		var old_idx: int = int(_active_drones[key]["idx"])
-		_kill_fade_tween(old_idx)
-		_drone_pool[old_idx].stop()
-		if not _drone_free.has(old_idx):
-			_drone_free.append(old_idx)
-		_active_drones.erase(key)
+	# Unique key per allocation — old drones play out fully, no re-attack.
+	var key: String = ("A_" if is_advanced else "N_") + str(bucket_idx) + "_" + str(Time.get_ticks_msec())
 
 	var octave_mult: float = 0.25 if is_advanced else 0.5
 	var pitch: float = _get_pitch_scale(degree) * octave_mult
 	var target_volume: float = BUCKET_VOLUME_DB + (4.0 if is_advanced else 0.0)
 	var sp: Dictionary = instrument.resolve(pitch)
 
-	# New coin hands off from the previous chord's lingering drones.
-	_fade_lingering_drones()
-
-	# Eviction runs AFTER linger-clear so freed slots are counted first.
-	_evict_oldest_drone_if_full(is_advanced)
 	if _drone_free.is_empty():
 		return
 	var voice_count: int = _count_drones_of_type(is_advanced)
@@ -879,8 +776,7 @@ func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 	player.pitch_scale = sp["pitch_scale"]
 	player.volume_db = target_volume + voice_attenuation_db
 	player.play()
-	var tail: float = maxf(_chord_timer, MIN_BUCKET_RING_SECONDS)
-	_active_drones[key] = _make_drone_entry(idx, tail, degree, octave_mult, DroneState.ACTIVE, is_advanced)
+	_active_drones[key] = _make_drone_entry(idx, Harp.DECAY_SECONDS, degree, octave_mult, DroneState.ACTIVE, is_advanced)
 
 
 ## Plays a bell sparkle that walks up the chord from the root. Each sparkle
@@ -909,11 +805,13 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	var pitch: float = _get_pitch_scale(degree) * sparkle_octave
 	var sp: Dictionary = _bell.resolve(pitch)
 
-	_evict_oldest_sparkle_if_full()
 	if _drone_free.is_empty():
 		return
 
-	var sparkle_count: int = _count_sparkle_drones()
+	var sparkle_count: int = 0
+	for dk in _active_drones:
+		if _active_drones[dk]["state"] == DroneState.SPARKLE:
+			sparkle_count += 1
 	var voice_attenuation_db: float = _voice_attenuation_db(sparkle_count)
 
 	var idx: int = _drone_free.pop_back()
@@ -990,11 +888,13 @@ func play(sound_name: StringName, pitch: float = 0.0, max_duration: float = 0.0)
 		)
 
 
-## Fades all active sounds and prevents new ones from starting.
-## Used by scene transitions and prestige sequences.
+## Prevents new sounds from starting. With fade_duration > 0, also fades
+## active drones (scene transitions). With fade_duration <= 0, drones ring
+## out naturally (prestige SLOW_MO).
 func silence(fade_duration: float = 0.5) -> void:
 	_silenced = true
-	_fade_all_drones(fade_duration)
+	if fade_duration > 0.0:
+		_fade_all_drones(fade_duration)
 	_bucket_queue.clear()
 
 
@@ -1034,8 +934,8 @@ func play_prestige(_play_duration: float = 3.0, _fade_duration: float = 2.0) -> 
 	_prestige_arpeggio_active = true
 
 
-## Allocates a drone pool voice for a prestige note. Fire-and-forget: registers
-## as LINGERING so _update_bucket_drones reclaims the slot after natural decay.
+## Allocates a drone pool voice for a prestige note. Fire-and-forget:
+## _update_bucket_drones reclaims the slot after the 10s timer expires.
 func _play_prestige_voice(sp: Dictionary, volume_db: float, key: String) -> void:
 	if _drone_free.is_empty():
 		return
@@ -1046,7 +946,7 @@ func _play_prestige_voice(sp: Dictionary, volume_db: float, key: String) -> void
 	player.pitch_scale = sp["pitch_scale"]
 	player.volume_db = volume_db
 	player.play()
-	_active_drones[key] = _make_drone_entry(idx, 10.0, 0, 1.0, DroneState.LINGERING, false)
+	_active_drones[key] = _make_drone_entry(idx, 10.0, 0, 1.0, DroneState.ACTIVE, false)
 
 
 ## Fires one arpeggio note per PRESTIGE_ARPEGGIO_INTERVAL using wall-clock time.
@@ -1073,7 +973,7 @@ func _tick_prestige_arpeggio() -> void:
 func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
 	match phase:
 		PrestigeManager.PrestigePhase.SLOW_MO:
-			silence(0.5)
+			silence(-1)
 		PrestigeManager.PrestigePhase.NONE:
 			unsilence()
 			_prestige_arpeggio_active = false
@@ -1133,19 +1033,14 @@ func _update_bucket_drones(delta: float) -> void:
 	var expired: Array[String] = []
 	for drone_key: String in _active_drones:
 		var drone: Dictionary = _active_drones[drone_key]
-		# ACTIVE drones are chord-managed — skip so the timer can't cut them
-		# off mid-chord.
-		if drone["state"] == DroneState.ACTIVE:
-			continue
 		drone.timer -= delta
 		if drone.timer <= 0.0:
-			var player: AudioStreamPlayer = _drone_pool[drone.idx]
-			player.volume_db = move_toward(player.volume_db, -80.0, BUCKET_DRONE_FADE_RATE * delta)
-			if player.volume_db <= -79.0:
-				player.stop()
-				_drone_fade_tweens.erase(drone.idx)
+			# Don't call player.stop() — the sample is finite and will
+			# end on its own. Stopping early cuts off the harp tail.
+			_drone_fade_tweens.erase(drone.idx)
+			if not _drone_free.has(drone.idx):
 				_drone_free.append(drone.idx)
-				expired.append(drone_key)
+			expired.append(drone_key)
 	for key: String in expired:
 		_active_drones.erase(key)
 

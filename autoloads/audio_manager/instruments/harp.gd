@@ -7,15 +7,16 @@ const LOW_FREQ := 130.81           # C3 — native frequency of low sample
 const HIGH_FREQ := 523.25          # C5 — native frequency of high sample
 const CROSSOVER_FREQ := 261.63     # C4 — below uses low, at/above uses high
 const BASE_FREQ := 261.63          # C4 — semantic anchor for pitch_mult = 1.0
-const DECAY_SECONDS := 4.0
+const DECAY_SECONDS := 4.0   # bucket/drone timer — how long the note is "active"
+const SAMPLE_SECONDS := 8.0  # actual sample length — long tail rings out naturally
 
 var _low_stream: AudioStreamWAV   # warm, C3-native
 var _high_stream: AudioStreamWAV  # dark, C5-native
 
 
 func _init() -> void:
-	_low_stream = _generate(LOW_FREQ, DECAY_SECONDS, false)
-	_high_stream = _generate(HIGH_FREQ, DECAY_SECONDS, true)
+	_low_stream = _generate(LOW_FREQ, SAMPLE_SECONDS, false)
+	_high_stream = _generate(HIGH_FREQ, SAMPLE_SECONDS, true)
 
 
 ## Picks the closer-pitched harp sample for the target pitch multiplier (where
@@ -67,10 +68,9 @@ static func _generate(freq: float, duration: float, darker: bool, mix_rate: int 
 	const INHARMONICITY: float = 0.0003
 
 	# Linear tail fade over the last TAIL_FADE seconds of the sample so the
-	# stream ends at true zero amplitude. Without this, the fundamental's slow
-	# exponential decay is still ~14% loud when the 4-second sample file ends,
-	# and the player cuts off mid-tone producing an audible click/snap.
-	const TAIL_FADE: float = 0.3
+	# stream ends at true zero amplitude. With the 8-second sample, the
+	# fundamental is already ~1.8% by t=8, but this ensures a clean zero.
+	const TAIL_FADE: float = 1.0
 	var tail_start: float = duration - TAIL_FADE
 
 	for i in num_samples:

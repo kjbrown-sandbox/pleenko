@@ -119,19 +119,10 @@ func _exit_tree() -> void:
 		ThemeProvider.theme_changed.disconnect(_on_theme_changed)
 
 
-## Chord advance: fade every bucket back to its faded color. Skipped when the
-## theme is in drum-layer mode — those buckets fade on tier expiration
-## instead (see _on_drum_tier_expired). Challenge hit/forbidden buckets are
-## skipped by Bucket.mark_stop_singing itself.
+## Chord advance — buckets now manage their own singing timers, so this is
+## a no-op for the standard (non-drum) path.
 func _on_chord_changed(_chord_index: int) -> void:
-	var theme: VisualTheme = ThemeProvider.theme if ThemeProvider else null
-	if not theme or theme.drum_instruments.size() > 0:
-		return
-	_singing_positions.clear()
-	var duration: float = theme.bucket_fade_duration
-	for child in buckets_container.get_children():
-		if child is Bucket:
-			child.mark_stop_singing(duration)
+	pass
 
 
 ## Drum beat fired: pulse every bucket at this tier's distance-from-center
@@ -151,6 +142,11 @@ func _on_drum_tier_fired(tier: int) -> void:
 ## don't bleed into rebuilds under the new theme.
 func _on_theme_changed() -> void:
 	_singing_positions.clear()
+
+
+## Bucket's singing timer expired — remove from rebuild tracking.
+func _on_bucket_stopped_singing(bucket: Bucket) -> void:
+	_singing_positions.erase(_bucket_position_key(bucket.position.x + buckets_container.position.x))
 
 
 ## Drum tier expired: fade every bucket at this tier's distance back to faded.
@@ -797,9 +793,8 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
 	# Suppress singing during upgrade ripple — the ripple owns the arpeggio.
-	if not _upgrade_animating:
-		# Each bucket sings at most once per chord. request_bucket_play returns
-		# false if this bucket already sang this chord — keep it faded.
+	# If bucket is already singing, skip audio — it keeps its original timer.
+	if not _upgrade_animating and not was_already_singing:
 		if AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced):
 			bucket.mark_singing()
 			_singing_positions[_bucket_position_key(bucket.position.x + buckets_container.position.x)] = true
@@ -1117,6 +1112,7 @@ func build_board() -> void:
 		bucket.is_prestige_bucket = _will_trigger_prestige(bucket_currency)
 		buckets_container.add_child(bucket)
 		bucket.setup(bucket_currency, Vector3(i * space_between_pegs, 0, 0), value)
+		bucket.stopped_singing.connect(_on_bucket_stopped_singing.bind(bucket))
 
 	# Re-apply stored markings after rebuild
 	for index in _bucket_markings:

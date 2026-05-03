@@ -12,11 +12,6 @@ func _run_tests() -> void:
 	test_voice_attenuation_one_voice()
 	test_voice_attenuation_monotonic_decrease()
 
-	# Eviction priority
-	test_eviction_priority_lingering_highest()
-	test_eviction_priority_sparkle_middle()
-	test_eviction_priority_active_lowest()
-
 	# Drone entry factory
 	test_make_drone_entry_has_all_fields()
 	test_make_drone_entry_values_match()
@@ -25,7 +20,6 @@ func _run_tests() -> void:
 	test_count_drones_of_type_excludes_sparkle()
 	test_count_drones_of_type_separates_advanced()
 	test_count_drones_of_type_empty()
-	test_count_sparkle_drones()
 
 	# Chord phase
 	test_chord_phase_at_start()
@@ -36,13 +30,20 @@ func _run_tests() -> void:
 	test_pitch_scale_degree_wraps()
 
 	# Chord advance
-	test_chord_advance_flips_active_to_lingering()
 	test_chord_advance_clears_bucket_queue()
+	test_chord_advance_increments_generation()
 
 	# Gates
 	test_silence_gates_bucket_play()
+	test_silence_no_fade_mode()
 	test_sparkle_wrong_board_returns_false()
 	test_autodropper_beat_sets_period()
+
+	# Per-chord attenuation
+	test_per_chord_attenuation_resets()
+
+	# Fixed drone timer
+	test_drone_timer_is_fixed()
 
 
 # --- Snapshot/restore helpers ---
@@ -50,6 +51,7 @@ func _run_tests() -> void:
 var _saved_drones: Dictionary
 var _saved_chord_index: int
 var _saved_chord_timer: float
+var _saved_chord_generation: int
 var _saved_silenced: bool
 var _saved_active_board: Variant
 var _saved_bucket_queue: Array
@@ -70,6 +72,7 @@ func _save_state() -> void:
 	_saved_drones = AudioManager._active_drones.duplicate(true)
 	_saved_chord_index = AudioManager._chord_index
 	_saved_chord_timer = AudioManager._chord_timer
+	_saved_chord_generation = AudioManager._chord_generation
 	_saved_silenced = AudioManager._silenced
 	_saved_active_board = AudioManager._active_board
 	_saved_bucket_queue = AudioManager._bucket_queue.duplicate(true)
@@ -90,6 +93,7 @@ func _restore_state() -> void:
 	AudioManager._active_drones = _saved_drones
 	AudioManager._chord_index = _saved_chord_index
 	AudioManager._chord_timer = _saved_chord_timer
+	AudioManager._chord_generation = _saved_chord_generation
 	AudioManager._silenced = _saved_silenced
 	AudioManager._active_board = _saved_active_board
 	AudioManager._bucket_queue = _saved_bucket_queue
@@ -136,26 +140,6 @@ func test_voice_attenuation_monotonic_decrease() -> void:
 	assert_true(monotonic, "attenuation decreases monotonically")
 
 
-# --- Eviction priority tests ---
-
-func test_eviction_priority_lingering_highest() -> void:
-	print("test_eviction_priority_lingering_highest")
-	assert_equal(AudioManager._eviction_priority(AudioManager.DroneState.LINGERING), 2,
-		"LINGERING = 2 (evict first)")
-
-
-func test_eviction_priority_sparkle_middle() -> void:
-	print("test_eviction_priority_sparkle_middle")
-	assert_equal(AudioManager._eviction_priority(AudioManager.DroneState.SPARKLE), 1,
-		"SPARKLE = 1")
-
-
-func test_eviction_priority_active_lowest() -> void:
-	print("test_eviction_priority_active_lowest")
-	assert_equal(AudioManager._eviction_priority(AudioManager.DroneState.ACTIVE), 0,
-		"ACTIVE = 0 (evict last)")
-
-
 # --- Drone entry factory tests ---
 
 func test_make_drone_entry_has_all_fields() -> void:
@@ -168,16 +152,17 @@ func test_make_drone_entry_has_all_fields() -> void:
 	assert_true(entry.has("state"), "has state")
 	assert_true(entry.has("is_advanced"), "has is_advanced")
 	assert_true(entry.has("created_at"), "has created_at")
+	assert_true(entry.has("chord_gen"), "has chord_gen")
 
 
 func test_make_drone_entry_values_match() -> void:
 	print("test_make_drone_entry_values_match")
-	var entry: Dictionary = AudioManager._make_drone_entry(5, 3.0, 2, 0.5, AudioManager.DroneState.LINGERING, false)
+	var entry: Dictionary = AudioManager._make_drone_entry(5, 3.0, 2, 0.5, AudioManager.DroneState.ACTIVE, false)
 	assert_equal(entry["idx"], 5, "idx matches")
 	assert_near(entry["timer"], 3.0, 0.001, "timer matches")
 	assert_equal(entry["degree"], 2, "degree matches")
 	assert_near(entry["octave_mult"], 0.5, 0.001, "octave_mult matches")
-	assert_equal(entry["state"], AudioManager.DroneState.LINGERING, "state matches")
+	assert_equal(entry["state"], AudioManager.DroneState.ACTIVE, "state matches")
 	assert_false(entry["is_advanced"], "is_advanced matches")
 
 
@@ -186,10 +171,11 @@ func test_make_drone_entry_values_match() -> void:
 func test_count_drones_of_type_excludes_sparkle() -> void:
 	print("test_count_drones_of_type_excludes_sparkle")
 	_save_state()
+	var gen: int = AudioManager._chord_generation
 	AudioManager._active_drones = {
-		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0},
-		"b": {"state": AudioManager.DroneState.SPARKLE, "is_advanced": false, "idx": 1, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0},
-		"c": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 2, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0},
+		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
+		"b": {"state": AudioManager.DroneState.SPARKLE, "is_advanced": false, "idx": 1, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
+		"c": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 2, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
 	}
 	assert_equal(AudioManager._count_drones_of_type(false), 2, "sparkle excluded from count")
 	_restore_state()
@@ -198,10 +184,11 @@ func test_count_drones_of_type_excludes_sparkle() -> void:
 func test_count_drones_of_type_separates_advanced() -> void:
 	print("test_count_drones_of_type_separates_advanced")
 	_save_state()
+	var gen: int = AudioManager._chord_generation
 	AudioManager._active_drones = {
-		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0},
-		"b": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": true, "idx": 1, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0},
-		"c": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 2, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0},
+		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
+		"b": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": true, "idx": 1, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
+		"c": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 2, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
 	}
 	assert_equal(AudioManager._count_drones_of_type(false), 2, "normal count")
 	assert_equal(AudioManager._count_drones_of_type(true), 1, "advanced count")
@@ -213,18 +200,6 @@ func test_count_drones_of_type_empty() -> void:
 	_save_state()
 	AudioManager._active_drones = {}
 	assert_equal(AudioManager._count_drones_of_type(false), 0, "empty = 0")
-	_restore_state()
-
-
-func test_count_sparkle_drones() -> void:
-	print("test_count_sparkle_drones")
-	_save_state()
-	AudioManager._active_drones = {
-		"a": {"state": AudioManager.DroneState.SPARKLE, "idx": 0, "timer": 1.0},
-		"b": {"state": AudioManager.DroneState.ACTIVE, "idx": 1, "timer": 1.0},
-		"c": {"state": AudioManager.DroneState.SPARKLE, "idx": 2, "timer": 1.0},
-	}
-	assert_equal(AudioManager._count_sparkle_drones(), 2, "counts only sparkles")
 	_restore_state()
 
 
@@ -289,21 +264,6 @@ func test_pitch_scale_degree_wraps() -> void:
 
 # --- Chord advance tests ---
 
-func test_chord_advance_flips_active_to_lingering() -> void:
-	print("test_chord_advance_flips_active_to_lingering")
-	_save_state()
-	AudioManager._active_drones = {
-		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 5.0, "degree": 0, "octave_mult": 1.0, "created_at": 0},
-		"b": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": true, "idx": 1, "timer": 5.0, "degree": 1, "octave_mult": 1.0, "created_at": 0},
-	}
-	AudioManager._handle_chord_advance()
-	assert_equal(AudioManager._active_drones["a"]["state"], AudioManager.DroneState.LINGERING,
-		"drone a flipped to LINGERING")
-	assert_equal(AudioManager._active_drones["b"]["state"], AudioManager.DroneState.LINGERING,
-		"drone b flipped to LINGERING")
-	_restore_state()
-
-
 func test_chord_advance_clears_bucket_queue() -> void:
 	print("test_chord_advance_clears_bucket_queue")
 	_save_state()
@@ -312,6 +272,15 @@ func test_chord_advance_clears_bucket_queue() -> void:
 	AudioManager._handle_chord_advance()
 	assert_true(AudioManager._bucket_queue.is_empty(), "bucket queue cleared")
 	assert_true(AudioManager._chord_activated_buckets.is_empty(), "activated buckets cleared")
+	_restore_state()
+
+
+func test_chord_advance_increments_generation() -> void:
+	print("test_chord_advance_increments_generation")
+	_save_state()
+	var before: int = AudioManager._chord_generation
+	AudioManager._handle_chord_advance()
+	assert_equal(AudioManager._chord_generation, before + 1, "generation incremented")
 	_restore_state()
 
 
@@ -324,6 +293,20 @@ func test_silence_gates_bucket_play() -> void:
 	var result: bool = AudioManager.request_bucket_play(
 		AudioManager._active_board, 0, 0, false)
 	assert_false(result, "silenced blocks bucket play")
+	AudioManager._silenced = false
+	_restore_state()
+
+
+func test_silence_no_fade_mode() -> void:
+	print("test_silence_no_fade_mode")
+	_save_state()
+	# Add a fake drone to verify it's NOT faded
+	AudioManager._active_drones = {
+		"test": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 4.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": 0},
+	}
+	AudioManager.silence(-1)
+	assert_true(AudioManager._silenced, "silenced flag set")
+	assert_true(AudioManager._active_drones.has("test"), "drone NOT erased (no fade)")
 	AudioManager._silenced = false
 	_restore_state()
 
@@ -345,4 +328,37 @@ func test_autodropper_beat_sets_period() -> void:
 	assert_near(AudioManager._beat_period, 0.5, 0.001, "beat period = interval / 4")
 	assert_near(AudioManager._beat_phase, 0.0, 0.001, "beat phase reset to 0")
 	assert_true(AudioManager._beat_armed, "beat armed after sync")
+	_restore_state()
+
+
+# --- Per-chord attenuation tests ---
+
+func test_per_chord_attenuation_resets() -> void:
+	print("test_per_chord_attenuation_resets")
+	_save_state()
+	var gen: int = AudioManager._chord_generation
+	# Add drones from the current chord
+	AudioManager._active_drones = {
+		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 4.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
+		"b": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 1, "timer": 4.0, "degree": 1, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
+	}
+	assert_equal(AudioManager._count_drones_of_type(false), 2, "2 drones before advance")
+	# Advance chord — generation increments, old drones become stale
+	AudioManager._handle_chord_advance()
+	assert_equal(AudioManager._count_drones_of_type(false), 0,
+		"0 drones counted after advance (stale chord_gen)")
+	# Drones still exist in dict, just not counted for attenuation
+	assert_equal(AudioManager._active_drones.size(), 2, "drones still in dict")
+	_restore_state()
+
+
+# --- Fixed drone timer test ---
+
+func test_drone_timer_is_fixed() -> void:
+	print("test_drone_timer_is_fixed")
+	_save_state()
+	# The drone timer should always be Harp.DECAY_SECONDS regardless of chord timer
+	var entry: Dictionary = AudioManager._make_drone_entry(0, Harp.DECAY_SECONDS, 0, 0.5, AudioManager.DroneState.ACTIVE, false)
+	assert_near(entry["timer"], Harp.DECAY_SECONDS, 0.001, "drone timer = Harp.DECAY_SECONDS")
+	assert_near(entry["timer"], 4.0, 0.001, "Harp.DECAY_SECONDS = 4.0")
 	_restore_state()

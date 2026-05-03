@@ -11,12 +11,17 @@ const SkullTexture := preload("res://assets/icons/skull.png")
 const SpriteTintShader := preload("res://entities/bucket/sprite_tint.gdshader")
 
 const PRESS_DEPTH: float = 0.1
+const SING_DURATION := 4.0  # matches Harp.DECAY_SECONDS
+const SING_FADE_DURATION := 1.0
+
+signal stopped_singing
 
 var currency_type: Enums.CurrencyType
 var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
 var _is_singing: bool = false
+var _sing_timer: float = 0.0
 var _color_tween: Tween
 var _press_tween: Tween
 var _upgrade_label_tween: Tween
@@ -31,13 +36,12 @@ func _ready() -> void:
 	set_process(false)
 
 
-# So that singing buckets all shrink at the same size
-func _process(_delta: float) -> void:
-	var phase: float = AudioManager.get_chord_phase()
-	var peak: float = ThemeProvider.theme.bucket_active_scale_peak
-	# Ease-out settle: drops fast from peak, eases into 1.0 by chord end.
-	var t: float = 1.0 - (1.0 - phase) * (1.0 - phase)
-	scale = Vector3.ONE * lerpf(peak, 1.0, t)
+## Counts down the singing timer. Bucket stays at peak scale + full color
+## for the entire duration; _stop_singing tweens back over SING_FADE_DURATION.
+func _process(delta: float) -> void:
+	_sing_timer -= delta
+	if _sing_timer <= 0.0:
+		_stop_singing()
 
 
 func _label_text() -> String:
@@ -108,14 +112,15 @@ func is_singing() -> bool:
 	return _is_singing
 
 
-## Snap to full color and start the chord-synced scale pulse. The fade back
-## is driven externally by PlinkoBoard on chord_changed via mark_stop_singing.
-## Hit/forbidden buckets keep their marker color but still participate in the
-## scale pulse.
+## Snap to full color and start the self-timed scale pulse (SING_DURATION).
+## If already singing, this is a no-op — the original timer keeps counting.
 func mark_singing() -> void:
+	if _is_singing:
+		return
 	_kill_color_tween()
 	_is_singing = true
-	# set_process(true)
+	_sing_timer = SING_DURATION
+	set_process(true)
 
 	var tween := create_tween()
 	tween.tween_property(self, "scale", Vector3.ONE * ThemeProvider.theme.bucket_active_scale_peak, 0.2) \
@@ -125,24 +130,31 @@ func mark_singing() -> void:
 		_apply_color(ThemeProvider.theme.get_bucket_color(currency_type))
 
 
-## Called on chord_changed from PlinkoBoard. Stops the scale pulse and fades
-## color back to the faded rest color. Hit/forbidden buckets fade scale only;
-## their marker color is preserved.
-func mark_stop_singing(duration: float) -> void:
+## Externally callable stop (e.g. drum-tier expiration). Delegates to _stop_singing.
+func mark_stop_singing(_duration: float) -> void:
+	_stop_singing()
+
+
+## Internal: ends singing with a short tween back to faded.
+func _stop_singing() -> void:
+	if not _is_singing:
+		return
 	_kill_color_tween()
 	_is_singing = false
+	_sing_timer = 0.0
 	set_process(false)
 	_color_tween = create_tween()
 	_color_tween.bind_node(self)
 	_color_tween.set_parallel(true)
-	_color_tween.tween_property(self, "scale", Vector3.ONE, duration) \
+	_color_tween.tween_property(self, "scale", Vector3.ONE, SING_FADE_DURATION) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	if not _is_hit:
 		var faded: Color = ThemeProvider.theme.get_bucket_color_faded(currency_type)
-		_color_tween.tween_property(_base_material, "albedo_color", faded, duration) \
+		_color_tween.tween_property(_base_material, "albedo_color", faded, SING_FADE_DURATION) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		_color_tween.tween_property(_label, "modulate", faded, duration) \
+		_color_tween.tween_property(_label, "modulate", faded, SING_FADE_DURATION) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	stopped_singing.emit()
 
 
 ## Trampoline press: punch down on Y, spring back with a slight overshoot.
