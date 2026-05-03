@@ -55,7 +55,6 @@ var _saved_chord_generation: int
 var _saved_silenced: bool
 var _saved_active_board: Variant
 var _saved_bucket_queue: Array
-var _saved_chord_activated_buckets: Dictionary
 var _saved_last_bucket_play_time: float
 var _saved_activated_buckets_order: Array
 var _saved_unplayed_buckets: Array
@@ -76,7 +75,6 @@ func _save_state() -> void:
 	_saved_silenced = AudioManager._silenced
 	_saved_active_board = AudioManager._active_board
 	_saved_bucket_queue = AudioManager._bucket_queue.duplicate(true)
-	_saved_chord_activated_buckets = AudioManager._chord_activated_buckets.duplicate(true)
 	_saved_last_bucket_play_time = AudioManager._last_bucket_play_time
 	_saved_activated_buckets_order = AudioManager._activated_buckets_order.duplicate(true)
 	_saved_unplayed_buckets = AudioManager._unplayed_buckets.duplicate(true)
@@ -97,7 +95,6 @@ func _restore_state() -> void:
 	AudioManager._silenced = _saved_silenced
 	AudioManager._active_board = _saved_active_board
 	AudioManager._bucket_queue = _saved_bucket_queue
-	AudioManager._chord_activated_buckets = _saved_chord_activated_buckets
 	AudioManager._last_bucket_play_time = _saved_last_bucket_play_time
 	AudioManager._activated_buckets_order = _saved_activated_buckets_order
 	AudioManager._unplayed_buckets = _saved_unplayed_buckets
@@ -151,7 +148,6 @@ func test_make_drone_entry_has_all_fields() -> void:
 	assert_true(entry.has("octave_mult"), "has octave_mult")
 	assert_true(entry.has("state"), "has state")
 	assert_true(entry.has("is_advanced"), "has is_advanced")
-	assert_true(entry.has("created_at"), "has created_at")
 	assert_true(entry.has("chord_gen"), "has chord_gen")
 
 
@@ -173,9 +169,9 @@ func test_count_drones_of_type_excludes_sparkle() -> void:
 	_save_state()
 	var gen: int = AudioManager._chord_generation
 	AudioManager._active_drones = {
-		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
-		"b": {"state": AudioManager.DroneState.SPARKLE, "is_advanced": false, "idx": 1, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
-		"c": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 2, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
+		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "chord_gen": gen},
+		"b": {"state": AudioManager.DroneState.SPARKLE, "is_advanced": false, "idx": 1, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "chord_gen": gen},
+		"c": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 2, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "chord_gen": gen},
 	}
 	assert_equal(AudioManager._count_drones_of_type(false), 2, "sparkle excluded from count")
 	_restore_state()
@@ -186,9 +182,9 @@ func test_count_drones_of_type_separates_advanced() -> void:
 	_save_state()
 	var gen: int = AudioManager._chord_generation
 	AudioManager._active_drones = {
-		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
-		"b": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": true, "idx": 1, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
-		"c": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 2, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
+		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "chord_gen": gen},
+		"b": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": true, "idx": 1, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "chord_gen": gen},
+		"c": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 2, "timer": 1.0, "degree": 0, "octave_mult": 1.0, "chord_gen": gen},
 	}
 	assert_equal(AudioManager._count_drones_of_type(false), 2, "normal count")
 	assert_equal(AudioManager._count_drones_of_type(true), 1, "advanced count")
@@ -268,10 +264,8 @@ func test_chord_advance_clears_bucket_queue() -> void:
 	print("test_chord_advance_clears_bucket_queue")
 	_save_state()
 	AudioManager._bucket_queue = [{"test": 1}]
-	AudioManager._chord_activated_buckets = {"test": true}
 	AudioManager._handle_chord_advance()
 	assert_true(AudioManager._bucket_queue.is_empty(), "bucket queue cleared")
-	assert_true(AudioManager._chord_activated_buckets.is_empty(), "activated buckets cleared")
 	_restore_state()
 
 
@@ -302,7 +296,7 @@ func test_silence_no_fade_mode() -> void:
 	_save_state()
 	# Add a fake drone to verify it's NOT faded
 	AudioManager._active_drones = {
-		"test": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 4.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": 0},
+		"test": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 4.0, "degree": 0, "octave_mult": 1.0, "chord_gen": 0},
 	}
 	AudioManager.silence(-1)
 	assert_true(AudioManager._silenced, "silenced flag set")
@@ -339,8 +333,8 @@ func test_per_chord_attenuation_resets() -> void:
 	var gen: int = AudioManager._chord_generation
 	# Add drones from the current chord
 	AudioManager._active_drones = {
-		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 4.0, "degree": 0, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
-		"b": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 1, "timer": 4.0, "degree": 1, "octave_mult": 1.0, "created_at": 0, "chord_gen": gen},
+		"a": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 0, "timer": 4.0, "degree": 0, "octave_mult": 1.0, "chord_gen": gen},
+		"b": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 1, "timer": 4.0, "degree": 1, "octave_mult": 1.0, "chord_gen": gen},
 	}
 	assert_equal(AudioManager._count_drones_of_type(false), 2, "2 drones before advance")
 	# Advance chord — generation increments, old drones become stale

@@ -127,7 +127,7 @@ var _prestige_arpeggio_notes: Array[float] = []  # pre-computed pitch_mult value
 #   Queue mode (default): hits dispatch BUCKET_WAIT apart, coin-driven.
 const BUCKET_WAIT := 0.5
 var _bucket_queue: Array[Dictionary] = []
-var _chord_activated_buckets: Dictionary = {}
+
 var _last_bucket_play_time: float = -999.0
 
 # Arpeggio-mode only. Cleared on chord advance.
@@ -465,7 +465,6 @@ func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, 
 		"octave_mult": octave_mult,
 		"state": state,
 		"is_advanced": is_advanced,
-		"created_at": Time.get_ticks_msec(),
 		"chord_gen": _chord_generation,
 	}
 
@@ -507,7 +506,6 @@ func get_chord_phase() -> float:
 func _handle_chord_advance() -> void:
 	_chord_generation += 1
 	_bucket_queue.clear()
-	_chord_activated_buckets.clear()
 	_last_bucket_play_time = -999.0
 	_activated_buckets_order.clear()
 	_unplayed_buckets.clear()

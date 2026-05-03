@@ -131,7 +131,7 @@ func mark_singing() -> void:
 
 
 ## Externally callable stop (e.g. drum-tier expiration). Delegates to _stop_singing.
-func mark_stop_singing(_duration: float) -> void:
+func mark_stop_singing() -> void:
 	_stop_singing()
 
 

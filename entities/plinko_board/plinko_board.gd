@@ -153,14 +153,13 @@ func _on_bucket_stopped_singing(bucket: Bucket) -> void:
 ## Only buckets currently tracked as singing get stopped — avoids touching
 ## buckets that were never activated this lifetime.
 func _on_drum_tier_expired(tier: int) -> void:
-	var duration: float = ThemeProvider.theme.bucket_fade_duration
 	var num_buckets: int = buckets_container.get_child_count()
 	var center: int = num_buckets / 2
 	for i in num_buckets:
 		if absi(i - center) == tier:
 			var bucket: Bucket = get_bucket(i)
 			if bucket:
-				bucket.mark_stop_singing(duration)
+				bucket.mark_stop_singing()
 				_singing_positions.erase(_bucket_position_key(bucket.position.x + buckets_container.position.x))
 
 
