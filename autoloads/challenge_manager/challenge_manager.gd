@@ -62,6 +62,13 @@ func setup(board_manager: BoardManager) -> void:
 	UpgradeManager.upgrade_gate = is_upgrade_allowed
 	_board_manager.board_gate = is_board_allowed
 
+	# Set gates on individual boards
+	var _drop_blocked := func() -> bool: return has_failed()
+	var _upgrade_gate := is_upgrade_allowed
+	for board in _board_manager.get_boards():
+		board.drop_blocked = _drop_blocked
+		board.upgrade_allowed = _upgrade_gate
+
 	# Apply starting conditions before tracker connects
 	_apply_starting_conditions()
 
@@ -199,6 +206,9 @@ func clear_challenge() -> void:
 	UpgradeManager.upgrade_gate = Callable()
 	if _board_manager:
 		_board_manager.board_gate = Callable()
+		for board in _board_manager.get_boards():
+			board.drop_blocked = Callable()
+			board.upgrade_allowed = Callable()
 
 	# Clean up tracker
 	if _tracker:
@@ -207,6 +217,15 @@ func clear_challenge() -> void:
 		_tracker = null
 
 	_board_manager = null
+
+
+func uses_target_buckets() -> bool:
+	if not is_active_challenge or not _challenge:
+		return false
+	for objective in _challenge.objectives:
+		if objective is HitXBucketYTimes or objective is HitBucketsInOrder:
+			return true
+	return false
 
 
 # ── Utilities ─────────────────────────────────────────────────────

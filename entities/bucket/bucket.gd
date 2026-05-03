@@ -16,6 +16,7 @@ var currency_type: Enums.CurrencyType
 var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
+var _is_singing: bool = false
 var _color_tween: Tween
 var _press_tween: Tween
 var _upgrade_label_tween: Tween
@@ -103,12 +104,17 @@ func mark_forbidden() -> void:
 	add_child(skull)
 
 
+func is_singing() -> bool:
+	return _is_singing
+
+
 ## Snap to full color and start the chord-synced scale pulse. The fade back
 ## is driven externally by PlinkoBoard on chord_changed via mark_stop_singing.
 ## Hit/forbidden buckets keep their marker color but still participate in the
 ## scale pulse.
 func mark_singing() -> void:
 	_kill_color_tween()
+	_is_singing = true
 	# set_process(true)
 
 	var tween := create_tween()
@@ -124,6 +130,7 @@ func mark_singing() -> void:
 ## their marker color is preserved.
 func mark_stop_singing(duration: float) -> void:
 	_kill_color_tween()
+	_is_singing = false
 	set_process(false)
 	_color_tween = create_tween()
 	_color_tween.bind_node(self)
@@ -195,6 +202,29 @@ func animate_value_upgrade(old_value: int, new_value: int, duration: float) -> v
 		var current: int = old_value + roundi(t * steps)
 		_label.text = str(current)
 	, 0.0, 1.0, duration)
+
+
+func mark_gameplay_target() -> void:
+	_kill_color_tween()
+	_is_hit = true
+	_apply_color(ThemeProvider.theme.hit_bucket_color)
+
+
+func start_gameplay_target_fade(duration: float) -> void:
+	_kill_color_tween()
+	var faded_color: Color = _resolve_default_color()
+	_color_tween = create_tween()
+	_color_tween.bind_node(self)
+	_color_tween.tween_property(_base_material, "albedo_color", faded_color, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_color_tween.parallel().tween_property(_label, "modulate", faded_color, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+
+func stop_gameplay_target() -> void:
+	_kill_color_tween()
+	_is_hit = false
+	_apply_color(_resolve_default_color())
 
 
 func _resolve_default_color() -> Color:

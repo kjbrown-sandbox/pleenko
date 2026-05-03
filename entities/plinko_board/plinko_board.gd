@@ -42,12 +42,28 @@ var _singing_positions: Dictionary = {}  # _bucket_position_key(x) -> true, surv
 var _upgrade_animating: bool = false
 var _upgrade_ripple_tween: Tween
 var multi_drop_count: int = -1
-@export var hack_space: bool = true
+@export var hack_space: bool = false
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 # True while the mouse is hovering either drop button — used by the tooltip
 # refresh logic so the persistent "Needs X" message is suppressed in favor of
 # the regular cost tooltip during hover.
 var _drop_button_hovered: bool = false
+
+## Optional gate: () -> bool. Returns true if drops should be blocked.
+## Set externally (e.g. by BoardManager during challenges).
+var drop_blocked: Callable
+
+## Optional gate: (upgrade_type: Enums.UpgradeType) -> bool. Returns true if allowed.
+## Set externally (e.g. by BoardManager during challenges).
+var upgrade_allowed: Callable
+
+# Gameplay target bucket state
+const GAMEPLAY_TARGET_DURATION: float = 8.0
+const GAMEPLAY_TARGET_FADE_START: float = 1.0  # begin fading with 1s left
+var _gameplay_target_enabled: bool = false
+var _gameplay_target_index: int = -1
+var _gameplay_target_timer: float = 0.0
+var _gameplay_target_fading: bool = false
 
 # MultiMesh peg state
 var _peg_multimesh_instance: MultiMeshInstance3D
@@ -89,6 +105,7 @@ func _ready() -> void:
 	AudioManager.drum_tier_fired.connect(_on_drum_tier_fired)
 	AudioManager.drum_tier_expired.connect(_on_drum_tier_expired)
 	ThemeProvider.theme_changed.connect(_on_theme_changed)
+	call_deferred("_init_gameplay_target")
 
 
 func _exit_tree() -> void:
@@ -290,6 +307,16 @@ func _process(delta: float) -> void:
 	if not _active_drop_bursts.is_empty():
 		_sync_drop_burst(delta)
 
+	if _gameplay_target_enabled and _gameplay_target_index >= 0:
+		_gameplay_target_timer -= delta
+		if _gameplay_target_timer <= GAMEPLAY_TARGET_FADE_START and not _gameplay_target_fading:
+			_gameplay_target_fading = true
+			var bucket := get_bucket(_gameplay_target_index)
+			if bucket:
+				bucket.start_gameplay_target_fade(GAMEPLAY_TARGET_FADE_START)
+		if _gameplay_target_timer <= 0.0:
+			_pick_new_gameplay_target()
+
 
 func _update_peg_flashes(delta: float) -> void:
 	var mm := _peg_multimesh_instance.multimesh
@@ -457,7 +484,7 @@ func has_in_flight_coins() -> bool:
 
 
 func request_drop(costs: Array = [], coin_type: int = -1, is_manual: bool = true) -> void:
-	if ChallengeManager.is_active_challenge and ChallengeManager.has_failed():
+	if drop_blocked.is_valid() and drop_blocked.call():
 		return
 
 	if costs.is_empty():
@@ -755,10 +782,17 @@ func on_coin_landed(coin: Coin) -> void:
 func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var bucket_idx := _get_bucket_index(bucket)
-	var amount: int = roundi(bucket.value * coin.multiplier)
+	var target_multiplier: float = 1.0
+	if _gameplay_target_enabled and bucket_idx == _gameplay_target_index:
+		target_multiplier = 2.0
+		_pick_new_gameplay_target()
+	var amount: int = roundi(bucket.value * coin.multiplier * target_multiplier)
+	var was_already_singing := bucket.is_singing()
 	if not coin.is_prestige_coin:
 		CurrencyManager.add(bucket.currency_type, amount)
 		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
+		if was_already_singing:
+			CurrencyManager.add(bucket.currency_type, 1)
 	bucket.pulse()
 	var num_buckets: int = buckets_container.get_child_count()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
@@ -771,8 +805,12 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 			bucket.mark_singing()
 			_singing_positions[_bucket_position_key(bucket.position.x + buckets_container.position.x)] = true
 	AudioManager.on_coin_landed()
-	if coin.multiplier > 1 and not coin.is_prestige_coin:
-		_show_floating_text(coin.global_position, coin.multiplier, amount)
+	var effective_multiplier := coin.multiplier * target_multiplier
+	var has_multiplier_text := effective_multiplier > 1.0 and not coin.is_prestige_coin
+	if has_multiplier_text:
+		_show_floating_text(coin.global_position, effective_multiplier, amount)
+	if was_already_singing and not coin.is_prestige_coin:
+		_show_bonus_text(coin.global_position, 0.1 if has_multiplier_text else 0.0)
 	if not coin.is_prestige_coin:
 		coin.queue_free()
 
@@ -848,6 +886,49 @@ func clear_all_markings() -> void:
 	_bucket_markings.clear()
 
 
+## Gameplay target: picks a new random bucket, avoiding the current one.
+func _pick_new_gameplay_target() -> void:
+	var num_buckets := buckets_container.get_child_count()
+	if num_buckets <= 0:
+		return
+	# Clear old target
+	if _gameplay_target_index >= 0 and _gameplay_target_index < num_buckets:
+		var old_bucket := get_bucket(_gameplay_target_index)
+		if old_bucket:
+			old_bucket.stop_gameplay_target()
+	# Pick new index, avoiding the current one
+	var new_index: int = _gameplay_target_index
+	if num_buckets > 1:
+		while new_index == _gameplay_target_index:
+			new_index = randi_range(0, num_buckets - 1)
+	else:
+		new_index = 0
+	_gameplay_target_index = new_index
+	_gameplay_target_timer = GAMEPLAY_TARGET_DURATION
+	_gameplay_target_fading = false
+	var bucket := get_bucket(_gameplay_target_index)
+	if bucket:
+		bucket.mark_gameplay_target()
+
+
+func set_gameplay_target_enabled(enabled: bool) -> void:
+	if _gameplay_target_enabled == enabled:
+		return
+	_gameplay_target_enabled = enabled
+	if not enabled:
+		if _gameplay_target_index >= 0:
+			var bucket := get_bucket(_gameplay_target_index)
+			if bucket:
+				bucket.stop_gameplay_target()
+		_gameplay_target_index = -1
+	else:
+		_pick_new_gameplay_target()
+
+
+func _init_gameplay_target() -> void:
+	set_gameplay_target_enabled(true)
+
+
 func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0, show_burst: bool = false) -> void:
 	var coin = CoinScene.instantiate()
 	coin.coin_type = type
@@ -864,7 +945,7 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 			for i in reward.coin_count:
 				force_drop_coin(reward.coin_type, mult)
 		elif reward.type == RewardData.RewardType.UNLOCK_UPGRADE and reward.board_type == board_type:
-			if ChallengeManager.is_active_challenge and not ChallengeManager.is_upgrade_allowed(reward.upgrade_type):
+			if upgrade_allowed.is_valid() and not upgrade_allowed.call(reward.upgrade_type):
 				# Drop an advanced coin instead of unlocking a blocked upgrade
 				if advanced_bucket_type >= 0:
 					force_drop_coin(advanced_bucket_type, advanced_coin_multiplier)
@@ -1056,6 +1137,19 @@ func build_board() -> void:
 				if _singing_positions.has(key):
 					child.mark_singing()
 
+	# Re-apply gameplay target after rebuild
+	if _gameplay_target_enabled and _gameplay_target_index >= 0:
+		var bucket_count := buckets_container.get_child_count()
+		if _gameplay_target_index >= bucket_count:
+			_pick_new_gameplay_target()
+		else:
+			var target_bucket := get_bucket(_gameplay_target_index)
+			if target_bucket:
+				if _gameplay_target_fading:
+					target_bucket.start_gameplay_target_fade(_gameplay_target_timer)
+				else:
+					target_bucket.mark_gameplay_target()
+
 	board_rebuilt.emit()
 
 
@@ -1227,6 +1321,28 @@ func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
 	add_child(label)
 
 	var tween := create_tween()
+	tween.tween_property(label, "position:y", label.position.y + t.floating_text_rise, t.floating_text_duration)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, t.floating_text_duration * 0.5) \
+		.set_delay(t.floating_text_duration * 0.5)
+	tween.tween_callback(label.queue_free)
+
+
+func _show_bonus_text(pos: Vector3, delay: float = 0.0) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var label := Label3D.new()
+	label.text = "+1"
+	label.font_size = t.floating_text_font_size
+	label.outline_size = t.label_outline_size
+	if t.label_font:
+		label.font = t.label_font
+	label.modulate = t.normal_text_color
+	label.modulate.a = 0.0 if delay > 0.0 else 1.0
+	var local_pos := to_local(pos)
+	label.position = Vector3(local_pos.x + 0.15, local_pos.y + 0.3, local_pos.z + 0.05)
+	add_child(label)
+	var tween := create_tween()
+	if delay > 0.0:
+		tween.tween_property(label, "modulate:a", 1.0, 0.05).set_delay(delay)
 	tween.tween_property(label, "position:y", label.position.y + t.floating_text_rise, t.floating_text_duration)
 	tween.parallel().tween_property(label, "modulate:a", 0.0, t.floating_text_duration * 0.5) \
 		.set_delay(t.floating_text_duration * 0.5)
@@ -1452,3 +1568,7 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 		_show_advanced_drop_bar()
 
 	build_board()
+
+
+
+

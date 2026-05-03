@@ -48,6 +48,7 @@ func setup(camera: Camera3D) -> void:
 	UpgradeManager.autodropper_unlocked.connect(_on_autodropper_unlocked)
 	UpgradeManager.advanced_autodropper_unlocked.connect(_on_advanced_autodropper_unlocked)
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
+	ChallengeManager.challenge_state_changed.connect(_on_challenge_state_changed_for_targets)
 
 
 func _input(event: InputEvent) -> void:
@@ -463,3 +464,9 @@ func deserialize(data: Dictionary) -> void:
 
 	# Re-frame camera on active board
 	_snap_camera_to_active_board()
+
+
+func _on_challenge_state_changed_for_targets() -> void:
+	var enabled := not ChallengeManager.uses_target_buckets()
+	for board in _boards:
+		board.set_gameplay_target_enabled(enabled)
