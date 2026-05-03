@@ -1,13 +1,10 @@
-extends SceneTree
+extends "res://test/test_base.gd"
 
-## Minimal test runner — run with:
-##   godot --headless -s test/test_offline_calculator.gd
-
-var _pass_count := 0
-var _fail_count := 0
+## OfflineCalculator tests — run with:
+##   godot --headless --scene res://test/test_offline_calculator.tscn
 
 
-func _init() -> void:
+func _run_tests() -> void:
 	print("\n=== OfflineCalculator Tests ===\n")
 
 	test_zero_elapsed_no_change()
@@ -30,21 +27,6 @@ func _init() -> void:
 	test_missing_board_state_uses_defaults()
 	test_all_three_boards_sequential_processing()
 	test_gold_accumulates_then_orange_fires()
-
-	print("\n--- Results: %d passed, %d failed ---" % [_pass_count, _fail_count])
-	if _fail_count > 0:
-		printerr("SOME TESTS FAILED")
-	quit()
-
-
-# --- Assertion helpers ---
-
-func assert_equal(actual: Variant, expected: Variant, label: String) -> void:
-	if actual == expected:
-		_pass_count += 1
-	else:
-		_fail_count += 1
-		printerr("  FAIL: %s — expected %s, got %s" % [label, expected, actual])
 
 
 # --- Test state builder ---

@@ -210,7 +210,7 @@ static func _get_drop_costs(board_type: Enums.BoardType, assignment_type: String
 	if assignment_type == "ADVANCED":
 		return [[_advanced_currency_key(board_type), 1]]
 
-	var costs := TierRegistry.get_drop_costs(board_type)
+	var costs: Array = TierRegistry.get_drop_costs(board_type)
 	var result: Array = []
 	for cost in costs:
 		result.append([_currency_key(cost[0]), cost[1]])

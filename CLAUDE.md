@@ -286,9 +286,9 @@ Each `PlinkoBoard` additionally listens to `AudioManager.chord_changed` (AudioSt
 
 ## Feature Planning Process (Plan Mode Only)
 
-When the user enters plan mode and describes a feature, run a multi-agent review before writing any code. Five personalities evaluate the feature in parallel, debate concerns in rounds, and produce a consensus plan.
+When the user enters plan mode and describes a feature, run a multi-agent review before writing any code. Six personalities evaluate the feature in parallel, debate concerns in rounds, and produce a consensus plan.
 
-### The Five Personalities
+### The Six Personalities
 
 Each personality evaluates proposed features through their specific lens. They should raise concerns, propose alternatives, and flag risks — all oriented toward **future code that will be written**, not auditing existing code.
 
@@ -330,10 +330,19 @@ Each personality evaluates proposed features through their specific lens. They s
 - Are type annotations, naming conventions, and file structure consistent?
 - Are we using theme variables instead of new ones like Color.WHITE (which is wrong)?
 
+**6. The Test Lead — Testing & Testability**
+
+- Can this feature's logic be tested without running the full game?
+- Are the key behaviors isolated enough to unit test (pure functions, clear inputs/outputs)?
+- What are the critical paths that need test coverage before this ships?
+- Does the design make mocking/stubbing dependencies easy (dependency injection over global singletons)?
+- Are state transitions explicit and verifiable (not buried in tween callbacks or signal chains)?
+- Will the tests catch regressions if someone refactors this later?
+
 ### Process
 
-1. **Parallel analysis:** Spin up all 5 agents simultaneously. Each receives the feature description and analyzes it through their lens.
-2. **Round 1 — Concerns:** Collect all concerns from the 5 agents. Present a summary to the user showing each personality's key concerns.
+1. **Parallel analysis:** Spin up all 6 agents simultaneously. Each receives the feature description and analyzes it through their lens.
+2. **Round 1 — Concerns:** Collect all concerns from the 6 agents. Present a summary to the user showing each personality's key concerns.
 3. **Round 2+ — Resolution:** If there are conflicts between agents, run another round where each agent sees the others' concerns and responds. Continue for up to 3 rounds. Do not ask the user to resolve disagreements during this process — let the agents work it out.
 4. **Escalation:** If no consensus after 3 rounds, present the unresolved disagreements to the user for a decision.
 5. **Approval:** Present the final plan to the user. Only begin implementation after explicit approval.
@@ -370,17 +379,18 @@ When the user enters plan mode for a feature, **create a new git branch** before
 
 ### Post-Implementation Review
 
-After the user confirms the implementation looks good, run a **post-implementation review** using the same five personalities before merging to main. This mirrors the pre-implementation plan review but evaluates the actual code changes.
+After the user confirms the implementation looks good, run a **post-implementation review** using the same six personalities before merging to main. This mirrors the pre-implementation plan review but evaluates the actual code changes.
 
 #### Process
 
 1. **Collect the diff:** Run `git diff main...HEAD` to get all changes on the feature branch.
-2. **Parallel review:** Spin up all 5 agents simultaneously. Each receives the full diff and reviews it through their lens:
+2. **Parallel review:** Spin up all 6 agents simultaneously. Each receives the full diff and reviews it through their lens:
    - **The Janitor** — Did the implementation introduce duplication, oversized files, or dead code? Is anything left behind that should be cleaned up?
    - **The Godot Guru** — Are Godot patterns correct in the actual code? Proper node lifecycle, signal usage, resource handling, performance?
    - **The Architect** — Do the actual connections match the plan? Any unplanned coupling, missing signal disconnections, or ripple effects?
    - **The Newcomer** — Is the implemented code readable? Magic numbers, unclear names, confusing control flow?
    - **The Consistency Lover** — Does the code match existing codebase patterns? Naming, typing, structure?
+   - **The Test Lead** — Is the code testable? Are key behaviors covered by tests? Can logic be verified without running the full game?
 3. **Round 1 — Concerns:** Collect and present all concerns, noting which are blocking (must fix before merge) vs. advisory (nice to fix, not required).
 4. **Round 2+ — Resolution:** Same multi-round debate as the planning phase. Agents see each other's concerns and resolve conflicts. Up to 3 rounds.
 5. **Escalation:** Unresolved disagreements after 3 rounds go to the user.

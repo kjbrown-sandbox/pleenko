@@ -58,21 +58,11 @@ const BEATS_PER_BAR := 4
 
 const MELODY_POOL_SIZE := 12
 const CLICK_POOL_SIZE := 8
-# DEPRECATED — ambient pad constants. The pad layer is dormant; `_fade_in_ambient`
-# early-returns. See the `DEPRECATED: Ambient pad` section below for the full
-# dormant code path and removal candidates.
-const AMBIENT_FADE_DURATION := 2.0
-const AMBIENT_IDLE_TIMEOUT := 2.0
-const AMBIENT_VOLUME_DB := -6.0
 const PEG_CLICK_VOLUME_DB := -18.0
 const PEG_SPARKLE_VOLUME_DB := -8.0
 const BUCKET_VOLUME_DB := -17.5
 
-var _cello_pool: Array[AudioStreamPlayer] = []
-var _chime_pool: Array[AudioStreamPlayer] = []
 var _click_pool: Array[AudioStreamPlayer] = []
-var _cello_idx: int = 0
-var _chime_idx: int = 0
 var _click_idx: int = 0
 
 var _active_board: Enums.BoardType = Enums.BoardType.GOLD
@@ -87,15 +77,6 @@ var _beat_phase: float = 0.0
 var _beat_armed: bool = false
 var _motif_position: int = 0
 
-# DEPRECATED — ambient pad double-buffer state. Pad layer is dormant.
-var _ambient_a: AudioStreamPlayer
-var _ambient_b: AudioStreamPlayer
-var _ambient_active: AudioStreamPlayer
-var _ambient_pad_streams: Dictionary = {}  # BoardType -> AudioStreamWAV
-var _ambient_fading_in: bool = false
-var _idle_timer: float = 0.0
-var _activity_detected: bool = false
-# Ambient pad stays alive while > 0 and for AMBIENT_IDLE_TIMEOUT after it hits 0.
 var _active_coin_count: int = 0
 
 # Sparkle state — pegs sparkle only within 100ms of a bucket drone firing.
@@ -213,28 +194,9 @@ var _challenge_tick_received: bool = false
 # Melody-bus low-pass filter. Toggled on/off with lofi theme.
 var _melody_lowpass_effect_idx: int = -1
 
-# ── Lofi drum system ─────────────────────────────────────────────────
-# Player drops: random pick from snare/clap/rim. Autodropper kicks cycle;
-# advanced autodropper hats cycle and fire offbeat (ADVANCED_DRUM_OFFSET after
-# the tick).
-const DRUM_POOL_PLAYER_VOLUME_DB := -2.0
-const DRUM_POOL_KICK_VOLUME_DB := 0.0
-const DRUM_POOL_HAT_VOLUME_DB := -6.0
-const DRUM_RAPID_FIRE_WINDOW := 0.25
-const DRUM_RAPID_FIRE_ATTENUATION_DB := -6.0
-const ADVANCED_DRUM_OFFSET := 0.75  # half of default 1.5s tick
-
-var _player_drum_players: Array[AudioStreamPlayer] = []
-var _kick_drum_players: Array[AudioStreamPlayer] = []
-var _hat_drum_players: Array[AudioStreamPlayer] = []
-var _kick_rotation_idx: int = 0
-var _hat_rotation_idx: int = 0
-var _last_player_drum_time: float = -999.0
-
 var _melody_bus_idx: int = -1
 var _drones_bus_idx: int = -1
 var _click_bus_idx: int = -1
-var _ambient_bus_idx: int = -1
 func _ready() -> void:
 	# ── Legacy sound pools ───────────────────────────────────────────
 	var pool_overrides := {&"coin_flip": MAX_BUCKET_SOUNDS}
@@ -257,7 +219,6 @@ func _ready() -> void:
 		# Low-pass is the last effect on the Melody bus — see default_bus_layout.tres
 		_melody_lowpass_effect_idx = AudioServer.get_bus_effect_count(_melody_bus_idx) - 1
 	_click_bus_idx = AudioServer.get_bus_index(&"Click")
-	_ambient_bus_idx = AudioServer.get_bus_index(&"Ambient")
 	_drones_bus_idx = AudioServer.get_bus_index(&"Drones")
 
 	# ── Instruments ─────────────────────────────────────────────────
@@ -275,20 +236,9 @@ func _ready() -> void:
 	_drum_rim = DrumRim.new(400.0, 0.08)
 	_drum_hat = DrumHat.new(6000.0, 0.05)
 
-	# Placeholder cello/chime streams — legacy pools, unused by active paths.
-	var cello_stream := _generate_tone(196.0, 0.8)      # G3
-	var chime_stream := _generate_chime(784.0, 0.6)      # G5 + shimmer
 	var click_stream: AudioStream = _click.resolve(0.0).stream
 
-	# DEPRECATED — ambient pad streams per board (4-note stacks of each chord).
-	_ambient_pad_streams[Enums.BoardType.GOLD] = _generate_ambient_pad(4.0, 44100,
-		[130.81, 164.81, 196.00, 246.94])  # Cmaj7
-	_ambient_pad_streams[Enums.BoardType.ORANGE] = _generate_ambient_pad(4.0, 44100,
-		[98.00, 123.47, 146.83, 174.61])   # G7
-	_ambient_pad_streams[Enums.BoardType.RED] = _generate_ambient_pad(4.0, 44100,
-		[110.00, 130.81, 164.81, 196.00])  # Am7
-
-	# Zen default drone stream. Lofi swaps to _piano_drone_stream per-play.
+	# Zen default drone stream.
 	_sine_drone_stream = _generate_ambient_pad(2.0, 44100, [262.0, 392.0])
 
 	_kick_player = AudioStreamPlayer.new()
@@ -297,22 +247,7 @@ func _ready() -> void:
 	_kick_player.volume_db = -4.0
 	add_child(_kick_player)
 
-	# ── Musical pools ───────────────────────────────────────────────
-	for i in MELODY_POOL_SIZE:
-		var cello := AudioStreamPlayer.new()
-		cello.stream = cello_stream
-		cello.bus = &"Melody"
-		cello.volume_db = BUCKET_VOLUME_DB
-		add_child(cello)
-		_cello_pool.append(cello)
-
-		var chime := AudioStreamPlayer.new()
-		chime.stream = chime_stream
-		chime.bus = &"Melody"
-		chime.volume_db = PEG_SPARKLE_VOLUME_DB
-		add_child(chime)
-		_chime_pool.append(chime)
-
+	# ── Click pool ──────────────────────────────────────────────────
 	for i in CLICK_POOL_SIZE:
 		var click := AudioStreamPlayer.new()
 		click.stream = click_stream
@@ -320,22 +255,6 @@ func _ready() -> void:
 		click.volume_db = PEG_CLICK_VOLUME_DB
 		add_child(click)
 		_click_pool.append(click)
-
-	# ── Ambient pad players ──────────────────────────────────────────
-	var initial_pad: AudioStreamWAV = _ambient_pad_streams[Enums.BoardType.GOLD]
-	_ambient_a = AudioStreamPlayer.new()
-	_ambient_a.stream = initial_pad
-	_ambient_a.bus = &"Ambient"
-	_ambient_a.volume_db = -80.0
-	add_child(_ambient_a)
-
-	_ambient_b = AudioStreamPlayer.new()
-	_ambient_b.stream = initial_pad
-	_ambient_b.bus = &"Ambient"
-	_ambient_b.volume_db = -80.0
-	add_child(_ambient_b)
-
-	_ambient_active = _ambient_a
 
 	# ── Bucket drone pool ───────────────────────────────────────────
 	# Stream is (re)assigned per-play via instrument.resolve() in play_bucket.
@@ -347,31 +266,6 @@ func _ready() -> void:
 		add_child(drone)
 		_drone_pool.append(drone)
 		_drone_free.append(i)
-
-	# ── Lofi drum pools ─────────────────────────────────────────────
-	for inst: Instrument in [_drum_snare, _drum_clap, _drum_rim]:
-		var p := AudioStreamPlayer.new()
-		p.stream = inst.resolve(0.0).stream
-		p.bus = &"Click"
-		p.volume_db = DRUM_POOL_PLAYER_VOLUME_DB
-		add_child(p)
-		_player_drum_players.append(p)
-
-	for inst: Instrument in [_drum_kick_deep, _drum_kick_thin]:
-		var p := AudioStreamPlayer.new()
-		p.stream = inst.resolve(0.0).stream
-		p.bus = &"Click"
-		p.volume_db = DRUM_POOL_KICK_VOLUME_DB
-		add_child(p)
-		_kick_drum_players.append(p)
-
-	for inst: Instrument in [_drum_hat]:
-		var p := AudioStreamPlayer.new()
-		p.stream = inst.resolve(0.0).stream
-		p.bus = &"Click"
-		p.volume_db = DRUM_POOL_HAT_VOLUME_DB
-		add_child(p)
-		_hat_drum_players.append(p)
 
 	# ── Sequencer players (melody + drum-layer dispatch) ────────────
 	_melody_player = AudioStreamPlayer.new()
@@ -398,16 +292,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	var has_activity: bool = _activity_detected or _active_coin_count > 0
-	if has_activity:
-		_idle_timer = 0.0
-		_activity_detected = false
-		if not _ambient_fading_in:
-			_fade_in_ambient()
-	else:
-		_idle_timer += delta
-		if _idle_timer >= AMBIENT_IDLE_TIMEOUT and _ambient_fading_in:
-			_fade_out_ambient()
+	var has_activity: bool = _active_coin_count > 0
 
 	_tick_harmonic_rhythm(delta, has_activity)
 	_tick_beat_grid(delta)
@@ -766,7 +651,6 @@ func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: i
 		return false
 	if board_type != _active_board:
 		return false
-	_activity_detected = true
 
 	# Drum-layer mode: activate the tier. Tier stays active for one chord
 	# duration from this activation.
@@ -815,7 +699,6 @@ func force_play_bucket(board_type: Enums.BoardType, bucket_idx: int, degree: int
 		return
 	if board_type != _active_board:
 		return
-	_activity_detected = true
 	if _theme_drum_instruments().size() > 0:
 		if degree < _theme_drum_instruments().size():
 			var now: float = Time.get_ticks_msec() / 1000.0
@@ -930,7 +813,7 @@ func _play_drum_hit(inst: Instrument, volume_offset: float) -> void:
 	_drum_seq_idx = (_drum_seq_idx + 1) % _drum_seq_pool.size()
 	player.stream = sp["stream"]
 	player.pitch_scale = sp["pitch_scale"]
-	player.volume_db = DRUM_POOL_PLAYER_VOLUME_DB + volume_offset
+	player.volume_db = -2.0 + volume_offset
 	player.play()
 
 
@@ -993,7 +876,7 @@ func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 	_kill_fade_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stream = sp["stream"]
-	player.pitch_scale = _apply_tape_wobble(sp["pitch_scale"])
+	player.pitch_scale = sp["pitch_scale"]
 	player.volume_db = target_volume + voice_attenuation_db
 	player.play()
 	var tail: float = maxf(_chord_timer, MIN_BUCKET_RING_SECONDS)
@@ -1037,7 +920,7 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	_kill_fade_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stream = sp["stream"]
-	player.pitch_scale = _apply_tape_wobble(sp["pitch_scale"])
+	player.pitch_scale = sp["pitch_scale"]
 	player.volume_db = SPARKLE_VOLUME_DB + voice_attenuation_db
 	player.play()
 
@@ -1053,7 +936,6 @@ func play_peg_click(board_type: Enums.BoardType) -> void:
 		return
 	if board_type != _active_board:
 		return
-	_activity_detected = true
 	var player: AudioStreamPlayer = _click_pool[_click_idx]
 	_click_idx = (_click_idx + 1) % _click_pool.size()
 	player.pitch_scale = randf_range(0.8, 1.2)
@@ -1064,77 +946,24 @@ func set_active_board(board_type: Enums.BoardType) -> void:
 	if board_type == _active_board:
 		return
 	_active_board = board_type
-	_crossfade_ambient(board_type)
 
 
 ## Keeps the ambient pad alive for the whole descent even on large boards
 ## where the 2s idle timeout would otherwise fade between sparkles.
 func on_coin_dropped() -> void:
 	_active_coin_count += 1
-	_activity_detected = true
 
 
 func on_coin_landed() -> void:
 	_active_coin_count = maxi(0, _active_coin_count - 1)
 
 
-## DISABLED — drums parked while harp timbre is being developed. Pools,
-## buses, and tick scheduling stay intact for easy re-enable.
-func play_manual_drop_drum(board_type: Enums.BoardType) -> void:
-	if _silenced:
-		return
-	return
-	if board_type != _active_board:
-		return
-	if _player_drum_players.is_empty():
-		return
-
-	var now: float = Time.get_ticks_msec() / 1000.0
-	var rapid: bool = (now - _last_player_drum_time) < DRUM_RAPID_FIRE_WINDOW
-	_last_player_drum_time = now
-
-	var player: AudioStreamPlayer = _player_drum_players[randi() % _player_drum_players.size()]
-	player.pitch_scale = _get_ambient_pitch(board_type)
-	player.volume_db = DRUM_POOL_PLAYER_VOLUME_DB + (DRUM_RAPID_FIRE_ATTENUATION_DB if rapid else 0.0)
-	player.play()
+func play_manual_drop_drum(_board_type: Enums.BoardType) -> void:
+	pass
 
 
-## DISABLED — see play_manual_drop_drum. Normal autodropper → kick on the
-## beat; advanced → hat on the offbeat (ADVANCED_DRUM_OFFSET later). Rotates
-## through the pool in order.
-func play_autodropper_drum(board_type: Enums.BoardType, is_advanced: bool) -> void:
-	if _silenced:
-		return
-	return
-	if board_type != _active_board:
-		return
-
-	if is_advanced:
-		get_tree().create_timer(ADVANCED_DRUM_OFFSET).timeout.connect(
-			_play_advanced_drum_now.bind(board_type))
-	else:
-		_play_kick_now(board_type)
-
-
-func _play_kick_now(board_type: Enums.BoardType) -> void:
-	if _kick_drum_players.is_empty():
-		return
-	var player: AudioStreamPlayer = _kick_drum_players[_kick_rotation_idx]
-	_kick_rotation_idx = (_kick_rotation_idx + 1) % _kick_drum_players.size()
-	player.pitch_scale = _get_ambient_pitch(board_type)
-	player.play()
-
-
-func _play_advanced_drum_now(board_type: Enums.BoardType) -> void:
-	# Re-check active board — player may have switched during the delay.
-	if board_type != _active_board:
-		return
-	if _hat_drum_players.is_empty():
-		return
-	var player: AudioStreamPlayer = _hat_drum_players[_hat_rotation_idx]
-	_hat_rotation_idx = (_hat_rotation_idx + 1) % _hat_drum_players.size()
-	player.pitch_scale = _get_ambient_pitch(board_type)
-	player.play()
+func play_autodropper_drum(_board_type: Enums.BoardType, _is_advanced: bool) -> void:
+	pass
 
 
 # ── Legacy API (kept for backward compatibility) ─────────────────────
@@ -1166,7 +995,6 @@ func play(sound_name: StringName, pitch: float = 0.0, max_duration: float = 0.0)
 func silence(fade_duration: float = 0.5) -> void:
 	_silenced = true
 	_fade_all_drones(fade_duration)
-	_fade_out_ambient()
 	_bucket_queue.clear()
 
 
@@ -1271,14 +1099,6 @@ func _current_chord_entry() -> Dictionary:
 	return prog[_chord_index % prog.size()]
 
 
-## DISABLED — tape wobble added "old recording" character that fought the
-## clean harp timbre. Kept for potential revival.
-func _apply_tape_wobble(pitch: float) -> float:
-	return pitch
-	var t: float = Time.get_ticks_msec() / 1000.0
-	return pitch * (1.0 + sin(t * 3.0) * 0.004)
-
-
 func is_active_board(board_type: Enums.BoardType) -> bool:
 	return board_type == _active_board
 
@@ -1307,63 +1127,6 @@ func notify_autodropper_beat(interval: float) -> void:
 	_beat_phase = 0.0
 	_motif_position += 1
 	_beat_armed = true
-
-
-# ── DEPRECATED: Ambient pad (unused; kept for potential revival) ─────
-#
-# Per-board sustained harmonic beds, crossfaded on board switch and auto-
-# faded during idle. `_fade_in_ambient` early-returns so no audible pad ever
-# reaches the mixer. Kept because the planned audio refactor may resurrect
-# the pad as its own instrument role.
-#
-# Full removal would also delete: the `AMBIENT_*` constants, the
-# `_ambient_pad_streams` dict + its init in `_ready`, the `_ambient_a` /
-# `_ambient_b` / `_ambient_active` players + their init, the idle-timer hooks
-# in `_process` that call the two fade helpers, the `_crossfade_ambient` call
-# in `_on_board_switched`, and the `_generate_ambient_pad` synth.
-# NOTE: `_generate_ambient_pad` is also reused to build `_sine_drone_stream`
-# for the bucket drone pool — if you remove it, port that one call to its
-# own sine-synth helper first.
-# NOTE: `_get_ambient_pitch` lives in this section by legacy but is still
-# used by the drum layer to match board chords — do NOT remove with the pad.
-
-func _fade_in_ambient() -> void:
-	# Over-dense with drums + bucket drones. Re-enable by removing this return.
-	return
-	_ambient_fading_in = true
-	if not _ambient_active.playing:
-		_ambient_active.stream = _ambient_pad_streams.get(_active_board, _ambient_pad_streams[Enums.BoardType.GOLD])
-		_ambient_active.pitch_scale = 1.0
-		_ambient_active.play()
-	var tween := create_tween()
-	tween.tween_property(_ambient_active, "volume_db", AMBIENT_VOLUME_DB, AMBIENT_FADE_DURATION)
-
-
-func _fade_out_ambient() -> void:
-	_ambient_fading_in = false
-	var player := _ambient_active
-	var tween := create_tween()
-	tween.tween_property(player, "volume_db", -80.0, AMBIENT_FADE_DURATION * 1.5)
-	tween.tween_callback(player.stop)
-
-
-func _crossfade_ambient(board_type: Enums.BoardType) -> void:
-	var old_player := _ambient_active
-	var new_player := _ambient_b if _ambient_active == _ambient_a else _ambient_a
-	_ambient_active = new_player
-
-	if old_player.playing:
-		var out_tween := create_tween()
-		out_tween.tween_property(old_player, "volume_db", -80.0, AMBIENT_FADE_DURATION)
-		out_tween.tween_callback(old_player.stop)
-
-	if _ambient_fading_in:
-		new_player.stream = _ambient_pad_streams.get(board_type, _ambient_pad_streams[Enums.BoardType.GOLD])
-		new_player.pitch_scale = 1.0
-		new_player.volume_db = -80.0
-		new_player.play()
-		var in_tween := create_tween()
-		in_tween.tween_property(new_player, "volume_db", AMBIENT_VOLUME_DB, AMBIENT_FADE_DURATION)
 
 
 func _update_bucket_drones(delta: float) -> void:
@@ -1410,43 +1173,7 @@ func _on_theme_changed() -> void:
 
 	_on_theme_swap()
 
-# ── Placeholder tone generation ──────────────────────────────────────
-
-func _generate_tone(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var env: float = 1.0
-		if t < 0.01:
-			env = t / 0.01
-		elif t > duration * 0.6:
-			env = (duration - t) / (duration * 0.4)
-		var value: float = sin(TAU * freq * t) * env * 0.4
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
-
-func _generate_chime(freq: float, duration: float, mix_rate: int = 44100) -> AudioStreamWAV:
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = mix_rate
-	var num_samples := int(duration * mix_rate)
-	var data := PackedByteArray()
-	data.resize(num_samples * 2)
-	for i in num_samples:
-		var t: float = float(i) / mix_rate
-		var env: float = exp(-t * 5.0)
-		var value: float = (sin(TAU * freq * t) * 0.6 + sin(TAU * freq * 3.0 * t) * 0.2) * env * 0.35
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
-	wav.data = data
-	return wav
-
+# ── Tone generation ─────────────────────────────────────────────────
 
 func _generate_ambient_pad(duration: float, mix_rate: int = 44100, frequencies: Array = [131.0, 196.0]) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
