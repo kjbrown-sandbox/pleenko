@@ -46,11 +46,16 @@ Fix all genuinely blocking issues directly in the code. Make the minimal targete
 
 If any fixes were made, commit them as a separate commit (e.g., "Fix review feedback: [brief description]").
 
-### 7. Report
+### 7. Push and Create PR
+
+- Push the branch to origin with `git push -u origin <branch-name>`
+- Create a pull request using `gh pr create` with a clear title and body summarizing the changes, review findings, and fixes applied
+- Print the PR URL so the user can open it in their browser
+
+### 8. Report
 
 Tell the user:
-- What branch they're on
+- The PR URL (prominently, at the top)
 - Summary of commits
 - Which blocking issues were fixed
 - Which advisory issues remain (if any worth noting)
-- Whether the branch is ready to merge
