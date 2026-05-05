@@ -9,4 +9,6 @@ extends ChallengeObjective
 @export var survive_duration: float = 30.0
 
 func get_text() -> String:
-	return "Survive with %d autodropper(s)" % autodropper_count
+	# return "Survive with %d autodropper(s)" % autodropper_count
+	var tier_name: String = TierRegistry.get_tier(board_type).display_name.to_lower()
+	return "Survive the %s autodropper%s" % [tier_name, "s" if autodropper_count != 1 else ""]
