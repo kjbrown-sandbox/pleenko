@@ -9,6 +9,7 @@ const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
 # Icon from: <a href="https://www.flaticon.com/free-icons/configure" title="configure icons">Configure icons created by logisstudio - Flaticon</a>
 # Arrow icon: <a href="https://www.flaticon.com/free-icons/next" title="next icons">Next icons created by Roundicons - Flaticon</a>
 # Skull: <a href="https://www.flaticon.com/free-icons/skull" title="skull icons">Skull icons created by meaicon - Flaticon</a>
+# Lock: <a href="https://www.flaticon.com/free-icons/caps-lock" title="caps lock icons">Caps lock icons created by Dave Gandy - Flaticon</a>
 @export var interactive: bool = true
 
 func _ready() -> void:
