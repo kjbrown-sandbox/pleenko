@@ -103,6 +103,10 @@ func load_game() -> bool:
 	UpgradeManager.deserialize(data.get("upgrades", {}))
 	_board_manager.deserialize(data.get("boards", {}))
 
+	# Failsafe: reconcile upgrade unlocks against the level table.
+	# Covers the race where current_level was saved ahead of claim_rewards().
+	LevelManager.ensure_unlocks_for_level()
+
 	print("[SaveManager] Game loaded.")
 	return true
 

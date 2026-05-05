@@ -241,6 +241,20 @@ func get_progress() -> float:
 	return float(balance) / float(threshold) if threshold > 0 else 0.0
 
 
+## Failsafe: ensures all upgrade unlocks that should have happened by the
+## current level are actually applied.  Covers the race where current_level
+## advances synchronously on currency change but claim_rewards() is deferred
+## to an async particle animation — if auto-save fires in between, the save
+## captures the advanced level without the unlock.
+func ensure_unlocks_for_level() -> void:
+	for i in range(current_level):
+		if i >= levels.size():
+			break
+		for reward in levels[i].rewards:
+			if reward.type == RewardData.RewardType.UNLOCK_UPGRADE:
+				UpgradeManager.unlock(reward.board_type, reward.upgrade_type)
+
+
 func serialize() -> Dictionary:
 	return { "current_level": current_level }
 
