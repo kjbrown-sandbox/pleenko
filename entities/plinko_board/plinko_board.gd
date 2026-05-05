@@ -1324,7 +1324,7 @@ func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
 func _show_bonus_text(pos: Vector3, delay: float = 0.0) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var label := Label3D.new()
-	label.text = "+1"
+	label.text = "Recent score bonus +1"
 	label.font_size = t.floating_text_font_size
 	label.outline_size = t.label_outline_size
 	if t.label_font:
