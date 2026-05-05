@@ -36,13 +36,12 @@ func _ready() -> void:
 	# Difficulty tabs (display only for now)
 	_difficulty_container = HBoxContainer.new()
 	_difficulty_container.add_theme_constant_override("separation", 4)
-	for diff_name in ["EASY", "MED", "HARD"]:
-		var tab := Label.new()
-		tab.text = diff_name
-		tab.add_theme_font_size_override("font_size", int(t.button_font_size))
-		tab.add_theme_color_override("font_color", t.button_disabled_text_color)
-		_apply_font(tab, t)
-		_difficulty_container.add_child(tab)
+	var tab := Label.new()
+	tab.text = "EASY"
+	tab.add_theme_font_size_override("font_size", int(t.button_font_size))
+	tab.add_theme_color_override("font_color", t.button_disabled_text_color)
+	_apply_font(tab, t)
+	_difficulty_container.add_child(tab)
 	vbox.add_child(_difficulty_container)
 
 	vbox.add_child(_make_separator(t))
