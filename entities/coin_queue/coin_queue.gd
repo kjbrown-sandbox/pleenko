@@ -1,9 +1,9 @@
 class_name CoinQueue
 extends Node3D
 
-## Coin queue with priority ordering (advanced before normal). Coins can be
-## FULL (ready to drop) or FILLING (autodrop pie animation). Both types
-## participate in the same queue mechanics — sliding, positioning, etc.
+## FIFO coin queue. Coins can be FULL (ready to drop) or FILLING (autodrop pie
+## animation). FULL coins sit before FILLING coins, but within each group the
+## order is strictly insertion order — no advanced-before-normal priority.
 
 const CoinScene: PackedScene = preload("res://entities/coin/coin.tscn")
 
@@ -22,8 +22,6 @@ signal capacity_changed(cap: int)
 
 var _capacity: int = 0
 var _coins: Array[Coin] = []
-## Boundary index: coins[0.._advanced_boundary) are advanced, rest are normal.
-var _advanced_boundary: int = 0
 
 # 3D visual indicators for empty slots
 var _empty_slot_meshes: Array[MeshInstance3D] = []
@@ -63,31 +61,20 @@ func enqueue(coin: Coin, is_advanced: bool = false) -> void:
 	if is_full():
 		return
 
-	# Priority order: FULL before FILLING, advanced before normal within each.
+	coin.is_advanced = is_advanced
+
+	# FULL coins go before FILLING coins (FIFO within each group).
 	var insert_idx: int
 	if coin.fill_state == Coin.FillState.FULL:
-		if is_advanced:
-			# Advanced FULL: insert at advanced boundary (before normal FULL coins)
-			insert_idx = _advanced_boundary
-			_advanced_boundary += 1
-		else:
-			# Normal FULL: insert after all FULL coins, before any FILLING coins
-			insert_idx = _find_first_filling_index()
+		insert_idx = _find_first_filling_index()
 	else:
-		# FILLING coins go at the end, advanced FILLING before normal FILLING
-		if is_advanced:
-			# Find where FILLING coins start, insert there
-			insert_idx = _find_first_filling_index()
-			_advanced_boundary += 1
-		else:
-			insert_idx = _coins.size()
+		insert_idx = _coins.size()
 
 	coin.position = _slot_position(insert_idx)
 	coin.rotation = coin_rotation
 	add_child(coin)
 	coin._apply_visuals()
 	_coins.insert(insert_idx, coin)
-	# Slide displaced coins to their new positions
 	_slide_coins_from(insert_idx + 1)
 	coin_enqueued.emit(insert_idx, coin.coin_type)
 
@@ -106,8 +93,6 @@ func dequeue() -> Coin:
 
 	var coin: Coin = _coins.pop_front()
 	remove_child(coin)
-	if _advanced_boundary > 0:
-		_advanced_boundary -= 1
 	_slide_all_forward()
 	coin_dequeued.emit()
 	return coin
@@ -120,8 +105,6 @@ func dequeue_full() -> Coin:
 			var coin: Coin = _coins[i]
 			_coins.remove_at(i)
 			remove_child(coin)
-			if i < _advanced_boundary:
-				_advanced_boundary -= 1
 			_slide_all_forward()
 			coin_dequeued.emit()
 			return coin
@@ -133,17 +116,13 @@ func dequeue_full() -> Coin:
 func complete_first_filling(is_advanced: bool) -> Coin:
 	for i in _coins.size():
 		var c: Coin = _coins[i]
-		if c.fill_state == Coin.FillState.FILLING:
-			var coin_is_adv: bool = i < _advanced_boundary
-			if coin_is_adv == is_advanced:
-				c.complete_fill()
-				_coins.remove_at(i)
-				remove_child(c)
-				if i < _advanced_boundary:
-					_advanced_boundary -= 1
-				_slide_all_forward()
-				coin_dequeued.emit()
-				return c
+		if c.fill_state == Coin.FillState.FILLING and c.is_advanced == is_advanced:
+			c.complete_fill()
+			_coins.remove_at(i)
+			remove_child(c)
+			_slide_all_forward()
+			coin_dequeued.emit()
+			return c
 	return null
 
 
@@ -151,15 +130,12 @@ func complete_first_filling(is_advanced: bool) -> Coin:
 ## add a replacement FILLING coin. Single slide pass at the end so no
 ## overlapping tweens. Returns the completed coin, or null if none found.
 func complete_and_requeue_filling(is_advanced: bool) -> Coin:
-	# Find the first FILLING coin of the requested type
 	var fill_idx: int = -1
 	for i in _coins.size():
 		var c: Coin = _coins[i]
-		if c.fill_state == Coin.FillState.FILLING:
-			var coin_is_adv: bool = i < _advanced_boundary
-			if coin_is_adv == is_advanced:
-				fill_idx = i
-				break
+		if c.fill_state == Coin.FillState.FILLING and c.is_advanced == is_advanced:
+			fill_idx = i
+			break
 	if fill_idx < 0:
 		return null
 
@@ -168,25 +144,17 @@ func complete_and_requeue_filling(is_advanced: bool) -> Coin:
 
 	# Remove from current position (no slide yet)
 	_coins.remove_at(fill_idx)
-	if fill_idx < _advanced_boundary:
-		_advanced_boundary -= 1
 
-	# Find the FULL insert position
-	var insert_idx: int
-	if is_advanced:
-		insert_idx = _advanced_boundary
-		_advanced_boundary += 1
-	else:
-		insert_idx = _find_first_filling_index()
-
+	# Insert at the end of the FULL section (FIFO)
+	var insert_idx: int = _find_first_filling_index()
 	_coins.insert(insert_idx, coin)
 
 	# Add a replacement FILLING coin at the end (no slide yet)
-	var replacement: Coin = null
 	if not is_full():
-		replacement = CoinScene.instantiate()
+		var replacement: Coin = CoinScene.instantiate()
 		replacement.coin_type = coin.coin_type
 		replacement.multiplier = coin.multiplier
+		replacement.is_advanced = is_advanced
 		replacement.fill_state = Coin.FillState.FILLING
 		replacement.fill_progress = 0.0
 		var rep_idx: int = _coins.size()
@@ -227,15 +195,11 @@ func remove_filling_coins_of_type(is_advanced: bool, max_remove: int = 0) -> voi
 		if max_remove > 0 and removed >= max_remove:
 			break
 		var coin: Coin = _coins[i]
-		if coin.fill_state == Coin.FillState.FILLING:
-			var coin_is_adv: bool = i < _advanced_boundary
-			if coin_is_adv == is_advanced:
-				_coins.remove_at(i)
-				remove_child(coin)
-				coin.queue_free()
-				if i < _advanced_boundary:
-					_advanced_boundary -= 1
-				removed += 1
+		if coin.fill_state == Coin.FillState.FILLING and coin.is_advanced == is_advanced:
+			_coins.remove_at(i)
+			remove_child(coin)
+			coin.queue_free()
+			removed += 1
 		i -= 1
 	_slide_all_forward()
 
@@ -243,11 +207,9 @@ func remove_filling_coins_of_type(is_advanced: bool, max_remove: int = 0) -> voi
 ## Count FILLING coins of a given type.
 func get_filling_count(is_advanced: bool) -> int:
 	var n: int = 0
-	for i in _coins.size():
-		if _coins[i].fill_state == Coin.FillState.FILLING:
-			var coin_is_adv: bool = i < _advanced_boundary
-			if coin_is_adv == is_advanced:
-				n += 1
+	for coin in _coins:
+		if coin.fill_state == Coin.FillState.FILLING and coin.is_advanced == is_advanced:
+			n += 1
 	return n
 
 

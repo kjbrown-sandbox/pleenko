@@ -15,6 +15,7 @@ var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
 		if is_node_ready():
 			_apply_visuals()
 var multiplier: float = 1.0
+var is_advanced: bool = false
 var fill_state: FillState = FillState.FULL
 var fill_progress: float = 1.0
 ## When true, the coin won't be freed on landing — the PrestigeAnimator handles its lifecycle.

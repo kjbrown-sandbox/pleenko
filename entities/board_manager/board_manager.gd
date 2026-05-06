@@ -190,6 +190,7 @@ func _on_board_rebuilt(board: PlinkoBoard) -> void:
 	# Only adjust the camera if the rebuilt board is the one we're looking at
 	if board == _boards[_active_index]:
 		_tween_camera_to_active_board()
+	_update_all_button_displays()
 
 
 func _get_camera_target(board: PlinkoBoard) -> Vector3:
@@ -378,8 +379,6 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 			# Auto-assign first advanced autodropper to orange board
 			_on_autodropper_adjust(StringName("ORANGE_ADVANCED"), 1, false)
 		_update_all_button_displays()
-	elif upgrade_type == Enums.UpgradeType.DROP_RATE:
-		_update_all_button_displays()
 	if board_type == Enums.BoardType.GOLD:
 		_check_and_rescue_gold_soft_lock()
 
@@ -424,26 +423,14 @@ func _update_all_button_displays() -> void:
 	var advanced_free := get_free_advanced_autodroppers()
 	for board in _boards:
 		board.update_autodropper_buttons(_assignments, normal_free, advanced_free)
-		# Update drop rate subtext — only if autodropper UI is visible for that type
-		var interval: String = str(_autodrop_timer.wait_time)
-		var drop_rate: float = 1.0 / board.drop_delay if board.drop_delay > 0 else 0.0
-		var drop_rate_str: String
-		if drop_rate == int(drop_rate):
-			drop_rate_str = str(int(drop_rate))
+		# Update drop rate subtext
+		var delay_str: String
+		if board.drop_delay == int(board.drop_delay):
+			delay_str = str(int(board.drop_delay)) + "s"
 		else:
-			drop_rate_str = "%.1f" % drop_rate
+			delay_str = "%.1fs" % board.drop_delay
 		for bid in board.get_drop_button_ids():
-			var is_adv := _is_advanced_button(bid)
-			var currency_name: String = board._get_currency_name_for_button(bid).to_lower()
-			var currency_abbrev: String = currency_name.left(1)
-			var drops_part: String = "drops " + drop_rate_str + currency_abbrev + " / 1s"
-			var autodrop_unlocked: bool = (_advanced_autodroppers_unlocked if is_adv else _normal_autodroppers_unlocked)
-			if autodrop_unlocked:
-				var assigned: int = _assignments.get(bid, 0)
-				var text: String = "auto " + str(assigned) + " " + currency_name + " / " + interval + "s · " + drops_part
-				board.set_drop_subtext(bid, text)
-			else:
-				board.set_drop_subtext(bid, drops_part)
+			board.set_drop_subtext(bid, delay_str)
 
 
 func serialize() -> Dictionary:

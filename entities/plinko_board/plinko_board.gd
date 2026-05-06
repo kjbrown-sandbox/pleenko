@@ -252,7 +252,8 @@ func _sync_filling_coins(wanted: int, is_advanced: bool) -> void:
 			coin_type = TierRegistry.primary_currency(board_type)
 		for i in wanted - current:
 			if coin_queue.is_full():
-				_show_no_room()
+				if coin_queue.has_queue():
+					_show_no_room()
 				break
 			coin_queue.add_filling_coin(coin_type, is_advanced, mult)
 	elif current > wanted:
@@ -1367,6 +1368,7 @@ func decrease_drop_delay() -> void:
 	# doesn't have to wait the full old duration
 	if is_waiting and old_delay > 0.0:
 		_drop_timer_remaining *= drop_delay / old_delay
+	board_rebuilt.emit()
 
 func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
 	var t: VisualTheme = ThemeProvider.theme
