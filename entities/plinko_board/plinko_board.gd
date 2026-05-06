@@ -1542,14 +1542,11 @@ func try_autodrop(is_advanced: bool) -> void:
 	if not _can_afford(costs):
 		autodrop_failed.emit(board_type)
 		return
-	# Complete a FILLING coin → becomes FULL and stays in the queue.
-	var coin: Coin = coin_queue.complete_first_filling(is_advanced)
+	# Atomically: complete FILLING → move to FULL section → add replacement FILLING.
+	# Single slide pass avoids overlapping tweens that caused position glitches.
+	var coin: Coin = coin_queue.complete_and_requeue_filling(is_advanced)
 	if coin:
 		_spend(costs)
-		# Re-enqueue as FULL (complete_first_filling already set the state)
-		coin_queue.enqueue(coin, is_advanced)
-		# Add a replacement FILLING coin for the next cycle
-		coin_queue.add_filling_coin(coin.coin_type, is_advanced, coin.multiplier)
 		# Trigger a drop if the board isn't on cooldown
 		if not is_waiting:
 			_drop_from_queue()

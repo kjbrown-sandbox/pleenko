@@ -147,6 +147,60 @@ func complete_first_filling(is_advanced: bool) -> Coin:
 	return null
 
 
+## Atomically: complete first FILLING coin → move it to the FULL section →
+## add a replacement FILLING coin. Single slide pass at the end so no
+## overlapping tweens. Returns the completed coin, or null if none found.
+func complete_and_requeue_filling(is_advanced: bool) -> Coin:
+	# Find the first FILLING coin of the requested type
+	var fill_idx: int = -1
+	for i in _coins.size():
+		var c: Coin = _coins[i]
+		if c.fill_state == Coin.FillState.FILLING:
+			var coin_is_adv: bool = i < _advanced_boundary
+			if coin_is_adv == is_advanced:
+				fill_idx = i
+				break
+	if fill_idx < 0:
+		return null
+
+	var coin: Coin = _coins[fill_idx]
+	coin.complete_fill()
+
+	# Remove from current position (no slide yet)
+	_coins.remove_at(fill_idx)
+	if fill_idx < _advanced_boundary:
+		_advanced_boundary -= 1
+
+	# Find the FULL insert position
+	var insert_idx: int
+	if is_advanced:
+		insert_idx = _advanced_boundary
+		_advanced_boundary += 1
+	else:
+		insert_idx = _find_first_filling_index()
+
+	_coins.insert(insert_idx, coin)
+
+	# Add a replacement FILLING coin at the end (no slide yet)
+	var replacement: Coin = null
+	if not is_full():
+		replacement = CoinScene.instantiate()
+		replacement.coin_type = coin.coin_type
+		replacement.multiplier = coin.multiplier
+		replacement.fill_state = Coin.FillState.FILLING
+		replacement.fill_progress = 0.0
+		var rep_idx: int = _coins.size()
+		replacement.position = _slot_position(rep_idx)
+		replacement.rotation = coin_rotation
+		add_child(replacement)
+		replacement._apply_visuals()
+		_coins.append(replacement)
+
+	# Single slide pass for all coins
+	_slide_all_forward()
+	return coin
+
+
 ## Get the world-space position for a given slot index.
 func get_overflow_position() -> Vector3:
 	return start_position + Vector3(-_capacity * coin_spacing - 0.05, 0, 0.02)
