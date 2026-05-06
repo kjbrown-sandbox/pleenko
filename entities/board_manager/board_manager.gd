@@ -47,8 +47,6 @@ func setup(camera: Camera3D) -> void:
 	_autodrop_timer.timeout.connect(_on_autodrop_tick)
 	add_child(_autodrop_timer)
 
-	UpgradeManager.autodropper_unlocked.connect(_on_autodropper_unlocked)
-	UpgradeManager.advanced_autodropper_unlocked.connect(_on_advanced_autodropper_unlocked)
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
 	ChallengeManager.challenge_state_changed.connect(_on_challenge_state_changed_for_targets)
 
@@ -277,16 +275,6 @@ func get_assigned_counts_for_board(bt: Enums.BoardType) -> Dictionary:
 		else:
 			normal += count
 	return { "normal": normal, "advanced": advanced }
-
-
-func _on_autodropper_unlocked() -> void:
-	# No-op: visibility is now triggered on first purchase, not reward unlock.
-	pass
-
-
-func _on_advanced_autodropper_unlocked() -> void:
-	# No-op: visibility is now triggered on first purchase, not reward unlock.
-	pass
 
 
 func _on_autodropper_adjust(button_id: StringName, delta: int, from_player: bool = true) -> void:

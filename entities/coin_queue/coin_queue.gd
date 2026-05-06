@@ -33,6 +33,9 @@ var _empty_slot_shader: Shader = preload("res://entities/coin/coin_empty_slot.gd
 var count: int:
 	get: return _coins.size()
 
+var capacity: int:
+	get: return _capacity
+
 
 func setup(_start_position: Vector3) -> void:
 	start_position = _start_position
@@ -125,6 +128,30 @@ func dequeue_full() -> Coin:
 	return null
 
 
+## Complete the first FILLING coin of the given type: transition it to FULL,
+## remove it from the queue, and return it. Returns null if none found.
+func complete_first_filling(is_advanced: bool) -> Coin:
+	for i in _coins.size():
+		var c: Coin = _coins[i]
+		if c.fill_state == Coin.FillState.FILLING:
+			var coin_is_adv: bool = i < _advanced_boundary
+			if coin_is_adv == is_advanced:
+				c.complete_fill()
+				_coins.remove_at(i)
+				remove_child(c)
+				if i < _advanced_boundary:
+					_advanced_boundary -= 1
+				_slide_all_forward()
+				coin_dequeued.emit()
+				return c
+	return null
+
+
+## Get the world-space position for a given slot index.
+func get_overflow_position() -> Vector3:
+	return start_position + Vector3(-_capacity * coin_spacing - 0.05, 0, 0.02)
+
+
 ## Create and enqueue a FILLING coin for autodrop visual.
 func add_filling_coin(coin_type: Enums.CurrencyType, is_advanced: bool, coin_multiplier: float = 1.0) -> Coin:
 	if is_full():
@@ -138,10 +165,13 @@ func add_filling_coin(coin_type: Enums.CurrencyType, is_advanced: bool, coin_mul
 	return coin
 
 
-## Remove all FILLING coins (e.g. when autodropper is unassigned).
-func remove_filling_coins_of_type(is_advanced: bool) -> void:
+## Remove FILLING coins of the given type. If max_remove <= 0, removes all.
+func remove_filling_coins_of_type(is_advanced: bool, max_remove: int = 0) -> void:
+	var removed: int = 0
 	var i: int = _coins.size() - 1
 	while i >= 0:
+		if max_remove > 0 and removed >= max_remove:
+			break
 		var coin: Coin = _coins[i]
 		if coin.fill_state == Coin.FillState.FILLING:
 			var coin_is_adv: bool = i < _advanced_boundary
@@ -151,6 +181,7 @@ func remove_filling_coins_of_type(is_advanced: bool) -> void:
 				coin.queue_free()
 				if i < _advanced_boundary:
 					_advanced_boundary -= 1
+				removed += 1
 		i -= 1
 	_slide_all_forward()
 
@@ -179,13 +210,7 @@ func _slot_position(index: int) -> Vector3:
 
 ## Tween all coins to their correct positions.
 func _slide_all_forward() -> void:
-	for i in _coins.size():
-		var coin: Coin = _coins[i]
-		var target: Vector3 = _slot_position(i)
-		if coin.position.distance_to(target) > 0.001:
-			var tween: Tween = create_tween()
-			tween.tween_property(coin, "position", target, slide_time) \
-				.set_trans(Tween.TRANS_LINEAR)
+	_slide_coins_from(0)
 
 
 ## Tween coins from start_index onward to their correct slot positions.

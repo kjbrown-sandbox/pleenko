@@ -253,17 +253,14 @@ func _sync_filling_coins(wanted: int, is_advanced: bool) -> void:
 				break
 			coin_queue.add_filling_coin(coin_type, is_advanced, mult)
 	elif current > wanted:
-		# Remove excess filling coins (autodropper was unassigned)
-		coin_queue.remove_filling_coins_of_type(is_advanced)
+		# Remove only the excess filling coins
+		coin_queue.remove_filling_coins_of_type(is_advanced, current - wanted)
 
 
 func _show_no_room() -> void:
 	if _no_room_label and is_instance_valid(_no_room_label):
 		return  # Already showing
 	var t: VisualTheme = ThemeProvider.theme
-	var overflow_slot := coin_queue._capacity
-	var destroy_pos: Vector3 = coin_queue.start_position + Vector3(-overflow_slot * coin_queue.coin_spacing - 0.05, 0, 0)
-
 	_no_room_label = Label3D.new()
 	_no_room_label.text = "!"
 	_no_room_label.font_size = 64
@@ -272,14 +269,14 @@ func _show_no_room() -> void:
 	_no_room_label.modulate = t.red_main
 	_no_room_label.outline_size = 0
 	_no_room_label.no_depth_test = true
-	_no_room_label.position = destroy_pos + Vector3(-0.05, 0, 0.02)
+	_no_room_label.position = coin_queue.get_overflow_position()
 	add_child(_no_room_label)
 
-	var pulse_time := 0.5
-	var pulse_tween := create_tween().set_loops(0)  # 0 = infinite
-	pulse_tween.tween_property(_no_room_label, "scale", Vector3(1.15, 1.15, 1.15), pulse_time) \
+	# Bind tween to the label so it's auto-killed when the label is freed
+	var pulse_tween := _no_room_label.create_tween().set_loops(0)
+	pulse_tween.tween_property(_no_room_label, "scale", Vector3(1.15, 1.15, 1.15), 0.5) \
 		.set_trans(Tween.TRANS_SINE)
-	pulse_tween.tween_property(_no_room_label, "scale", Vector3.ONE, pulse_time) \
+	pulse_tween.tween_property(_no_room_label, "scale", Vector3.ONE, 0.5) \
 		.set_trans(Tween.TRANS_SINE)
 
 
@@ -1534,7 +1531,7 @@ func _spawn_peg_ring(peg_local_pos: Vector3, ring_color: Color, t: VisualTheme) 
 
 
 func increase_queue_capacity() -> void:
-	coin_queue.set_capacity(coin_queue._capacity + 1)
+	coin_queue.set_capacity(coin_queue.capacity + 1)
 
 
 func try_autodrop(is_advanced: bool) -> void:
@@ -1543,23 +1540,20 @@ func try_autodrop(is_advanced: bool) -> void:
 		autodrop_failed.emit(board_type)
 		return
 	# Complete a FILLING coin → becomes FULL and stays in the queue.
-	# The normal drop timer will dequeue it when ready.
-	for i in coin_queue._coins.size():
-		var c: Coin = coin_queue._coins[i]
-		if c.fill_state == Coin.FillState.FILLING:
-			var coin_is_adv: bool = i < coin_queue._advanced_boundary
-			if coin_is_adv == is_advanced:
-				_spend(costs)
-				c.complete_fill()
-				# Add a replacement FILLING coin for the next cycle
-				coin_queue.add_filling_coin(c.coin_type, is_advanced, c.multiplier)
-				# Trigger a drop if the board isn't on cooldown
-				if not is_waiting:
-					_drop_from_queue()
-				return
-	# No FILLING coin found — fallback to normal request_drop
-	var coin_type: int = advanced_bucket_type if is_advanced else -1
-	request_drop(costs, coin_type, false)
+	var coin: Coin = coin_queue.complete_first_filling(is_advanced)
+	if coin:
+		_spend(costs)
+		# Re-enqueue as FULL (complete_first_filling already set the state)
+		coin_queue.enqueue(coin, is_advanced)
+		# Add a replacement FILLING coin for the next cycle
+		coin_queue.add_filling_coin(coin.coin_type, is_advanced, coin.multiplier)
+		# Trigger a drop if the board isn't on cooldown
+		if not is_waiting:
+			_drop_from_queue()
+	else:
+		# No FILLING coin found — fallback to normal request_drop
+		var coin_type: int = advanced_bucket_type if is_advanced else -1
+		request_drop(costs, coin_type, false)
 
 
 func set_normal_autodroppers_visible(vis: bool) -> void:
