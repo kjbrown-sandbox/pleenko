@@ -378,6 +378,8 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 			# Auto-assign first advanced autodropper to orange board
 			_on_autodropper_adjust(StringName("ORANGE_ADVANCED"), 1, false)
 		_update_all_button_displays()
+	elif upgrade_type == Enums.UpgradeType.DROP_RATE:
+		_update_all_button_displays()
 	if board_type == Enums.BoardType.GOLD:
 		_check_and_rescue_gold_soft_lock()
 

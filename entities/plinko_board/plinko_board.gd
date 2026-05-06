@@ -19,8 +19,12 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var upgrade_section = $UpgradeSection
 @onready var drop_section = $DropSection
 @onready var coin_queue: CoinQueue = $CoinQueue
-@onready var _drop_main = $DropSection/DropButtons/DropMain
-@onready var _drop_advanced = $DropSection/DropButtons/DropAdvanced
+@onready var _drop_main_column: VBoxContainer = $DropSection/DropButtons/DropMainColumn
+@onready var _drop_main = $DropSection/DropButtons/DropMainColumn/DropMain
+@onready var _drop_main_label: Label = $DropSection/DropButtons/DropMainColumn/DropMainLabel
+@onready var _drop_advanced_column: VBoxContainer = $DropSection/DropButtons/DropAdvancedColumn
+@onready var _drop_advanced = $DropSection/DropButtons/DropAdvancedColumn/DropAdvanced
+@onready var _drop_advanced_label: Label = $DropSection/DropButtons/DropAdvancedColumn/DropAdvancedLabel
 @onready var _drop_tooltip: Tooltip = $DropSection/DropTooltip
 
 var board_type: Enums.BoardType
@@ -33,7 +37,6 @@ var _has_advanced_drop: bool = false
 var _normal_autodroppers_visible: bool = false
 var _advanced_autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
-var _drop_subtext_labels: Dictionary = {}  # StringName -> Label
 var _no_room_label: Label3D
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
 # Tracks specific buckets currently singing in drum-layer mode so they survive
@@ -198,9 +201,9 @@ func _setup_drop_bars() -> void:
 	var coin_color: Color = t.get_coin_color(currency_type)
 	var coin_color_dark: Color = t.get_coin_color_faded(currency_type)
 
-	# Add spacing in the VBox to accommodate subtext labels between buttons
-	var drop_buttons_vbox: VBoxContainer = _drop_main.get_parent()
-	drop_buttons_vbox.add_theme_constant_override("separation", 2)
+	# Add spacing in the column to accommodate subtext labels above buttons
+	_drop_main_column.add_theme_constant_override("separation", 2)
+	_drop_advanced_column.add_theme_constant_override("separation", 2)
 
 	# Main drop bar
 	_drop_main.setup(coin_color, coin_color_dark)
@@ -222,7 +225,7 @@ func _setup_drop_bars() -> void:
 	_drop_buttons[normal_id] = _drop_main
 
 	# Advanced drop bar — hidden until earned
-	_drop_advanced.visible = false
+	_drop_advanced_column.visible = false
 
 
 func update_queue_fill(progress: float, num_advanced: int, num_normal: int) -> void:
@@ -436,7 +439,7 @@ func _is_hold_to_drop_advanced_active() -> bool:
 	return Input.is_action_pressed("drop_unrefined") \
 		and ChallengeProgressManager.is_unlocked(ChallengeRewardData.UnlockType.HOLD_TO_DROP) \
 		and drop_section.visible \
-		and _drop_advanced.visible
+		and _drop_advanced_column.visible
 
 
 # --- Coin MultiMesh management ---
@@ -827,7 +830,7 @@ func _update_drop_fill() -> void:
 	_drop_main.apply_fill_colors(not can_drop_normal)
 
 	# Advanced drop bar
-	if _drop_advanced.visible:
+	if _drop_advanced_column.visible:
 		_drop_advanced.set_fill(fill_pct)
 		var can_drop_advanced: bool = _can_afford(_get_advanced_drop_costs()) and not show_cooldown
 		_drop_advanced.set_main_disabled(not can_drop_advanced)
@@ -1039,7 +1042,7 @@ func _show_advanced_drop_bar() -> void:
 	_drop_advanced.main_button.shortcut = adv_shortcut
 	_drop_advanced.main_button.shortcut_in_tooltip = false
 
-	_drop_advanced.visible = true
+	_drop_advanced_column.visible = true
 	var adv_id := StringName("%s_ADVANCED" % Enums.BoardType.keys()[board_type])
 	_drop_buttons[adv_id] = _drop_advanced
 	if _advanced_autodroppers_visible:
@@ -1625,22 +1628,21 @@ func set_drop_subtext(button_id: StringName, text: String) -> void:
 	var bar: FillBar = _drop_buttons.get(button_id)
 	if not bar:
 		return
-	var label: Label = _drop_subtext_labels.get(button_id)
-	if not label:
+	var label: Label
+	if bar == _drop_main:
+		label = _drop_main_label
+	elif bar == _drop_advanced:
+		label = _drop_advanced_label
+	else:
+		return
+	if not label.has_meta("styled"):
 		var t: VisualTheme = ThemeProvider.theme
-		label = Label.new()
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.add_theme_font_size_override("font_size", maxi(t.button_font_size - 4, 8))
 		label.add_theme_color_override("font_color", t.normal_text_color)
 		var btn_font: Font = t.button_font if t.button_font else preload("res://style_lab/VendSans-Bold.ttf")
 		label.add_theme_font_override("font", btn_font)
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		# Insert right after the bar in the VBox
-		var vbox: VBoxContainer = bar.get_parent()
-		var bar_idx := bar.get_index()
-		vbox.add_child(label)
-		vbox.move_child(label, bar_idx + 1)
-		_drop_subtext_labels[button_id] = label
+		label.set_meta("styled", true)
 	label.text = text
 
 
