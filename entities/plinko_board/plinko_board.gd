@@ -33,6 +33,8 @@ var _has_advanced_drop: bool = false
 var _normal_autodroppers_visible: bool = false
 var _advanced_autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
+var _drop_subtext_labels: Dictionary = {}  # StringName -> Label
+var _no_room_label: Label3D
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
 # Tracks specific buckets currently singing in drum-layer mode so they survive
 # rebuilds. Keyed by bucket world-x scaled to integer millimeters (float → int
@@ -196,6 +198,10 @@ func _setup_drop_bars() -> void:
 	var coin_color: Color = t.get_coin_color(currency_type)
 	var coin_color_dark: Color = t.get_coin_color_faded(currency_type)
 
+	# Add spacing in the VBox to accommodate subtext labels between buttons
+	var drop_buttons_vbox: VBoxContainer = _drop_main.get_parent()
+	drop_buttons_vbox.add_theme_constant_override("separation", 2)
+
 	# Main drop bar
 	_drop_main.setup(coin_color, coin_color_dark)
 	_drop_main.update_text("Drop %s" % FormatUtils.currency_name(currency_type))
@@ -217,6 +223,70 @@ func _setup_drop_bars() -> void:
 
 	# Advanced drop bar — hidden until earned
 	_drop_advanced.visible = false
+
+
+func update_queue_fill(progress: float, num_advanced: int, num_normal: int) -> void:
+	# Hide overflow indicator if queue has room now
+	if not coin_queue.is_full():
+		_hide_no_room()
+	# Ensure the right number of FILLING coins exist for each type
+	_sync_filling_coins(num_advanced, true)
+	_sync_filling_coins(num_normal, false)
+	# Update fill progress on all FILLING coins
+	coin_queue.update_filling_progress(progress)
+
+
+func _sync_filling_coins(wanted: int, is_advanced: bool) -> void:
+	var current: int = coin_queue.get_filling_count(is_advanced)
+	if current < wanted:
+		# Add more filling coins
+		var coin_type: Enums.CurrencyType
+		var mult: float = 1.0
+		if is_advanced:
+			coin_type = advanced_bucket_type
+			mult = advanced_coin_multiplier
+		else:
+			coin_type = TierRegistry.primary_currency(board_type)
+		for i in wanted - current:
+			if coin_queue.is_full():
+				_show_no_room()
+				break
+			coin_queue.add_filling_coin(coin_type, is_advanced, mult)
+	elif current > wanted:
+		# Remove excess filling coins (autodropper was unassigned)
+		coin_queue.remove_filling_coins_of_type(is_advanced)
+
+
+func _show_no_room() -> void:
+	if _no_room_label and is_instance_valid(_no_room_label):
+		return  # Already showing
+	var t: VisualTheme = ThemeProvider.theme
+	var overflow_slot := coin_queue._capacity
+	var destroy_pos: Vector3 = coin_queue.start_position + Vector3(-overflow_slot * coin_queue.coin_spacing - 0.05, 0, 0)
+
+	_no_room_label = Label3D.new()
+	_no_room_label.text = "!"
+	_no_room_label.font_size = 64
+	if t.label_font:
+		_no_room_label.font = t.label_font
+	_no_room_label.modulate = t.red_main
+	_no_room_label.outline_size = 0
+	_no_room_label.no_depth_test = true
+	_no_room_label.position = destroy_pos + Vector3(-0.05, 0, 0.02)
+	add_child(_no_room_label)
+
+	var pulse_time := 0.5
+	var pulse_tween := create_tween().set_loops(0)  # 0 = infinite
+	pulse_tween.tween_property(_no_room_label, "scale", Vector3(1.15, 1.15, 1.15), pulse_time) \
+		.set_trans(Tween.TRANS_SINE)
+	pulse_tween.tween_property(_no_room_label, "scale", Vector3.ONE, pulse_time) \
+		.set_trans(Tween.TRANS_SINE)
+
+
+func _hide_no_room() -> void:
+	if _no_room_label and is_instance_valid(_no_room_label):
+		_no_room_label.queue_free()
+		_no_room_label = null
 
 
 func _format_cost_text(costs: Array) -> String:
@@ -501,7 +571,7 @@ func request_drop(costs: Array = [], coin_type: int = -1, is_manual: bool = true
 
 	if coin_queue.has_queue() and not coin_queue.is_full():
 		_spend(costs)
-		coin_queue.enqueue(coin)
+		coin_queue.enqueue(coin, drop_coin_type == advanced_bucket_type)
 		if not is_waiting:
 			_drop_from_queue()
 	elif not is_waiting:
@@ -716,7 +786,9 @@ func _drop_from_queue() -> void:
 	if coin_queue.is_empty():
 		return
 
-	var coin: Coin = coin_queue.dequeue()
+	var coin: Coin = coin_queue.dequeue_full()
+	if not coin:
+		return  # Only FILLING coins in queue, not ready yet
 	_launch_coin(coin)
 	_start_drop_timer()
 
@@ -1467,11 +1539,27 @@ func increase_queue_capacity() -> void:
 
 func try_autodrop(is_advanced: bool) -> void:
 	var costs: Array = _get_advanced_drop_costs() if is_advanced else _get_drop_costs()
-	var coin_type: int = advanced_bucket_type if is_advanced else -1
-	if _can_afford(costs):
-		request_drop(costs, coin_type, false)
-	else:
+	if not _can_afford(costs):
 		autodrop_failed.emit(board_type)
+		return
+	# Complete a FILLING coin → becomes FULL and stays in the queue.
+	# The normal drop timer will dequeue it when ready.
+	for i in coin_queue._coins.size():
+		var c: Coin = coin_queue._coins[i]
+		if c.fill_state == Coin.FillState.FILLING:
+			var coin_is_adv: bool = i < coin_queue._advanced_boundary
+			if coin_is_adv == is_advanced:
+				_spend(costs)
+				c.complete_fill()
+				# Add a replacement FILLING coin for the next cycle
+				coin_queue.add_filling_coin(c.coin_type, is_advanced, c.multiplier)
+				# Trigger a drop if the board isn't on cooldown
+				if not is_waiting:
+					_drop_from_queue()
+				return
+	# No FILLING coin found — fallback to normal request_drop
+	var coin_type: int = advanced_bucket_type if is_advanced else -1
+	request_drop(costs, coin_type, false)
 
 
 func set_normal_autodroppers_visible(vis: bool) -> void:
@@ -1535,6 +1623,33 @@ func get_drop_button(btn_id: StringName):
 	return _drop_buttons.get(btn_id)
 
 
+func get_drop_button_ids() -> Array:
+	return _drop_buttons.keys()
+
+
+func set_drop_subtext(button_id: StringName, text: String) -> void:
+	var bar: FillBar = _drop_buttons.get(button_id)
+	if not bar:
+		return
+	var label: Label = _drop_subtext_labels.get(button_id)
+	if not label:
+		var t: VisualTheme = ThemeProvider.theme
+		label = Label.new()
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", maxi(t.button_font_size - 4, 8))
+		label.add_theme_color_override("font_color", t.normal_text_color)
+		var btn_font: Font = t.button_font if t.button_font else preload("res://style_lab/VendSans-Bold.ttf")
+		label.add_theme_font_override("font", btn_font)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Insert right after the bar in the VBox
+		var vbox: VBoxContainer = bar.get_parent()
+		var bar_idx := bar.get_index()
+		vbox.add_child(label)
+		vbox.move_child(label, bar_idx + 1)
+		_drop_subtext_labels[button_id] = label
+	label.text = text
+
+
 ## Applies saved upgrade state to this board without going through buy logic.
 ## Permanent challenge bonuses are added on top of player-bought upgrade levels.
 func apply_saved_state(upgrade_state: Dictionary) -> void:
@@ -1562,7 +1677,3 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 		_show_advanced_drop_bar()
 
 	build_board()
-
-
-
-

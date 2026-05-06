@@ -6,6 +6,8 @@ signal landed(coin: Coin)
 ## The coin is still mid-air, bouncing toward the bucket.
 signal final_bounce_started(coin: Coin, predicted_bucket: Bucket)
 
+enum FillState { FULL, FILLING }
+
 var board: PlinkoBoard
 var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
 	set(value):
@@ -13,6 +15,8 @@ var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
 		if is_node_ready():
 			_apply_visuals()
 var multiplier: float = 1.0
+var fill_state: FillState = FillState.FULL
+var fill_progress: float = 1.0
 ## When true, the coin won't be freed on landing — the PrestigeAnimator handles its lifecycle.
 var is_prestige_coin: bool = false
 var _active_tweens: Array[Tween] = []
@@ -34,7 +38,15 @@ func _apply_visuals() -> void:
 		return
 	var t: VisualTheme = ThemeProvider.theme
 	mesh_instance.mesh = t.make_coin_mesh()
-	mesh_instance.material_override = t.make_coin_material(coin_type)
+	if fill_state == FillState.FILLING:
+		var fill_shader: Shader = preload("res://entities/coin/coin_fill.gdshader")
+		var mat := ShaderMaterial.new()
+		mat.shader = fill_shader
+		mat.set_shader_parameter("albedo_color", t.get_coin_color(coin_type))
+		mat.set_shader_parameter("fill_progress", fill_progress)
+		mesh_instance.material_override = mat
+	else:
+		mesh_instance.material_override = t.make_coin_material(coin_type)
 	cached_color = t.coin_silhouette_color if t.coin_silhouette else t.get_coin_color(coin_type)
 	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		mesh_instance.rotation = Vector3(PI / 2, 0, 0)
@@ -92,6 +104,19 @@ func set_color(color: Color) -> void:
 	var mesh_instance := get_node_or_null("MeshInstance3D")
 	if mesh_instance and mesh_instance.material_override is ShaderMaterial:
 		mesh_instance.material_override.set_shader_parameter("albedo_color", color)
+
+
+func set_fill(progress: float) -> void:
+	fill_progress = progress
+	var mesh_instance := get_node_or_null("MeshInstance3D")
+	if mesh_instance and mesh_instance.material_override is ShaderMaterial:
+		mesh_instance.material_override.set_shader_parameter("fill_progress", progress)
+
+
+func complete_fill() -> void:
+	fill_state = FillState.FULL
+	fill_progress = 1.0
+	_apply_visuals()
 
 
 func set_mesh_visible(vis: bool) -> void:
