@@ -463,11 +463,12 @@ func serialize() -> Dictionary:
 	var board_state := {}
 	for board in _boards:
 		var key: String = Enums.BoardType.keys()[board.board_type]
+		var acm_bonus: float = ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board.board_type)
 		board_state[key] = {
 			"num_rows": board.num_rows,
 			"drop_delay": board.drop_delay,
 			"bucket_value_multiplier": board.bucket_value_multiplier,
-			"advanced_coin_multiplier": board.advanced_coin_multiplier,
+			"advanced_coin_multiplier": board.advanced_coin_multiplier - acm_bonus,
 			"distance_for_advanced_buckets": board.distance_for_advanced_buckets,
 			"multi_drop_count": board.multi_drop_count,
 		}
@@ -543,6 +544,7 @@ func _exit_tree() -> void:
 
 
 func _on_challenge_state_changed_for_targets() -> void:
-	var enabled := not ChallengeManager.uses_target_buckets()
+	# 2x bonus bucket is main-mode only — disabled for every challenge.
+	var enabled := not ChallengeManager.is_active_challenge
 	for board in _boards:
 		board.set_gameplay_target_enabled(enabled)

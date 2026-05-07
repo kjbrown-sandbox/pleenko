@@ -18,13 +18,13 @@ func _ready() -> void:
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(overlay)
 
-	# Centered "More coming soon!" message
+	# Centered "It's not done yet :D" message
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
 
 	var label := Label.new()
-	label.text = "More coming soon!"
+	label.text = "It's not done yet :D"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 48)
 	label.add_theme_color_override("font_color", t.normal_text_color)

@@ -102,6 +102,14 @@ var _active_drop_bursts: Array[Dictionary] = []
 
 var _drop_timer_remaining: float = 0.0
 
+# Hold-to-drop rate limiter: enqueues at 10 coins/sec while space (or B) is held.
+# The drop timer drains the queue at its own pace; this only controls how fast
+# coins enter the queue.
+const HOLD_DROP_INTERVAL: float = 0.1
+# Primed at HOLD_DROP_INTERVAL so the first frame of a fresh hold fires
+# immediately rather than waiting an interval.
+var _hold_drop_accumulator: float = HOLD_DROP_INTERVAL
+
 func _ready() -> void:
 	space_between_pegs = ThemeProvider.theme.space_between_pegs
 	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
@@ -205,9 +213,11 @@ func _setup_drop_bars() -> void:
 	_drop_main_column.add_theme_constant_override("separation", 2)
 	_drop_advanced_column.add_theme_constant_override("separation", 2)
 
-	# Main drop bar
+	# Main drop bar — non-gold boards drop raw currency, so label accordingly
+	var raw: int = TierRegistry.raw_currency(board_type)
+	var label_currency: Enums.CurrencyType = (raw as Enums.CurrencyType) if raw >= 0 else currency_type
 	_drop_main.setup(coin_color, coin_color_dark)
-	_drop_main.update_text("Drop %s" % FormatUtils.currency_name(currency_type))
+	_drop_main.update_text("Drop %s" % FormatUtils.currency_name(label_currency))
 	_drop_main.main_pressed.connect(func(): request_drop())
 	_drop_main.main_mouse_entered.connect(_on_drop_main_hover)
 	_drop_main.main_mouse_exited.connect(_on_drop_hover_exit)
@@ -357,10 +367,16 @@ func _process(delta: float) -> void:
 		_update_drop_fill()
 		if _drop_timer_remaining == 0.0:
 			_on_drop_timer_done()
-	elif _is_hold_to_drop_advanced_active():
-		request_drop(_get_advanced_drop_costs(), advanced_bucket_type)
-	elif _is_hold_to_drop_active():
-		request_drop()
+
+	# Hold-to-drop runs independently of the drop timer so the queue fills
+	# at HOLD_DROP_INTERVAL while the drop timer drains it at its own rate.
+	var hold_advanced: bool = _is_hold_to_drop_advanced_active()
+	var hold_normal: bool = not hold_advanced and _is_hold_to_drop_active()
+	if _tick_hold_drop_accumulator(delta, hold_advanced or hold_normal):
+		if hold_advanced:
+			request_drop(_get_advanced_drop_costs(), advanced_bucket_type)
+		else:
+			request_drop()
 
 	if not _active_flashes.is_empty():
 		_update_peg_flashes(delta)
@@ -428,6 +444,19 @@ func _update_peg_pulses(delta: float) -> void:
 	for idx in finished:
 		mm.set_instance_transform(idx, Transform3D(_peg_basis, _peg_positions[idx]))
 		_active_peg_pulses.erase(idx)
+
+
+## Pacing for hold-to-drop. Returns true when a drop should fire this frame.
+## Resets when not pressed so the next press fires immediately.
+func _tick_hold_drop_accumulator(delta: float, is_pressed: bool) -> bool:
+	if not is_pressed:
+		_hold_drop_accumulator = HOLD_DROP_INTERVAL
+		return false
+	_hold_drop_accumulator += delta
+	if _hold_drop_accumulator >= HOLD_DROP_INTERVAL:
+		_hold_drop_accumulator = 0.0
+		return true
+	return false
 
 
 func _is_hold_to_drop_active() -> bool:

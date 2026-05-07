@@ -6,7 +6,7 @@ const ChallengeCompleteDialogScene := preload("res://entities/challenge_complete
 const OfflineEarningsDialogScene := preload("res://entities/offline_earnings_dialog/offline_earnings_dialog.tscn")
 
 ## Demo lockdown toggle. When true, the red board and orange/red challenge
-## groups are blocked behind a "More coming soon!" overlay. Toggle from the
+## groups are blocked behind a "It's not done yet :D" overlay. Toggle from the
 ## Inspector on the Main node to switch between demo and full play.
 @export var demo_mode: bool = true
 
@@ -282,7 +282,7 @@ func _show_offline_earnings() -> void:
 	await _offline_earnings_dialog.closed
 
 
-## Demo lockdown: shows the "More coming soon!" overlay when the active board
+## Demo lockdown: shows the "It's not done yet :D" overlay when the active board
 ## or challenge group is one of the locked tiers. No-op when demo_mode is off.
 func _update_lockdown_overlay() -> void:
 	if not demo_mode:

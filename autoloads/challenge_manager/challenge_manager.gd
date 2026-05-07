@@ -219,15 +219,6 @@ func clear_challenge() -> void:
 	_board_manager = null
 
 
-func uses_target_buckets() -> bool:
-	if not is_active_challenge or not _challenge:
-		return false
-	for objective in _challenge.objectives:
-		if objective is HitXBucketYTimes or objective is HitBucketsInOrder:
-			return true
-	return false
-
-
 # ── Utilities ─────────────────────────────────────────────────────
 
 func _get_board(board_type: Enums.BoardType) -> PlinkoBoard:
