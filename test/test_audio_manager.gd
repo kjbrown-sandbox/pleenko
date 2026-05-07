@@ -45,6 +45,9 @@ func _run_tests() -> void:
 	# Fixed drone timer
 	test_drone_timer_is_fixed()
 
+	# Prestige unsilence
+	test_prestige_reset_unsilences_audio()
+
 
 # --- Snapshot/restore helpers ---
 
@@ -355,4 +358,16 @@ func test_drone_timer_is_fixed() -> void:
 	var entry: Dictionary = AudioManager._make_drone_entry(0, Harp.DECAY_SECONDS, 0, 0.5, AudioManager.DroneState.ACTIVE, false)
 	assert_near(entry["timer"], Harp.DECAY_SECONDS, 0.001, "drone timer = Harp.DECAY_SECONDS")
 	assert_near(entry["timer"], 4.0, 0.001, "Harp.DECAY_SECONDS = 4.0")
+	_restore_state()
+
+
+func test_prestige_reset_unsilences_audio() -> void:
+	print("test_prestige_reset_unsilences_audio")
+	_save_state()
+	# Simulate prestige silencing audio (SLOW_MO phase)
+	AudioManager._silenced = true
+	# reset_time_scale emits prestige_phase_changed(NONE),
+	# which AudioManager listens to and calls unsilence()
+	PrestigeManager.reset_time_scale()
+	assert_false(AudioManager._silenced, "audio unsilenced after prestige reset")
 	_restore_state()

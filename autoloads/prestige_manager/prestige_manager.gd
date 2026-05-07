@@ -60,6 +60,7 @@ func enter_phase(phase: PrestigePhase) -> void:
 func reset_time_scale() -> void:
 	current_phase = PrestigePhase.NONE
 	Engine.time_scale = 1.0
+	prestige_phase_changed.emit(PrestigePhase.NONE)
 
 
 func serialize() -> Dictionary:

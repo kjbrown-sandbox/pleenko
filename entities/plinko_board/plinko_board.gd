@@ -560,11 +560,6 @@ func request_drop(costs: Array = [], coin_type: int = -1, is_manual: bool = true
 	if not _can_afford(costs):
 		return
 
-	# Multi-drop count is per-color (the coin's native board), not per the board it's
-	# being dropped on. Raw orange dropped on gold uses orange's multi-drop level, etc.
-	var coin_multi_drop: int = _get_multi_drop_for_coin_type(drop_coin_type)
-
-	# First coin — normal queue/immediate path (pays cost once)
 	var coin: Coin = CoinScene.instantiate()
 	coin.coin_type = drop_coin_type
 	if drop_coin_type == advanced_bucket_type:
@@ -581,23 +576,8 @@ func request_drop(costs: Array = [], coin_type: int = -1, is_manual: bool = true
 	else:
 		return  # Can't drop right now
 
-	# Spawn burst VFX for the first coin. Bonus coins from the multi-drop loop
-	# below fire their own bursts via force_drop_coin. The per-board rate limit
-	# (drop_burst_max_per_second) naturally caps this during heavy drop storms.
-	_try_emit_drop_burst(drop_coin_type)
 	if is_manual:
 		AudioManager.play_manual_drop_drum(board_type)
-
-	# Multi-drop: first coin pays the cost (above). Bonus coins from prestige/challenges
-	# are free and staggered so they don't all land in the same bucket simultaneously.
-	var mult: float = advanced_coin_multiplier if drop_coin_type == advanced_bucket_type else 1.0
-	for i in range(1, coin_multi_drop):
-		var tween := create_tween()
-		tween.tween_interval(i * MULTI_DROP_STAGGER)
-		tween.tween_callback(force_drop_coin.bind(drop_coin_type, mult, true))
-
-	if coin_multi_drop > 1:
-		_show_multi_drop_label(coin_multi_drop)
 
 
 ## Returns the multi-drop count for a specific coin color, looked up from that
@@ -647,7 +627,26 @@ func _launch_coin(coin: Coin) -> void:
 
 func _drop_immediate_coin(coin: Coin) -> void:
 	_launch_coin(coin)
+	_spawn_multi_drop_bonus_coins(coin)
 	_start_drop_timer()
+
+
+## Called when a coin actually launches onto the board. Spawns N-1 bonus coins
+## (staggered) if multi-drop is active for this coin type, and fires burst VFX.
+func _spawn_multi_drop_bonus_coins(coin: Coin) -> void:
+	var coin_multi_drop: int = _get_multi_drop_for_coin_type(coin.coin_type)
+	_try_emit_drop_burst(coin.coin_type)
+
+	if coin_multi_drop <= 1:
+		return
+
+	var mult: float = coin.multiplier
+	for i in range(1, coin_multi_drop):
+		var tween := create_tween()
+		tween.tween_interval(i * MULTI_DROP_STAGGER)
+		tween.tween_callback(force_drop_coin.bind(coin.coin_type, mult, true))
+
+	_show_multi_drop_label(coin_multi_drop)
 
 
 ## Spawns a 3D drop burst at the drop point if the per-second rate limit hasn't
@@ -791,6 +790,7 @@ func _drop_from_queue() -> void:
 	if not coin:
 		return  # Only FILLING coins in queue, not ready yet
 	_launch_coin(coin)
+	_spawn_multi_drop_bonus_coins(coin)
 	_start_drop_timer()
 
 
@@ -992,7 +992,8 @@ func set_gameplay_target_enabled(enabled: bool) -> void:
 
 
 func _init_gameplay_target() -> void:
-	set_gameplay_target_enabled(true)
+	# 2x bonus bucket is main-mode only — disabled for every challenge.
+	set_gameplay_target_enabled(not ChallengeManager.is_active_challenge)
 
 
 func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0, show_burst: bool = false) -> void:
