@@ -31,6 +31,12 @@ func setup(board_manager: BoardManager, should_autosave: bool) -> void:
 func save_game() -> void:
 	if not is_instance_valid(_board_manager):
 		return
+
+	# Reconcile state with current_level before serializing — covers the race
+	# where current_level advanced but rewards haven't dispatched yet (deferred
+	# to the level-up animation). Ensures saved state always matches level.
+	LevelManager.ensure_state_for_level()
+
 	var data := {
 		"version": SAVE_VERSION,
 		"save_timestamp": Time.get_unix_time_from_system(),
@@ -105,9 +111,9 @@ func load_game() -> bool:
 	_board_manager.deserialize(data.get("boards", {}))
 	AudioManager.set_muted(data.get("audio_muted", false))
 
-	# Failsafe: reconcile upgrade unlocks against the level table.
-	# Covers the race where current_level was saved ahead of claim_rewards().
-	LevelManager.ensure_unlocks_for_level()
+	# Failsafe: reconcile state with the level table.
+	# Heals saves where current_level was saved ahead of claim_rewards().
+	LevelManager.ensure_state_for_level()
 
 	print("[SaveManager] Game loaded.")
 	return true

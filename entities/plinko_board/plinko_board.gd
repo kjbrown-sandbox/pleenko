@@ -200,6 +200,7 @@ func setup(type: Enums.BoardType) -> void:
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	coin_queue.set_capacity(perm_queue)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
+	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 
@@ -1050,6 +1051,15 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET and reward.target_board == board_type:
 			should_show_advanced_buckets = true
 			build_board()
+
+
+func _on_reconcile_reward(reward: RewardData) -> void:
+	if reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET \
+			and reward.target_board == board_type \
+			and not should_show_advanced_buckets:
+		should_show_advanced_buckets = true
+		build_board()
+
 
 func _show_advanced_drop_bar() -> void:
 	if _has_advanced_drop:

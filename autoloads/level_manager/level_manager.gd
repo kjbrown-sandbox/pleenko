@@ -16,6 +16,13 @@ signal level_up_ready(level: int, level_data: LevelData)
 ## Emitted after the player claims rewards. Other systems react to this.
 signal rewards_claimed(level: int, rewards: Array[RewardData])
 
+## Emitted by ensure_state_for_level() when reconciling state on save/load.
+## Listeners apply state-affecting rewards idempotently (skip side effects that
+## have already been applied). Distinct from rewards_claimed so AnalyticsManager
+## doesn't double-log past levels and so listeners can guard against replay
+## without affecting the live claim flow.
+signal reconcile_reward(reward: RewardData)
+
 ## Emitted whenever the level changes (for progress UI).
 signal level_changed(new_level: int)
 
@@ -241,18 +248,24 @@ func get_progress() -> float:
 	return float(balance) / float(threshold) if threshold > 0 else 0.0
 
 
-## Failsafe: ensures all upgrade unlocks that should have happened by the
-## current level are actually applied.  Covers the race where current_level
-## advances synchronously on currency change but claim_rewards() is deferred
-## to an async particle animation — if auto-save fires in between, the save
-## captures the advanced level without the unlock.
-func ensure_unlocks_for_level() -> void:
+## Reconciles game state with current_level. For every level the player has
+## crossed, emits reconcile_reward for each state-affecting reward so listeners
+## can apply effects that may have been lost to the claim_rewards race
+## (current_level advances synchronously on currency change, but reward dispatch
+## is deferred to the level-up animation — a save in that window captures the
+## advanced level without the rewards).
+##
+## Called on both save (so saved state is self-consistent) and load (so already-
+## bugged saves heal). DROP_COINS rewards are skipped — replaying them would
+## drop free coins on every save/load.
+func ensure_state_for_level() -> void:
 	for i in range(current_level):
 		if i >= levels.size():
 			break
 		for reward in levels[i].rewards:
-			if reward.type == RewardData.RewardType.UNLOCK_UPGRADE:
-				UpgradeManager.unlock(reward.board_type, reward.upgrade_type)
+			if reward.type == RewardData.RewardType.DROP_COINS:
+				continue
+			reconcile_reward.emit(reward)
 
 
 func serialize() -> Dictionary:

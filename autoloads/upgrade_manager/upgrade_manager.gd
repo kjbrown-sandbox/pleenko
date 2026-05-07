@@ -43,6 +43,7 @@ func _ready() -> void:
 
 	# Listen for level rewards to unlock upgrades
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
+	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 
@@ -159,6 +160,11 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 			autodropper_unlocked.emit()
 		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER:
 			advanced_autodropper_unlocked.emit()
+
+
+func _on_reconcile_reward(reward: RewardData) -> void:
+	if reward.type == RewardData.RewardType.UNLOCK_UPGRADE:
+		unlock(reward.board_type, reward.upgrade_type)
 
 
 func is_cap_raise_available(board_type: Enums.BoardType) -> bool:
