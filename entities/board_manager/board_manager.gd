@@ -430,7 +430,13 @@ func _update_all_button_displays() -> void:
 		else:
 			delay_str = "%.1fs" % board.drop_delay
 		for bid in board.get_drop_button_ids():
-			board.set_drop_subtext(bid, delay_str)
+			var is_adv := _is_advanced_button(bid)
+			var autodrop_unlocked: bool = (_advanced_autodroppers_unlocked if is_adv else _normal_autodroppers_unlocked)
+			if autodrop_unlocked:
+				var assigned: int = _assignments.get(bid, 0)
+				board.set_drop_subtext(bid, "auto %d · %s" % [assigned, delay_str])
+			else:
+				board.set_drop_subtext(bid, delay_str)
 
 
 func serialize() -> Dictionary:
