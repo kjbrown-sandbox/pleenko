@@ -191,16 +191,10 @@ func _input(event: InputEvent) -> void:
 		ModeManager.switch_to_challenges()
 	elif event.is_action_pressed("challenges_up") and ModeManager.is_challenges():
 		ModeManager.switch_to_main()
-	elif event.is_action_pressed("quicksave"):
-		SaveManager.save_game()
-	elif event.is_action_pressed("reset_game"):
-		SaveManager.reset_game()
-	elif event is InputEventKey and event.pressed and event.keycode == KEY_P:
+	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_P:
 		_debug_test_prestige()
-	elif event is InputEventKey and event.pressed and event.keycode == KEY_O:
+	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_O:
 		_debug_setup_prestigeable_state()
-	elif event is InputEventKey and event.pressed and event.keycode == KEY_U:
-		CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, 1)
 
 
 func _debug_test_prestige() -> void:
