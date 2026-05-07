@@ -19,6 +19,9 @@ func _run_tests() -> void:
 	test_bucket_position_key_zero()
 	test_get_bounds_geometry()
 	test_has_in_flight_coins_empty()
+	test_hold_drop_first_press_fires_immediately()
+	test_hold_drop_rate_limited_to_interval()
+	test_hold_drop_release_resets_accumulator()
 
 
 # --- Helper ---
@@ -131,4 +134,39 @@ func test_has_in_flight_coins_empty() -> void:
 	print("test_has_in_flight_coins_empty")
 	var board := _make_board()
 	assert_false(board.has_in_flight_coins(), "no coins in flight on fresh board")
+	board.free()
+
+
+# --- Hold-to-drop pacing tests ---
+
+func test_hold_drop_first_press_fires_immediately() -> void:
+	print("test_hold_drop_first_press_fires_immediately")
+	var board := _make_board()
+	# Accumulator is primed so a fresh press fires on its first tick.
+	assert_true(board._tick_hold_drop_accumulator(0.016, true), "first frame of press fires")
+	board.free()
+
+
+func test_hold_drop_rate_limited_to_interval() -> void:
+	print("test_hold_drop_rate_limited_to_interval")
+	var board := _make_board()
+	# Burn the priming fire so we're measuring from a fresh accumulator at 0.
+	assert_true(board._tick_hold_drop_accumulator(0.016, true), "primed fire")
+	# 60 fps frames totaling ~99ms: still under the 100ms interval.
+	for i in 6:
+		assert_false(board._tick_hold_drop_accumulator(0.0165, true), "frame %d should not fire" % i)
+	# Next frame crosses 100ms total → fires.
+	assert_true(board._tick_hold_drop_accumulator(0.0165, true), "fires after >=100ms accumulated")
+	board.free()
+
+
+func test_hold_drop_release_resets_accumulator() -> void:
+	print("test_hold_drop_release_resets_accumulator")
+	var board := _make_board()
+	# Hold long enough to fire and start a fresh interval.
+	board._tick_hold_drop_accumulator(0.016, true)
+	board._tick_hold_drop_accumulator(0.05, true)  # accumulator at 0.05, no fire
+	# Release: accumulator must reset so the next press fires immediately.
+	assert_false(board._tick_hold_drop_accumulator(0.016, false), "release does not fire")
+	assert_true(board._tick_hold_drop_accumulator(0.016, true), "next press fires immediately")
 	board.free()
