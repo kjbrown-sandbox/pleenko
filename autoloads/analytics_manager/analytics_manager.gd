@@ -39,10 +39,17 @@ func _ready() -> void:
 	_ga = Engine.get_singleton("GameAnalytics")
 	_ga.setEnabledInfoLog(false)
 	_ga.setEnabledVerboseLog(false)
-	_ga.init(keys["game_key"], keys["secret_key"])
+
+	# Native SDK needs a writable path for its event database
+	var writable_path: String = OS.get_user_data_dir()
+	_ga.setWritablePath(writable_path)
 
 	var player_id := _load_or_create_player_id()
+	_ga.setExternalUserId(player_id)
 	_ga.configureUserId(player_id)
+	_ga.configureBuild("0.1.0")
+
+	_ga.init(keys["game_key"], keys["secret_key"])
 
 	_enabled = true
 	print("[AnalyticsManager] Initialized with player ID: %s" % player_id)
@@ -73,7 +80,7 @@ func setup(board_manager: Node) -> void:
 # -- Event handlers --------------------------------------------------------
 
 func _on_level_changed(new_level: int) -> void:
-	_design_event("progression:level_reached", new_level)
+	_design_event("progression:level:%d" % new_level, _session_seconds())
 
 
 func _on_rewards_claimed(level: int, _rewards: Array[RewardData]) -> void:
@@ -83,11 +90,13 @@ func _on_rewards_claimed(level: int, _rewards: Array[RewardData]) -> void:
 func _on_prestige_claimed(board_type: Enums.BoardType) -> void:
 	var board_name: String = Enums.BoardType.keys()[board_type]
 	_design_event("prestige:claimed:%s" % board_name.to_lower(), 1.0)
+	_design_event("timing:prestige:%s" % board_name.to_lower(), _session_seconds())
 
 
 func _on_board_unlocked(board_type: Enums.BoardType) -> void:
 	var board_name: String = Enums.BoardType.keys()[board_type]
 	_design_event("progression:board_unlocked:%s" % board_name.to_lower(), 1.0)
+	_design_event("timing:board_unlocked:%s" % board_name.to_lower(), _session_seconds())
 
 
 func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, new_level: int) -> void:
@@ -109,18 +118,24 @@ func _on_challenge_failed(reason: String) -> void:
 		_design_event("challenge:fail_reason:%s:%s" % [challenge.id, reason], 1.0)
 
 
+func _session_seconds() -> float:
+	if not _enabled:
+		return 0.0
+	return _ga.getElapsedSessionTime() / 1000.0
+
+
 # -- SDK wrappers ----------------------------------------------------------
 
 func _design_event(event_id: String, value: float) -> void:
 	if not _enabled:
 		return
-	_ga.addDesignEventWithValue(event_id, value, {})
+	_ga.addDesignEventWithValue(event_id, value)
 
 
 func _progression_event(status: String, challenge_id: String, score: float) -> void:
 	if not _enabled:
 		return
-	_ga.addProgressionEventWithScore(status, "challenge", challenge_id, "", int(score), {})
+	_ga.addProgressionEventWithScore(status, "challenge", challenge_id, "", int(score))
 
 
 # -- Key loading -----------------------------------------------------------

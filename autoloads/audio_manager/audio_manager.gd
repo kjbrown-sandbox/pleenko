@@ -114,6 +114,7 @@ const PRESTIGE_BASS_VOLUME_DB := -10.0
 const PRESTIGE_BELL_VOLUME_DB := -12.0
 const PRESTIGE_ARPEGGIO_VOLUME_DB := -14.0
 var _silenced: bool = false  # gates all new sounds (prestige, scene transitions)
+var _muted: bool = false  # user preference — mutes the Master bus
 var _prestige_arpeggio_active: bool = false
 var _prestige_arpeggio_step: int = 0
 var _prestige_arpeggio_last_ms: int = 0
@@ -899,6 +900,15 @@ func silence(fade_duration: float = 0.5) -> void:
 ## Re-enables sound production after a silence() call.
 func unsilence() -> void:
 	_silenced = false
+
+
+func set_muted(muted: bool) -> void:
+	_muted = muted
+	AudioServer.set_bus_mute(0, muted)
+
+
+func is_muted() -> bool:
+	return _muted
 
 
 func play_prestige(_play_duration: float = 3.0, _fade_duration: float = 2.0) -> void:
