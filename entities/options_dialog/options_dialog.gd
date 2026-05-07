@@ -5,6 +5,7 @@ const MAIN_MENU_PATH := "res://entities/main_menu/main_menu.tscn"
 
 var _overlay: ColorRect
 var _panel: VBoxContainer
+var _mute_button: Button
 var _return_button: Button
 
 func _ready() -> void:
@@ -37,6 +38,13 @@ func _ready() -> void:
 		title.add_theme_font_override("font", font)
 	_panel.add_child(title)
 
+	# Mute toggle button
+	_mute_button = Button.new()
+	_mute_button.text = _mute_label()
+	t.apply_button_theme(_mute_button)
+	_mute_button.pressed.connect(_on_mute_pressed)
+	_panel.add_child(_mute_button)
+
 	# "Return to Main Menu" button
 	_return_button = Button.new()
 	_return_button.text = "Return to Main Menu"
@@ -48,6 +56,7 @@ func _ready() -> void:
 
 
 func show_dialog() -> void:
+	_mute_button.text = _mute_label()
 	visible = true
 
 
@@ -61,6 +70,15 @@ func _on_overlay_input(event: InputEvent) -> void:
 		var panel_rect := _panel.get_global_rect()
 		if not panel_rect.has_point(event.global_position):
 			hide_dialog()
+
+
+func _mute_label() -> String:
+	return "Unmute" if AudioManager.is_muted() else "Mute"
+
+
+func _on_mute_pressed() -> void:
+	AudioManager.set_muted(not AudioManager.is_muted())
+	_mute_button.text = _mute_label()
 
 
 func _on_return_pressed() -> void:

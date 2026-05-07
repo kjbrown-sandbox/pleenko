@@ -40,6 +40,7 @@ func save_game() -> void:
 		"boards": _board_manager.serialize(),
 		"prestige": PrestigeManager.serialize(),
 		"challenges": ChallengeProgressManager.serialize(),
+		"audio_muted": AudioManager.is_muted(),
 	}
 
 	var json_string := JSON.stringify(data, "\t")
@@ -102,6 +103,7 @@ func load_game() -> bool:
 	CurrencyManager.deserialize(data.get("currency", {}))
 	UpgradeManager.deserialize(data.get("upgrades", {}))
 	_board_manager.deserialize(data.get("boards", {}))
+	AudioManager.set_muted(data.get("audio_muted", false))
 
 	# Failsafe: reconcile upgrade unlocks against the level table.
 	# Covers the race where current_level was saved ahead of claim_rewards().
