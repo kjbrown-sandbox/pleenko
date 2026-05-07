@@ -22,6 +22,9 @@ func _run_tests() -> void:
 	test_hold_drop_first_press_fires_immediately()
 	test_hold_drop_rate_limited_to_interval()
 	test_hold_drop_release_resets_accumulator()
+	test_reconcile_reward_ignores_wrong_type()
+	test_reconcile_reward_ignores_wrong_board()
+	test_reconcile_reward_ignores_already_set()
 
 
 # --- Helper ---
@@ -169,4 +172,51 @@ func test_hold_drop_release_resets_accumulator() -> void:
 	# Release: accumulator must reset so the next press fires immediately.
 	assert_false(board._tick_hold_drop_accumulator(0.016, false), "release does not fire")
 	assert_true(board._tick_hold_drop_accumulator(0.016, true), "next press fires immediately")
+	board.free()
+
+
+# --- Reconcile reward guard tests ---
+# _on_reconcile_reward must early-return for wrong type / wrong board / already-
+# set, since the happy path calls build_board() which touches @onready nodes
+# and would crash a bare-instance test. Manual integration test covers the
+# happy path on a real scene.
+
+func test_reconcile_reward_ignores_wrong_type() -> void:
+	print("test_reconcile_reward_ignores_wrong_type")
+	var board := _make_board({"board_type": Enums.BoardType.GOLD})
+	var reward := RewardData.new()
+	reward.type = RewardData.RewardType.UNLOCK_UPGRADE
+	reward.board_type = Enums.BoardType.GOLD
+	reward.target_board = Enums.BoardType.GOLD
+	board._on_reconcile_reward(reward)
+	assert_false(board.should_show_advanced_buckets,
+		"non-UNLOCK_ADVANCED_BUCKET reward must not flip the flag")
+	board.free()
+
+
+func test_reconcile_reward_ignores_wrong_board() -> void:
+	print("test_reconcile_reward_ignores_wrong_board")
+	var board := _make_board({"board_type": Enums.BoardType.GOLD})
+	var reward := RewardData.new()
+	reward.type = RewardData.RewardType.UNLOCK_ADVANCED_BUCKET
+	reward.target_board = Enums.BoardType.ORANGE  # wrong board
+	board._on_reconcile_reward(reward)
+	assert_false(board.should_show_advanced_buckets,
+		"reward targeting different board must not flip the flag")
+	board.free()
+
+
+func test_reconcile_reward_ignores_already_set() -> void:
+	print("test_reconcile_reward_ignores_already_set")
+	# If the flag is already set, the handler must early-return *before* build_board()
+	# (which would crash without @onready nodes). Reaching this assertion proves it.
+	var board := _make_board({
+		"board_type": Enums.BoardType.GOLD,
+		"should_show_advanced_buckets": true,
+	})
+	var reward := RewardData.new()
+	reward.type = RewardData.RewardType.UNLOCK_ADVANCED_BUCKET
+	reward.target_board = Enums.BoardType.GOLD
+	board._on_reconcile_reward(reward)
+	assert_true(board.should_show_advanced_buckets, "flag remains set")
 	board.free()

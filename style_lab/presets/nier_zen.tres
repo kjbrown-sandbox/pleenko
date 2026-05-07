@@ -43,3 +43,7 @@ peg_ring_enabled = true
 vignette_enabled = true
 vignette_radius = 0.7
 vignette_softness = 0.5
+melody_sequence = PackedInt32Array()
+drum_instruments = PackedInt32Array()
+drum_patterns = PackedStringArray()
+drum_volumes = PackedFloat32Array()
