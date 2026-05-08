@@ -154,6 +154,9 @@ func is_board_unlocked(type: Enums.BoardType) -> bool:
 
 func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
 	if _new_balance <= 0:
+		# A source currency just hit zero — check for soft-lock.
+		if type == Enums.CurrencyType.GOLD_COIN or type == Enums.CurrencyType.RAW_ORANGE:
+			check_and_rescue_gold_soft_lock()
 		return
 	# When a raw currency is earned, unlock or prestige the board it belongs to.
 	for i in range(1, TierRegistry.get_tier_count()):
@@ -380,15 +383,15 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 			_on_autodropper_adjust(StringName("ORANGE_ADVANCED"), 1, false)
 		_update_all_button_displays()
 	if board_type == Enums.BoardType.GOLD:
-		_check_and_rescue_gold_soft_lock()
+		check_and_rescue_gold_soft_lock()
 
 
-## After a gold-board upgrade purchase, verify the player can still produce
-## gold or raw orange. Gold and raw orange are the only "source" currencies —
-## only the gold board generates them — so if both are zero and no coins are
-## mid-flight or queued there, the player is soft-locked. Grant 1 gold to
-## unstick them.
-func _check_and_rescue_gold_soft_lock() -> void:
+## Verify the player can still produce gold or raw orange. These are the only
+## "source" currencies — only the gold board generates them — so if both are
+## zero and no coins are mid-flight or queued on the gold board, the player is
+## soft-locked. Grant 1 gold to unstick them. Called after upgrade purchases,
+## after any currency-changed event that zeroes a source currency, and on load.
+func check_and_rescue_gold_soft_lock() -> void:
 	if CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN) >= 1:
 		return
 	if CurrencyManager.get_balance(Enums.CurrencyType.RAW_ORANGE) >= 1:
@@ -401,7 +404,7 @@ func _check_and_rescue_gold_soft_lock() -> void:
 	if not gold_board.coin_queue.is_empty():
 		return
 	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, 1)
-	print("[BoardManager] Soft-lock detected after gold upgrade purchase; granted 1 gold.")
+	print("[BoardManager] Soft-lock rescue: granted 1 gold.")
 
 
 func _find_board(type: Enums.BoardType) -> PlinkoBoard:

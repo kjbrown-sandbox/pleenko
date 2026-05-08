@@ -115,6 +115,9 @@ func load_game() -> bool:
 	# Heals saves where current_level was saved ahead of claim_rewards().
 	LevelManager.ensure_state_for_level()
 
+	# Failsafe: rescue from 0 gold / 0 raw orange soft-lock on load.
+	_board_manager.check_and_rescue_gold_soft_lock()
+
 	print("[SaveManager] Game loaded.")
 	return true
 
