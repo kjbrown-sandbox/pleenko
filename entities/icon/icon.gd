@@ -11,6 +11,10 @@ const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
 # Skull: <a href="https://www.flaticon.com/free-icons/skull" title="skull icons">Skull icons created by meaicon - Flaticon</a>
 # Lock: <a href="https://www.flaticon.com/free-icons/caps-lock" title="caps lock icons">Caps lock icons created by Dave Gandy - Flaticon</a>
 # Exclamation point: <a href="https://www.flaticon.com/free-icons/exclamation-mark" title="exclamation mark icons">Exclamation mark icons created by Freepik - Flaticon</a>
+# Music: <a href="https://www.flaticon.com/free-icons/music" title="music icons">Music icons created by Becris - Flaticon</a><a href="https://www.flaticon.com/free-icons/music" title="music icons">Music icons created by Becris - Flaticon</a>
+# Sound on: <a href="https://www.flaticon.com/free-icons/volume" title="volume icons">Volume icons created by Bharat Icons - Flaticon</a>
+# Sound off: <a href="https://www.flaticon.com/free-icons/sound-off" title="sound off icons">Sound off icons created by See Icons - Flaticon</a>
+
 @export var interactive: bool = true
 
 func _ready() -> void:
