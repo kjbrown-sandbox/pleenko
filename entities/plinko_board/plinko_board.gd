@@ -8,9 +8,17 @@ var vertical_spacing: float
 @export var drop_delay_reduction_factor: float = 0.85
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
-## Each coin in the queue (FULL or FILLING) boosts drop rate by this fraction
-## (additive in rate). effective_delay = drop_delay / (1 + bonus * queue.count)
+## Each coin in the queue (FULL or FILLING) boosts drop rate by this multiplier
+## of the base rate. effective_delay = drop_delay / (1 + bonus * queue.count).
+## Additive in rate (not delay) keeps the curve self-bounded — delay shrinks
+## but never reaches zero. With 1.0, one queued coin doubles the rate, two
+## triples it, ten gives 11x the base rate.
 const QUEUE_RATE_BONUS_PER_COIN := 1.0
+
+## Pixel offset from the projected spawn point to the top-left of the bonus
+## label box. +X pushes the label right of the queue (clear of the drop
+## column); -Y centers a single line vertically against the spawn dot.
+const QUEUE_BONUS_LABEL_OFFSET := Vector2(40.0, -16.0)
 
 ## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
 const MULTI_DROP_STAGGER := 0.15
@@ -864,20 +872,25 @@ func _on_queue_count_changed(_new_count: int) -> void:
 	drop_section.set_queue_bonus(coin_queue.count, QUEUE_RATE_BONUS_PER_COIN)
 
 
+## Cached so we don't re-walk the viewport every frame. Refreshed on demand
+## if it's freed (theme swap / scene reload).
+var _cached_camera: Camera3D
+
+
 ## Project the spawn point (slot 0 of the queue) into screen space and tell
 ## the DropSection to anchor its bonus label there. Skipped when the section
 ## is hidden (non-active board) — saves the unproject + assignment cost.
-const QUEUE_BONUS_LABEL_OFFSET := Vector2(40.0, -16.0)
 func _update_queue_bonus_label_position() -> void:
 	if not drop_section.visible:
 		return
 	if not is_instance_valid(coin_queue):
 		return
-	var camera := get_viewport().get_camera_3d()
-	if camera == null:
-		return
+	if not is_instance_valid(_cached_camera):
+		_cached_camera = get_viewport().get_camera_3d()
+		if _cached_camera == null:
+			return
 	var spawn_world: Vector3 = coin_queue.global_position + coin_queue.start_position
-	var screen_pos: Vector2 = camera.unproject_position(spawn_world)
+	var screen_pos: Vector2 = _cached_camera.unproject_position(spawn_world)
 	drop_section.set_queue_bonus_position(screen_pos + QUEUE_BONUS_LABEL_OFFSET)
 
 

@@ -5,16 +5,28 @@ extends Control
 
 
 func _ready() -> void:
-	if _queue_bonus_label:
-		var t: VisualTheme = ThemeProvider.theme
-		_queue_bonus_label.add_theme_color_override("font_color", t.normal_text_color)
-		var btn_font: Font = t.button_font if t.button_font else preload("res://style_lab/VendSans-Bold.ttf")
-		_queue_bonus_label.add_theme_font_override("font", btn_font)
-		_queue_bonus_label.add_theme_font_size_override("font_size", maxi(t.button_font_size - 2, 10))
+	_apply_theme()
+	ThemeProvider.theme_changed.connect(_apply_theme)
+
+
+func _exit_tree() -> void:
+	if ThemeProvider.theme_changed.is_connected(_apply_theme):
+		ThemeProvider.theme_changed.disconnect(_apply_theme)
+
+
+func _apply_theme() -> void:
+	if not _queue_bonus_label:
+		return
+	var t: VisualTheme = ThemeProvider.theme
+	_queue_bonus_label.add_theme_color_override("font_color", t.normal_text_color)
+	var btn_font: Font = t.button_font if t.button_font else preload("res://style_lab/VendSans-Bold.ttf")
+	_queue_bonus_label.add_theme_font_override("font", btn_font)
+	_queue_bonus_label.add_theme_font_size_override("font_size", maxi(t.button_font_size - 2, 10))
 
 
 ## Show two-line bonus text when queued_count > 0; hide otherwise.
-## bonus_per_coin is the additive rate fraction per queued coin (e.g. 0.50 = +50%).
+## bonus_per_coin is the rate-multiplier per queued coin (e.g. 1.0 = +100% per
+## coin). The displayed percent is bonus_per_coin * queued_count * 100.
 func set_queue_bonus(queued_count: int, bonus_per_coin: float) -> void:
 	if not _queue_bonus_label:
 		return
