@@ -878,6 +878,14 @@ func on_coin_landed(coin: Coin) -> void:
 ## Completes the normal landing flow: adds currency, emits signal, cleans up coin.
 ## Prestige coins skip currency add and queue_free — the PrestigeAnimator handles them.
 func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
+	# Safety net: if the board rebuilt between final_bounce_started and landing,
+	# the predicted bucket may have been normal but the actual bucket is advanced.
+	# Catch this and route through the prestige path (skips slow-mo, starts at freeze).
+	if not coin.is_prestige_coin and _will_trigger_prestige(bucket.currency_type):
+		prestige_coin_landed.emit(coin, bucket)
+		if coin.is_prestige_coin:
+			return
+
 	var t: VisualTheme = ThemeProvider.theme
 	var bucket_idx := _get_bucket_index(bucket)
 	var target_multiplier: float = 1.0
@@ -1709,6 +1717,7 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 
 	if upgrade_state.get("show_advanced_buckets", false):
 		should_show_advanced_buckets = true
+	if upgrade_state.get("has_advanced_drop", false):
 		_show_advanced_drop_bar()
 
 	build_board()

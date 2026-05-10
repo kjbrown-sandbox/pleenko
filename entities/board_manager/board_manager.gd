@@ -158,14 +158,14 @@ func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap:
 		if type == Enums.CurrencyType.GOLD_COIN or type == Enums.CurrencyType.RAW_ORANGE:
 			check_and_rescue_gold_soft_lock()
 		return
-	# When a raw currency is earned, unlock or prestige the board it belongs to.
+	# When a raw currency is earned, unlock the board if already prestiged.
+	# First-time prestige is handled exclusively by the PrestigeAnimator
+	# (via PlinkoBoard.prestige_coin_landed) to ensure the animation plays.
 	for i in range(1, TierRegistry.get_tier_count()):
 		var tier := TierRegistry.get_tier_by_index(i)
 		if tier.raw_currency == type:
 			if PrestigeManager.is_board_unlocked_permanently(tier.board_type):
 				unlock_board(tier.board_type)
-			elif PrestigeManager.can_prestige(tier.board_type):
-				PrestigeManager.trigger_prestige(tier.board_type)
 			break
 
 
@@ -455,12 +455,15 @@ func serialize() -> Dictionary:
 		board_types.append(board.board_type)
 	data["board_types"] = board_types
 
-	# Which boards have advanced buckets visible
+	# Which boards have advanced buckets visible / advanced drop bar shown
 	var advanced_buckets := {}
+	var advanced_drops := {}
 	for board in _boards:
 		var key: String = Enums.BoardType.keys()[board.board_type]
 		advanced_buckets[key] = board.should_show_advanced_buckets
+		advanced_drops[key] = board._has_advanced_drop
 	data["advanced_buckets"] = advanced_buckets
+	data["advanced_drops"] = advanced_drops
 
 	# Per-board computed state (read by OfflineCalculator)
 	var board_state := {}
@@ -495,6 +498,7 @@ func deserialize(data: Dictionary) -> void:
 
 	# Build per-board upgrade state for apply_saved_state
 	var advanced_buckets: Dictionary = data.get("advanced_buckets", {})
+	var advanced_drops: Dictionary = data.get("advanced_drops", {})
 	var board_state: Dictionary = data.get("board_state", {})
 	for board in _boards:
 		var board_key: String = Enums.BoardType.keys()[board.board_type]
@@ -504,6 +508,11 @@ func deserialize(data: Dictionary) -> void:
 			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
 			upgrade_state[upgrade_key] = UpgradeManager.get_level(board.board_type, upgrade_type)
 		upgrade_state["show_advanced_buckets"] = advanced_buckets.get(board_key, false)
+		# Old saves lack advanced_drops. Fall back to false — _on_currency_changed
+		# (fired by CurrencyManager.deserialize before this) already shows the bar
+		# when balance > 0, so this only misses the spent-all-to-zero edge case on
+		# old saves. New saves serialize _has_advanced_drop properly.
+		upgrade_state["has_advanced_drop"] = advanced_drops.get(board_key, false)
 		upgrade_state["advanced_coin_multiplier"] = bs.get("advanced_coin_multiplier", 2)
 		board.apply_saved_state(upgrade_state)
 
