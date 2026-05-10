@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="BaseUpgradeData" format=3]
+[gd_resource type="Resource" script_class="BaseUpgradeData" format=3 uid="uid://clxrlm8knjcwq"]
 
 [ext_resource type="Script" uid="uid://c571lcduobww" path="res://autoloads/upgrade_manager/base_upgrade_data.gd" id="1"]
 
@@ -6,6 +6,6 @@
 script = ExtResource("1")
 type = 5
 display_name = "Advanced Autodropper"
-base_cost = 10
-max_level = 10
-cost_delta = 10
+base_cost = 100
+max_level = 5
+cost_delta = 100

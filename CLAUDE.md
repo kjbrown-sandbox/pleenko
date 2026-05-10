@@ -136,16 +136,19 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Orchestrates all `PlinkoBoard` instances. Owns `_boards[]`, `_active_index`, autodropper pool + assignments, camera tweening, autodropper timer.
 - Emits: `board_switched(board)`, `board_unlocked(type)`.
 - Per-tick: `_autodrop_timer` (1.5s) calls `AudioManager.notify_autodropper_beat(wait_time)` to sync the beat grid, then dispatches to assigned boards.
-- Listens: `UpgradeManager.{autodropper_unlocked, advanced_autodropper_unlocked, upgrade_purchased}`, `CurrencyManager.currency_changed`, `LevelManager.rewards_claimed`, per-board `board_rebuilt` / `autodropper_adjust_requested`.
+- Listens: `UpgradeManager.{autodropper_unlocked, advanced_autodropper_unlocked, upgrade_purchased}`, `CurrencyManager.currency_changed`, `LevelManager.rewards_claimed`, per-board `board_rebuilt` / `autodropper_adjust_requested` / `coin_queue.count_changed` (refresh drop-button subtext when the queue rate bonus shifts the effective delay).
+- Drop-button subtext reads `PlinkoBoard.get_effective_drop_delay()` so the displayed `Xs` reflects the current queue bonus.
 
 **PlinkoBoard** — `entities/plinko_board/plinko_board.gd`
 
 - Per-board gameplay: peg + bucket multimesh rendering, coin spawning, drop queue, drop timer, per-board upgrade multipliers, bucket marking API for challenges.
 - Emits: `coin_dropped`, `coin_landed(board_type, bucket_index, currency_type, amount, multiplier)`, `board_rebuilt`, `autodropper_adjust_requested`, `prestige_coin_landed`, `autodrop_failed(board_type)`.
-- Listens: `AudioManager.chord_changed` — fades all buckets to faded color on every chord advance.
+- Listens: `AudioManager.chord_changed` — fades all buckets to faded color on every chord advance. `coin_queue.count_changed` — rescales the active drop timer proportionally and refreshes the bonus label.
 - On coin land: `AudioManager.request_bucket_play` + `on_coin_landed`. Singing is suppressed while `_upgrade_animating` is true (the upgrade ripple owns the arpeggio).
 - On peg contact: `flash_nearest_peg` calls `AudioManager.should_sparkle` (gates the ring VFX in coin color); flash + halo + pulse always fire.
 - Bucket value upgrade ripple: `increase_bucket_values` updates buckets in-place with a center-outward arpeggio at `BUCKET_WAIT / 2` intervals via `force_play_bucket`, instead of rebuilding the board.
+- Queue rate bonus: `get_effective_drop_delay()` returns `drop_delay / (1 + QUEUE_RATE_BONUS_PER_COIN * coin_queue.count)` — additive in rate, never reaches zero. `_start_drop_timer` and `decrease_drop_delay` track `_last_effective_delay` so a queue-size change mid-cycle rescales `_drop_timer_remaining` proportionally without losing accumulated progress.
+- Per frame, `_update_queue_bonus_label_position` projects `coin_queue.global_position + coin_queue.start_position` to viewport space (using a cached `Camera3D`) and tells `DropSection` where to anchor its bonus label. Skipped when `drop_section.visible` is false.
 
 **Coin** — `entities/coin/coin.gd`
 
@@ -172,9 +175,17 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Root scene orchestrator. Wires up BoardManager, ChallengeHUD, dialogs, UI panels, prestige animator. On `_ready` decides between `_setup_normal()` and `_setup_challenge()` based on `ChallengeManager.is_active_challenge`.
 - Listens: `ModeManager.mode_changed`, `PrestigeManager.{prestige_claimed, prestige_phase_changed}`, `BoardManager.{board_switched, board_unlocked}`, `UpgradeManager.upgrade_unlocked`, `ChallengeManager.{challenge_completed, challenge_failed}`.
 
-**DropSection** — `entities/drop_section/`
+**DropSection** — `entities/drop_section/drop_section.gd` + `.tscn`
 
 - Contains `DropButton` instances (normal + advanced). Each emits `drop_pressed` (wired to `PlinkoBoard.request_drop()`) and `autodropper_adjust_requested` (wired to `BoardManager` via the board's matching signal).
+- Owns the `QueueBonusLabel` (top-left-anchored 2D `Label`). `set_queue_bonus(queued_count, bonus_per_coin)` updates the two-line text and visibility; `set_queue_bonus_position(viewport_pos)` writes `global_position` directly so the label anchors in screen space regardless of `DropSection`'s parent layout (it sits under a `Node3D`).
+- Listens: `ThemeProvider.theme_changed` to re-apply font/color overrides on the bonus label so it survives theme swaps (e.g. challenge mode).
+
+**CoinQueue** — `entities/coin_queue/coin_queue.gd` + `.tscn`
+
+- FIFO queue of `Coin` nodes (FULL coins ahead of FILLING autodrop coins).
+- Emits: `coin_enqueued(index, coin_type)`, `coin_dequeued()`, `capacity_changed(cap)`, `count_changed(new_count)`. `count_changed` carries the new total and fires only on actual size changes — used by `PlinkoBoard` for the rate bonus and by `BoardManager` for subtext refresh.
+- Mutations that affect total count (`enqueue`, `dequeue`, `dequeue_full`, `complete_first_filling`, `complete_and_requeue_filling`, `remove_filling_coins_of_type`) all call `_emit_count_if_changed`.
 
 #### Resources (data)
 

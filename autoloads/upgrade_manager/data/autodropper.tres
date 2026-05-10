@@ -7,5 +7,5 @@ script = ExtResource("1")
 type = 4
 display_name = "Autodropper"
 base_cost = 100
-max_level = 10
+max_level = 5
 cost_delta = 100

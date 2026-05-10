@@ -8,6 +8,18 @@ var vertical_spacing: float
 @export var drop_delay_reduction_factor: float = 0.85
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
+## Each coin in the queue (FULL or FILLING) boosts drop rate by this multiplier
+## of the base rate. effective_delay = drop_delay / (1 + bonus * queue.count).
+## Additive in rate (not delay) keeps the curve self-bounded — delay shrinks
+## but never reaches zero. With 1.0, one queued coin doubles the rate, two
+## triples it, ten gives 11x the base rate.
+const QUEUE_RATE_BONUS_PER_COIN := 1.0
+
+## Pixel offset from the projected spawn point to the top-left of the bonus
+## label box. +X pushes the label right of the queue (clear of the drop
+## column); -Y centers a single line vertically against the spawn dot.
+const QUEUE_BONUS_LABEL_OFFSET := Vector2(40.0, -16.0)
+
 ## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
 const MULTI_DROP_STAGGER := 0.15
 
@@ -17,7 +29,7 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 @onready var upgrade_section = $UpgradeSection
-@onready var drop_section = $DropSection
+@onready var drop_section: DropSection = $DropSection
 @onready var coin_queue: CoinQueue = $CoinQueue
 @onready var _drop_main_column: VBoxContainer = $DropSection/DropButtons/DropMainColumn
 @onready var _drop_main = $DropSection/DropButtons/DropMainColumn/DropMain
@@ -101,6 +113,10 @@ var _drop_burst_free_indices: Array[int] = []
 var _active_drop_bursts: Array[Dictionary] = []
 
 var _drop_timer_remaining: float = 0.0
+# Effective delay (after queue bonus) at the time the active timer cycle started
+# or was last rescaled. Used to proportionally rescale _drop_timer_remaining
+# when the queue's full count changes mid-cycle.
+var _last_effective_delay: float = 0.0
 
 # Hold-to-drop rate limiter: enqueues at 10 coins/sec while space (or B) is held.
 # The drop timer drains the queue at its own pace; this only controls how fast
@@ -199,6 +215,8 @@ func setup(type: Enums.BoardType) -> void:
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	coin_queue.set_capacity(perm_queue)
+	coin_queue.count_changed.connect(_on_queue_count_changed)
+	drop_section.set_queue_bonus(coin_queue.count, QUEUE_RATE_BONUS_PER_COIN)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
@@ -378,6 +396,8 @@ func _process(delta: float) -> void:
 			request_drop(_get_advanced_drop_costs(), advanced_bucket_type)
 		else:
 			request_drop()
+
+	_update_queue_bonus_label_position()
 
 	if not _active_flashes.is_empty():
 		_update_peg_flashes(delta)
@@ -826,7 +846,52 @@ func _drop_from_queue() -> void:
 
 func _start_drop_timer() -> void:
 	is_waiting = true
-	_drop_timer_remaining = drop_delay
+	_last_effective_delay = get_effective_drop_delay()
+	_drop_timer_remaining = _last_effective_delay
+
+
+## Drop delay after applying the queue's rate bonus. Each queued coin (FULL or
+## FILLING) adds QUEUE_RATE_BONUS_PER_COIN to the effective rate (rate = 1/delay),
+## which is equivalent to dividing the delay by (1 + bonus * queue.count).
+## Naturally bounded — delay shrinks but never reaches zero.
+func get_effective_drop_delay() -> float:
+	if coin_queue == null:
+		return drop_delay
+	var bonus_mult: float = 1.0 + QUEUE_RATE_BONUS_PER_COIN * float(coin_queue.count)
+	return drop_delay / bonus_mult
+
+
+func _on_queue_count_changed(_new_count: int) -> void:
+	# Rescale the active drop timer proportionally so the player sees an
+	# immediate speed-up/slow-down when the queue fills or drains, matching
+	# the precedent in decrease_drop_delay().
+	if is_waiting and _drop_timer_remaining > 0.0 and _last_effective_delay > 0.0:
+		var new_effective: float = get_effective_drop_delay()
+		_drop_timer_remaining *= new_effective / _last_effective_delay
+		_last_effective_delay = new_effective
+	drop_section.set_queue_bonus(coin_queue.count, QUEUE_RATE_BONUS_PER_COIN)
+
+
+## Cached so we don't re-walk the viewport every frame. Refreshed on demand
+## if it's freed (theme swap / scene reload).
+var _cached_camera: Camera3D
+
+
+## Project the spawn point (slot 0 of the queue) into screen space and tell
+## the DropSection to anchor its bonus label there. Skipped when the section
+## is hidden (non-active board) — saves the unproject + assignment cost.
+func _update_queue_bonus_label_position() -> void:
+	if not drop_section.visible:
+		return
+	if not is_instance_valid(coin_queue):
+		return
+	if not is_instance_valid(_cached_camera):
+		_cached_camera = get_viewport().get_camera_3d()
+		if _cached_camera == null:
+			return
+	var spawn_world: Vector3 = coin_queue.global_position + coin_queue.start_position
+	var screen_pos: Vector2 = _cached_camera.unproject_position(spawn_world)
+	drop_section.set_queue_bonus_position(screen_pos + QUEUE_BONUS_LABEL_OFFSET)
 
 
 func _on_drop_timer_done() -> void:
@@ -878,6 +943,14 @@ func on_coin_landed(coin: Coin) -> void:
 ## Completes the normal landing flow: adds currency, emits signal, cleans up coin.
 ## Prestige coins skip currency add and queue_free — the PrestigeAnimator handles them.
 func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
+	# Safety net: if the board rebuilt between final_bounce_started and landing,
+	# the predicted bucket may have been normal but the actual bucket is advanced.
+	# Catch this and route through the prestige path (skips slow-mo, starts at freeze).
+	if not coin.is_prestige_coin and _will_trigger_prestige(bucket.currency_type):
+		prestige_coin_landed.emit(coin, bucket)
+		if coin.is_prestige_coin:
+			return
+
 	var t: VisualTheme = ThemeProvider.theme
 	var bucket_idx := _get_bucket_index(bucket)
 	var target_multiplier: float = 1.0
@@ -1405,9 +1478,11 @@ func decrease_drop_delay() -> void:
 	var old_delay := drop_delay
 	drop_delay *= drop_delay_reduction_factor
 	# If currently waiting, scale remaining time proportionally so the player
-	# doesn't have to wait the full old duration
+	# doesn't have to wait the full old duration. The queue bonus multiplier is
+	# unchanged here, so the same scale factor applies to the effective delay.
 	if is_waiting and old_delay > 0.0:
 		_drop_timer_remaining *= drop_delay / old_delay
+		_last_effective_delay = get_effective_drop_delay()
 	board_rebuilt.emit()
 
 func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
@@ -1709,6 +1784,7 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 
 	if upgrade_state.get("show_advanced_buckets", false):
 		should_show_advanced_buckets = true
+	if upgrade_state.get("has_advanced_drop", false):
 		_show_advanced_drop_bar()
 
 	build_board()
