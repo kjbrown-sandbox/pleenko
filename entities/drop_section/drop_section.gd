@@ -22,7 +22,7 @@ func set_queue_bonus(full_count: int, bonus_per_coin: float) -> void:
 		_queue_bonus_label.visible = false
 		return
 	var pct: int = int(round(bonus_per_coin * float(full_count) * 100.0))
-	_queue_bonus_label.text = "Queue bonus: Drop rate +%d%%" % pct
+	_queue_bonus_label.text = "Queue bonus:\nDrop rate +%d%%" % pct
 	_queue_bonus_label.visible = true
 
 
