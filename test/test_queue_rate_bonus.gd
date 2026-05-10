@@ -72,7 +72,7 @@ func test_effective_delay_with_null_queue() -> void:
 
 
 # --- Mid-cycle rescale math ---
-# Mirrors PlinkoBoard._on_queue_full_count_changed:
+# Mirrors PlinkoBoard._on_queue_count_changed:
 #   _drop_timer_remaining *= new_effective / _last_effective_delay
 
 func test_rescale_proportional_grow() -> void:

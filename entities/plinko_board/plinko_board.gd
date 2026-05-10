@@ -8,8 +8,8 @@ var vertical_spacing: float
 @export var drop_delay_reduction_factor: float = 0.85
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
-## Each FULL coin in the queue boosts drop rate by this fraction (additive in rate).
-## effective_delay = drop_delay / (1 + QUEUE_RATE_BONUS_PER_COIN * full_count)
+## Each coin in the queue (FULL or FILLING) boosts drop rate by this fraction
+## (additive in rate). effective_delay = drop_delay / (1 + bonus * queue.count)
 const QUEUE_RATE_BONUS_PER_COIN := 1.0
 
 ## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
@@ -207,8 +207,8 @@ func setup(type: Enums.BoardType) -> void:
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	coin_queue.set_capacity(perm_queue)
-	coin_queue.full_count_changed.connect(_on_queue_full_count_changed)
-	drop_section.set_queue_bonus(coin_queue.full_count, QUEUE_RATE_BONUS_PER_COIN)
+	coin_queue.count_changed.connect(_on_queue_count_changed)
+	drop_section.set_queue_bonus(coin_queue.count, QUEUE_RATE_BONUS_PER_COIN)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
@@ -842,18 +842,18 @@ func _start_drop_timer() -> void:
 	_drop_timer_remaining = _last_effective_delay
 
 
-## Drop delay after applying the queue's rate bonus. Each FULL coin in the queue
-## adds QUEUE_RATE_BONUS_PER_COIN to the effective rate (rate = 1/delay), which
-## is equivalent to dividing the delay by (1 + bonus * full_count). Naturally
-## bounded — delay shrinks but never reaches zero.
+## Drop delay after applying the queue's rate bonus. Each queued coin (FULL or
+## FILLING) adds QUEUE_RATE_BONUS_PER_COIN to the effective rate (rate = 1/delay),
+## which is equivalent to dividing the delay by (1 + bonus * queue.count).
+## Naturally bounded — delay shrinks but never reaches zero.
 func get_effective_drop_delay() -> float:
 	if coin_queue == null:
 		return drop_delay
-	var bonus_mult: float = 1.0 + QUEUE_RATE_BONUS_PER_COIN * float(coin_queue.full_count)
+	var bonus_mult: float = 1.0 + QUEUE_RATE_BONUS_PER_COIN * float(coin_queue.count)
 	return drop_delay / bonus_mult
 
 
-func _on_queue_full_count_changed(_new_count: int) -> void:
+func _on_queue_count_changed(_new_count: int) -> void:
 	# Rescale the active drop timer proportionally so the player sees an
 	# immediate speed-up/slow-down when the queue fills or drains, matching
 	# the precedent in decrease_drop_delay().
@@ -861,7 +861,7 @@ func _on_queue_full_count_changed(_new_count: int) -> void:
 		var new_effective: float = get_effective_drop_delay()
 		_drop_timer_remaining *= new_effective / _last_effective_delay
 		_last_effective_delay = new_effective
-	drop_section.set_queue_bonus(coin_queue.full_count, QUEUE_RATE_BONUS_PER_COIN)
+	drop_section.set_queue_bonus(coin_queue.count, QUEUE_RATE_BONUS_PER_COIN)
 
 
 ## Project the spawn point (slot 0 of the queue) into screen space and tell

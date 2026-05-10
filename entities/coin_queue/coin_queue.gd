@@ -10,7 +10,7 @@ const CoinScene: PackedScene = preload("res://entities/coin/coin.tscn")
 signal coin_enqueued(index: int, coin_type: Enums.CurrencyType)
 signal coin_dequeued()
 signal capacity_changed(cap: int)
-signal full_count_changed(new_count: int)
+signal count_changed(new_count: int)
 
 ## Where the first coin in the queue sits (local to this node).
 @export var start_position: Vector3 = Vector3(-1, sqrt(3)/2 + 0.2, 0)
@@ -23,7 +23,7 @@ signal full_count_changed(new_count: int)
 
 var _capacity: int = 0
 var _coins: Array[Coin] = []
-var _last_full_count: int = 0
+var _last_count: int = 0
 
 # 3D visual indicators for empty slots
 var _empty_slot_meshes: Array[MeshInstance3D] = []
@@ -35,15 +35,6 @@ var count: int:
 
 var capacity: int:
 	get: return _capacity
-
-## Number of FULL coins in the queue (excludes FILLING autodrop coins).
-var full_count: int:
-	get:
-		var n: int = 0
-		for c in _coins:
-			if c.fill_state == Coin.FillState.FULL:
-				n += 1
-		return n
 
 
 func setup(_start_position: Vector3) -> void:
@@ -88,7 +79,7 @@ func enqueue(coin: Coin, is_advanced: bool = false) -> void:
 	_coins.insert(insert_idx, coin)
 	_slide_coins_from(insert_idx + 1)
 	coin_enqueued.emit(insert_idx, coin.coin_type)
-	_emit_full_count_if_changed()
+	_emit_count_if_changed()
 
 
 ## Find the index of the first FILLING coin. Returns _coins.size() if none.
@@ -107,7 +98,7 @@ func dequeue() -> Coin:
 	remove_child(coin)
 	_slide_all_forward()
 	coin_dequeued.emit()
-	_emit_full_count_if_changed()
+	_emit_count_if_changed()
 	return coin
 
 
@@ -120,7 +111,7 @@ func dequeue_full() -> Coin:
 			remove_child(coin)
 			_slide_all_forward()
 			coin_dequeued.emit()
-			_emit_full_count_if_changed()
+			_emit_count_if_changed()
 			return coin
 	return null
 
@@ -136,6 +127,7 @@ func complete_first_filling(is_advanced: bool) -> Coin:
 			remove_child(c)
 			_slide_all_forward()
 			coin_dequeued.emit()
+			_emit_count_if_changed()
 			return c
 	return null
 
@@ -180,15 +172,14 @@ func complete_and_requeue_filling(is_advanced: bool) -> Coin:
 
 	# Single slide pass for all coins
 	_slide_all_forward()
-	_emit_full_count_if_changed()
+	_emit_count_if_changed()
 	return coin
 
 
-func _emit_full_count_if_changed() -> void:
-	var n: int = full_count
-	if n != _last_full_count:
-		_last_full_count = n
-		full_count_changed.emit(n)
+func _emit_count_if_changed() -> void:
+	if count != _last_count:
+		_last_count = count
+		count_changed.emit(count)
 
 
 ## Get the world-space position for a given slot index.
@@ -224,6 +215,7 @@ func remove_filling_coins_of_type(is_advanced: bool, max_remove: int = 0) -> voi
 			removed += 1
 		i -= 1
 	_slide_all_forward()
+	_emit_count_if_changed()
 
 
 ## Count FILLING coins of a given type.

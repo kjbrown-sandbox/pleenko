@@ -13,15 +13,15 @@ func _ready() -> void:
 		_queue_bonus_label.add_theme_font_size_override("font_size", maxi(t.button_font_size - 2, 10))
 
 
-## Show "Queue bonus: Drop rate +X%" when full_count > 0; hide otherwise.
-## bonus_per_coin is the additive rate fraction per FULL coin (e.g. 0.50 = +50%).
-func set_queue_bonus(full_count: int, bonus_per_coin: float) -> void:
+## Show two-line bonus text when queued_count > 0; hide otherwise.
+## bonus_per_coin is the additive rate fraction per queued coin (e.g. 0.50 = +50%).
+func set_queue_bonus(queued_count: int, bonus_per_coin: float) -> void:
 	if not _queue_bonus_label:
 		return
-	if full_count <= 0:
+	if queued_count <= 0:
 		_queue_bonus_label.visible = false
 		return
-	var pct: int = int(round(bonus_per_coin * float(full_count) * 100.0))
+	var pct: int = int(round(bonus_per_coin * float(queued_count) * 100.0))
 	_queue_bonus_label.text = "Queue bonus:\nDrop rate +%d%%" % pct
 	_queue_bonus_label.visible = true
 

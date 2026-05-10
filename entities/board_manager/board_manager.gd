@@ -140,8 +140,8 @@ func _spawn_board(type: Enums.BoardType) -> void:
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
-	# Queue full-count changes shift the effective drop delay — refresh subtext.
-	board.coin_queue.full_count_changed.connect(_on_board_queue_full_count_changed)
+	# Queue count changes shift the effective drop delay — refresh subtext.
+	board.coin_queue.count_changed.connect(_on_board_queue_count_changed)
 	if _normal_autodroppers_unlocked:
 		board.set_normal_autodroppers_visible(true)
 	if _advanced_autodroppers_unlocked:
@@ -445,7 +445,7 @@ func _update_all_button_displays() -> void:
 				board.set_drop_subtext(bid, delay_str)
 
 
-func _on_board_queue_full_count_changed(_new_count: int) -> void:
+func _on_board_queue_count_changed(_new_count: int) -> void:
 	_update_all_button_displays()
 
 
