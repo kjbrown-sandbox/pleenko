@@ -140,6 +140,8 @@ func _spawn_board(type: Enums.BoardType) -> void:
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
+	# Queue full-count changes shift the effective drop delay — refresh subtext.
+	board.coin_queue.full_count_changed.connect(_on_board_queue_full_count_changed)
 	if _normal_autodroppers_unlocked:
 		board.set_normal_autodroppers_visible(true)
 	if _advanced_autodroppers_unlocked:
@@ -426,12 +428,13 @@ func _update_all_button_displays() -> void:
 	var advanced_free := get_free_advanced_autodroppers()
 	for board in _boards:
 		board.update_autodropper_buttons(_assignments, normal_free, advanced_free)
-		# Update drop rate subtext
+		# Update drop rate subtext (reflects queue bonus)
+		var effective: float = board.get_effective_drop_delay()
 		var delay_str: String
-		if board.drop_delay == int(board.drop_delay):
-			delay_str = str(int(board.drop_delay)) + "s"
+		if effective == int(effective):
+			delay_str = str(int(effective)) + "s"
 		else:
-			delay_str = "%.1fs" % board.drop_delay
+			delay_str = "%.1fs" % effective
 		for bid in board.get_drop_button_ids():
 			var is_adv := _is_advanced_button(bid)
 			var autodrop_unlocked: bool = (_advanced_autodroppers_unlocked if is_adv else _normal_autodroppers_unlocked)
@@ -440,6 +443,10 @@ func _update_all_button_displays() -> void:
 				board.set_drop_subtext(bid, "auto %d · %s" % [assigned, delay_str])
 			else:
 				board.set_drop_subtext(bid, delay_str)
+
+
+func _on_board_queue_full_count_changed(_new_count: int) -> void:
+	_update_all_button_displays()
 
 
 func serialize() -> Dictionary:
@@ -508,10 +515,10 @@ func deserialize(data: Dictionary) -> void:
 			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
 			upgrade_state[upgrade_key] = UpgradeManager.get_level(board.board_type, upgrade_type)
 		upgrade_state["show_advanced_buckets"] = advanced_buckets.get(board_key, false)
-		# Old saves lack advanced_drops. Fall back to false — _on_currency_changed
-		# (fired by CurrencyManager.deserialize before this) already shows the bar
-		# when balance > 0, so this only misses the spent-all-to-zero edge case on
-		# old saves. New saves serialize _has_advanced_drop properly.
+		# Old saves lack advanced_drops. Fall back to checking whether the player
+		# actually has the raw currency — if balance is 0 the bar shouldn't show.
+		# _on_currency_changed (fired by CurrencyManager.deserialize before this
+		# runs) already shows the bar when balance > 0, so false is safe here.
 		upgrade_state["has_advanced_drop"] = advanced_drops.get(board_key, false)
 		upgrade_state["advanced_coin_multiplier"] = bs.get("advanced_coin_multiplier", 2)
 		board.apply_saved_state(upgrade_state)

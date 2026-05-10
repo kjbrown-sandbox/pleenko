@@ -2,10 +2,12 @@
 
 [ext_resource type="PackedScene" uid="uid://b6gbfhxvkrhth" path="res://entities/fill_bar/fill_bar.tscn" id="1_ddiwm"]
 [ext_resource type="PackedScene" path="res://entities/tooltip/tooltip.tscn" id="2_tooltip"]
+[ext_resource type="Script" path="res://entities/drop_section/drop_section.gd" id="3_dropscript"]
 
 [node name="DropSection" type="Control" unique_id=540970006]
 layout_mode = 3
 anchors_preset = 0
+script = ExtResource("3_dropscript")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=1059968091]
 visible = false
@@ -29,6 +31,23 @@ horizontal_alignment = 1
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer" unique_id=1095684869]
 layout_mode = 2
+
+[node name="QueueBonusLabel" type="Label" parent="." unique_id=991122334]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -200.0
+offset_top = -98.0
+offset_right = 200.0
+offset_bottom = -78.0
+grow_horizontal = 2
+grow_vertical = 0
+text = ""
+horizontal_alignment = 1
 
 [node name="DropButtons" type="HBoxContainer" parent="." unique_id=1414190653]
 layout_mode = 1

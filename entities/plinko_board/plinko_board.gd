@@ -8,6 +8,10 @@ var vertical_spacing: float
 @export var drop_delay_reduction_factor: float = 0.85
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
+## Each FULL coin in the queue boosts drop rate by this fraction (additive in rate).
+## effective_delay = drop_delay / (1 + QUEUE_RATE_BONUS_PER_COIN * full_count)
+const QUEUE_RATE_BONUS_PER_COIN := 1.0
+
 ## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
 const MULTI_DROP_STAGGER := 0.15
 
@@ -17,7 +21,7 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var pegs_container: Node3D = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 @onready var upgrade_section = $UpgradeSection
-@onready var drop_section = $DropSection
+@onready var drop_section: DropSection = $DropSection
 @onready var coin_queue: CoinQueue = $CoinQueue
 @onready var _drop_main_column: VBoxContainer = $DropSection/DropButtons/DropMainColumn
 @onready var _drop_main = $DropSection/DropButtons/DropMainColumn/DropMain
@@ -101,6 +105,10 @@ var _drop_burst_free_indices: Array[int] = []
 var _active_drop_bursts: Array[Dictionary] = []
 
 var _drop_timer_remaining: float = 0.0
+# Effective delay (after queue bonus) at the time the active timer cycle started
+# or was last rescaled. Used to proportionally rescale _drop_timer_remaining
+# when the queue's full count changes mid-cycle.
+var _last_effective_delay: float = 0.0
 
 # Hold-to-drop rate limiter: enqueues at 10 coins/sec while space (or B) is held.
 # The drop timer drains the queue at its own pace; this only controls how fast
@@ -199,6 +207,8 @@ func setup(type: Enums.BoardType) -> void:
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	coin_queue.set_capacity(perm_queue)
+	coin_queue.full_count_changed.connect(_on_queue_full_count_changed)
+	drop_section.set_queue_bonus(coin_queue.full_count, QUEUE_RATE_BONUS_PER_COIN)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
@@ -826,7 +836,30 @@ func _drop_from_queue() -> void:
 
 func _start_drop_timer() -> void:
 	is_waiting = true
-	_drop_timer_remaining = drop_delay
+	_last_effective_delay = get_effective_drop_delay()
+	_drop_timer_remaining = _last_effective_delay
+
+
+## Drop delay after applying the queue's rate bonus. Each FULL coin in the queue
+## adds QUEUE_RATE_BONUS_PER_COIN to the effective rate (rate = 1/delay), which
+## is equivalent to dividing the delay by (1 + bonus * full_count). Naturally
+## bounded — delay shrinks but never reaches zero.
+func get_effective_drop_delay() -> float:
+	if coin_queue == null:
+		return drop_delay
+	var bonus_mult: float = 1.0 + QUEUE_RATE_BONUS_PER_COIN * float(coin_queue.full_count)
+	return drop_delay / bonus_mult
+
+
+func _on_queue_full_count_changed(_new_count: int) -> void:
+	# Rescale the active drop timer proportionally so the player sees an
+	# immediate speed-up/slow-down when the queue fills or drains, matching
+	# the precedent in decrease_drop_delay().
+	if is_waiting and _drop_timer_remaining > 0.0 and _last_effective_delay > 0.0:
+		var new_effective: float = get_effective_drop_delay()
+		_drop_timer_remaining *= new_effective / _last_effective_delay
+		_last_effective_delay = new_effective
+	drop_section.set_queue_bonus(coin_queue.full_count, QUEUE_RATE_BONUS_PER_COIN)
 
 
 func _on_drop_timer_done() -> void:
@@ -1413,9 +1446,11 @@ func decrease_drop_delay() -> void:
 	var old_delay := drop_delay
 	drop_delay *= drop_delay_reduction_factor
 	# If currently waiting, scale remaining time proportionally so the player
-	# doesn't have to wait the full old duration
+	# doesn't have to wait the full old duration. The queue bonus multiplier is
+	# unchanged here, so the same scale factor applies to the effective delay.
 	if is_waiting and old_delay > 0.0:
 		_drop_timer_remaining *= drop_delay / old_delay
+		_last_effective_delay = get_effective_drop_delay()
 	board_rebuilt.emit()
 
 func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
