@@ -24,3 +24,10 @@ func set_queue_bonus(full_count: int, bonus_per_coin: float) -> void:
 	var pct: int = int(round(bonus_per_coin * float(full_count) * 100.0))
 	_queue_bonus_label.text = "Queue bonus: Drop rate +%d%%" % pct
 	_queue_bonus_label.visible = true
+
+
+## Anchor the bonus label to a screen-space point (typically the projected
+## spawn point of the active board). Caller is responsible for any offset.
+func set_queue_bonus_position(viewport_pos: Vector2) -> void:
+	if _queue_bonus_label:
+		_queue_bonus_label.global_position = viewport_pos

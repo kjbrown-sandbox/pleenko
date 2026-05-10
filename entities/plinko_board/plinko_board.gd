@@ -389,6 +389,8 @@ func _process(delta: float) -> void:
 		else:
 			request_drop()
 
+	_update_queue_bonus_label_position()
+
 	if not _active_flashes.is_empty():
 		_update_peg_flashes(delta)
 	if not _active_peg_pulses.is_empty():
@@ -860,6 +862,23 @@ func _on_queue_full_count_changed(_new_count: int) -> void:
 		_drop_timer_remaining *= new_effective / _last_effective_delay
 		_last_effective_delay = new_effective
 	drop_section.set_queue_bonus(coin_queue.full_count, QUEUE_RATE_BONUS_PER_COIN)
+
+
+## Project the spawn point (slot 0 of the queue) into screen space and tell
+## the DropSection to anchor its bonus label there. Skipped when the section
+## is hidden (non-active board) — saves the unproject + assignment cost.
+const QUEUE_BONUS_LABEL_OFFSET := Vector2(40.0, -16.0)
+func _update_queue_bonus_label_position() -> void:
+	if not drop_section.visible:
+		return
+	if not is_instance_valid(coin_queue):
+		return
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return
+	var spawn_world: Vector3 = coin_queue.global_position + coin_queue.start_position
+	var screen_pos: Vector2 = camera.unproject_position(spawn_world)
+	drop_section.set_queue_bonus_position(screen_pos + QUEUE_BONUS_LABEL_OFFSET)
 
 
 func _on_drop_timer_done() -> void:
