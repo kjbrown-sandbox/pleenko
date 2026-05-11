@@ -13,7 +13,7 @@ var vertical_spacing: float
 ## Additive in rate (not delay) keeps the curve self-bounded — delay shrinks
 ## but never reaches zero. With 1.0, one queued coin doubles the rate, two
 ## triples it, ten gives 11x the base rate.
-const QUEUE_RATE_BONUS_PER_COIN := 1.0
+const QUEUE_RATE_BONUS_PER_COIN := 0.25
 
 ## Pixel offset from the projected spawn point to the top-left of the bonus
 ## label box. +X pushes the label right of the queue (clear of the drop

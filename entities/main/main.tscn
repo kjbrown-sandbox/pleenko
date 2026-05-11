@@ -12,6 +12,7 @@
 [ext_resource type="PackedScene" uid="uid://x8pe2anpsxj2" path="res://entities/nav_arrow/nav_arrow.tscn" id="17_navarrow"]
 [ext_resource type="Script" uid="uid://1wujxqybenxn" path="res://entities/challenge_grouping_manager/challenge_grouping_manager.gd" id="18_cgm"]
 [ext_resource type="PackedScene" path="res://entities/tooltip/tooltip.tscn" id="19_tooltip"]
+[ext_resource type="Texture2D" uid="uid://m6iihv3lc8go" path="res://assets/icons/volume-up.png" id="20_volup"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
@@ -74,6 +75,20 @@ anchor_right = 1.0
 offset_left = -150.0
 offset_bottom = 30.0
 horizontal_alignment = 2
+
+[node name="VolumeIcon" parent="CanvasLayer" unique_id=1117118417 instance=ExtResource("6_kg4ji")]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -161.0
+offset_top = -78.0
+offset_right = -97.0
+offset_bottom = -14.0
+grow_horizontal = 0
+grow_vertical = 0
+icon_texture = ExtResource("20_volup")
 
 [node name="OptionsIcon" parent="CanvasLayer" unique_id=824553164 instance=ExtResource("6_kg4ji")]
 anchors_preset = 3

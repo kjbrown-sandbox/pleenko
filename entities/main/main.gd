@@ -4,6 +4,8 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 const ComingSoonOverlayScript := preload("res://entities/coming_soon_overlay/coming_soon_overlay.gd")
 const ChallengeCompleteDialogScene := preload("res://entities/challenge_complete_dialog/challenge_complete_dialog.tscn")
 const OfflineEarningsDialogScene := preload("res://entities/offline_earnings_dialog/offline_earnings_dialog.tscn")
+const VolumeUpTexture := preload("res://assets/icons/volume-up.png")
+const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 
 ## Demo lockdown toggle. When true, the red board and orange/red challenge
 ## groups are blocked behind a "It's not done yet :D" overlay. Toggle from the
@@ -17,6 +19,7 @@ const OfflineEarningsDialogScene := preload("res://entities/offline_earnings_dia
 @onready var challenge_hud = $CanvasLayer/ChallengeHUD
 @onready var game_timer: Label = $CanvasLayer/GameTimer
 @onready var options_icon: TextureButton = $CanvasLayer/OptionsIcon
+@onready var volume_icon: TextureButton = $CanvasLayer/VolumeIcon
 @onready var level_section = $CanvasLayer/LevelSection
 @onready var challenges_down_icon: TextureButton = $NavIconsLayer/ChallengesDownIcon
 @onready var challenges_up_icon: TextureButton = $NavIconsLayer/ChallengesUpIcon
@@ -57,6 +60,7 @@ func _ready() -> void:
 	coin_values.setup(board_manager)
 	_setup_autodropper_summary()
 	_setup_gear_button()
+	_setup_volume_icon()
 	_setup_options_dialog()
 	_setup_coming_soon_overlay()
 	_setup_challenge_complete_dialog()
@@ -92,6 +96,7 @@ func _setup_normal() -> void:
 		_loading_from_save = true
 		SaveManager.load_game()
 		_loading_from_save = false
+		_refresh_volume_icon()
 		coin_values.refresh_visible_currencies()
 		challenge_grouping_manager.refresh_challenge_progress()
 
@@ -247,6 +252,20 @@ func _setup_gear_button() -> void:
 	options_icon.pressed.connect(_on_gear_pressed)
 
 
+func _setup_volume_icon() -> void:
+	_refresh_volume_icon()
+	volume_icon.pressed.connect(_on_volume_pressed)
+
+
+func _refresh_volume_icon() -> void:
+	volume_icon.texture_normal = VolumeOffTexture if AudioManager.is_muted() else VolumeUpTexture
+
+
+func _on_volume_pressed() -> void:
+	AudioManager.set_muted(not AudioManager.is_muted())
+	_refresh_volume_icon()
+
+
 func _setup_options_dialog() -> void:
 	_options_dialog = CanvasLayer.new()
 	_options_dialog.layer = 10
@@ -352,6 +371,7 @@ func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
 		level_section.visible = false
 		game_timer.visible = false
 		options_icon.visible = false
+		volume_icon.visible = false
 		challenges_down_icon.visible = false
 		board_manager.set_active_board_ui_visible(false)
 
