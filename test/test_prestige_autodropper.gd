@@ -4,7 +4,8 @@ extends "res://test/test_base.gd"
 ##   godot --headless --scene res://test/test_prestige_autodropper.tscn
 ##
 ## Verifies that gold prestige grants 1 normal autodropper auto-assigned
-## to the gold board, and that the reward is idempotent.
+## to the gold board, that the reward is idempotent, and that all purchased
+## autodroppers auto-assign to the default board.
 
 
 func _run_tests() -> void:
@@ -14,6 +15,9 @@ func _run_tests() -> void:
 	test_gold_prestige_grants_autodropper()
 	test_prestige_reward_does_not_overwrite_existing_pool()
 	test_prestige_reward_does_not_overwrite_existing_assignment()
+	test_all_normal_autodroppers_auto_assign_to_gold()
+	test_all_advanced_autodroppers_auto_assign_to_orange()
+	test_prestige_reward_text_includes_autodropper()
 
 
 func _reset() -> void:
@@ -102,3 +106,51 @@ func test_prestige_reward_does_not_overwrite_existing_assignment() -> void:
 	assert_equal(bm._assignments.get(StringName("ORANGE_NORMAL"), 0), 2,
 		"orange assignment should be untouched")
 	bm.queue_free()
+
+
+func test_all_normal_autodroppers_auto_assign_to_gold() -> void:
+	print("test_all_normal_autodroppers_auto_assign_to_gold")
+	_reset()
+	var bm := _make_board_manager()
+	bm._normal_autodroppers_unlocked = true
+	bm._normal_pool = 2
+	bm._assignments[StringName("GOLD_NORMAL")] = 2
+
+	# Simulate purchasing a 3rd autodropper
+	bm._on_upgrade_purchased(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD, 3)
+
+	assert_equal(bm._normal_pool, 3,
+		"pool should be 3 after third purchase")
+	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 3,
+		"all 3 should be assigned to GOLD_NORMAL")
+	bm.queue_free()
+
+
+func test_all_advanced_autodroppers_auto_assign_to_orange() -> void:
+	print("test_all_advanced_autodroppers_auto_assign_to_orange")
+	_reset()
+	var bm := _make_board_manager()
+	bm._advanced_autodroppers_unlocked = true
+	bm._advanced_pool = 1
+	bm._assignments[StringName("ORANGE_ADVANCED")] = 1
+
+	# Simulate purchasing a 2nd advanced autodropper
+	bm._on_upgrade_purchased(Enums.UpgradeType.ADVANCED_AUTODROPPER, Enums.BoardType.ORANGE, 2)
+
+	assert_equal(bm._advanced_pool, 2,
+		"advanced pool should be 2 after second purchase")
+	assert_equal(bm._assignments.get(StringName("ORANGE_ADVANCED"), 0), 2,
+		"both should be assigned to ORANGE_ADVANCED")
+	bm.queue_free()
+
+
+func test_prestige_reward_text_includes_autodropper() -> void:
+	print("test_prestige_reward_text_includes_autodropper")
+	var screen := preload("res://entities/prestige_screen/prestige_screen.gd").new()
+	screen._board_type = Enums.BoardType.GOLD
+	var text: String = screen._build_rewards_text()
+	assert_true(text.contains("permanent autodropper"),
+		"gold prestige rewards should mention permanent autodropper")
+	assert_true(text.contains("gold challenges"),
+		"gold prestige rewards should mention challenge access")
+	screen.free()
