@@ -547,6 +547,8 @@ func deserialize(data: Dictionary) -> void:
 	for key in assignments_data:
 		_assignments[StringName(key)] = assignments_data[key]
 
+	_apply_prestige_rewards()
+
 	var total_assigned := _get_assigned_for_pool(false) + _get_assigned_for_pool(true)
 	if total_assigned > 0:
 		_autodrop_timer.start()
@@ -555,6 +557,21 @@ func deserialize(data: Dictionary) -> void:
 
 	# Re-frame camera on active board
 	_snap_camera_to_active_board()
+
+
+## Apply one-time prestige rewards. Called at the end of deserialize so the
+## bonus is present on every load (fresh prestige reset or normal save).
+func _apply_prestige_rewards() -> void:
+	# Gold prestige reward: guarantee 1 normal autodropper on gold board.
+	if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.GOLD):
+		if not _normal_autodroppers_unlocked:
+			_normal_autodroppers_unlocked = true
+			for board in _boards:
+				board.set_normal_autodroppers_visible(true)
+		if _normal_pool < 1:
+			_normal_pool = 1
+		if _assignments.get(StringName("GOLD_NORMAL"), 0) < 1:
+			_assignments[StringName("GOLD_NORMAL")] = 1
 
 
 func _exit_tree() -> void:
