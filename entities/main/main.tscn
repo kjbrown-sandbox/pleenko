@@ -125,7 +125,7 @@ rotation_angle = 3.0
 icon_texture = null
 
 [node name="Tooltip" parent="NavIconsLayer/ChallengesDownIcon" unique_id=1689310439 instance=ExtResource("19_tooltip")]
-text = "Hotkey: Down arrow"
+text = "Hotkey: Down arrow or S"
 offset = 4.0
 
 [node name="ChallengesUpIcon" parent="NavIconsLayer" unique_id=2081979746 instance=ExtResource("17_navarrow")]
@@ -144,7 +144,7 @@ rotation_angle = -1.5708
 icon_texture = null
 
 [node name="Tooltip" parent="NavIconsLayer/ChallengesUpIcon" unique_id=953103228 instance=ExtResource("19_tooltip")]
-text = "Hotkey: Up arrow"
+text = "Hotkey: Up arrow or W"
 position_side = 2
 offset = 4.0
 
@@ -163,7 +163,7 @@ rotation_angle = 3.14159
 icon_texture = null
 
 [node name="Tooltip" parent="NavIconsLayer/BoardLeftIcon" unique_id=1645626912 instance=ExtResource("19_tooltip")]
-text = "Hotkey: Left arrow"
+text = "Hotkey: Left arrow or A"
 position_side = 1
 offset = 4.0
 
@@ -184,7 +184,7 @@ texture_normal = ExtResource("9_qgs1w")
 icon_texture = null
 
 [node name="Tooltip" parent="NavIconsLayer/BoardRightIcon" unique_id=198097779 instance=ExtResource("19_tooltip")]
-text = "Hotkey: Right arrow"
+text = "Hotkey: Right arrow or D"
 position_side = 3
 offset = 4.0
 
