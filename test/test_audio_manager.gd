@@ -48,6 +48,10 @@ func _run_tests() -> void:
 	# Prestige unsilence
 	test_prestige_reset_unsilences_audio()
 
+	# Mute
+	test_set_muted_toggles_state()
+	test_is_muted_default_false()
+
 
 # --- Snapshot/restore helpers ---
 
@@ -69,6 +73,7 @@ var _saved_beat_phase: float
 var _saved_motif_position: int
 var _saved_beat_armed: bool
 var _saved_autodrop_interval: float
+var _saved_muted: bool
 
 func _save_state() -> void:
 	_saved_drones = AudioManager._active_drones.duplicate(true)
@@ -89,6 +94,7 @@ func _save_state() -> void:
 	_saved_motif_position = AudioManager._motif_position
 	_saved_beat_armed = AudioManager._beat_armed
 	_saved_autodrop_interval = AudioManager._autodrop_interval
+	_saved_muted = AudioManager._muted
 
 func _restore_state() -> void:
 	AudioManager._active_drones = _saved_drones
@@ -109,6 +115,7 @@ func _restore_state() -> void:
 	AudioManager._motif_position = _saved_motif_position
 	AudioManager._beat_armed = _saved_beat_armed
 	AudioManager._autodrop_interval = _saved_autodrop_interval
+	AudioManager._muted = _saved_muted
 
 
 # --- Pure math tests ---
@@ -370,4 +377,24 @@ func test_prestige_reset_unsilences_audio() -> void:
 	# which AudioManager listens to and calls unsilence()
 	PrestigeManager.reset_time_scale()
 	assert_false(AudioManager._silenced, "audio unsilenced after prestige reset")
+	_restore_state()
+
+
+# --- Mute tests ---
+
+func test_set_muted_toggles_state() -> void:
+	print("test_set_muted_toggles_state")
+	_save_state()
+	AudioManager.set_muted(true)
+	assert_true(AudioManager.is_muted(), "is_muted true after set_muted(true)")
+	AudioManager.set_muted(false)
+	assert_false(AudioManager.is_muted(), "is_muted false after set_muted(false)")
+	_restore_state()
+
+
+func test_is_muted_default_false() -> void:
+	print("test_is_muted_default_false")
+	_save_state()
+	AudioManager._muted = false
+	assert_false(AudioManager.is_muted(), "default mute state is false")
 	_restore_state()
