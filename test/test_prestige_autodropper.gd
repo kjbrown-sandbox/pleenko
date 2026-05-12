@@ -16,7 +16,7 @@ func _run_tests() -> void:
 	test_prestige_reward_does_not_overwrite_existing_pool()
 	test_prestige_reward_does_not_overwrite_existing_assignment()
 	test_all_normal_autodroppers_auto_assign_to_gold()
-	test_all_advanced_autodroppers_auto_assign_to_orange()
+	test_all_advanced_autodroppers_auto_assign_to_gold()
 	test_prestige_reward_text_includes_autodropper()
 
 
@@ -126,21 +126,21 @@ func test_all_normal_autodroppers_auto_assign_to_gold() -> void:
 	bm.queue_free()
 
 
-func test_all_advanced_autodroppers_auto_assign_to_orange() -> void:
-	print("test_all_advanced_autodroppers_auto_assign_to_orange")
+func test_all_advanced_autodroppers_auto_assign_to_gold() -> void:
+	print("test_all_advanced_autodroppers_auto_assign_to_gold")
 	_reset()
 	var bm := _make_board_manager()
 	bm._advanced_autodroppers_unlocked = true
 	bm._advanced_pool = 1
-	bm._assignments[StringName("ORANGE_ADVANCED")] = 1
+	bm._assignments[StringName("GOLD_ADVANCED")] = 1
 
 	# Simulate purchasing a 2nd advanced autodropper
 	bm._on_upgrade_purchased(Enums.UpgradeType.ADVANCED_AUTODROPPER, Enums.BoardType.ORANGE, 2)
 
 	assert_equal(bm._advanced_pool, 2,
 		"advanced pool should be 2 after second purchase")
-	assert_equal(bm._assignments.get(StringName("ORANGE_ADVANCED"), 0), 2,
-		"both should be assigned to ORANGE_ADVANCED")
+	assert_equal(bm._assignments.get(StringName("GOLD_ADVANCED"), 0), 2,
+		"both should be assigned to GOLD_ADVANCED")
 	bm.queue_free()
 
 

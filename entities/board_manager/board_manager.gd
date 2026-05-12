@@ -381,8 +381,8 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 			_advanced_autodroppers_unlocked = true
 			for board in _boards:
 				board.set_advanced_autodroppers_visible(true)
-		# Auto-assign every new advanced autodropper to orange; player can reassign later
-		_on_autodropper_adjust(StringName("ORANGE_ADVANCED"), 1, false)
+		# Auto-assign every new advanced autodropper to gold; player can reassign later
+		_on_autodropper_adjust(StringName("GOLD_ADVANCED"), 1, false)
 		_update_all_button_displays()
 	if board_type == Enums.BoardType.GOLD:
 		check_and_rescue_gold_soft_lock()
