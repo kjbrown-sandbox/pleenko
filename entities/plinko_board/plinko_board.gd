@@ -959,10 +959,9 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		_pick_new_gameplay_target()
 	var amount: int = roundi(bucket.value * coin.multiplier * target_multiplier)
 	var was_already_singing := bucket.is_singing()
-	var singing_bonus: int = 1 if was_already_singing else 0
 	if not coin.is_prestige_coin:
-		CurrencyManager.add(bucket.currency_type, amount + singing_bonus)
-		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount + singing_bonus, coin.multiplier)
+		CurrencyManager.add(bucket.currency_type, amount)
+		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
 	bucket.pulse()
 	var num_buckets: int = buckets_container.get_child_count()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
@@ -978,8 +977,6 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var has_multiplier_text := effective_multiplier > 1.0 and not coin.is_prestige_coin
 	if has_multiplier_text:
 		_show_floating_text(coin.global_position, effective_multiplier, amount)
-	if was_already_singing and not coin.is_prestige_coin:
-		_show_bonus_text(coin.global_position, 0.1 if has_multiplier_text else 0.0)
 	if not coin.is_prestige_coin:
 		coin.queue_free()
 
@@ -1504,28 +1501,6 @@ func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
 	add_child(label)
 
 	var tween := create_tween()
-	tween.tween_property(label, "position:y", label.position.y + t.floating_text_rise, t.floating_text_duration)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, t.floating_text_duration * 0.5) \
-		.set_delay(t.floating_text_duration * 0.5)
-	tween.tween_callback(label.queue_free)
-
-
-func _show_bonus_text(pos: Vector3, delay: float = 0.0) -> void:
-	var t: VisualTheme = ThemeProvider.theme
-	var label := Label3D.new()
-	label.text = "Recency bonus +1"
-	label.font_size = t.floating_text_font_size
-	label.outline_size = t.label_outline_size
-	if t.label_font:
-		label.font = t.label_font
-	label.modulate = t.normal_text_color
-	label.modulate.a = 0.0 if delay > 0.0 else 1.0
-	var local_pos := to_local(pos)
-	label.position = Vector3(local_pos.x + 0.15, local_pos.y + 0.3, local_pos.z + 0.05)
-	add_child(label)
-	var tween := create_tween()
-	if delay > 0.0:
-		tween.tween_property(label, "modulate:a", 1.0, 0.05).set_delay(delay)
 	tween.tween_property(label, "position:y", label.position.y + t.floating_text_rise, t.floating_text_duration)
 	tween.parallel().tween_property(label, "modulate:a", 0.0, t.floating_text_duration * 0.5) \
 		.set_delay(t.floating_text_duration * 0.5)
