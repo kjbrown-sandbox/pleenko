@@ -73,21 +73,15 @@ func _build_tier_levels(board_type: Enums.BoardType) -> void:
 			1:  # Unlock BUCKET_VALUE
 				data.message = "You have unlocked Bucket Value for %s." % tier_name
 				data.rewards = [_unlock_upgrade(Enums.UpgradeType.BUCKET_VALUE, board_type)]
-			2:  # Drop advanced coin
-				_set_advanced_drop(data, next_tier, board_type)
-			3:  # Unlock DROP_RATE
+			2:  # Unlock DROP_RATE
 				data.message = "You have unlocked Drop Rate for %s." % tier_name
 				data.rewards = [_unlock_upgrade(Enums.UpgradeType.DROP_RATE, board_type)]
-			4:  # Unlock QUEUE
+			3:  # Unlock QUEUE
 				data.message = "You have unlocked Queue for %s." % tier_name
 				data.rewards = [_unlock_upgrade(Enums.UpgradeType.QUEUE, board_type)]
-			5:  # Drop advanced coin
-				_set_advanced_drop(data, next_tier, board_type)
-			6:  # Special slot (autodroppers)
+			4:  # Special slot (autodroppers)
 				_set_special_slot(data, board_type, next_tier)
-			7:  # Drop advanced coin
-				_set_advanced_drop(data, next_tier, board_type)
-			8:  # Drop advanced coin
+			5, 6, 7, 8:  # Drop advanced coin
 				_set_advanced_drop(data, next_tier, board_type)
 			9:  # Unlock advanced buckets
 				if next_tier:

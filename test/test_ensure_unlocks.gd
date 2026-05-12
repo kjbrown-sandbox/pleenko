@@ -13,9 +13,9 @@ func _run_tests() -> void:
 	test_no_unlocks_at_level_zero()
 	test_level_1_unlocks_add_row()
 	test_level_2_unlocks_bucket_value()
-	test_level_4_unlocks_drop_rate()
-	test_level_5_unlocks_queue()
-	test_all_gold_upgrades_unlocked_at_level_5()
+	test_level_3_unlocks_drop_rate()
+	test_level_4_unlocks_queue()
+	test_all_gold_upgrades_unlocked_at_level_4()
 	test_idempotent_when_already_unlocked()
 	test_partial_unlocks_repaired()
 	test_advanced_bucket_reconcile_at_level_10()
@@ -61,32 +61,32 @@ func test_level_2_unlocks_bucket_value() -> void:
 		"BUCKET_VALUE should be unlocked at level 2")
 
 
-func test_level_4_unlocks_drop_rate() -> void:
-	print("test_level_4_unlocks_drop_rate")
+func test_level_3_unlocks_drop_rate() -> void:
+	print("test_level_3_unlocks_drop_rate")
+	_reset_state()
+	LevelManager.current_level = 3
+	LevelManager.ensure_state_for_level()
+	assert_true(
+		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.DROP_RATE),
+		"DROP_RATE should be unlocked at level 3")
+
+
+func test_level_4_unlocks_queue() -> void:
+	print("test_level_4_unlocks_queue")
 	_reset_state()
 	LevelManager.current_level = 4
 	LevelManager.ensure_state_for_level()
 	assert_true(
-		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.DROP_RATE),
-		"DROP_RATE should be unlocked at level 4")
-
-
-func test_level_5_unlocks_queue() -> void:
-	print("test_level_5_unlocks_queue")
-	_reset_state()
-	LevelManager.current_level = 5
-	LevelManager.ensure_state_for_level()
-	assert_true(
 		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.QUEUE),
-		"QUEUE should be unlocked at level 5")
+		"QUEUE should be unlocked at level 4")
 
 
-func test_all_gold_upgrades_unlocked_at_level_5() -> void:
-	print("test_all_gold_upgrades_unlocked_at_level_5")
+func test_all_gold_upgrades_unlocked_at_level_4() -> void:
+	print("test_all_gold_upgrades_unlocked_at_level_4")
 	_reset_state()
-	LevelManager.current_level = 5
+	LevelManager.current_level = 4
 	LevelManager.ensure_state_for_level()
-	# Levels 0-4: ADD_ROW, BUCKET_VALUE, (coin drop), DROP_RATE, QUEUE
+	# Levels 0-3: ADD_ROW, BUCKET_VALUE, DROP_RATE, QUEUE
 	assert_true(
 		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW),
 		"ADD_ROW unlocked")
@@ -160,7 +160,7 @@ func test_no_advanced_bucket_reconcile_below_level_10() -> void:
 func test_drop_coins_not_replayed() -> void:
 	print("test_drop_coins_not_replayed")
 	_reset_state()
-	LevelManager.current_level = 10  # past several DROP_COINS levels (slots 2, 5, 7, 8)
+	LevelManager.current_level = 10  # past several DROP_COINS levels (slots 5, 6, 7, 8)
 
 	var caught: Array[RewardData] = []
 	var probe := func(reward: RewardData):
