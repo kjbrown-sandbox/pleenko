@@ -482,13 +482,11 @@ func _tick_hold_drop_accumulator(delta: float, is_pressed: bool) -> bool:
 
 func _is_hold_to_drop_active() -> bool:
 	return Input.is_action_pressed("drop_coin") \
-		and ChallengeProgressManager.is_unlocked(ChallengeRewardData.UnlockType.HOLD_TO_DROP) \
 		and drop_section.visible
 
 
 func _is_hold_to_drop_advanced_active() -> bool:
 	return Input.is_action_pressed("drop_unrefined") \
-		and ChallengeProgressManager.is_unlocked(ChallengeRewardData.UnlockType.HOLD_TO_DROP) \
 		and drop_section.visible \
 		and _drop_advanced_column.visible
 
