@@ -156,8 +156,7 @@ func is_board_unlocked(type: Enums.BoardType) -> bool:
 
 func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
 	if _new_balance <= 0:
-		# A source currency just hit zero — check for soft-lock.
-		if type == Enums.CurrencyType.GOLD_COIN or type == Enums.CurrencyType.RAW_ORANGE:
+		if type == Enums.CurrencyType.GOLD_COIN:
 			check_and_rescue_gold_soft_lock()
 		return
 	# When a raw currency is earned, unlock the board if already prestiged.
@@ -388,15 +387,11 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 		check_and_rescue_gold_soft_lock()
 
 
-## Verify the player can still produce gold or raw orange. These are the only
-## "source" currencies — only the gold board generates them — so if both are
-## zero and no coins are mid-flight or queued on the gold board, the player is
-## soft-locked. Grant 1 gold to unstick them. Called after upgrade purchases,
-## after any currency-changed event that zeroes a source currency, and on load.
+## If the player has 0 gold and no coins are mid-flight or queued on the gold
+## board, grant 1 gold so they can always make a drop. Called after upgrade
+## purchases, after any currency-changed event that zeroes gold, and on load.
 func check_and_rescue_gold_soft_lock() -> void:
 	if CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN) >= 1:
-		return
-	if CurrencyManager.get_balance(Enums.CurrencyType.RAW_ORANGE) >= 1:
 		return
 	var gold_board: PlinkoBoard = _find_board(Enums.BoardType.GOLD)
 	if gold_board == null:

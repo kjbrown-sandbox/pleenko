@@ -12,6 +12,7 @@
 - Prefer idiomatic Godot solutions (e.g., using signals over polling, scene composition over deep inheritance, built-in nodes over custom reimplementations).
 - When making modifications, make as many edits to the .tscn file as possible before relying on .gd for functionality.
 - **Always write tests for bug fixes.** The project has test infrastructure in `test/` using a custom `test_base.gd` runner (headless Godot scenes). Before marking any bug fix done, check if the fix is testable and write a test. Pure-logic functions and autoload methods can be tested in headless scenes. This applies to all work, not just plan-mode features.
+- **When committing, always add tests for your changes.** Before creating a commit, ensure tests exist for the files you modified. Only test your own changes — other untested code in the diff is out of scope.
 
 ## Game Description
 

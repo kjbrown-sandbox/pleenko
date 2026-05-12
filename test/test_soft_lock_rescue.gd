@@ -12,7 +12,7 @@ func _run_tests() -> void:
 
 	test_rescue_grants_gold_when_both_zero()
 	test_no_rescue_when_gold_nonzero()
-	test_no_rescue_when_raw_orange_nonzero()
+	test_rescue_even_when_raw_orange_nonzero()
 	test_rescue_idempotent()
 	test_currency_changed_triggers_rescue()
 
@@ -59,15 +59,15 @@ func test_no_rescue_when_gold_nonzero() -> void:
 	bm.queue_free()
 
 
-func test_no_rescue_when_raw_orange_nonzero() -> void:
-	print("test_no_rescue_when_raw_orange_nonzero")
+func test_rescue_even_when_raw_orange_nonzero() -> void:
+	print("test_rescue_even_when_raw_orange_nonzero")
 	_reset_to_zero()
 	CurrencyManager.add(Enums.CurrencyType.RAW_ORANGE, 3)
 	var bm := _make_board_manager()
 	bm.check_and_rescue_gold_soft_lock()
 	assert_equal(
-		CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN), 0,
-		"should NOT grant gold when raw orange is nonzero")
+		CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN), 1,
+		"should grant 1 gold even when raw orange is nonzero")
 	bm.queue_free()
 
 
