@@ -99,9 +99,11 @@ func _build_rewards_text() -> String:
 		lower_names.append(TierRegistry.get_tier_by_index(i).display_name.to_lower())
 	var multi_drop_target: String = " and ".join(lower_names) if lower_names.size() > 0 else "lower"
 
-	var rewards_text := "+1 multi-drop for the %s board\nAccess to the %s board" % [multi_drop_target, board_name]
-	if _board_type == Enums.BoardType.GOLD:
-		rewards_text += "\n1 permanent autodropper for the gold board"
+	var rewards_text := "+1 multi-drop for the %s board" % multi_drop_target
+	if _board_type == Enums.BoardType.ORANGE:
+		rewards_text += "\n+1 permanent autodropper"
+	rewards_text += "\nAccess to the %s board" % board_name
+	if _board_type == Enums.BoardType.ORANGE:
 		rewards_text += "\nAccess to gold challenges"
 	return rewards_text
 

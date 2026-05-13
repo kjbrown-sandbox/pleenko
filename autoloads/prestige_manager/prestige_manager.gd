@@ -34,11 +34,11 @@ func get_multi_drop(board_type: Enums.BoardType) -> int:
 
 
 func trigger_prestige(board_type: Enums.BoardType) -> void:
-	_prestige_counts[board_type] = 1
 	prestige_triggered.emit(board_type)
 
 
 func claim_prestige(board_type: Enums.BoardType) -> void:
+	_prestige_counts[board_type] = 1
 	prestige_claimed.emit(board_type)
 
 

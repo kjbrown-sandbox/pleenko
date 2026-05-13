@@ -558,7 +558,8 @@ func deserialize(data: Dictionary) -> void:
 ## bonus is present on every load (fresh prestige reset or normal save).
 func _apply_prestige_rewards() -> void:
 	# Gold prestige reward: guarantee 1 normal autodropper on gold board.
-	if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.GOLD):
+	# Orange being unlocked permanently means the player completed gold prestige.
+	if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.ORANGE):
 		if not _normal_autodroppers_unlocked:
 			_normal_autodroppers_unlocked = true
 			for board in _boards:
