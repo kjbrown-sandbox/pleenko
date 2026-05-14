@@ -125,8 +125,10 @@ func _drain_loop() -> void:
 
 
 func _run_peek(request: PeekRequest) -> void:
-	# Slow the camera tween in BoardManager + ChallengeGroupingManager for the
-	# duration of the peek so each direction feels gentle, then restore.
+	# Temporarily borrow BoardManager + ChallengeGroupingManager's camera_tween_duration
+	# for the duration of the peek so each transition feels gentle, then restore.
+	# Owners are unaware their state was borrowed — keep all early-returns inside
+	# this function so the restore at the bottom always runs.
 	var theme: VisualTheme = ThemeProvider.theme
 	var bm_original: float = 0.0
 	var cgm_original: float = 0.0
@@ -153,7 +155,7 @@ func _run_board_peek(target_type: Enums.BoardType) -> void:
 		return
 
 	var theme: VisualTheme = ThemeProvider.theme
-	var saved_index: int = _board_manager._active_index
+	var saved_index: int = _board_manager.get_active_index()
 	var saved_was_main: bool = ModeManager.is_main()
 
 	if not saved_was_main:
@@ -169,6 +171,8 @@ func _run_board_peek(target_type: Enums.BoardType) -> void:
 	if target_index == -1:
 		return
 	if target_index == saved_index:
+		# Player is already looking at the just-unlocked board — no camera move needed,
+		# just record it as peeked so we don't re-attempt next session.
 		OnboardingProgress.mark_board_peeked(target_type)
 		SaveManager.save_game()
 		return
@@ -203,6 +207,9 @@ func _run_challenges_peek() -> void:
 	var theme: VisualTheme = ThemeProvider.theme
 	var was_main: bool = ModeManager.is_main()
 
+	# If the player is already in challenges mode (e.g. they jumped there in the
+	# session before the peek queue drained), there's nothing to peek to — just
+	# linger and mark it done. The was_main branches below all skip in that case.
 	# Pre-pause: let the player register their normal view before the peek pulls them away.
 	if was_main:
 		await wait_fn.call(theme.peek_pre_challenges_pause)

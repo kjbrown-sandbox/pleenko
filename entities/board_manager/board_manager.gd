@@ -79,6 +79,10 @@ func get_active_board() -> PlinkoBoard:
 	return _boards[_active_index]
 
 
+func get_active_index() -> int:
+	return _active_index
+
+
 func get_boards() -> Array[PlinkoBoard]:
 	return _boards
 

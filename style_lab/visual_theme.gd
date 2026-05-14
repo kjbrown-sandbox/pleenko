@@ -167,6 +167,9 @@ const coin_shape := CoinShape.CYLINDER
 @export var board_rows := 6                                       # demo row count
 @export var board_spacing := 20.0											# space between boards in multi-board setups
 @export var camera_tween_duration := 0.4                            # seconds for camera movement
+
+# ── Peek Animation ──────────────────────────────────────────────────
+@export_group("Peek Animation")
 @export var peek_linger_duration := 0.75                             # seconds the camera holds on a peek target
 @export var peek_camera_tween_duration := 1.0                       # seconds for each peek transition (slower than normal so the move feels gentle)
 @export var peek_pre_challenges_pause := 1.0                        # seconds the player sees main mode before the challenges peek begins

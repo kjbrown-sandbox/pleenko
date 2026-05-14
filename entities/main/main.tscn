@@ -199,4 +199,5 @@ script = ExtResource("22_peekanim")
 
 [node name="LingerTimer" type="Timer" parent="PeekAnimator" unique_id=1450820603]
 process_mode = 3
+ignore_time_scale = true
 one_shot = true
