@@ -227,10 +227,9 @@ func _get_upgrade_section_target(upgrade_type: int = -1) -> Vector2:
 ## where the row will materialize after rewards are claimed.
 func _get_hud_upgrade_target(upgrade_type: Enums.UpgradeType) -> Vector2:
 	if _coin_values:
-		if _coin_values.has_method("get_upgrade_row"):
-			var row: Control = _coin_values.get_upgrade_row(upgrade_type)
-			if row:
-				return row.global_position + row.size * 0.5
+		var row: Control = _coin_values.get_upgrade_row(upgrade_type)
+		if row:
+			return row.global_position + row.size * 0.5
 		# Row doesn't exist yet — target where it will appear
 		var cv: Control = _coin_values as Control
 		return cv.global_position + Vector2(cv.size.x * 0.5, cv.size.y)
