@@ -130,7 +130,7 @@ func _update_currencies() -> void:
 	# Universal upgrades section
 	if has_upgrades:
 		var spacer := Control.new()
-		spacer.custom_minimum_size.y = 8
+		spacer.custom_minimum_size.y = ThemeProvider.theme.section_spacer_height
 		add_child(spacer)
 
 		add_child(_create_section_label("Universal upgrades"))
@@ -308,7 +308,7 @@ func _animate_universal_section(upgrade_type: Enums.UpgradeType, board_type: Enu
 
 	if needs_header:
 		var spacer := Control.new()
-		spacer.custom_minimum_size.y = 8
+		spacer.custom_minimum_size.y = ThemeProvider.theme.section_spacer_height
 		add_child(spacer)
 
 		var label: Label = _create_section_label("")
