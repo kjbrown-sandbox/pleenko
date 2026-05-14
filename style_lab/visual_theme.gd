@@ -253,6 +253,7 @@ const coin_shape := CoinShape.CYLINDER
 @export var level_up_particle_burst_duration := 0.8       ## Seconds for initial burst phase
 @export var level_up_particle_swoop_duration := 0.6       ## Seconds for particles to fly to target
 @export var upgrade_materialize_duration := 0.8           ## Seconds for left-to-right reveal
+@export var typewriter_char_delay := 0.02                  ## Seconds per character for section title reveal
 @export var attention_blink_duration := 3.5               ## Seconds for one full on-off blink cycle
 
 # ── Drop Burst VFX ───────────────────────────────────────────────────

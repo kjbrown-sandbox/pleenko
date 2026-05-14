@@ -56,7 +56,7 @@ func _ready() -> void:
 
 	board_manager.setup(camera)
 	AnalyticsManager.setup(board_manager)
-	level_section.setup(board_manager, camera)
+	level_section.setup(board_manager, camera, coin_values)
 	challenge_grouping_manager.setup(camera, challenge_info_panel)
 	coin_values.setup(board_manager)
 	_setup_autodropper_summary()

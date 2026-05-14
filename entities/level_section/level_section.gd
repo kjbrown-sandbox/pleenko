@@ -11,6 +11,7 @@ var _shaking := false
 var _particle_overlay: Control
 var _board_manager: Node
 var _camera: Camera3D
+var _coin_values: Node  # CoinValues — provides autodropper row targets
 
 # Shimmer sweep state — moving highlight on the filled portion of the bar.
 var _shimmer_rect: ColorRect
@@ -22,9 +23,10 @@ var _shimmer_time: float = 0.0
 var _bar_particle_accum: float = 0.0
 
 
-func setup(board_manager: Node, cam: Camera3D) -> void:
+func setup(board_manager: Node, cam: Camera3D, coin_values: Node = null) -> void:
 	_board_manager = board_manager
 	_camera = cam
+	_coin_values = coin_values
 
 
 func _ready() -> void:
@@ -197,9 +199,10 @@ func _get_reward_targets(rewards: Array[RewardData]) -> Array[Vector2]:
 				if ChallengeManager.is_active_challenge and not ChallengeManager.is_upgrade_allowed(reward.upgrade_type):
 					return [_get_coin_drop_target(reward.board_type)]
 				return [_get_upgrade_section_target(reward.upgrade_type)]
-			RewardData.RewardType.UNLOCK_AUTODROPPER, \
+			RewardData.RewardType.UNLOCK_AUTODROPPER:
+				return [_get_hud_upgrade_target(Enums.UpgradeType.AUTODROPPER)]
 			RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER:
-				return [_get_upgrade_section_target()]
+				return [_get_hud_upgrade_target(Enums.UpgradeType.ADVANCED_AUTODROPPER)]
 			RewardData.RewardType.UNLOCK_ADVANCED_BUCKET:
 				return _get_advanced_bucket_targets(reward.target_board)
 	return []
@@ -217,6 +220,21 @@ func _get_upgrade_section_target(upgrade_type: int = -1) -> Vector2:
 		return row.global_position + row.size * 0.5
 	var container: VBoxContainer = section.upgrades_container
 	return container.global_position + Vector2(container.size.x * 0.5, container.size.y)
+
+
+## Target the autodropper row in the HUD (CoinValues). If the row exists,
+## target its center. Otherwise target the bottom of the CoinValues container
+## where the row will materialize after rewards are claimed.
+func _get_hud_upgrade_target(upgrade_type: Enums.UpgradeType) -> Vector2:
+	if _coin_values:
+		if _coin_values.has_method("get_upgrade_row"):
+			var row: Control = _coin_values.get_upgrade_row(upgrade_type)
+			if row:
+				return row.global_position + row.size * 0.5
+		# Row doesn't exist yet — target where it will appear
+		var cv: Control = _coin_values as Control
+		return cv.global_position + Vector2(cv.size.x * 0.5, cv.size.y)
+	return _get_upgrade_section_target()
 
 
 func _get_coin_drop_target(target_board_type: int) -> Vector2:

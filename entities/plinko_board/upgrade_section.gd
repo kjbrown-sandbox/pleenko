@@ -4,21 +4,30 @@ extends CanvasLayer
 const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 
 @onready var upgrades_container: VBoxContainer = $MarginContainer/OuterVBox/Upgrades
+@onready var _outer_vbox: VBoxContainer = $MarginContainer/OuterVBox
 @onready var _hover_tooltip: Tooltip = $MarginContainer/OuterVBox/HoverInfo
 
 var _board: PlinkoBoard
 var _board_type: Enums.BoardType
 var _rows: Dictionary = {}  # UpgradeType -> UpgradeRow node
 var _initial_setup_complete := false
+var _section_label: Label
 
 func setup(board: PlinkoBoard, board_type: Enums.BoardType) -> void:
 	_board = board
 	_board_type = board_type
 
 	# Spawn rows for any upgrades already unlocked
+	# (Autodropper types live in the HUD, not here)
 	for upgrade_type in Enums.UpgradeType.values():
+		if _is_universal_upgrade(upgrade_type):
+			continue
 		if UpgradeManager.is_unlocked(_board_type, upgrade_type):
 			_spawn_row(upgrade_type)
+
+	# Show section title immediately if any rows were restored from save
+	if not _rows.is_empty():
+		_add_section_label()
 
 	# Listen for future unlocks and cap raise availability
 	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked)
@@ -33,67 +42,25 @@ func _mark_setup_complete() -> void:
 
 
 func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
+	if _is_universal_upgrade(upgrade_type):
+		return
 	if board_type != _board_type:
 		return
 	if upgrade_type in _rows:
 		return
 	_spawn_row(upgrade_type)
 	if _initial_setup_complete:
-		_materialize_row(_rows[upgrade_type])
-
-
-func _materialize_row(row: UpgradeRow) -> void:
-	# The VBoxContainer forces direct children to full width, so clip_contents
-	# on a VBox child does nothing useful. Instead we use two layers:
-	#   wrapper (in VBox, full width, holds height) → clip (manually sized) → row
-	# The wrapper is a plain Control so it doesn't manage clip's size.
-	var idx: int = row.get_index()
-	upgrades_container.remove_child(row)
-
-	var wrapper := Control.new()
-	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	upgrades_container.add_child(wrapper)
-	upgrades_container.move_child(wrapper, idx)
-
-	var clip := Control.new()
-	clip.clip_contents = true
-	clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wrapper.add_child(clip)
-
-	clip.add_child(row)
-
-	_animate_clip_reveal.call_deferred(wrapper, clip, row)
-
-
-func _animate_clip_reveal(wrapper: Control, clip: Control, row: UpgradeRow) -> void:
-	var target_width: float = upgrades_container.size.x
-	var row_height: float = row.size.y
-
-	# Wrapper reserves the right height in the VBox
-	wrapper.custom_minimum_size.y = row_height
-
-	# Row is full-size inside the clip, positioned at origin
-	row.position = Vector2.ZERO
-	row.size = Vector2(target_width, row_height)
-
-	# Clip starts at 0 width — row is fully hidden
-	clip.size = Vector2(0, row_height)
-
-	var t: VisualTheme = ThemeProvider.theme
-	var tween := clip.create_tween()
-	tween.tween_property(clip, "size:x", target_width, t.upgrade_materialize_duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tween.tween_callback(func():
-		# Unwrap: move row back into VBox, remove wrapper
-		var i: int = wrapper.get_index()
-		clip.remove_child(row)
-		upgrades_container.remove_child(wrapper)
-		upgrades_container.add_child(row)
-		upgrades_container.move_child(row, i)
-		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		wrapper.queue_free()
-		row.start_attention()
-	)
+		if _section_label:
+			# Title already shown — just materialize the row
+			_rows[upgrade_type].materialize()
+		else:
+			# First upgrade during gameplay — hide the row, typewriter the title,
+			# then materialize the row once the title is fully typed
+			var row: UpgradeRow = _rows[upgrade_type]
+			row.visible = false
+			_animate_section_title(row)
+	elif not _section_label:
+		_add_section_label()
 
 
 func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:
@@ -157,3 +124,39 @@ func _buy_upgrade(upgrade_type: Enums.UpgradeType) -> void:
 			_board.increase_queue_capacity()
 		Enums.UpgradeType.AUTODROPPER, Enums.UpgradeType.ADVANCED_AUTODROPPER:
 			pass  # Pool size is just the upgrade level; BoardManager reads it directly
+
+
+func _is_universal_upgrade(upgrade_type: Enums.UpgradeType) -> bool:
+	return upgrade_type == Enums.UpgradeType.AUTODROPPER \
+		or upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER
+
+
+func _get_section_title() -> String:
+	var tier: TierData = TierRegistry.get_tier(_board_type)
+	return "%s upgrades" % tier.display_name
+
+
+func _add_section_label(initial_text: String = "") -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var bold_font: Font = preload("res://style_lab/VendSans-Bold.ttf")
+	var btn_font: Font = t.button_font if t.button_font else bold_font
+	_section_label = Label.new()
+	_section_label.text = initial_text if initial_text != "" else _get_section_title()
+	_section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_section_label.add_theme_font_size_override("font_size", t.button_font_size)
+	_section_label.add_theme_color_override("font_color", t.normal_text_color)
+	_section_label.add_theme_font_override("font", btn_font)
+	_outer_vbox.add_child(_section_label)
+	_outer_vbox.move_child(_section_label, upgrades_container.get_index())
+
+
+func _animate_section_title(row: UpgradeRow) -> void:
+	_add_section_label("")
+
+	var full_text := _get_section_title()
+	var char_delay: float = ThemeProvider.theme.typewriter_char_delay
+	var tween := create_tween()
+	for i in full_text.length():
+		tween.tween_callback(func(): _section_label.text = full_text.substr(0, i + 1))
+		tween.tween_interval(char_delay)
+	tween.tween_callback(row.materialize)
