@@ -88,7 +88,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Deserialization order (strict): `PrestigeManager → ChallengeProgressManager → OnboardingProgress → LevelManager → CurrencyManager → UpgradeManager → BoardManager`. Order matters so signals fire against fully-initialized state.
 - `_migrate(data, version)` runs sequential version upgrades. v4→v5 seeds `OnboardingProgress` peeked-boards from the existing `boards.board_types` so existing players don't see peeks for things they already unlocked.
 - `reset_game` / `reset_game_without_reload` preserve `PrestigeManager`, `ChallengeProgressManager`, AND `OnboardingProgress` blobs in the minimal save so peek state survives a prestige reset.
-- Calls `OfflineCalculator` (`scripts/offline/`) to credit earnings accumulated since last save.
+- Calls `OfflineCalculator` (`scripts/offline/`) to credit earnings accumulated since last save. Offline credits are gated per-currency: a non-starting-tier currency only accrues if its board appears in `state["prestige"]` with count > 0 — preserves the first-time prestige beat for raw currencies the player has never organically earned.
 
 **SceneManager** — `autoloads/scene_manager/scene_manager.gd`
 
