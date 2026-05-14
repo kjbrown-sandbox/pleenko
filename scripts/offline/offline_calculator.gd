@@ -34,6 +34,21 @@ static func _advanced_currency_key(board_type: Enums.BoardType) -> String:
 	return _currency_key(adv)
 
 
+## A currency is considered "ever earned" when its tier's board has been
+## prestiged at least once, OR when it's the starting tier (always earnable).
+## Used to suppress offline earnings for currencies the player has never
+## organically earned — preserves the first-time prestige beat.
+static func _is_currency_ever_earned(currency_key: String, prestige_data: Dictionary) -> bool:
+	var currency_type: int = Enums.CurrencyType[currency_key]
+	var tier := TierRegistry.get_tier_for_currency(currency_type)
+	if not tier:
+		return true
+	if TierRegistry.is_starting_tier(tier.board_type):
+		return true
+	var board_key: String = Enums.BoardType.keys()[tier.board_type]
+	return int(prestige_data.get(board_key, 0)) > 0
+
+
 ## Takes the full save dictionary and elapsed seconds, returns a modified copy
 ## with updated currency balances reflecting offline autodropper earnings.
 static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
@@ -49,6 +64,7 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 	var board_types: Array = boards_data.get("board_types", [0])
 	var board_state: Dictionary = boards_data.get("board_state", {})
 	var advanced_buckets: Dictionary = boards_data.get("advanced_buckets", {})
+	var prestige_data: Dictionary = result.get("prestige", {})
 
 	# Precompute per-assignment configuration
 	var configs: Array = []
@@ -96,6 +112,8 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 			for i in probabilities.size():
 				var bucket: Dictionary = bucket_layout[i]
 				var c_key: String = bucket["currency_key"]
+				if not _is_currency_ever_earned(c_key, prestige_data):
+					continue
 				var value: int = bucket["value"]
 				var earning: float = probabilities[i] * value * coin_multiplier * multi_drop
 				earnings_per_drop[c_key] = earnings_per_drop.get(c_key, 0.0) + earning
