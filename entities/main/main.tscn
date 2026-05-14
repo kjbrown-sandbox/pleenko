@@ -13,6 +13,7 @@
 [ext_resource type="Script" uid="uid://1wujxqybenxn" path="res://entities/challenge_grouping_manager/challenge_grouping_manager.gd" id="18_cgm"]
 [ext_resource type="PackedScene" path="res://entities/tooltip/tooltip.tscn" id="19_tooltip"]
 [ext_resource type="Texture2D" uid="uid://m6iihv3lc8go" path="res://assets/icons/volume-up.png" id="20_volup"]
+[ext_resource type="Script" uid="uid://b3kxjvb0j2qia" path="res://entities/main/peek_animator.gd" id="22_peekanim"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
@@ -192,3 +193,10 @@ offset = 4.0
 
 [node name="PrestigeAnimator" type="Node" parent="." unique_id=752656161]
 script = ExtResource("5_prestige_anim")
+
+[node name="PeekAnimator" type="Node" parent="." unique_id=2098291175]
+script = ExtResource("22_peekanim")
+
+[node name="LingerTimer" type="Timer" parent="PeekAnimator" unique_id=1450820603]
+process_mode = 3
+one_shot = true

@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 4
+const SAVE_VERSION := 5
 const AUTO_SAVE_INTERVAL := 30.0
 
 var _auto_save_timer: Timer
@@ -46,6 +46,7 @@ func save_game() -> void:
 		"boards": _board_manager.serialize(),
 		"prestige": PrestigeManager.serialize(),
 		"challenges": ChallengeProgressManager.serialize(),
+		"onboarding": OnboardingProgress.serialize(),
 		"audio_muted": AudioManager.is_muted(),
 	}
 
@@ -103,6 +104,7 @@ func load_game() -> bool:
 	# Deserialize prestige first — BoardManager queries it during deserialize
 	PrestigeManager.deserialize(data.get("prestige", {}))
 	ChallengeProgressManager.deserialize(data.get("challenges", {}))
+	OnboardingProgress.deserialize(data.get("onboarding", {}))
 	# LevelManager before CurrencyManager so current_level is correct
 	# when currency_changed signals fire during currency restore
 	LevelManager.deserialize(data.get("level", {}))
@@ -174,9 +176,10 @@ func load_prestige_only() -> void:
 
 
 func reset_game() -> void:
-	# Capture persistent data before wiping the save — prestige + challenges survive resets
+	# Capture persistent data before wiping the save — prestige + challenges + onboarding survive resets
 	var prestige_data := PrestigeManager.serialize()
 	var challenge_data := ChallengeProgressManager.serialize()
+	var onboarding_data := OnboardingProgress.serialize()
 
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
@@ -186,6 +189,7 @@ func reset_game() -> void:
 		"version": SAVE_VERSION,
 		"prestige": prestige_data,
 		"challenges": challenge_data,
+		"onboarding": onboarding_data,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -202,6 +206,7 @@ func reset_game() -> void:
 func reset_game_without_reload() -> void:
 	var prestige_data := PrestigeManager.serialize()
 	var challenge_data := ChallengeProgressManager.serialize()
+	var onboarding_data := OnboardingProgress.serialize()
 
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
@@ -210,6 +215,7 @@ func reset_game_without_reload() -> void:
 		"version": SAVE_VERSION,
 		"prestige": prestige_data,
 		"challenges": challenge_data,
+		"onboarding": onboarding_data,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -238,6 +244,23 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 	if version < 4:
 		data["challenges"] = {}
 		print("[SaveManager] Migrated save v%d -> v4" % version)
+	if version < 5:
+		# Pre-onboarding: assume the player has already seen every navigation
+		# target they've unlocked. Otherwise they'd peek again at boards/challenges
+		# they already know about.
+		var boards_data: Dictionary = data.get("boards", {})
+		var board_types: Array = boards_data.get("board_types", [])
+		var peeked_boards: Array[int] = []
+		for board_type_int in board_types:
+			if int(board_type_int) != Enums.BoardType.GOLD:
+				peeked_boards.append(int(board_type_int))
+		var challenge_data: Dictionary = data.get("challenges", {})
+		var challenges_visited: bool = challenge_data.get("challenges_ever_visited", false)
+		data["onboarding"] = {
+			"peeked_boards": peeked_boards,
+			"peeked_challenges": challenges_visited,
+		}
+		print("[SaveManager] Migrated save v%d -> v5 (onboarding seeded from existing state)" % version)
 	data["version"] = SAVE_VERSION
 	return data
 

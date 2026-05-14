@@ -20,6 +20,7 @@ var _advanced_pool: int = 0
 var _assignments: Dictionary = {}  # StringName -> int (button_id → assigned count)
 var _autodrop_timer: Timer
 var _last_tick_msec: float = 0.0
+var _camera_tween: Tween
 
 ## Optional gate callable: Callable(board_type: Enums.BoardType) -> bool
 ## Set by ChallengeManager to restrict boards during challenges.
@@ -218,12 +219,16 @@ func _snap_camera_to_active_board() -> void:
 
 
 func _tween_camera_to_active_board() -> void:
+	# Kill any in-flight camera tween so rapid switches (e.g. peek out-and-back)
+	# don't end up with two tweens fighting over the camera.
+	if _camera_tween and _camera_tween.is_valid():
+		_camera_tween.kill()
 	var target := _get_camera_target(_boards[_active_index])
-	var tween := create_tween()
-	tween.tween_property(_camera, "position", target, camera_tween_duration) \
+	_camera_tween = create_tween()
+	_camera_tween.tween_property(_camera, "position", target, camera_tween_duration) \
 		.set_ease(Tween.EASE_IN_OUT) \
 		.set_trans(Tween.TRANS_CUBIC)
-	tween.parallel().tween_property(_camera, "size", _get_camera_size_for_board(_boards[_active_index]), camera_tween_duration) \
+	_camera_tween.parallel().tween_property(_camera, "size", _get_camera_size_for_board(_boards[_active_index]), camera_tween_duration) \
 		.set_ease(Tween.EASE_IN_OUT) \
 		.set_trans(Tween.TRANS_CUBIC)
 
