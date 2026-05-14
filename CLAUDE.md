@@ -48,7 +48,7 @@ Coins should calculate their path **row by row**, not all at once. This way if t
 - `style_lab/` — `VisualTheme` resource, presets under `style_lab/presets/*.tres`, plus the in-editor style lab scene.
 - `assets/` — icons, sounds, fonts.
 
-Autoload init order is set in `project.godot` and matters: `TierRegistry → CurrencyManager → UpgradeManager → LevelManager → PrestigeManager → SaveManager → SceneManager → ChallengeManager → ThemeProvider → ModeManager → ChallengeProgressManager → AudioManager`. Later autoloads may subscribe to earlier ones in `_ready`.
+Autoload init order is set in `project.godot` and matters: `TierRegistry → CurrencyManager → UpgradeManager → LevelManager → PrestigeManager → SaveManager → SceneManager → ChallengeManager → ThemeProvider → ModeManager → ChallengeProgressManager → OnboardingProgress → AudioManager`. Later autoloads may subscribe to earlier ones in `_ready`.
 
 #### Autoloads
 
@@ -84,8 +84,10 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 **SaveManager** — `autoloads/save_manager/save_manager.gd`
 
-- Orchestrates save/load to `user://save.json`. No signals.
-- Deserialization order (strict): `PrestigeManager → ChallengeProgressManager → LevelManager → CurrencyManager → UpgradeManager → BoardManager`. Order matters so signals fire against fully-initialized state.
+- Orchestrates save/load to `user://save.json`. No signals. `SAVE_VERSION = 5`.
+- Deserialization order (strict): `PrestigeManager → ChallengeProgressManager → OnboardingProgress → LevelManager → CurrencyManager → UpgradeManager → BoardManager`. Order matters so signals fire against fully-initialized state.
+- `_migrate(data, version)` runs sequential version upgrades. v4→v5 seeds `OnboardingProgress` peeked-boards from the existing `boards.board_types` so existing players don't see peeks for things they already unlocked.
+- `reset_game` / `reset_game_without_reload` preserve `PrestigeManager`, `ChallengeProgressManager`, AND `OnboardingProgress` blobs in the minimal save so peek state survives a prestige reset.
 - Calls `OfflineCalculator` (`scripts/offline/`) to credit earnings accumulated since last save.
 
 **SceneManager** — `autoloads/scene_manager/scene_manager.gd`
@@ -117,6 +119,13 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Persistent state for challenge completion, unlock flags, starting modifiers, permanent upgrades. Survives a prestige reset (alongside PrestigeManager).
 - Emits: `challenge_state_changed(id, state)`, `unlock_granted(unlock_type)`. Read by `PlinkoBoard.setup` to apply per-board bonus multipliers and permanent upgrade levels.
+- `challenges_ever_visited: bool` — flipped to `true` the first time the player manually enters challenges mode (read by `Main._update_nav_arrow_blinks` to stop the down-arrow blink; peek-driven mode switches do NOT flip this flag, see `PeekAnimator`).
+
+**OnboardingProgress** — `autoloads/onboarding_progress/onboarding_progress.gd`
+
+- Persistent first-time-UX flags: `_peeked_boards: Dictionary` (BoardType → bool) and `_peeked_challenges: bool`. Survives a prestige reset (`SaveManager.reset_game` and `reset_game_without_reload` preserve the serialized blob).
+- API: `has_peeked_board(type)`, `mark_board_peeked(type)`, `has_peeked_challenges()`, `mark_challenges_peeked()`. No signals — pure data.
+- Read by `PeekAnimator` to decide whether to peek a newly-unlocked target. Save migration v4→v5 pre-seeds existing players' unlocked boards as already-peeked so the feature doesn't re-peek things they already know about.
 
 **AudioManager** — `autoloads/audio_manager/audio_manager.gd`
 
@@ -136,6 +145,8 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Orchestrates all `PlinkoBoard` instances. Owns `_boards[]`, `_active_index`, autodropper pool + assignments, camera tweening, autodropper timer.
 - Emits: `board_switched(board)`, `board_unlocked(type)`.
+- Public API: `get_active_board()`, `get_active_index()`, `get_boards()`, `switch_board(index)`, `unlock_board(type)`.
+- `camera_tween_duration: float` is public and can be borrowed temporarily by `PeekAnimator` to slow tweens for the peek; `_tween_camera_to_active_board` stores `_camera_tween` and kills any prior in-flight tween before creating a new one so rapid switches (manual + peek out-and-back) don't fight over the camera.
 - Per-tick: `_autodrop_timer` (1.5s) calls `AudioManager.notify_autodropper_beat(wait_time)` to sync the beat grid, then dispatches to assigned boards.
 - Listens: `UpgradeManager.{autodropper_unlocked, advanced_autodropper_unlocked, upgrade_purchased}`, `CurrencyManager.currency_changed`, `LevelManager.rewards_claimed`, per-board `board_rebuilt` / `autodropper_adjust_requested` / `coin_queue.count_changed` (refresh drop-button subtext when the queue rate bonus shifts the effective delay).
 - Drop-button subtext reads `PlinkoBoard.get_effective_drop_delay()` so the displayed `Xs` reflects the current queue bonus.
@@ -173,8 +184,21 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 **Main** — `entities/main/main.gd`
 
-- Root scene orchestrator. Wires up BoardManager, ChallengeHUD, dialogs, UI panels, prestige animator. On `_ready` decides between `_setup_normal()` and `_setup_challenge()` based on `ChallengeManager.is_active_challenge`.
+- Root scene orchestrator. Wires up BoardManager, ChallengeHUD, dialogs, UI panels, prestige animator, peek animator. On `_ready` decides between `_setup_normal()` and `_setup_challenge()` based on `ChallengeManager.is_active_challenge`.
 - Listens: `ModeManager.mode_changed`, `PrestigeManager.{prestige_claimed, prestige_phase_changed}`, `BoardManager.{board_switched, board_unlocked}`, `UpgradeManager.upgrade_unlocked`, `ChallengeManager.{challenge_completed, challenge_failed}`.
+- `apply_input_lock(locked)` — called by `PeekAnimator` to toggle navigation input across BoardManager, ChallengeGroupingManager, Main's own `_input`, and the four nav-arrow buttons. Single chokepoint for "all navigation locked" (covers both peek and prestige).
+- `_on_mode_changed` / `_on_board_switched` consult `peek_animator.is_peeking()` and skip the "mark visited / clear unseen" side effects when the switch is peek-driven — preserves the blink as a real signal of "you haven't been here yet."
+- `is_loading_from_save()` accessor exposes `_loading_from_save` to `PeekAnimator` so it can suppress peek enqueues during deserialize.
+
+**PeekAnimator** — `entities/main/peek_animator.gd`
+
+- Child of Main (script-on-Node + child `LingerTimer`). Drives a brief auto-pan to a newly-unlocked navigation target (new board or challenges-first-unlocked), holds for `VisualTheme.peek_linger_duration`, then returns. Each transition uses `VisualTheme.peek_camera_tween_duration` (longer than normal so the move feels gentle); the challenges peek also waits `peek_pre_challenges_pause` before pulling the camera away.
+- Listens: `BoardManager.board_unlocked` → enqueue peek; `PrestigeManager.prestige_phase_changed` → clear queue + stop timer on non-NONE so prestige owns the camera, drain on NONE.
+- Public API: `setup(board_manager)`, `is_peeking()`, `is_input_locked()`, `queue_peeks_for_existing_unlocks()` (called by Main after `SaveManager.load_game` to catch unlocks from prior sessions).
+- Callable seams (`switch_board_fn`, `switch_to_challenges_fn`, `switch_to_main_fn`, `apply_input_lock_fn`, `loading_query`, `wait_fn`) — production defaults wire to BoardManager/ModeManager/Main; tests inject stubs to bypass camera tweens and `await`s.
+- Suppresses peeks during active challenges, during deserialize, and for already-peeked targets. Marks `OnboardingProgress.mark_board_peeked` / `mark_challenges_peeked` after a peek completes and calls `SaveManager.save_game()`.
+- Borrows BoardManager's and ChallengeGroupingManager's `camera_tween_duration` for the peek's duration; restores on exit (all early-returns are inside `_run_peek` so the restore at the bottom always runs).
+- `LingerTimer` has `ignore_time_scale = true` so `Engine.time_scale` changes during prestige can't warp the linger.
 
 **DropSection** — `entities/drop_section/drop_section.gd` + `.tscn`
 
@@ -228,6 +252,8 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - **Theme/Challenge → Audio:** `theme_changed` or `challenge_state_changed` → `AudioManager._reselect_audio_style`. Any style transition fades all drones over 1s.
 - **Autodropper → Audio beat:** `BoardManager._on_autodrop_tick` → `AudioManager.notify_autodropper_beat` syncs the harp beat grid.
 - **Coin lifecycle:** `request_drop` → `Coin.start` → per-row board queries → `final_bounce_started` → `PlinkoBoard.finalize_coin_landing` → `coin_landed` (ChallengeTracker, BoardManager listen) + `AudioManager.play_bucket`.
+- **Peek lifecycle:** `BoardManager.board_unlocked` (or `Main._setup_normal` → `PeekAnimator.queue_peeks_for_existing_unlocks` post-load) → enqueue PeekRequest → `_drain_loop` → `apply_input_lock(true)` → `switch_board_fn` / `switch_to_challenges_fn` → wait → switch back → `OnboardingProgress.mark_*_peeked` → `SaveManager.save_game` → `apply_input_lock(false)`. Suppressed during active challenges, during deserialize, and for already-peeked targets.
+- **Peek-driven side-effect suppression:** `Main._on_mode_changed` / `Main._on_board_switched` consult `peek_animator.is_peeking()` before flipping `challenges_ever_visited` / clearing `_boards_with_unseen_upgrades`, so nav-arrow blinks survive the peek as cues the player still hasn't visited.
 - **Save:** `SaveManager.save_game/load_game` serializes/deserializes managers in the strict order above.
 
 ### Three-Currency Economy
