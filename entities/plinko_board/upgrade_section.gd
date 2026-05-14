@@ -133,7 +133,7 @@ func _is_universal_upgrade(upgrade_type: Enums.UpgradeType) -> bool:
 
 func _get_section_title() -> String:
 	var tier: TierData = TierRegistry.get_tier(_board_type)
-	return "%s upgrades" % tier.display_name
+	return "%s board upgrades" % tier.display_name
 
 
 func _add_section_label(initial_text: String = "") -> void:
@@ -146,8 +146,8 @@ func _add_section_label(initial_text: String = "") -> void:
 	_section_label.add_theme_font_size_override("font_size", t.button_font_size)
 	_section_label.add_theme_color_override("font_color", t.normal_text_color)
 	_section_label.add_theme_font_override("font", btn_font)
-	_outer_vbox.add_child(_section_label)
-	_outer_vbox.move_child(_section_label, upgrades_container.get_index())
+	upgrades_container.add_child(_section_label)
+	upgrades_container.move_child(_section_label, 0)
 
 
 func _animate_section_title(row: UpgradeRow) -> void:
