@@ -87,6 +87,14 @@ func get_bucket_value_percent_bonus(board_type: Enums.BoardType) -> float:
 	return bonus
 
 
+func get_gold_coin_speed_boost_count() -> int:
+	var count := 0
+	for mod in _starting_modifiers:
+		if mod.modifier_type == ChallengeRewardData.ModifierType.GOLD_COIN_SPEED_BOOST:
+			count += 1
+	return count
+
+
 func get_earliest_incomplete(buttons: Array[ChallengeButton]) -> ChallengeButton:
 	for btn in buttons:
 		var state := get_state(btn.challenge_ui_name)

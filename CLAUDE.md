@@ -120,6 +120,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Persistent state for challenge completion, unlock flags, starting modifiers, permanent upgrades. Survives a prestige reset (alongside PrestigeManager).
 - Emits: `challenge_state_changed(id, state)`, `unlock_granted(unlock_type)`. Read by `PlinkoBoard.setup` to apply per-board bonus multipliers and permanent upgrade levels.
 - `challenges_ever_visited: bool` — flipped to `true` the first time the player manually enters challenges mode (read by `Main._update_nav_arrow_blinks` to stop the down-arrow blink; peek-driven mode switches do NOT flip this flag, see `PeekAnimator`).
+- `get_gold_coin_speed_boost_count()` — counts `GOLD_COIN_SPEED_BOOST` starting modifiers (board-agnostic, gold-only by design). Read by `Coin.start()` to scale fall-speed; the per-grant magnitude lives on `Coin.COIN_SPEED_BOOST_PER_UNLOCK`.
 
 **OnboardingProgress** — `autoloads/onboarding_progress/onboarding_progress.gd`
 
@@ -166,6 +167,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Individual coin animation. Picks left/right at each row, queries the board for the next waypoint, determines final bucket at landing time.
 - Emits: `final_bounce_started(coin, predicted_bucket)` (triggers prestige handover), `landed`.
+- `start()` caches `_fall_speed_multiplier` from `ChallengeProgressManager.get_gold_coin_speed_boost_count()` (gold coins only); reused by `_bounce_or_despawn()` so the autoload isn't queried per bounce. Per-grant magnitude is the local `COIN_SPEED_BOOST_PER_UNLOCK` constant — keep it in sync with any `data/challenges/*.tres` description that grants the reward, since `ChallengeInfoPanel` displays the description verbatim.
 
 **Bucket** — `entities/bucket/bucket.gd`
 

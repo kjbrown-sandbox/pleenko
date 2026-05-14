@@ -1,0 +1,50 @@
+{
+   "version": 5,
+   "save_timestamp": 0,
+   "currency": {
+      "GOLD_COIN": { "balance": 100000000, "cap": 100000000, "cap_raise_level": 0 },
+      "RAW_ORANGE": { "balance": 0, "cap": 500, "cap_raise_level": 0 },
+      "ORANGE_COIN": { "balance": 100000000, "cap": 100000000, "cap_raise_level": 0 },
+      "RAW_RED": { "balance": 0, "cap": 500, "cap_raise_level": 0 },
+      "RED_COIN": { "balance": 0, "cap": 500, "cap_raise_level": 0 },
+      "RAW_VIOLET": { "balance": 0, "cap": 500, "cap_raise_level": 0 },
+      "VIOLET_COIN": { "balance": 0, "cap": 500, "cap_raise_level": 0 },
+      "RAW_BLUE": { "balance": 0, "cap": 500, "cap_raise_level": 0 },
+      "BLUE_COIN": { "balance": 0, "cap": 500, "cap_raise_level": 0 },
+      "RAW_GREEN": { "balance": 0, "cap": 500, "cap_raise_level": 0 },
+      "GREEN_COIN": { "balance": 0, "cap": 500, "cap_raise_level": 0 }
+   },
+   "level": { "current_level": 0 },
+   "upgrades": {
+      "state": {
+         "GOLD": {
+            "ADD_ROW": {
+               "level": 7,
+               "cost": 60000000000,
+               "delta": 0,
+               "current_cap": 10,
+               "cap_level": 4
+            }
+         }
+      },
+      "unlocked": {
+         "GOLD": { "ADD_ROW": true }
+      },
+      "cap_raise_available": {}
+   },
+   "boards": {
+      "normal_autodroppers_unlocked": false,
+      "advanced_autodroppers_unlocked": false,
+      "normal_pool": 0,
+      "advanced_pool": 0,
+      "board_types": [0, 1],
+      "advanced_buckets": { "GOLD": true },
+      "advanced_drops": { "GOLD": true },
+      "board_state": {},
+      "assignments": {}
+   },
+   "prestige": { "ORANGE": 1 },
+   "challenges": {},
+   "onboarding": { "peeked_boards": [], "peeked_challenges": false },
+   "audio_muted": false
+}

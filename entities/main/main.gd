@@ -206,6 +206,8 @@ func _format_starting_modifier(reward: ChallengeRewardData) -> String:
 			return "+%d%% bucket value (%s)" % [int(reward.modifier_amount * 100), board_name]
 		ChallengeRewardData.ModifierType.STARTING_AUTODROPPERS:
 			return "+%d starting autodroppers (%s)" % [int(reward.modifier_amount), board_name]
+		ChallengeRewardData.ModifierType.GOLD_COIN_SPEED_BOOST:
+			return "+%d%% gold coin speed" % int(Coin.COIN_SPEED_BOOST_PER_UNLOCK * 100)
 	return ""
 
 

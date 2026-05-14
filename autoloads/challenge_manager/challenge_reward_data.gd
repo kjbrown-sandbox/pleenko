@@ -17,6 +17,7 @@ enum ModifierType {
 	MULTI_DROP,
 	ADVANCED_COIN_MULTIPLIER,
 	BUCKET_VALUE_PERCENT,
+	GOLD_COIN_SPEED_BOOST,
 }
 
 @export var type: RewardType
