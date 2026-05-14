@@ -37,6 +37,53 @@ func start_attention() -> void:
 	fill_bar.set_attention(true)
 
 
+## Clip-reveal animation: slides the row in from left to right inside its
+## parent VBoxContainer, then calls start_attention().
+func materialize() -> void:
+	visible = true
+	var container: Control = get_parent()
+	var idx: int = get_index()
+	container.remove_child(self)
+
+	var wrapper := Control.new()
+	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.add_child(wrapper)
+	container.move_child(wrapper, idx)
+
+	var clip := Control.new()
+	clip.clip_contents = true
+	clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrapper.add_child(clip)
+	clip.add_child(self)
+
+	_animate_clip_reveal.call_deferred(container, wrapper, clip)
+
+
+func _animate_clip_reveal(container: Control, wrapper: Control, clip: Control) -> void:
+	var target_width: float = container.size.x
+	var row_height: float = size.y
+
+	wrapper.custom_minimum_size.y = row_height
+	position = Vector2.ZERO
+	size = Vector2(target_width, row_height)
+	clip.size = Vector2(0, row_height)
+
+	var t: VisualTheme = ThemeProvider.theme
+	var tween := clip.create_tween()
+	tween.tween_property(clip, "size:x", target_width, t.upgrade_materialize_duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.tween_callback(func():
+		var i: int = wrapper.get_index()
+		clip.remove_child(self)
+		container.remove_child(wrapper)
+		container.add_child(self)
+		container.move_child(self, i)
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		wrapper.queue_free()
+		start_attention()
+	)
+
+
 func setup_plus(on_pressed: Callable, on_hover: Callable = Callable(), on_update: Callable = Callable()) -> void:
 	fill_bar.setup_plus(on_pressed, on_hover, on_update)
 

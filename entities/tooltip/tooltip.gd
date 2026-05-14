@@ -65,8 +65,8 @@ func _connect_to_parent() -> void:
 
 func show_tooltip() -> void:
 	visible = true
-	_label.size = Vector2.ZERO
 	if position_side != Placement.INLINE:
+		_label.size = Vector2.ZERO
 		_position_tooltip.call_deferred()
 
 

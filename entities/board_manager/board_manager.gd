@@ -251,6 +251,14 @@ func get_advanced_pool() -> int:
 	return _advanced_pool
 
 
+func is_normal_autodroppers_unlocked() -> bool:
+	return _normal_autodroppers_unlocked
+
+
+func is_advanced_autodroppers_unlocked() -> bool:
+	return _advanced_autodroppers_unlocked
+
+
 func _get_assigned_for_pool(advanced: bool) -> int:
 	var total := 0
 	for bid in _assignments:

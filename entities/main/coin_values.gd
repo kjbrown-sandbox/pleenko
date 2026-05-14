@@ -1,6 +1,7 @@
 extends VBoxContainer
 
 const FillBarScene := preload("res://entities/fill_bar/fill_bar.tscn")
+const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 const TooltipScene := preload("res://entities/tooltip/tooltip.tscn")
 
 var _bars: Dictionary = {}  # CurrencyType -> FillBar node
@@ -8,6 +9,10 @@ var _visible_currencies: Array[Enums.CurrencyType] = [Enums.CurrencyType.GOLD_CO
 var _hover_tooltip: Tooltip
 
 var _board_manager: BoardManager
+
+# Autodropper upgrade rows shown in the HUD (keyed by UpgradeType)
+var _upgrade_rows: Dictionary = {}  # UpgradeType -> UpgradeRow node
+var _initial_setup_complete := false
 
 # Debounce: collapse multiple currency_changed signals into one deferred update
 var _dirty := false
@@ -22,6 +27,15 @@ func setup(board_manager: BoardManager) -> void:
 
 	_visible_currencies.sort()
 	_update_currencies()
+
+	# Listen for autodropper unlocks to trigger layout rebuild
+	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked)
+	# Defer so save loading finishes first — unlocks from save skip animation
+	_mark_setup_complete.call_deferred()
+
+
+func _mark_setup_complete() -> void:
+	_initial_setup_complete = true
 
 func _ready() -> void:
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
@@ -84,12 +98,17 @@ func _update_currencies() -> void:
 		child.queue_free()
 	_bars.clear()
 	_hover_tooltip = null
+	_upgrade_rows.clear()
+
+	var t: VisualTheme = ThemeProvider.theme
+	var has_upgrades: bool = _has_any_universal_upgrade()
+
+	add_child(_create_section_label("Currencies"))
 
 	for currency_type in _visible_currencies:
 		var bar = FillBarScene.instantiate()
 		add_child(bar)
 
-		var t: VisualTheme = ThemeProvider.theme
 		var fill_color: Color = t.get_coin_color(currency_type)
 		var disabled_color: Color = t.get_coin_color_faded(currency_type)
 		bar.setup(fill_color, disabled_color)
@@ -108,7 +127,18 @@ func _update_currencies() -> void:
 
 		_bars[currency_type] = bar
 
-	# Hover tooltip at the bottom
+	# Universal upgrades section
+	if has_upgrades:
+		var spacer := Control.new()
+		spacer.custom_minimum_size.y = ThemeProvider.theme.section_spacer_height
+		add_child(spacer)
+
+		add_child(_create_section_label("Universal upgrades"))
+
+		_try_spawn_upgrade_row(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD)
+		_try_spawn_upgrade_row(Enums.UpgradeType.ADVANCED_AUTODROPPER, Enums.BoardType.ORANGE)
+
+	# Hover tooltip — must be last child so it renders below everything
 	_hover_tooltip = TooltipScene.instantiate()
 	_hover_tooltip.use_parent_signals = false
 	_hover_tooltip.position_side = Tooltip.Placement.INLINE
@@ -116,6 +146,56 @@ func _update_currencies() -> void:
 	add_child(_hover_tooltip)
 
 	_update_all_cap_buttons()
+
+
+func _has_any_universal_upgrade() -> bool:
+	return UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER) \
+		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.ADVANCED_AUTODROPPER)
+
+
+func _try_spawn_upgrade_row(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
+	if not UpgradeManager.is_unlocked(board_type, upgrade_type):
+		return
+	var row: UpgradeRow = UpgradeRowScene.instantiate()
+	row.setup(board_type, upgrade_type, _buy_upgrade.bind(board_type, upgrade_type))
+	row.hover_info_changed.connect(_on_upgrade_hover_changed)
+	add_child(row)
+	if _hover_tooltip:
+		move_child(_hover_tooltip, get_child_count() - 1)
+	_upgrade_rows[upgrade_type] = row
+
+
+func _buy_upgrade(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
+	UpgradeManager.buy(board_type, upgrade_type)
+
+
+func _on_upgrade_hover_changed(text: String) -> void:
+	if not _hover_tooltip:
+		return
+	if text == "":
+		_hover_tooltip.hide_tooltip()
+	else:
+		_hover_tooltip.update_and_show(text)
+
+
+func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
+	# Only care about autodropper-type upgrades
+	if upgrade_type != Enums.UpgradeType.AUTODROPPER and upgrade_type != Enums.UpgradeType.ADVANCED_AUTODROPPER:
+		return
+	if upgrade_type in _upgrade_rows:
+		return
+	if not _initial_setup_complete:
+		# Loading from save — just rebuild without animation
+		_update_currencies()
+		return
+	# First unlock during gameplay — animate the section in
+	_animate_universal_section(upgrade_type, board_type)
+
+
+## Returns the UpgradeRow for the given upgrade type, or null if not present.
+## Used by LevelSection to target sparkle animations.
+func get_upgrade_row(upgrade_type: Enums.UpgradeType) -> UpgradeRow:
+	return _upgrade_rows.get(upgrade_type)
 
 
 func _update_bar(bar, type: Enums.CurrencyType, balance: int, cap: int) -> void:
@@ -208,3 +288,53 @@ func _update_cap_button_affordability() -> void:
 		var can_afford := CurrencyManager.can_buy_cap_raise(currency_type)
 		bar.set_plus_disabled(not can_afford)
 		bar.set_plus_filled(can_afford)
+
+
+func _create_section_label(text: String) -> Label:
+	var t: VisualTheme = ThemeProvider.theme
+	var bold_font: Font = preload("res://style_lab/VendSans-Bold.ttf")
+	var btn_font: Font = t.button_font if t.button_font else bold_font
+	var label := Label.new()
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.add_theme_font_size_override("font_size", t.button_font_size)
+	label.add_theme_color_override("font_color", t.normal_text_color)
+	label.add_theme_font_override("font", btn_font)
+	return label
+
+
+func _animate_universal_section(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
+	var needs_header: bool = _upgrade_rows.is_empty()
+
+	if needs_header:
+		var spacer := Control.new()
+		spacer.custom_minimum_size.y = ThemeProvider.theme.section_spacer_height
+		add_child(spacer)
+
+		var label: Label = _create_section_label("")
+		add_child(label)
+
+		# Keep tooltip at the very end
+		if _hover_tooltip:
+			move_child(_hover_tooltip, get_child_count() - 1)
+
+		# Typewriter animation — reveal one character at a time
+		var full_text := "Universal upgrades"
+		var char_delay: float = ThemeProvider.theme.typewriter_char_delay
+		var tween := create_tween()
+		for i in full_text.length():
+			tween.tween_callback(func(): label.text = full_text.substr(0, i + 1))
+			tween.tween_interval(char_delay)
+
+		# After typewriter completes, spawn the upgrade row with clip reveal
+		tween.tween_callback(_spawn_and_materialize_row.bind(upgrade_type, board_type))
+	else:
+		# Section header already exists — just add the row with clip reveal
+		_spawn_and_materialize_row(upgrade_type, board_type)
+
+
+func _spawn_and_materialize_row(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
+	_try_spawn_upgrade_row(upgrade_type, board_type)
+	var row: UpgradeRow = _upgrade_rows.get(upgrade_type)
+	if row:
+		row.materialize()
