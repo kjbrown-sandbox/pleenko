@@ -27,6 +27,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 @onready var board_right_icon: TextureButton = $NavIconsLayer/BoardRightIcon
 @onready var challenge_info_panel: ChallengeInfoPanel = $ChallengeInfoPanel
 @onready var prestige_animator: PrestigeAnimator = $PrestigeAnimator
+@onready var peek_animator: PeekAnimator = $PeekAnimator
 
 var _options_dialog: CanvasLayer
 var _coming_soon_overlay: CanvasLayer
@@ -104,6 +105,33 @@ func _setup_normal() -> void:
 			_show_offline_earnings.call_deferred()
 
 	challenge_grouping_manager.update_group_visibility()
+	_setup_peek_animator()
+
+
+func _setup_peek_animator() -> void:
+	peek_animator.loading_query = is_loading_from_save
+	peek_animator.apply_input_lock_fn = apply_input_lock
+	peek_animator.setup(board_manager, challenge_grouping_manager)
+	peek_animator.queue_peeks_for_existing_unlocks()
+
+
+func is_loading_from_save() -> bool:
+	return _loading_from_save
+
+
+## Toggle navigation input across BoardManager, ChallengeGroupingManager, Main's
+## own _input, and the four nav arrow buttons. Called by PeekAnimator on
+## peek/prestige state changes.
+func apply_input_lock(locked: bool) -> void:
+	if is_instance_valid(board_manager):
+		board_manager.set_process_input(not locked)
+	if is_instance_valid(challenge_grouping_manager):
+		challenge_grouping_manager.set_process_input(not locked)
+	set_process_input(not locked)
+	board_left_icon.disabled = locked
+	board_right_icon.disabled = locked
+	challenges_down_icon.disabled = locked
+	challenges_up_icon.disabled = locked
 
 
 func _setup_challenge() -> void:
@@ -333,7 +361,10 @@ func _go_back_to_board() -> void:
 
 func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 	if new_mode == ModeManager.Mode.CHALLENGES:
-		ChallengeProgressManager.challenges_ever_visited = true
+		# A peek-driven switch shouldn't count as the player having visited —
+		# leave the down-arrow blink intact so it still pulls them in.
+		if not _is_peek_active():
+			ChallengeProgressManager.challenges_ever_visited = true
 		coin_values.visible = false
 		level_section.visible = false
 		game_timer.visible = false
@@ -383,10 +414,16 @@ func _on_prestige_claimed(_board_type: Enums.BoardType) -> void:
 
 
 func _on_board_switched(board: PlinkoBoard) -> void:
-	# Clear unseen flag for the board we just navigated to
-	_boards_with_unseen_upgrades.erase(board.board_type)
+	# Peek-driven switches are a preview, not a real visit — keep the blink
+	# so the player still sees the cue until they navigate there themselves.
+	if not _is_peek_active():
+		_boards_with_unseen_upgrades.erase(board.board_type)
 	_update_nav_arrows()
 	_update_lockdown_overlay()
+
+
+func _is_peek_active() -> bool:
+	return is_instance_valid(peek_animator) and peek_animator.is_peeking()
 
 
 func _on_board_unlocked(board_type: Enums.BoardType) -> void:

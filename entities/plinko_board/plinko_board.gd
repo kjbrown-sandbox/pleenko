@@ -5,7 +5,7 @@ extends Node3D
 var space_between_pegs: float
 var vertical_spacing: float
 @export var drop_delay: float = 2.0
-@export var drop_delay_reduction_factor: float = 0.85
+@export var drop_delay_reduction_factor: float = 0.82
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
 ## Each coin in the queue (FULL or FILLING) boosts drop rate by this multiplier
@@ -13,7 +13,7 @@ var vertical_spacing: float
 ## Additive in rate (not delay) keeps the curve self-bounded — delay shrinks
 ## but never reaches zero. With 1.0, one queued coin doubles the rate, two
 ## triples it, ten gives 11x the base rate.
-const QUEUE_RATE_BONUS_PER_COIN := 0.25
+const QUEUE_RATE_BONUS_PER_COIN := 0.20
 
 ## Pixel offset from the projected spawn point to the top-left of the bonus
 ## label box. +X pushes the label right of the queue (clear of the drop

@@ -31,3 +31,8 @@ enum UpgradeType {
 	AUTODROPPER,
 	ADVANCED_AUTODROPPER,
 }
+
+enum PeekKind {
+	BOARD,
+	CHALLENGES,
+}

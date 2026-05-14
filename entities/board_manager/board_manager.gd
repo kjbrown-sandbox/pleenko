@@ -20,6 +20,7 @@ var _advanced_pool: int = 0
 var _assignments: Dictionary = {}  # StringName -> int (button_id → assigned count)
 var _autodrop_timer: Timer
 var _last_tick_msec: float = 0.0
+var _camera_tween: Tween
 
 ## Optional gate callable: Callable(board_type: Enums.BoardType) -> bool
 ## Set by ChallengeManager to restrict boards during challenges.
@@ -76,6 +77,10 @@ func set_active_board_ui_visible(visible: bool) -> void:
 
 func get_active_board() -> PlinkoBoard:
 	return _boards[_active_index]
+
+
+func get_active_index() -> int:
+	return _active_index
 
 
 func get_boards() -> Array[PlinkoBoard]:
@@ -218,12 +223,16 @@ func _snap_camera_to_active_board() -> void:
 
 
 func _tween_camera_to_active_board() -> void:
+	# Kill any in-flight camera tween so rapid switches (e.g. peek out-and-back)
+	# don't end up with two tweens fighting over the camera.
+	if _camera_tween and _camera_tween.is_valid():
+		_camera_tween.kill()
 	var target := _get_camera_target(_boards[_active_index])
-	var tween := create_tween()
-	tween.tween_property(_camera, "position", target, camera_tween_duration) \
+	_camera_tween = create_tween()
+	_camera_tween.tween_property(_camera, "position", target, camera_tween_duration) \
 		.set_ease(Tween.EASE_IN_OUT) \
 		.set_trans(Tween.TRANS_CUBIC)
-	tween.parallel().tween_property(_camera, "size", _get_camera_size_for_board(_boards[_active_index]), camera_tween_duration) \
+	_camera_tween.parallel().tween_property(_camera, "size", _get_camera_size_for_board(_boards[_active_index]), camera_tween_duration) \
 		.set_ease(Tween.EASE_IN_OUT) \
 		.set_trans(Tween.TRANS_CUBIC)
 
@@ -558,7 +567,8 @@ func deserialize(data: Dictionary) -> void:
 ## bonus is present on every load (fresh prestige reset or normal save).
 func _apply_prestige_rewards() -> void:
 	# Gold prestige reward: guarantee 1 normal autodropper on gold board.
-	if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.GOLD):
+	# Orange being unlocked permanently means the player completed gold prestige.
+	if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.ORANGE):
 		if not _normal_autodroppers_unlocked:
 			_normal_autodroppers_unlocked = true
 			for board in _boards:

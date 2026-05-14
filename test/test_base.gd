@@ -14,7 +14,9 @@ func _run_tests() -> void:
 
 
 func _ready() -> void:
-	_run_tests()
+	# Await covers tests that use `await` internally (e.g. for coroutine flows);
+	# pure-sync test suites pay a single extra idle-frame delay, no behavior change.
+	await _run_tests()
 
 	print("\n--- Results: %d passed, %d failed ---" % [_pass_count, _fail_count])
 	if _fail_count > 0:
