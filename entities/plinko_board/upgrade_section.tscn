@@ -23,7 +23,6 @@ theme_override_constants/separation = 10
 
 [node name="Upgrades" type="VBoxContainer" parent="MarginContainer/OuterVBox" unique_id=107140261]
 layout_mode = 2
-theme_override_constants/separation = 10
 
 [node name="HoverInfo" parent="MarginContainer/OuterVBox" unique_id=74694662 instance=ExtResource("2_tooltip")]
 layout_mode = 2
