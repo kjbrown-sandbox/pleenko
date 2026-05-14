@@ -36,17 +36,18 @@ static func _advanced_currency_key(board_type: Enums.BoardType) -> String:
 
 ## A currency is considered "ever earned" when its tier's board has been
 ## prestiged at least once, OR when it's the starting tier (always earnable).
+## Currencies with no associated tier (e.g. unrecognized keys) are treated
+## as always earnable to avoid hiding legitimate balances.
 ## Used to suppress offline earnings for currencies the player has never
 ## organically earned — preserves the first-time prestige beat.
 static func _is_currency_ever_earned(currency_key: String, prestige_data: Dictionary) -> bool:
 	var currency_type: int = Enums.CurrencyType[currency_key]
-	var tier := TierRegistry.get_tier_for_currency(currency_type)
+	var tier: TierData = TierRegistry.get_tier_for_currency(currency_type)
 	if not tier:
 		return true
 	if TierRegistry.is_starting_tier(tier.board_type):
 		return true
-	var board_key: String = Enums.BoardType.keys()[tier.board_type]
-	return int(prestige_data.get(board_key, 0)) > 0
+	return int(prestige_data.get(_board_key(tier.board_type), 0)) > 0
 
 
 ## Takes the full save dictionary and elapsed seconds, returns a modified copy

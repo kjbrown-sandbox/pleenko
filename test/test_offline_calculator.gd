@@ -437,8 +437,7 @@ func test_red_board_basic() -> void:
 	# Cost: 1 RAW_RED + 100 RAW_ORANGE per drop (RED tier's previous-tier raw cost)
 	# RAW_ORANGE seeded high so currency affordability isn't the limit.
 	# 7 drops: RAW_RED 10 - 7 = 3, RAW_ORANGE 1000 - 700 = 300
-	# RED_COIN per drop = 0.25*2 + 0.5*1 + 0.25*2 = 1.5; over 7 drops with batched
-	# fractional carry → 10
+	# RED_COIN per drop = 0.25*2 + 0.5*1 + 0.25*2 = 1.5; floor(7 * 1.5) = 10
 	var state := _make_state({
 		"currency": {
 			"RAW_RED": {"balance": 10, "cap": 50, "cap_raise_level": 0},
@@ -503,12 +502,12 @@ func test_all_three_boards_interleaved() -> void:
 		},
 	})
 	var result := OfflineCalculator.calculate(state, 60.0)
-	assert(result["currency"]["GOLD_COIN"]["balance"] > 0, "gold accrues / persists")
-	assert(result["currency"]["ORANGE_COIN"]["balance"] > 0, "orange earned")
-	assert(result["currency"]["RED_COIN"]["balance"] > 0, "red earned")
+	assert_true(result["currency"]["GOLD_COIN"]["balance"] > 0, "gold accrues / persists")
+	assert_true(result["currency"]["ORANGE_COIN"]["balance"] > 0, "orange earned")
+	assert_true(result["currency"]["RED_COIN"]["balance"] > 0, "red earned")
 	# Raw currencies got spent by higher-tier drops
-	assert(result["currency"]["RAW_ORANGE"]["balance"] < 5000, "raw_orange spent by red drops")
-	assert(result["currency"]["RAW_RED"]["balance"] < 100, "raw_red spent by red drops")
+	assert_true(result["currency"]["RAW_ORANGE"]["balance"] < 5000, "raw_orange spent by red drops")
+	assert_true(result["currency"]["RAW_RED"]["balance"] < 100, "raw_red spent by red drops")
 
 
 func test_gold_accumulates_then_orange_fires() -> void:
@@ -554,7 +553,7 @@ func test_no_raw_orange_credited_before_orange_prestige() -> void:
 	})
 	var result := OfflineCalculator.calculate(state, 60.0)
 	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 0, "no raw_orange before prestige")
-	assert(result["currency"]["GOLD_COIN"]["balance"] > 100, "gold still accrues")
+	assert_true(result["currency"]["GOLD_COIN"]["balance"] > 100, "gold still accrues")
 
 
 func test_raw_orange_credited_after_orange_prestige() -> void:
@@ -572,7 +571,7 @@ func test_raw_orange_credited_after_orange_prestige() -> void:
 		"prestige": {"ORANGE": 1},
 	})
 	var result := OfflineCalculator.calculate(state, 60.0)
-	assert(result["currency"]["RAW_ORANGE"]["balance"] > 0, "raw_orange earned post-prestige")
+	assert_true(result["currency"]["RAW_ORANGE"]["balance"] > 0, "raw_orange earned post-prestige")
 
 
 func test_gold_always_credited_even_without_prestige() -> void:
@@ -583,7 +582,7 @@ func test_gold_always_credited_even_without_prestige() -> void:
 		"prestige": {},
 	})
 	var result := OfflineCalculator.calculate(state, 60.0)
-	assert(result["currency"]["GOLD_COIN"]["balance"] > 100, "gold accrues without prestige")
+	assert_true(result["currency"]["GOLD_COIN"]["balance"] > 100, "gold accrues without prestige")
 
 
 func test_no_raw_red_credited_before_red_prestige() -> void:
