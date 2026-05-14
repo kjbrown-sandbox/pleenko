@@ -25,6 +25,11 @@ var _active_tweens: Array[Tween] = []
 ## Read by PlinkoBoard._sync_coin_multimesh to derive the per-coin scale.
 var impact_squash_remaining: float = 0.0
 
+## Each granted GOLD_COIN_SPEED_BOOST challenge reward adds this fraction to
+## gold coins' fall-speed multiplier. 0.3 → first grant = 1.3x speed, third = 1.9x (additive).
+## Only gold coins are sped up; other coin types fall at baseline speed.
+const COIN_SPEED_BOOST_PER_UNLOCK := 0.2
+
 ## MultiMesh rendering state
 var multimesh_index: int = -1
 var cached_color: Color = Color.WHITE
@@ -83,10 +88,16 @@ func start(target: Vector3) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var tween: Tween = create_tween()
 	_active_tweens.append(tween)
-	tween.tween_property(self, "position", target, t.coin_fall_time) \
+	tween.tween_property(self, "position", target, t.coin_fall_time / _get_fall_speed_multiplier()) \
 		.set_ease(Tween.EASE_IN) \
 		.set_trans(Tween.TRANS_QUAD)
 	tween.tween_callback(_bounce_or_despawn)
+
+
+func _get_fall_speed_multiplier() -> float:
+	if coin_type != Enums.CurrencyType.GOLD_COIN:
+		return 1.0
+	return 1.0 + ChallengeProgressManager.get_gold_coin_speed_boost_count() * COIN_SPEED_BOOST_PER_UNLOCK
 
 
 func kill_tweens() -> void:
@@ -148,7 +159,7 @@ func _bounce_or_despawn() -> void:
 
 		# Add randomness so bounces don't look uniform
 		var bounce_height: float = t.coin_bounce_height * randf_range(0.3, 1.7)
-		var fall_time: float = t.coin_fall_time * randf_range(0.9, 1.1)
+		var fall_time: float = t.coin_fall_time * randf_range(0.9, 1.1) / _get_fall_speed_multiplier()
 
 		var x_tween: Tween = create_tween()
 		_active_tweens.append(x_tween)

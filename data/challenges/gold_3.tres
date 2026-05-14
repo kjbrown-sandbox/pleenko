@@ -16,12 +16,12 @@ blocked_upgrades = Array[int]([0])
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
 
+
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
 type = 1
-modifier_type = 3
-modifier_amount = 0.5
-description = "+0.5 orange multiplier"
+modifier_type = 5
+description = "+20% gold coin speed"
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("8_start")
@@ -35,4 +35,4 @@ time_limit_seconds = 75.0
 objectives = Array[ExtResource("2_of83a")]([SubResource("objective_1")])
 constraints = Array[ExtResource("1_nw500")]([SubResource("constraint_1")])
 starting_conditions = Array[ExtResource("6_dovvo")]([SubResource("starting_1")])
-rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])
+rewards = Array[ExtResource("3_reward")]([SubResource("reward_1"), SubResource("reward_2")])
