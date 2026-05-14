@@ -43,7 +43,6 @@ offset_left = 20.0
 offset_top = 20.0
 offset_right = 370.0
 offset_bottom = 40.0
-theme_override_constants/separation = 10
 script = ExtResource("2_dn64k")
 
 [node name="ChallengeHUD" type="VBoxContainer" parent="CanvasLayer" unique_id=1607277629]
