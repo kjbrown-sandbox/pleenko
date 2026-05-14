@@ -163,6 +163,33 @@ func _try_spawn_upgrade_row(upgrade_type: Enums.UpgradeType, board_type: Enums.B
 	if _hover_tooltip:
 		move_child(_hover_tooltip, get_child_count() - 1)
 	_upgrade_rows[upgrade_type] = row
+	_setup_cap_raise_if_needed(row, board_type, upgrade_type)
+
+
+func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
+	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(board_type, upgrade_type)
+	if state.base_cap <= 0 or not UpgradeManager.is_cap_raise_available(board_type):
+		return
+	if row.fill_bar.plus_button.visible:
+		return
+
+	var bt := board_type
+	var ut := upgrade_type
+	var r := row
+
+	row.setup_plus(
+		func():
+			UpgradeManager.buy_cap_raise(bt, ut),
+		func() -> String:
+			var cap_cost: int = UpgradeManager.get_cap_raise_cost(bt, ut)
+			var cap_currency: int = TierRegistry.cap_raise_currency(bt)
+			var currency_name: String = FormatUtils.currency_name(cap_currency, false)
+			return "Cost: %d %s" % [cap_cost, currency_name],
+		func():
+			var can_raise: bool = UpgradeManager.can_buy_cap_raise(bt, ut)
+			r.fill_bar.set_plus_disabled(not can_raise)
+			r.fill_bar.set_plus_filled(can_raise),
+	)
 
 
 func _buy_upgrade(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
@@ -248,8 +275,20 @@ func refresh_visible_currencies() -> void:
 		_update_all_bars()
 
 
-func _on_cap_raise_unlocked(_board_type: Enums.BoardType) -> void:
+func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:
 	_update_all_cap_buttons()
+	# Check if any universal upgrade rows need their + button wired up
+	for upgrade_type in _upgrade_rows:
+		var row: UpgradeRow = _upgrade_rows[upgrade_type]
+		var row_board: Enums.BoardType = _get_board_for_upgrade(upgrade_type)
+		if row_board == board_type:
+			_setup_cap_raise_if_needed(row, row_board, upgrade_type)
+
+
+func _get_board_for_upgrade(upgrade_type: Enums.UpgradeType) -> Enums.BoardType:
+	if upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
+		return Enums.BoardType.ORANGE
+	return Enums.BoardType.GOLD
 
 
 func _on_cap_raise_pressed(type: Enums.CurrencyType) -> void:
