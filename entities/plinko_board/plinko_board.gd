@@ -966,10 +966,12 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var num_buckets: int = buckets_container.get_child_count()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
-	# Suppress singing during upgrade ripple — the ripple owns the arpeggio.
-	# If bucket is already singing, skip audio — it keeps its original timer.
-	if not _upgrade_animating and not was_already_singing:
-		if AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced):
+	# Suppress all bucket audio during the upgrade ripple — the ripple owns the arpeggio.
+	# Repeat hits route to the lower-priority queue and play softer per concurrent
+	# active drone for the bucket (see AudioManager.REPEAT_ATTENUATION_DB / CAP).
+	if not _upgrade_animating:
+		AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced, was_already_singing)
+		if not was_already_singing:
 			bucket.mark_singing()
 			_singing_positions[_bucket_position_key(bucket.position.x + buckets_container.position.x)] = true
 	AudioManager.on_coin_landed()
