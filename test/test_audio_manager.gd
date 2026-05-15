@@ -21,6 +21,11 @@ func _run_tests() -> void:
 	test_count_drones_of_type_separates_advanced()
 	test_count_drones_of_type_empty()
 
+	# Drone bump lookup
+	test_find_active_drone_matches_type()
+	test_find_active_drone_no_cross_type_fallback()
+	test_find_active_drone_skips_sparkle()
+
 	# Chord phase
 	test_chord_phase_at_start()
 	test_chord_phase_at_end()
@@ -52,6 +57,16 @@ func _run_tests() -> void:
 	test_set_muted_toggles_state()
 	test_is_muted_default_false()
 
+	# Master volume
+	test_set_master_volume_stores_value()
+	test_master_volume_clamped_to_range()
+	test_get_master_volume_default()
+
+	# VFX overrides
+	test_set_vfx_override_updates_theme()
+	test_get_vfx_overrides_returns_stored()
+	test_apply_all_vfx_overrides_mutates_theme()
+
 
 # --- Snapshot/restore helpers ---
 
@@ -74,6 +89,8 @@ var _saved_motif_position: int
 var _saved_beat_armed: bool
 var _saved_autodrop_interval: float
 var _saved_muted: bool
+var _saved_master_volume: float
+var _saved_vfx_overrides: Dictionary
 
 func _save_state() -> void:
 	_saved_drones = AudioManager._active_drones.duplicate(true)
@@ -95,6 +112,8 @@ func _save_state() -> void:
 	_saved_beat_armed = AudioManager._beat_armed
 	_saved_autodrop_interval = AudioManager._autodrop_interval
 	_saved_muted = AudioManager._muted
+	_saved_master_volume = AudioManager._master_volume_percent
+	_saved_vfx_overrides = AudioManager._vfx_overrides.duplicate(true)
 
 func _restore_state() -> void:
 	AudioManager._active_drones = _saved_drones
@@ -116,6 +135,8 @@ func _restore_state() -> void:
 	AudioManager._beat_armed = _saved_beat_armed
 	AudioManager._autodrop_interval = _saved_autodrop_interval
 	AudioManager._muted = _saved_muted
+	AudioManager._master_volume_percent = _saved_master_volume
+	AudioManager._vfx_overrides = _saved_vfx_overrides
 
 
 # --- Pure math tests ---
@@ -159,6 +180,7 @@ func test_make_drone_entry_has_all_fields() -> void:
 	assert_true(entry.has("state"), "has state")
 	assert_true(entry.has("is_advanced"), "has is_advanced")
 	assert_true(entry.has("chord_gen"), "has chord_gen")
+	assert_true(entry.has("base_volume_db"), "has base_volume_db")
 
 
 func test_make_drone_entry_values_match() -> void:
@@ -206,6 +228,45 @@ func test_count_drones_of_type_empty() -> void:
 	_save_state()
 	AudioManager._active_drones = {}
 	assert_equal(AudioManager._count_drones_of_type(false), 0, "empty = 0")
+	_restore_state()
+
+
+# --- Drone bump lookup tests ---
+
+func test_find_active_drone_matches_type() -> void:
+	print("test_find_active_drone_matches_type")
+	_save_state()
+	var gen: int = AudioManager._chord_generation
+	AudioManager._active_drones = {
+		"N_5_1000": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 3, "timer": 1.0, "degree": 0, "octave_mult": 0.5, "chord_gen": gen, "base_volume_db": -10.0},
+		"A_5_1001": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": true, "idx": 7, "timer": 1.0, "degree": 0, "octave_mult": 0.25, "chord_gen": gen, "base_volume_db": -6.0},
+	}
+	assert_equal(AudioManager._find_active_drone_key_for(5, true), "A_5_1001", "advanced lookup finds A_ entry")
+	assert_equal(AudioManager._find_active_drone_key_for(5, false), "N_5_1000", "normal lookup finds N_ entry")
+	_restore_state()
+
+
+func test_find_active_drone_no_cross_type_fallback() -> void:
+	print("test_find_active_drone_no_cross_type_fallback")
+	_save_state()
+	var gen: int = AudioManager._chord_generation
+	AudioManager._active_drones = {
+		"N_5_1000": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 3, "timer": 1.0, "degree": 0, "octave_mult": 0.5, "chord_gen": gen, "base_volume_db": -10.0},
+	}
+	assert_equal(AudioManager._find_active_drone_key_for(5, true), "", "advanced lookup does not fall back to normal drone")
+	_restore_state()
+
+
+func test_find_active_drone_skips_sparkle() -> void:
+	print("test_find_active_drone_skips_sparkle")
+	_save_state()
+	var gen: int = AudioManager._chord_generation
+	# A sparkle entry would never be keyed "N_<idx>_..." in practice, but
+	# defensively guard against it — state, not key, decides whether to bump.
+	AudioManager._active_drones = {
+		"N_5_1000": {"state": AudioManager.DroneState.SPARKLE, "is_advanced": false, "idx": 3, "timer": 1.0, "degree": 0, "octave_mult": 0.5, "chord_gen": gen, "base_volume_db": -22.0},
+	}
+	assert_equal(AudioManager._find_active_drone_key_for(5, false), "", "sparkle-state entry is not returned")
 	_restore_state()
 
 
@@ -397,4 +458,74 @@ func test_is_muted_default_false() -> void:
 	_save_state()
 	AudioManager._muted = false
 	assert_false(AudioManager.is_muted(), "default mute state is false")
+	_restore_state()
+
+
+# --- Master volume tests ---
+
+func test_set_master_volume_stores_value() -> void:
+	print("test_set_master_volume_stores_value")
+	_save_state()
+	AudioManager.set_master_volume(75.0)
+	assert_near(AudioManager.get_master_volume(), 75.0, 0.001, "volume stored as 75")
+	_restore_state()
+
+
+func test_master_volume_clamped_to_range() -> void:
+	print("test_master_volume_clamped_to_range")
+	_save_state()
+	AudioManager.set_master_volume(-10.0)
+	assert_near(AudioManager.get_master_volume(), 0.0, 0.001, "negative clamped to 0")
+	AudioManager.set_master_volume(150.0)
+	assert_near(AudioManager.get_master_volume(), 100.0, 0.001, "over-100 clamped to 100")
+	_restore_state()
+
+
+func test_get_master_volume_default() -> void:
+	print("test_get_master_volume_default")
+	_save_state()
+	AudioManager._master_volume_percent = 50.0
+	assert_near(AudioManager.get_master_volume(), 50.0, 0.001, "default volume is 50")
+	_restore_state()
+
+
+# --- VFX override tests ---
+
+func test_set_vfx_override_updates_theme() -> void:
+	print("test_set_vfx_override_updates_theme")
+	_save_state()
+	var prev: bool = ThemeProvider.theme.peg_flash_enabled
+	AudioManager.set_vfx_override("peg_flash", not prev)
+	assert_equal(ThemeProvider.theme.peg_flash_enabled, not prev, "theme property updated")
+	# Restore theme property directly since _restore_state won't touch it
+	ThemeProvider.theme.peg_flash_enabled = prev
+	_restore_state()
+
+
+func test_get_vfx_overrides_returns_stored() -> void:
+	print("test_get_vfx_overrides_returns_stored")
+	_save_state()
+	AudioManager._vfx_overrides = {}
+	AudioManager.set_vfx_override("drop_burst", false)
+	var overrides: Dictionary = AudioManager.get_vfx_overrides()
+	assert_true(overrides.has("drop_burst"), "override stored in dict")
+	assert_false(overrides["drop_burst"], "stored value is false")
+	ThemeProvider.theme.drop_burst_enabled = true
+	_restore_state()
+
+
+func test_apply_all_vfx_overrides_mutates_theme() -> void:
+	print("test_apply_all_vfx_overrides_mutates_theme")
+	_save_state()
+	var prev_flash: bool = ThemeProvider.theme.peg_flash_enabled
+	var prev_pulse: bool = ThemeProvider.theme.peg_pulse_enabled
+	AudioManager._vfx_overrides = {
+		"peg_flash": not prev_flash,
+		"peg_pulse": not prev_pulse,
+	}
+	AudioManager.apply_all_vfx_overrides()
+	assert_equal(ThemeProvider.theme.peg_flash_enabled, not prev_flash, "peg_flash applied")
+	assert_equal(ThemeProvider.theme.peg_pulse_enabled, not prev_pulse, "peg_pulse applied")
+	ThemeProvider.theme.peg_flash_enabled = prev_flash
+	ThemeProvider.theme.peg_pulse_enabled = prev_pulse
 	_restore_state()

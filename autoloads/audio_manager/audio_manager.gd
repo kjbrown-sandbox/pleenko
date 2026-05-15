@@ -100,6 +100,13 @@ const MAX_SPARKLES_PER_FIRE := 2
 const VOICE_ATTENUATION_RATIO := 0.75
 
 const SPARKLE_DRONE_SUSTAIN := 2.5
+
+# Drone bump: brief volume spike when a coin lands on an already-singing
+# bucket. Tuned against the Drones-bus compressor (-18 dB / 3:1) — the
+# audible delta is ~2 dB less than the raw number. Retune both together.
+const DRONE_BUMP_DB := 5.0
+const DRONE_BUMP_FADE_SECONDS := 0.4
+
 const BUCKET_DRONE_POOL_SIZE := 24
 var _drone_pool: Array[AudioStreamPlayer] = []
 var _drone_free: Array[int] = []
@@ -107,6 +114,9 @@ var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree",
 # Keyed by drone pool idx. Killed before a slot is reused so an in-flight fade
 # can't keep writing to the new drone's volume_db.
 var _drone_fade_tweens: Dictionary = {}
+# Same shape as _drone_fade_tweens but for bump-and-decay tweens. Discarded
+# when the bucket's drone slot is reclaimed so bumps never outlive the drone.
+var _drone_bump_tweens: Dictionary = {}
 
 # Prestige audio — ascending maj7 arpeggio from bass to bell at contact.
 const PRESTIGE_ARPEGGIO_INTERVAL := 0.125  # seconds between arpeggio notes (real-time)
@@ -115,6 +125,8 @@ const PRESTIGE_BELL_VOLUME_DB := -12.0
 const PRESTIGE_ARPEGGIO_VOLUME_DB := -14.0
 var _silenced: bool = false  # gates all new sounds (prestige, scene transitions)
 var _muted: bool = false  # user preference — mutes the Master bus
+var _master_volume_percent: float = 50.0
+var _vfx_overrides: Dictionary = {}
 var _prestige_arpeggio_active: bool = false
 var _prestige_arpeggio_step: int = 0
 var _prestige_arpeggio_last_ms: int = 0
@@ -277,6 +289,7 @@ func _ready() -> void:
 	PrestigeManager.prestige_phase_changed.connect(_on_prestige_phase_changed)
 	_on_theme_swap.call_deferred()
 
+	set_master_volume(50.0)
 	set_process(true)
 
 
@@ -400,6 +413,7 @@ func _hard_stop_all_drones() -> void:
 		var drone: Dictionary = _active_drones[drone_key]
 		var idx: int = int(drone["idx"])
 		_kill_fade_tween(idx)
+		_kill_bump_tween(idx)
 		_drone_pool[idx].stop()
 		if not _drone_free.has(idx):
 			_drone_free.append(idx)
@@ -415,6 +429,7 @@ func _fade_all_drones(duration: float) -> void:
 
 func _fade_drone(idx: int, duration: float) -> void:
 	_kill_fade_tween(idx)
+	_kill_bump_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	var tween := create_tween()
 	# EASE_OUT matches loudness perception (drop fast, trail off slowly).
@@ -432,6 +447,60 @@ func _kill_fade_tween(idx: int) -> void:
 	if tween and tween.is_valid():
 		tween.kill()
 	_drone_fade_tweens.erase(idx)
+
+
+func _kill_bump_tween(idx: int) -> void:
+	var tween: Tween = _drone_bump_tweens.get(idx)
+	if tween and tween.is_valid():
+		tween.kill()
+	_drone_bump_tweens.erase(idx)
+
+
+## Locates the ACTIVE drone for this bucket+type. Skips sparkles and refuses
+## to cross-fall-back to the other coin type — a normal-coin bump on an
+## advanced-coin drone (or vice versa) would play at the wrong octave.
+func _find_active_drone_key_for(bucket_idx: int, is_advanced: bool) -> String:
+	var prefix: String = ("A_" if is_advanced else "N_") + str(bucket_idx) + "_"
+	for key: String in _active_drones:
+		if not key.begins_with(prefix):
+			continue
+		if _active_drones[key]["state"] != DroneState.ACTIVE:
+			continue
+		return key
+	return ""
+
+
+## Briefly raises the existing drone's volume by DRONE_BUMP_DB and tweens
+## back to its base. No-op if no matching drone, if a fade is already
+## governing this slot, or in modes that don't allocate _active_drones
+## entries (drum-layer, arpeggio).
+func bump_bucket_drone(board_type: Enums.BoardType, bucket_idx: int, is_advanced: bool) -> void:
+	print("[BUMP] called board=", board_type, " bucket=", bucket_idx, " advanced=", is_advanced)
+	if _silenced:
+		print("[BUMP] skip: _silenced")
+		return
+	if board_type != _active_board:
+		print("[BUMP] skip: board mismatch (_active_board=", _active_board, ")")
+		return
+	var key: String = _find_active_drone_key_for(bucket_idx, is_advanced)
+	if key == "":
+		print("[BUMP] skip: no matching active drone. _active_drones keys=", _active_drones.keys())
+		return
+	var idx: int = int(_active_drones[key]["idx"])
+	if _drone_fade_tweens.has(idx):
+		print("[BUMP] skip: idx=", idx, " is being faded")
+		return
+	var base_db: float = float(_active_drones[key]["base_volume_db"])
+	_kill_bump_tween(idx)
+	var player: AudioStreamPlayer = _drone_pool[idx]
+	var pre_volume: float = player.volume_db
+	player.volume_db = base_db + DRONE_BUMP_DB
+	print("[BUMP] FIRED key=", key, " idx=", idx, " base=", base_db, " pre=", pre_volume, " -> ", player.volume_db, " fade ", DRONE_BUMP_FADE_SECONDS, "s")
+	var tween := create_tween()
+	tween.tween_property(player, "volume_db", base_db, DRONE_BUMP_FADE_SECONDS) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	tween.tween_callback(func() -> void: _drone_bump_tweens.erase(idx))
+	_drone_bump_tweens[idx] = tween
 
 
 ## dB equivalent of VOICE_ATTENUATION_RATIO^N.
@@ -458,7 +527,9 @@ func _count_drones_of_type(is_advanced: bool) -> int:
 
 ## Factory for `_active_drones` entries — centralized so field shape can't
 ## drift per-site. Sparkle allocations get is_advanced=false by default.
-func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, state: int, is_advanced: bool = false) -> Dictionary:
+## `base_volume_db` is the volume_db actually written to the player at spawn;
+## bump_bucket_drone uses it as the fade-back target.
+func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, state: int, is_advanced: bool = false, base_volume_db: float = 0.0) -> Dictionary:
 	return {
 		"idx": idx,
 		"timer": timer,
@@ -467,6 +538,7 @@ func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, 
 		"state": state,
 		"is_advanced": is_advanced,
 		"chord_gen": _chord_generation,
+		"base_volume_db": base_volume_db,
 	}
 
 
@@ -476,6 +548,7 @@ func _finish_drone_fade(idx: int) -> void:
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stop()
 	_drone_fade_tweens.erase(idx)
+	_drone_bump_tweens.erase(idx)
 	if not _drone_free.has(idx):
 		_drone_free.append(idx)
 
@@ -770,12 +843,14 @@ func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 	var voice_attenuation_db: float = _voice_attenuation_db(voice_count)
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
+	_kill_bump_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stream = sp["stream"]
 	player.pitch_scale = sp["pitch_scale"]
-	player.volume_db = target_volume + voice_attenuation_db
+	var base_volume_db: float = target_volume + voice_attenuation_db
+	player.volume_db = base_volume_db
 	player.play()
-	_active_drones[key] = _make_drone_entry(idx, Harp.DECAY_SECONDS, degree, octave_mult, DroneState.ACTIVE, is_advanced)
+	_active_drones[key] = _make_drone_entry(idx, Harp.DECAY_SECONDS, degree, octave_mult, DroneState.ACTIVE, is_advanced, base_volume_db)
 
 
 ## Plays a bell sparkle that walks up the chord from the root. Each sparkle
@@ -815,17 +890,19 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
+	_kill_bump_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stream = sp["stream"]
 	player.pitch_scale = sp["pitch_scale"]
-	player.volume_db = SPARKLE_VOLUME_DB + voice_attenuation_db
+	var base_volume_db: float = SPARKLE_VOLUME_DB + voice_attenuation_db
+	player.volume_db = base_volume_db
 	player.play()
 
 	if _sparkles_this_fire == 0:
 		_sparkle_step += 1
 	_sparkles_this_fire += 1
 	var key: String = "SP_" + str(Time.get_ticks_msec()) + "_" + str(idx)
-	_active_drones[key] = _make_drone_entry(idx, SPARKLE_DRONE_SUSTAIN, degree, sparkle_octave, DroneState.SPARKLE, false)
+	_active_drones[key] = _make_drone_entry(idx, SPARKLE_DRONE_SUSTAIN, degree, sparkle_octave, DroneState.SPARKLE, false, base_volume_db)
 
 
 func play_peg_click(board_type: Enums.BoardType) -> void:
@@ -911,6 +988,50 @@ func is_muted() -> bool:
 	return _muted
 
 
+func set_master_volume(percent: float) -> void:
+	_master_volume_percent = clampf(percent, 0.0, 100.0)
+	var linear: float = _master_volume_percent / 100.0
+	AudioServer.set_bus_volume_db(0, linear_to_db(linear) if linear > 0.0 else -80.0)
+
+
+func get_master_volume() -> float:
+	return _master_volume_percent
+
+
+func set_vfx_override(key: String, enabled: bool) -> void:
+	_vfx_overrides[key] = enabled
+	_apply_vfx_override(key, enabled, ThemeProvider.theme)
+
+
+func get_vfx_overrides() -> Dictionary:
+	return _vfx_overrides
+
+
+func apply_all_vfx_overrides() -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	if not t:
+		return
+	for key: String in _vfx_overrides:
+		_apply_vfx_override(key, _vfx_overrides[key], t)
+
+
+func _apply_vfx_override(key: String, enabled: bool, t: VisualTheme) -> void:
+	match key:
+		"peg_flash":          t.peg_flash_enabled = enabled
+		"peg_pulse":          t.peg_pulse_enabled = enabled
+		"peg_glow_halo":      t.peg_glow_halo_enabled = enabled
+		"peg_ring":           t.peg_ring_enabled = enabled
+		"bucket_pulse":       t.bucket_pulse_enabled = enabled
+		"coin_halo":          t.coin_halo_enabled = enabled
+		"coin_impact_squash": t.coin_impact_squash_enabled = enabled
+		"drop_burst":         t.drop_burst_enabled = enabled
+		"level_bar_shimmer":  t.level_bar_shimmer_enabled = enabled
+		"level_bar_particle": t.level_bar_particle_enabled = enabled
+		"vignette":           t.vignette_enabled = enabled
+		"board_glow":         t.board_glow_enabled = enabled
+		"bg_particles":       t.bg_particles_enabled = enabled
+
+
 func play_prestige(_play_duration: float = 3.0, _fade_duration: float = 2.0) -> void:
 	# Always use the first chord (I) so prestige is a I maj7, not whatever chord
 	# the progression happened to be on.
@@ -949,12 +1070,13 @@ func _play_prestige_voice(sp: Dictionary, volume_db: float, key: String) -> void
 		return
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
+	_kill_bump_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stream = sp["stream"]
 	player.pitch_scale = sp["pitch_scale"]
 	player.volume_db = volume_db
 	player.play()
-	_active_drones[key] = _make_drone_entry(idx, 10.0, 0, 1.0, DroneState.ACTIVE, false)
+	_active_drones[key] = _make_drone_entry(idx, 10.0, 0, 1.0, DroneState.ACTIVE, false, volume_db)
 
 
 ## Fires one arpeggio note per PRESTIGE_ARPEGGIO_INTERVAL using wall-clock time.
@@ -1046,6 +1168,7 @@ func _update_bucket_drones(delta: float) -> void:
 			# Don't call player.stop() — the sample is finite and will
 			# end on its own. Stopping early cuts off the harp tail.
 			_drone_fade_tweens.erase(drone.idx)
+			_kill_bump_tween(drone.idx)
 			if not _drone_free.has(drone.idx):
 				_drone_free.append(drone.idx)
 			expired.append(drone_key)
