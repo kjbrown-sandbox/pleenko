@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 5
+const SAVE_VERSION := 6
 const AUTO_SAVE_INTERVAL := 30.0
 
 var _auto_save_timer: Timer
@@ -48,6 +48,8 @@ func save_game() -> void:
 		"challenges": ChallengeProgressManager.serialize(),
 		"onboarding": OnboardingProgress.serialize(),
 		"audio_muted": AudioManager.is_muted(),
+		"master_volume": AudioManager.get_master_volume(),
+		"vfx_settings": AudioManager.get_vfx_overrides(),
 	}
 
 	var json_string := JSON.stringify(data, "\t")
@@ -112,6 +114,9 @@ func load_game() -> bool:
 	UpgradeManager.deserialize(data.get("upgrades", {}))
 	_board_manager.deserialize(data.get("boards", {}))
 	AudioManager.set_muted(data.get("audio_muted", false))
+	AudioManager.set_master_volume(data.get("master_volume", 50.0))
+	for key: String in data.get("vfx_settings", {}):
+		AudioManager.set_vfx_override(key, bool(data["vfx_settings"][key]))
 
 	# Failsafe: reconcile state with the level table.
 	# Heals saves where current_level was saved ahead of claim_rewards().
@@ -261,6 +266,15 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 			"peeked_challenges": challenges_visited,
 		}
 		print("[SaveManager] Migrated save v%d -> v5 (onboarding seeded from existing state)" % version)
+	if version < 6:
+		# Existing players who already have the autodropper unlocked should not
+		# see the intro animation — mark it as already seen.
+		var boards_data: Dictionary = data.get("boards", {})
+		if boards_data.get("normal_autodroppers_unlocked", false):
+			var onboarding: Dictionary = data.get("onboarding", {})
+			onboarding["autodropper_intro_seen"] = true
+			data["onboarding"] = onboarding
+		print("[SaveManager] Migrated save v%d -> v6 (autodropper intro seeded)" % version)
 	data["version"] = SAVE_VERSION
 	return data
 

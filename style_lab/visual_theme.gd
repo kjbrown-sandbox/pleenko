@@ -199,6 +199,7 @@ const coin_shape := CoinShape.CYLINDER
 @export var peg_pulse_duration := 0.15                            # seconds from peg-pulse start to full settle
 @export var bucket_pulse_enabled := true                          # bucket scale-pulse on receive
 @export var drop_burst_enabled := true                            # particle burst at drop point
+@export var bg_particles_enabled := false                         # ambient drifting particles in background
 
 # Peg rings — expanding ripple at each peg hit, alternative/complement to the glow halo.
 @export var peg_ring_enabled := false

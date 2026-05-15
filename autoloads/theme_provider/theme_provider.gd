@@ -53,4 +53,5 @@ func set_theme(kind: Kind) -> void:
 		_directional_light.light_energy = theme.directional_light_energy
 		_directional_light.rotation_degrees = theme.directional_light_angle
 
+	AudioManager.apply_all_vfx_overrides()
 	theme_changed.emit()

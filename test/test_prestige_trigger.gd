@@ -52,7 +52,7 @@ func test_currency_changed_does_not_re_trigger_after_prestige() -> void:
 	print("test_currency_changed_does_not_re_trigger_after_prestige")
 	_reset()
 	# Simulate a completed prestige for orange
-	PrestigeManager.trigger_prestige(Enums.BoardType.ORANGE)
+	PrestigeManager.claim_prestige(Enums.BoardType.ORANGE)
 	assert_true(PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.ORANGE),
 		"precondition: orange should be permanently unlocked")
 
@@ -85,7 +85,7 @@ func test_will_trigger_prestige_true_for_raw_currency() -> void:
 func test_will_trigger_prestige_false_after_prestige() -> void:
 	print("test_will_trigger_prestige_false_after_prestige")
 	_reset()
-	PrestigeManager.trigger_prestige(Enums.BoardType.ORANGE)
+	PrestigeManager.claim_prestige(Enums.BoardType.ORANGE)
 	var board := PlinkoBoard.new()
 	board.board_type = Enums.BoardType.GOLD
 	assert_false(board._will_trigger_prestige(Enums.CurrencyType.RAW_ORANGE),

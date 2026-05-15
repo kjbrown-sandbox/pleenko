@@ -26,6 +26,12 @@ func _reset() -> void:
 
 func _make_board_manager() -> BoardManager:
 	var bm := BoardManager.new()
+	add_child(bm)
+	# setup() would normally create this; tests skip setup() to avoid pulling
+	# in a camera + theme. Stub the timer so _on_autodropper_adjust's start/stop
+	# logic doesn't NPE.
+	bm._autodrop_timer = Timer.new()
+	bm.add_child(bm._autodrop_timer)
 	var gold_board := PlinkoBoard.new()
 	gold_board.board_type = Enums.BoardType.GOLD
 	gold_board.coin_queue = CoinQueue.new()
@@ -54,7 +60,9 @@ func test_no_autodropper_without_prestige() -> void:
 func test_gold_prestige_grants_autodropper() -> void:
 	print("test_gold_prestige_grants_autodropper")
 	_reset()
-	PrestigeManager.trigger_prestige(Enums.BoardType.GOLD)
+	# Completing gold prestige claims the orange tier (the new tier the player
+	# unlocked by prestiging out of gold).
+	PrestigeManager.claim_prestige(Enums.BoardType.ORANGE)
 
 	var bm := _make_board_manager()
 
@@ -72,7 +80,7 @@ func test_gold_prestige_grants_autodropper() -> void:
 func test_prestige_reward_does_not_overwrite_existing_pool() -> void:
 	print("test_prestige_reward_does_not_overwrite_existing_pool")
 	_reset()
-	PrestigeManager.trigger_prestige(Enums.BoardType.GOLD)
+	PrestigeManager.claim_prestige(Enums.BoardType.ORANGE)
 
 	var bm := _make_board_manager()
 	bm._normal_autodroppers_unlocked = true
@@ -91,7 +99,7 @@ func test_prestige_reward_does_not_overwrite_existing_pool() -> void:
 func test_prestige_reward_does_not_overwrite_existing_assignment() -> void:
 	print("test_prestige_reward_does_not_overwrite_existing_assignment")
 	_reset()
-	PrestigeManager.trigger_prestige(Enums.BoardType.GOLD)
+	PrestigeManager.claim_prestige(Enums.BoardType.ORANGE)
 
 	var bm := _make_board_manager()
 	bm._normal_autodroppers_unlocked = true
@@ -147,7 +155,9 @@ func test_all_advanced_autodroppers_auto_assign_to_gold() -> void:
 func test_prestige_reward_text_includes_autodropper() -> void:
 	print("test_prestige_reward_text_includes_autodropper")
 	var screen := preload("res://entities/prestige_screen/prestige_screen.gd").new()
-	screen._board_type = Enums.BoardType.GOLD
+	# After gold prestige the screen shows orange as the newly-claimed tier;
+	# the "permanent autodropper" + "gold challenges" lines key off that.
+	screen._board_type = Enums.BoardType.ORANGE
 	var text: String = screen._build_rewards_text()
 	assert_true(text.contains("permanent autodropper"),
 		"gold prestige rewards should mention permanent autodropper")
