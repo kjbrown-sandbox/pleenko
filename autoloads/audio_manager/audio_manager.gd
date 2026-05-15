@@ -95,8 +95,9 @@ const SPARKLE_PROXIMITY_MS := 100.0
 const MAX_SPARKLES_PER_FIRE := 2
 
 # Per-voice attenuation: voice N plays at VOICE_ATTENUATION_RATIO^(N-1) of
-# base amplitude (~2.5 dB drop per added voice at 0.75). The Drones-bus
-# compressor is tuned against this curve — retune both together.
+# base amplitude (~2.5 dB drop per added voice at 0.75). Sparkle-only now —
+# bucket plays use per-bucket repeat softening instead (REPEAT_ATTENUATION_DB).
+# `_count_drones_of_type` is retained for sparkles + tests.
 const VOICE_ATTENUATION_RATIO := 0.75
 
 const SPARKLE_DRONE_SUSTAIN := 2.5
@@ -591,6 +592,11 @@ func _tick_beat_grid(delta: float) -> void:
 ## its parallel arrays (drum_instruments, drum_patterns, drum_volumes) by
 ## this same value, where it's called a "tier." Arpeggio / harp modes use
 ## it as a chord-tone offset via _get_pitch_scale. Three words, one concept.
+## `is_repeat` (queue mode only): when true, the entry is routed to the
+## lower-priority `_repeat_bucket_queue` instead, never preempts primary,
+## and the per-bucket count check in `_play_bucket_now` softens or caps it.
+## In drum-layer and arpeggio modes the flag is ignored — softening only
+## applies in queue mode where the harp drones overlap.
 func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool, is_repeat: bool = false) -> bool:
 	if _silenced:
 		return false

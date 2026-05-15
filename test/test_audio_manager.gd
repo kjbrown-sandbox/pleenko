@@ -268,16 +268,18 @@ func test_request_bucket_play_repeat_queues_separately() -> void:
 	AudioManager._silenced = false
 	AudioManager._bucket_queue = []
 	AudioManager._repeat_bucket_queue = []
-	# Force queue mode: ensure no drum/pattern mode is active. The active
-	# theme decides this — if drum_instruments or pattern is non-empty, skip
-	# (the test only validates queue-mode routing).
-	if AudioManager._theme_drum_instruments().size() > 0 or AudioManager._theme_pattern().length() > 0:
-		print("  SKIP (non-queue mode active)")
-		_restore_state()
-		return
+	# Force queue mode by stubbing the theme's drum/pattern fields — the
+	# theme mode selector in request_bucket_play reads these and we need
+	# the queue-mode branch to fire deterministically.
+	var saved_drums: PackedInt32Array = ThemeProvider.theme.drum_instruments
+	var saved_pattern: String = ThemeProvider.theme.arpeggio_pattern
+	ThemeProvider.theme.drum_instruments = PackedInt32Array()
+	ThemeProvider.theme.arpeggio_pattern = ""
 	AudioManager.request_bucket_play(AudioManager._active_board, 5, 0, false, true)
 	assert_equal(AudioManager._repeat_bucket_queue.size(), 1, "repeat enqueued in repeat queue")
 	assert_true(AudioManager._bucket_queue.is_empty(), "primary queue untouched")
+	ThemeProvider.theme.drum_instruments = saved_drums
+	ThemeProvider.theme.arpeggio_pattern = saved_pattern
 	_restore_state()
 
 

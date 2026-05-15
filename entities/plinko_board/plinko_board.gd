@@ -969,9 +969,12 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	# Suppress all bucket audio during the upgrade ripple — the ripple owns the arpeggio.
 	# Repeat hits route to the lower-priority queue and play softer per concurrent
 	# active drone for the bucket (see AudioManager.REPEAT_ATTENUATION_DB / CAP).
+	# Visual singing is gated on the audio request being accepted so an inactive or
+	# silenced board doesn't visually mark its buckets (would resurface via
+	# _singing_positions on board switch-back).
 	if not _upgrade_animating:
-		AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced, was_already_singing)
-		if not was_already_singing:
+		var accepted: bool = AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced, was_already_singing)
+		if accepted and not was_already_singing:
 			bucket.mark_singing()
 			_singing_positions[_bucket_position_key(bucket.position.x + buckets_container.position.x)] = true
 	AudioManager.on_coin_landed()
