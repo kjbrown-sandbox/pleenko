@@ -400,8 +400,8 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 				return
 			for board in _boards:
 				board.set_normal_autodroppers_visible(true)
-		# Auto-assign every new autodropper to gold; player can reassign later
-		_on_autodropper_adjust(StringName("GOLD_NORMAL"), 1, false)
+		# New autodroppers stay in the free pool; the player assigns them
+		# manually. They are never auto-assigned to gold.
 		_update_all_button_displays()
 	elif upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
 		_advanced_pool += 1
@@ -409,8 +409,8 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 			_advanced_autodroppers_unlocked = true
 			for board in _boards:
 				board.set_advanced_autodroppers_visible(true)
-		# Auto-assign every new advanced autodropper to gold; player can reassign later
-		_on_autodropper_adjust(StringName("GOLD_ADVANCED"), 1, false)
+		# New advanced autodroppers stay in the free pool; the player assigns
+		# them manually. They are never auto-assigned to gold.
 		_update_all_button_displays()
 	if board_type == Enums.BoardType.GOLD:
 		check_and_rescue_gold_soft_lock()

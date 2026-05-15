@@ -4,8 +4,8 @@ extends "res://test/test_base.gd"
 ##   godot --headless --scene res://test/test_prestige_autodropper.tscn
 ##
 ## Verifies that gold prestige grants 1 normal autodropper auto-assigned
-## to the gold board, that the reward is idempotent, and that all purchased
-## autodroppers auto-assign to the default board.
+## to the gold board, that the reward is idempotent, and that purchased
+## autodroppers go into the free pool and are never auto-assigned to gold.
 
 
 func _run_tests() -> void:
@@ -16,9 +16,9 @@ func _run_tests() -> void:
 	test_prestige_reward_does_not_overwrite_existing_pool()
 	test_prestige_reward_does_not_overwrite_existing_assignment()
 	test_first_purchase_no_auto_assign_when_intro_not_seen()
-	test_second_purchase_auto_assigns_when_already_unlocked()
-	test_all_normal_autodroppers_auto_assign_to_gold()
-	test_all_advanced_autodroppers_auto_assign_to_gold()
+	test_second_purchase_does_not_auto_assign_to_gold()
+	test_normal_autodropper_purchase_pools_without_assigning()
+	test_advanced_autodropper_purchase_pools_without_assigning()
 	test_prestige_reward_text_includes_autodropper()
 
 
@@ -140,57 +140,54 @@ func test_first_purchase_no_auto_assign_when_intro_not_seen() -> void:
 	OnboardingProgress.reset()
 
 
-func test_second_purchase_auto_assigns_when_already_unlocked() -> void:
-	print("test_second_purchase_auto_assigns_when_already_unlocked")
+func test_second_purchase_does_not_auto_assign_to_gold() -> void:
+	print("test_second_purchase_does_not_auto_assign_to_gold")
 	_reset()
 	var bm := _make_board_manager()
 	# Simulate already-unlocked state (intro already seen / second purchase).
 	bm._normal_autodroppers_unlocked = true
 	bm._normal_pool = 1
-	bm._assignments[StringName("GOLD_NORMAL")] = 1
 
 	bm._on_upgrade_purchased(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD, 2)
 
-	assert_equal(bm._normal_pool, 2, "pool should be 2")
-	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 2,
-		"second purchase must auto-assign to gold")
+	assert_equal(bm._normal_pool, 2, "pool should increment to 2")
+	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 0,
+		"second purchase must NOT auto-assign to gold (stays in free pool)")
 	bm.queue_free()
 
 
-func test_all_normal_autodroppers_auto_assign_to_gold() -> void:
-	print("test_all_normal_autodroppers_auto_assign_to_gold")
+func test_normal_autodropper_purchase_pools_without_assigning() -> void:
+	print("test_normal_autodropper_purchase_pools_without_assigning")
 	_reset()
 	var bm := _make_board_manager()
 	# Pre-set unlocked=true so this exercises the post-intro (second+) purchase path.
 	bm._normal_autodroppers_unlocked = true
 	bm._normal_pool = 2
-	bm._assignments[StringName("GOLD_NORMAL")] = 2
 
 	# Simulate purchasing a 3rd autodropper
 	bm._on_upgrade_purchased(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD, 3)
 
 	assert_equal(bm._normal_pool, 3,
 		"pool should be 3 after third purchase")
-	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 3,
-		"all 3 should be assigned to GOLD_NORMAL")
+	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 0,
+		"purchased normal autodroppers must never be assigned to gold")
 	bm.queue_free()
 
 
-func test_all_advanced_autodroppers_auto_assign_to_gold() -> void:
-	print("test_all_advanced_autodroppers_auto_assign_to_gold")
+func test_advanced_autodropper_purchase_pools_without_assigning() -> void:
+	print("test_advanced_autodropper_purchase_pools_without_assigning")
 	_reset()
 	var bm := _make_board_manager()
 	bm._advanced_autodroppers_unlocked = true
 	bm._advanced_pool = 1
-	bm._assignments[StringName("GOLD_ADVANCED")] = 1
 
 	# Simulate purchasing a 2nd advanced autodropper
 	bm._on_upgrade_purchased(Enums.UpgradeType.ADVANCED_AUTODROPPER, Enums.BoardType.ORANGE, 2)
 
 	assert_equal(bm._advanced_pool, 2,
 		"advanced pool should be 2 after second purchase")
-	assert_equal(bm._assignments.get(StringName("GOLD_ADVANCED"), 0), 2,
-		"both should be assigned to GOLD_ADVANCED")
+	assert_equal(bm._assignments.get(StringName("GOLD_ADVANCED"), 0), 0,
+		"purchased advanced autodroppers must never be assigned to gold")
 	bm.queue_free()
 
 
