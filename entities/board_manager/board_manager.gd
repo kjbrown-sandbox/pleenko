@@ -387,7 +387,11 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 		_normal_pool += 1
 		if not _normal_autodroppers_unlocked:
 			_normal_autodroppers_unlocked = true
-			if not OnboardingProgress.has_seen_autodropper_intro():
+			# Skip the intro in challenge mode — the animator only lives in
+			# main scene setup, so the signal would fire into the void and
+			# the player would never see the animation.
+			if not OnboardingProgress.has_seen_autodropper_intro() \
+					and not ChallengeManager.is_active_challenge:
 				# First-ever autodropper: fire the intro animation instead of
 				# auto-assigning. AutodropperIntroAnimator calls
 				# reveal_autodropper_controls() when particles land.

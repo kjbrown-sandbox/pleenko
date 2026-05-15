@@ -48,8 +48,6 @@ func save_game() -> void:
 		"challenges": ChallengeProgressManager.serialize(),
 		"onboarding": OnboardingProgress.serialize(),
 		"audio_muted": AudioManager.is_muted(),
-		"master_volume": AudioManager.get_master_volume(),
-		"vfx_settings": AudioManager.get_vfx_overrides(),
 	}
 
 	var json_string := JSON.stringify(data, "\t")
@@ -114,9 +112,6 @@ func load_game() -> bool:
 	UpgradeManager.deserialize(data.get("upgrades", {}))
 	_board_manager.deserialize(data.get("boards", {}))
 	AudioManager.set_muted(data.get("audio_muted", false))
-	AudioManager.set_master_volume(data.get("master_volume", 50.0))
-	for key: String in data.get("vfx_settings", {}):
-		AudioManager.set_vfx_override(key, bool(data["vfx_settings"][key]))
 
 	# Failsafe: reconcile state with the level table.
 	# Heals saves where current_level was saved ahead of claim_rewards().

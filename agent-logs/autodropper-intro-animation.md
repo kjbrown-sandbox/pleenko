@@ -97,7 +97,10 @@ All blocking concerns resolved in design:
 
 ## Final Plan
 
-See `/Users/kjbrown/.claude/plans/i-want-a-new-piped-lake.md`.
+The approved plan was implemented in commit `0d6da7c` on
+`feature/autodropper-intro-animation`. See the diff against `main` for the
+full set of changes; the Critical files / Implementation steps sections
+above describe the intended structure.
 
 ---
 

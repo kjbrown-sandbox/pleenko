@@ -13,7 +13,9 @@ var _coin_values: Node
 var _canvas_layer: CanvasLayer
 var _particle_overlay: Control
 var _is_animating: bool = false
+var _completed: bool = false
 var _plus_pulse_tween: Tween
+var _pulsing_drop_bar: FillBar
 
 
 func setup(board_manager: BoardManager, coin_values: Node, canvas_layer: CanvasLayer) -> void:
@@ -129,6 +131,11 @@ func _swoop_particles(particles: Array[ColorRect], target: Vector2) -> void:
 
 
 func _on_all_particles_arrived() -> void:
+	# Guard against re-entry: per-particle tween_callbacks all race to call
+	# this once the counter hits total. The first call completes the intro.
+	if _completed:
+		return
+	_completed = true
 	if is_instance_valid(_particle_overlay):
 		_particle_overlay.queue_free()
 		_particle_overlay = null
@@ -154,15 +161,17 @@ func _complete_intro() -> void:
 	if not is_instance_valid(drop_bar):
 		return
 
+	_pulsing_drop_bar = drop_bar
 	_plus_pulse_tween = ThemeProvider.theme.blink_scale_fade(drop_bar.plus_button, 1.05, 0.5)
+	drop_bar.plus_pressed.connect(_on_first_plus_pressed, CONNECT_ONE_SHOT)
 
-	drop_bar.plus_pressed.connect(
-		func():
-			if is_instance_valid(_plus_pulse_tween):
-				_plus_pulse_tween.kill()
-				_plus_pulse_tween = null
-			if is_instance_valid(drop_bar):
-				drop_bar.plus_button.scale = Vector2.ONE
-				drop_bar.plus_button.modulate.a = 1.0,
-		CONNECT_ONE_SHOT
-	)
+
+func _on_first_plus_pressed() -> void:
+	if is_instance_valid(_plus_pulse_tween):
+		_plus_pulse_tween.kill()
+		_plus_pulse_tween = null
+	if is_instance_valid(_pulsing_drop_bar):
+		# blink_scale_fade leaves the button mid-tween; restore neutral state.
+		_pulsing_drop_bar.plus_button.scale = Vector2.ONE
+		_pulsing_drop_bar.plus_button.modulate.a = 1.0
+	_pulsing_drop_bar = null
