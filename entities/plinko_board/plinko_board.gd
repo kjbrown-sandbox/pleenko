@@ -59,7 +59,7 @@ var _singing_positions: Dictionary = {}  # _bucket_position_key(x) -> true, surv
 var _upgrade_animating: bool = false
 var _upgrade_ripple_tween: Tween
 var multi_drop_count: int = -1
-@export var hack_space: bool = true
+@export var hack_space: bool = false
 @export var hack_burst: int = 10 
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 # True while the mouse is hovering either drop button — used by the tooltip
@@ -483,12 +483,12 @@ func _tick_hold_drop_accumulator(delta: float, is_pressed: bool) -> bool:
 
 
 func _is_hold_to_drop_active() -> bool:
-	return Input.is_action_pressed("drop_coin") \
+	return (Input.is_action_pressed("drop_coin") or _drop_main.is_held()) \
 		and drop_section.visible
 
 
 func _is_hold_to_drop_advanced_active() -> bool:
-	return Input.is_action_pressed("drop_unrefined") \
+	return (Input.is_action_pressed("drop_unrefined") or _drop_advanced.is_held()) \
 		and drop_section.visible \
 		and _drop_advanced_column.visible
 

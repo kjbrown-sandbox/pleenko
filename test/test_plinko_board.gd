@@ -22,6 +22,7 @@ func _run_tests() -> void:
 	test_hold_drop_first_press_fires_immediately()
 	test_hold_drop_rate_limited_to_interval()
 	test_hold_drop_release_resets_accumulator()
+	test_hold_drop_advanced_uses_same_accumulator()
 	test_reconcile_reward_ignores_wrong_type()
 	test_reconcile_reward_ignores_wrong_board()
 	test_reconcile_reward_ignores_already_set()
@@ -172,6 +173,18 @@ func test_hold_drop_release_resets_accumulator() -> void:
 	# Release: accumulator must reset so the next press fires immediately.
 	assert_false(board._tick_hold_drop_accumulator(0.016, false), "release does not fire")
 	assert_true(board._tick_hold_drop_accumulator(0.016, true), "next press fires immediately")
+	board.free()
+
+
+func test_hold_drop_advanced_uses_same_accumulator() -> void:
+	print("test_hold_drop_advanced_uses_same_accumulator")
+	# Normal and advanced hold both pass is_pressed=true to _tick_hold_drop_accumulator.
+	# Verify the pacing is identical — no separate accumulator was introduced.
+	var board := _make_board()
+	assert_true(board._tick_hold_drop_accumulator(0.016, true), "advanced: first press fires immediately")
+	board._tick_hold_drop_accumulator(0.05, true)  # partial interval
+	assert_false(board._tick_hold_drop_accumulator(0.016, true), "advanced: mid-interval does not fire")
+	assert_true(board._tick_hold_drop_accumulator(0.035, true), "advanced: fires after 100ms total")
 	board.free()
 
 

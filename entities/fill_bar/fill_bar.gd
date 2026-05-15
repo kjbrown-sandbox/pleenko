@@ -185,6 +185,12 @@ func _apply_outline_style(button: Button, border_col: Color, disabled_border: Co
 
 # ── Public API ──────────────────────────────────────────────────────
 
+## True while the mouse button is physically held over this bar's main button.
+## Polls Input directly so button.disabled state changes don't interrupt the hold.
+func is_held() -> bool:
+	return main_button.is_hovered() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+
+
 func update_text(new_text: String) -> void:
 	main_button.text = new_text
 	if _base_label:
