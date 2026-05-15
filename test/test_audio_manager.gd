@@ -21,10 +21,11 @@ func _run_tests() -> void:
 	test_count_drones_of_type_separates_advanced()
 	test_count_drones_of_type_empty()
 
-	# Drone bump lookup
-	test_find_active_drone_matches_type()
-	test_find_active_drone_no_cross_type_fallback()
-	test_find_active_drone_skips_sparkle()
+	# Repeat softening
+	test_count_active_drones_for_bucket_matches_type()
+	test_count_active_drones_for_bucket_excludes_sparkle()
+	test_request_bucket_play_repeat_queues_separately()
+	test_pump_bucket_queue_drains_primary_first()
 
 	# Chord phase
 	test_chord_phase_at_start()
@@ -77,6 +78,7 @@ var _saved_chord_generation: int
 var _saved_silenced: bool
 var _saved_active_board: Variant
 var _saved_bucket_queue: Array
+var _saved_repeat_bucket_queue: Array
 var _saved_last_bucket_play_time: float
 var _saved_activated_buckets_order: Array
 var _saved_unplayed_buckets: Array
@@ -100,6 +102,7 @@ func _save_state() -> void:
 	_saved_silenced = AudioManager._silenced
 	_saved_active_board = AudioManager._active_board
 	_saved_bucket_queue = AudioManager._bucket_queue.duplicate(true)
+	_saved_repeat_bucket_queue = AudioManager._repeat_bucket_queue.duplicate(true)
 	_saved_last_bucket_play_time = AudioManager._last_bucket_play_time
 	_saved_activated_buckets_order = AudioManager._activated_buckets_order.duplicate(true)
 	_saved_unplayed_buckets = AudioManager._unplayed_buckets.duplicate(true)
@@ -123,6 +126,7 @@ func _restore_state() -> void:
 	AudioManager._silenced = _saved_silenced
 	AudioManager._active_board = _saved_active_board
 	AudioManager._bucket_queue = _saved_bucket_queue
+	AudioManager._repeat_bucket_queue = _saved_repeat_bucket_queue
 	AudioManager._last_bucket_play_time = _saved_last_bucket_play_time
 	AudioManager._activated_buckets_order = _saved_activated_buckets_order
 	AudioManager._unplayed_buckets = _saved_unplayed_buckets
@@ -180,7 +184,6 @@ func test_make_drone_entry_has_all_fields() -> void:
 	assert_true(entry.has("state"), "has state")
 	assert_true(entry.has("is_advanced"), "has is_advanced")
 	assert_true(entry.has("chord_gen"), "has chord_gen")
-	assert_true(entry.has("base_volume_db"), "has base_volume_db")
 
 
 func test_make_drone_entry_values_match() -> void:
@@ -231,42 +234,67 @@ func test_count_drones_of_type_empty() -> void:
 	_restore_state()
 
 
-# --- Drone bump lookup tests ---
+# --- Repeat softening tests ---
 
-func test_find_active_drone_matches_type() -> void:
-	print("test_find_active_drone_matches_type")
+func test_count_active_drones_for_bucket_matches_type() -> void:
+	print("test_count_active_drones_for_bucket_matches_type")
 	_save_state()
 	var gen: int = AudioManager._chord_generation
 	AudioManager._active_drones = {
-		"N_5_1000": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 3, "timer": 1.0, "degree": 0, "octave_mult": 0.5, "chord_gen": gen, "base_volume_db": -10.0},
-		"A_5_1001": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": true, "idx": 7, "timer": 1.0, "degree": 0, "octave_mult": 0.25, "chord_gen": gen, "base_volume_db": -6.0},
+		"N_5_1000": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 3, "timer": 1.0, "degree": 0, "octave_mult": 0.5, "chord_gen": gen},
+		"A_5_1001": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": true, "idx": 7, "timer": 1.0, "degree": 0, "octave_mult": 0.25, "chord_gen": gen},
 	}
-	assert_equal(AudioManager._find_active_drone_key_for(5, true), "A_5_1001", "advanced lookup finds A_ entry")
-	assert_equal(AudioManager._find_active_drone_key_for(5, false), "N_5_1000", "normal lookup finds N_ entry")
+	assert_equal(AudioManager._count_active_drones_for_bucket(5, false), 1, "normal bucket count")
+	assert_equal(AudioManager._count_active_drones_for_bucket(5, true), 1, "advanced bucket count")
 	_restore_state()
 
 
-func test_find_active_drone_no_cross_type_fallback() -> void:
-	print("test_find_active_drone_no_cross_type_fallback")
-	_save_state()
-	var gen: int = AudioManager._chord_generation
-	AudioManager._active_drones = {
-		"N_5_1000": {"state": AudioManager.DroneState.ACTIVE, "is_advanced": false, "idx": 3, "timer": 1.0, "degree": 0, "octave_mult": 0.5, "chord_gen": gen, "base_volume_db": -10.0},
-	}
-	assert_equal(AudioManager._find_active_drone_key_for(5, true), "", "advanced lookup does not fall back to normal drone")
-	_restore_state()
-
-
-func test_find_active_drone_skips_sparkle() -> void:
-	print("test_find_active_drone_skips_sparkle")
+func test_count_active_drones_for_bucket_excludes_sparkle() -> void:
+	print("test_count_active_drones_for_bucket_excludes_sparkle")
 	_save_state()
 	var gen: int = AudioManager._chord_generation
 	# A sparkle entry would never be keyed "N_<idx>_..." in practice, but
-	# defensively guard against it — state, not key, decides whether to bump.
+	# defensively guard — state, not key, decides whether it counts as a repeat.
 	AudioManager._active_drones = {
-		"N_5_1000": {"state": AudioManager.DroneState.SPARKLE, "is_advanced": false, "idx": 3, "timer": 1.0, "degree": 0, "octave_mult": 0.5, "chord_gen": gen, "base_volume_db": -22.0},
+		"N_5_1000": {"state": AudioManager.DroneState.SPARKLE, "is_advanced": false, "idx": 3, "timer": 1.0, "degree": 0, "octave_mult": 0.5, "chord_gen": gen},
 	}
-	assert_equal(AudioManager._find_active_drone_key_for(5, false), "", "sparkle-state entry is not returned")
+	assert_equal(AudioManager._count_active_drones_for_bucket(5, false), 0, "sparkle-state entry not counted")
+	_restore_state()
+
+
+func test_request_bucket_play_repeat_queues_separately() -> void:
+	print("test_request_bucket_play_repeat_queues_separately")
+	_save_state()
+	AudioManager._silenced = false
+	AudioManager._bucket_queue = []
+	AudioManager._repeat_bucket_queue = []
+	# Force queue mode by stubbing the theme's drum/pattern fields — the
+	# theme mode selector in request_bucket_play reads these and we need
+	# the queue-mode branch to fire deterministically.
+	var saved_drums: PackedInt32Array = ThemeProvider.theme.drum_instruments
+	var saved_pattern: String = ThemeProvider.theme.arpeggio_pattern
+	ThemeProvider.theme.drum_instruments = PackedInt32Array()
+	ThemeProvider.theme.arpeggio_pattern = ""
+	AudioManager.request_bucket_play(AudioManager._active_board, 5, 0, false, true)
+	assert_equal(AudioManager._repeat_bucket_queue.size(), 1, "repeat enqueued in repeat queue")
+	assert_true(AudioManager._bucket_queue.is_empty(), "primary queue untouched")
+	ThemeProvider.theme.drum_instruments = saved_drums
+	ThemeProvider.theme.arpeggio_pattern = saved_pattern
+	_restore_state()
+
+
+func test_pump_bucket_queue_drains_primary_first() -> void:
+	print("test_pump_bucket_queue_drains_primary_first")
+	_save_state()
+	AudioManager._silenced = false
+	# Seed both queues; force cooldown elapsed so the next pump plays one entry.
+	AudioManager._bucket_queue = [{"bucket_idx": 1, "degree": 0, "is_advanced": false}]
+	AudioManager._repeat_bucket_queue = [{"bucket_idx": 2, "degree": 0, "is_advanced": false}]
+	AudioManager._last_bucket_play_time = -999.0
+	AudioManager._pump_bucket_queue()
+	# Exactly one drain: primary should win.
+	assert_true(AudioManager._bucket_queue.is_empty(), "primary drained")
+	assert_equal(AudioManager._repeat_bucket_queue.size(), 1, "repeat queue still has its entry")
 	_restore_state()
 
 

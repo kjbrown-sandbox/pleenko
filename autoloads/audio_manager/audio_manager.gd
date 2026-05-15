@@ -95,17 +95,18 @@ const SPARKLE_PROXIMITY_MS := 100.0
 const MAX_SPARKLES_PER_FIRE := 2
 
 # Per-voice attenuation: voice N plays at VOICE_ATTENUATION_RATIO^(N-1) of
-# base amplitude (~2.5 dB drop per added voice at 0.75). The Drones-bus
-# compressor is tuned against this curve — retune both together.
+# base amplitude (~2.5 dB drop per added voice at 0.75). Sparkle-only now —
+# bucket plays use per-bucket repeat softening instead (REPEAT_ATTENUATION_DB).
+# `_count_drones_of_type` is retained for sparkles + tests.
 const VOICE_ATTENUATION_RATIO := 0.75
 
 const SPARKLE_DRONE_SUSTAIN := 2.5
 
-# Drone bump: brief volume spike when a coin lands on an already-singing
-# bucket. Tuned against the Drones-bus compressor (-18 dB / 3:1) — the
-# audible delta is ~2 dB less than the raw number. Retune both together.
-const DRONE_BUMP_DB := 5.0
-const DRONE_BUMP_FADE_SECONDS := 0.4
+# Repeat-bucket softening: when a coin lands in a bucket already singing, the
+# repeat play is queued on a lower-priority queue and attenuated linearly per
+# concurrent active drone for that bucket. Past the cap, the hit is dropped.
+const REPEAT_ATTENUATION_DB := 5.0
+const REPEAT_COUNT_CAP := 4
 
 const BUCKET_DRONE_POOL_SIZE := 24
 var _drone_pool: Array[AudioStreamPlayer] = []
@@ -114,9 +115,6 @@ var _active_drones: Dictionary = {}  # String key -> { "idx", "timer", "degree",
 # Keyed by drone pool idx. Killed before a slot is reused so an in-flight fade
 # can't keep writing to the new drone's volume_db.
 var _drone_fade_tweens: Dictionary = {}
-# Same shape as _drone_fade_tweens but for bump-and-decay tweens. Discarded
-# when the bucket's drone slot is reclaimed so bumps never outlive the drone.
-var _drone_bump_tweens: Dictionary = {}
 
 # Prestige audio — ascending maj7 arpeggio from bass to bell at contact.
 const PRESTIGE_ARPEGGIO_INTERVAL := 0.125  # seconds between arpeggio notes (real-time)
@@ -140,6 +138,10 @@ var _prestige_arpeggio_notes: Array[float] = []  # pre-computed pitch_mult value
 #   Queue mode (default): hits dispatch BUCKET_WAIT apart, coin-driven.
 const BUCKET_WAIT := 0.5
 var _bucket_queue: Array[Dictionary] = []
+## Lower-priority queue for repeat hits (a coin landed in a bucket that was
+## already singing). Drained only when _bucket_queue is empty so brand-new
+## buckets always take precedence; can starve under heavy primary load.
+var _repeat_bucket_queue: Array[Dictionary] = []
 
 var _last_bucket_play_time: float = -999.0
 
@@ -413,7 +415,6 @@ func _hard_stop_all_drones() -> void:
 		var drone: Dictionary = _active_drones[drone_key]
 		var idx: int = int(drone["idx"])
 		_kill_fade_tween(idx)
-		_kill_bump_tween(idx)
 		_drone_pool[idx].stop()
 		if not _drone_free.has(idx):
 			_drone_free.append(idx)
@@ -429,7 +430,6 @@ func _fade_all_drones(duration: float) -> void:
 
 func _fade_drone(idx: int, duration: float) -> void:
 	_kill_fade_tween(idx)
-	_kill_bump_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	var tween := create_tween()
 	# EASE_OUT matches loudness perception (drop fast, trail off slowly).
@@ -449,58 +449,19 @@ func _kill_fade_tween(idx: int) -> void:
 	_drone_fade_tweens.erase(idx)
 
 
-func _kill_bump_tween(idx: int) -> void:
-	var tween: Tween = _drone_bump_tweens.get(idx)
-	if tween and tween.is_valid():
-		tween.kill()
-	_drone_bump_tweens.erase(idx)
-
-
-## Locates the ACTIVE drone for this bucket+type. Skips sparkles and refuses
-## to cross-fall-back to the other coin type — a normal-coin bump on an
-## advanced-coin drone (or vice versa) would play at the wrong octave.
-func _find_active_drone_key_for(bucket_idx: int, is_advanced: bool) -> String:
+## Counts ACTIVE drones currently allocated for this bucket+type. Used by
+## _play_bucket_now as the implicit "repeat index" for progressive softening —
+## no _repeat_counts dict to maintain; expiration is the natural reset.
+func _count_active_drones_for_bucket(bucket_idx: int, is_advanced: bool) -> int:
 	var prefix: String = ("A_" if is_advanced else "N_") + str(bucket_idx) + "_"
+	var count: int = 0
 	for key: String in _active_drones:
 		if not key.begins_with(prefix):
 			continue
 		if _active_drones[key]["state"] != DroneState.ACTIVE:
 			continue
-		return key
-	return ""
-
-
-## Briefly raises the existing drone's volume by DRONE_BUMP_DB and tweens
-## back to its base. No-op if no matching drone, if a fade is already
-## governing this slot, or in modes that don't allocate _active_drones
-## entries (drum-layer, arpeggio).
-func bump_bucket_drone(board_type: Enums.BoardType, bucket_idx: int, is_advanced: bool) -> void:
-	print("[BUMP] called board=", board_type, " bucket=", bucket_idx, " advanced=", is_advanced)
-	if _silenced:
-		print("[BUMP] skip: _silenced")
-		return
-	if board_type != _active_board:
-		print("[BUMP] skip: board mismatch (_active_board=", _active_board, ")")
-		return
-	var key: String = _find_active_drone_key_for(bucket_idx, is_advanced)
-	if key == "":
-		print("[BUMP] skip: no matching active drone. _active_drones keys=", _active_drones.keys())
-		return
-	var idx: int = int(_active_drones[key]["idx"])
-	if _drone_fade_tweens.has(idx):
-		print("[BUMP] skip: idx=", idx, " is being faded")
-		return
-	var base_db: float = float(_active_drones[key]["base_volume_db"])
-	_kill_bump_tween(idx)
-	var player: AudioStreamPlayer = _drone_pool[idx]
-	var pre_volume: float = player.volume_db
-	player.volume_db = base_db + DRONE_BUMP_DB
-	print("[BUMP] FIRED key=", key, " idx=", idx, " base=", base_db, " pre=", pre_volume, " -> ", player.volume_db, " fade ", DRONE_BUMP_FADE_SECONDS, "s")
-	var tween := create_tween()
-	tween.tween_property(player, "volume_db", base_db, DRONE_BUMP_FADE_SECONDS) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
-	tween.tween_callback(func() -> void: _drone_bump_tweens.erase(idx))
-	_drone_bump_tweens[idx] = tween
+		count += 1
+	return count
 
 
 ## dB equivalent of VOICE_ATTENUATION_RATIO^N.
@@ -527,9 +488,7 @@ func _count_drones_of_type(is_advanced: bool) -> int:
 
 ## Factory for `_active_drones` entries — centralized so field shape can't
 ## drift per-site. Sparkle allocations get is_advanced=false by default.
-## `base_volume_db` is the volume_db actually written to the player at spawn;
-## bump_bucket_drone uses it as the fade-back target.
-func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, state: int, is_advanced: bool = false, base_volume_db: float = 0.0) -> Dictionary:
+func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, state: int, is_advanced: bool = false) -> Dictionary:
 	return {
 		"idx": idx,
 		"timer": timer,
@@ -538,7 +497,6 @@ func _make_drone_entry(idx: int, timer: float, degree: int, octave_mult: float, 
 		"state": state,
 		"is_advanced": is_advanced,
 		"chord_gen": _chord_generation,
-		"base_volume_db": base_volume_db,
 	}
 
 
@@ -548,7 +506,6 @@ func _finish_drone_fade(idx: int) -> void:
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stop()
 	_drone_fade_tweens.erase(idx)
-	_drone_bump_tweens.erase(idx)
 	if not _drone_free.has(idx):
 		_drone_free.append(idx)
 
@@ -580,6 +537,7 @@ func get_chord_phase() -> float:
 func _handle_chord_advance() -> void:
 	_chord_generation += 1
 	_bucket_queue.clear()
+	_repeat_bucket_queue.clear()
 	_last_bucket_play_time = -999.0
 	_activated_buckets_order.clear()
 	_unplayed_buckets.clear()
@@ -634,7 +592,12 @@ func _tick_beat_grid(delta: float) -> void:
 ## its parallel arrays (drum_instruments, drum_patterns, drum_volumes) by
 ## this same value, where it's called a "tier." Arpeggio / harp modes use
 ## it as a chord-tone offset via _get_pitch_scale. Three words, one concept.
-func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool) -> bool:
+## `is_repeat` (queue mode only): when true, the entry is routed to the
+## lower-priority `_repeat_bucket_queue` instead, never preempts primary,
+## and the per-bucket count check in `_play_bucket_now` softens or caps it.
+## In drum-layer and arpeggio modes the flag is ignored — softening only
+## applies in queue mode where the harp drones overlap.
+func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool, is_repeat: bool = false) -> bool:
 	if _silenced:
 		return false
 	if board_type != _active_board:
@@ -663,7 +626,12 @@ func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: i
 			_unplayed_buckets.push_back(entry)
 		return true
 
-	# Queue mode.
+	# Queue mode. Repeats never preempt the primary queue — always queued,
+	# and only drained when _bucket_queue is empty (see _pump_bucket_queue).
+	if is_repeat:
+		_repeat_bucket_queue.push_back(entry)
+		return true
+
 	var now: float = Time.get_ticks_msec() / 1000.0
 	if _bucket_queue.is_empty() and now - _last_bucket_play_time >= BUCKET_WAIT:
 		_play_bucket_now(bucket_idx, degree, is_advanced)
@@ -689,13 +657,22 @@ func force_play_bucket(board_type: Enums.BoardType, bucket_idx: int, degree: int
 		_play_bucket_now(bucket_idx, degree, is_advanced)
 
 
-## Dequeues pending bucket plays spaced by BUCKET_WAIT. Called from _process.
+## Dequeues pending bucket plays spaced by BUCKET_WAIT. Primary queue drains
+## before the repeat queue so brand-new buckets always take precedence.
 func _pump_bucket_queue() -> void:
-	if _silenced or _bucket_queue.is_empty():
+	if _silenced:
+		return
+	if _bucket_queue.is_empty() and _repeat_bucket_queue.is_empty():
 		return
 	var now: float = Time.get_ticks_msec() / 1000.0
-	while not _bucket_queue.is_empty() and now - _last_bucket_play_time >= BUCKET_WAIT:
-		var entry: Dictionary = _bucket_queue.pop_front()
+	while now - _last_bucket_play_time >= BUCKET_WAIT:
+		var entry: Dictionary
+		if not _bucket_queue.is_empty():
+			entry = _bucket_queue.pop_front()
+		elif not _repeat_bucket_queue.is_empty():
+			entry = _repeat_bucket_queue.pop_front()
+		else:
+			return
 		_play_bucket_now(int(entry["bucket_idx"]), int(entry["degree"]), bool(entry["is_advanced"]))
 		_last_bucket_play_time = now
 
@@ -839,18 +816,20 @@ func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 
 	if _drone_free.is_empty():
 		return
-	var voice_count: int = _count_drones_of_type(is_advanced)
-	var voice_attenuation_db: float = _voice_attenuation_db(voice_count)
+	# Repeat softening: count this bucket's currently-active drones; each one
+	# already singing softens the new drone by REPEAT_ATTENUATION_DB. Past the
+	# cap, drop the hit silently rather than allocate another voice.
+	var repeat_count: int = _count_active_drones_for_bucket(bucket_idx, is_advanced)
+	if repeat_count >= REPEAT_COUNT_CAP:
+		return
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
-	_kill_bump_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stream = sp["stream"]
 	player.pitch_scale = sp["pitch_scale"]
-	var base_volume_db: float = target_volume + voice_attenuation_db
-	player.volume_db = base_volume_db
+	player.volume_db = target_volume - REPEAT_ATTENUATION_DB * repeat_count
 	player.play()
-	_active_drones[key] = _make_drone_entry(idx, Harp.DECAY_SECONDS, degree, octave_mult, DroneState.ACTIVE, is_advanced, base_volume_db)
+	_active_drones[key] = _make_drone_entry(idx, Harp.DECAY_SECONDS, degree, octave_mult, DroneState.ACTIVE, is_advanced)
 
 
 ## Plays a bell sparkle that walks up the chord from the root. Each sparkle
@@ -890,19 +869,17 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
-	_kill_bump_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stream = sp["stream"]
 	player.pitch_scale = sp["pitch_scale"]
-	var base_volume_db: float = SPARKLE_VOLUME_DB + voice_attenuation_db
-	player.volume_db = base_volume_db
+	player.volume_db = SPARKLE_VOLUME_DB + voice_attenuation_db
 	player.play()
 
 	if _sparkles_this_fire == 0:
 		_sparkle_step += 1
 	_sparkles_this_fire += 1
 	var key: String = "SP_" + str(Time.get_ticks_msec()) + "_" + str(idx)
-	_active_drones[key] = _make_drone_entry(idx, SPARKLE_DRONE_SUSTAIN, degree, sparkle_octave, DroneState.SPARKLE, false, base_volume_db)
+	_active_drones[key] = _make_drone_entry(idx, SPARKLE_DRONE_SUSTAIN, degree, sparkle_octave, DroneState.SPARKLE, false)
 
 
 func play_peg_click(board_type: Enums.BoardType) -> void:
@@ -972,6 +949,7 @@ func silence(fade_duration: float = 0.5) -> void:
 	if fade_duration > 0.0:
 		_fade_all_drones(fade_duration)
 	_bucket_queue.clear()
+	_repeat_bucket_queue.clear()
 
 
 ## Re-enables sound production after a silence() call.
@@ -1070,13 +1048,12 @@ func _play_prestige_voice(sp: Dictionary, volume_db: float, key: String) -> void
 		return
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
-	_kill_bump_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
 	player.stream = sp["stream"]
 	player.pitch_scale = sp["pitch_scale"]
 	player.volume_db = volume_db
 	player.play()
-	_active_drones[key] = _make_drone_entry(idx, 10.0, 0, 1.0, DroneState.ACTIVE, false, volume_db)
+	_active_drones[key] = _make_drone_entry(idx, 10.0, 0, 1.0, DroneState.ACTIVE, false)
 
 
 ## Fires one arpeggio note per PRESTIGE_ARPEGGIO_INTERVAL using wall-clock time.
@@ -1168,7 +1145,6 @@ func _update_bucket_drones(delta: float) -> void:
 			# Don't call player.stop() — the sample is finite and will
 			# end on its own. Stopping early cuts off the harp tail.
 			_drone_fade_tweens.erase(drone.idx)
-			_kill_bump_tween(drone.idx)
 			if not _drone_free.has(drone.idx):
 				_drone_free.append(drone.idx)
 			expired.append(drone_key)
