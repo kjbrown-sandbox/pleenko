@@ -84,9 +84,9 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 **SaveManager** — `autoloads/save_manager/save_manager.gd`
 
-- Orchestrates save/load to `user://save.json`. No signals. `SAVE_VERSION = 5`.
+- Orchestrates save/load to `user://save.json`. No signals. `SAVE_VERSION = 6`.
 - Deserialization order (strict): `PrestigeManager → ChallengeProgressManager → OnboardingProgress → LevelManager → CurrencyManager → UpgradeManager → BoardManager`. Order matters so signals fire against fully-initialized state.
-- `_migrate(data, version)` runs sequential version upgrades. v4→v5 seeds `OnboardingProgress` peeked-boards from the existing `boards.board_types` so existing players don't see peeks for things they already unlocked.
+- `_migrate(data, version)` runs sequential version upgrades. v4→v5 seeds `OnboardingProgress` peeked-boards from the existing `boards.board_types` so existing players don't see peeks for things they already unlocked. v5→v6 seeds `OnboardingProgress.autodropper_intro_seen = true` for any save with `boards.normal_autodroppers_unlocked = true`, so existing players don't see the first-time autodropper animation replay on load.
 - `reset_game` / `reset_game_without_reload` preserve `PrestigeManager`, `ChallengeProgressManager`, AND `OnboardingProgress` blobs in the minimal save so peek state survives a prestige reset.
 - Calls `OfflineCalculator` (`scripts/offline/`) to credit earnings accumulated since last save. Offline credits are gated per-currency: a non-starting-tier currency only accrues if its board appears in `state["prestige"]` with count > 0 — preserves the first-time prestige beat for raw currencies the player has never organically earned.
 
@@ -124,9 +124,9 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 **OnboardingProgress** — `autoloads/onboarding_progress/onboarding_progress.gd`
 
-- Persistent first-time-UX flags: `_peeked_boards: Dictionary` (BoardType → bool) and `_peeked_challenges: bool`. Survives a prestige reset (`SaveManager.reset_game` and `reset_game_without_reload` preserve the serialized blob).
-- API: `has_peeked_board(type)`, `mark_board_peeked(type)`, `has_peeked_challenges()`, `mark_challenges_peeked()`. No signals — pure data.
-- Read by `PeekAnimator` to decide whether to peek a newly-unlocked target. Save migration v4→v5 pre-seeds existing players' unlocked boards as already-peeked so the feature doesn't re-peek things they already know about.
+- Persistent first-time-UX flags: `_peeked_boards: Dictionary` (BoardType → bool), `_peeked_challenges: bool`, and `_autodropper_intro_seen: bool`. All survive a prestige reset (`SaveManager.reset_game` and `reset_game_without_reload` preserve the serialized blob; `reset()` itself does not clear these).
+- API: `has_peeked_board(type)`, `mark_board_peeked(type)`, `has_peeked_challenges()`, `mark_challenges_peeked()`, `has_seen_autodropper_intro()`, `mark_autodropper_intro_seen()`. No signals — pure data.
+- Read by `PeekAnimator` to decide whether to peek a newly-unlocked target. Read by `BoardManager._on_upgrade_purchased` to decide whether to fire the first-autodropper intro signal. Save migration v4→v5 pre-seeds peeked-boards; v5→v6 pre-seeds `autodropper_intro_seen` from existing autodropper-unlocked saves.
 
 **AudioManager** — `autoloads/audio_manager/audio_manager.gd`
 
@@ -145,8 +145,8 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 **BoardManager** — `entities/board_manager/board_manager.gd`
 
 - Orchestrates all `PlinkoBoard` instances. Owns `_boards[]`, `_active_index`, autodropper pool + assignments, camera tweening, autodropper timer.
-- Emits: `board_switched(board)`, `board_unlocked(type)`.
-- Public API: `get_active_board()`, `get_active_index()`, `get_boards()`, `switch_board(index)`, `unlock_board(type)`.
+- Emits: `board_switched(board)`, `board_unlocked(type)`, `first_autodropper_purchased` (fired exactly once per player on the very first autodropper purchase, gated by `OnboardingProgress.has_seen_autodropper_intro` and suppressed in challenge mode — `AutodropperIntroAnimator` listens).
+- Public API: `get_active_board()`, `get_active_index()`, `get_boards()`, `switch_board(index)`, `unlock_board(type)`, `reveal_autodropper_controls()` (called by `AutodropperIntroAnimator` when the intro animation completes; shows the +/– drop-button controls and refreshes button displays).
 - `camera_tween_duration: float` is public and can be borrowed temporarily by `PeekAnimator` to slow tweens for the peek; `_tween_camera_to_active_board` stores `_camera_tween` and kills any prior in-flight tween before creating a new one so rapid switches (manual + peek out-and-back) don't fight over the camera.
 - Per-tick: `_autodrop_timer` (1.5s) calls `AudioManager.notify_autodropper_beat(wait_time)` to sync the beat grid, then dispatches to assigned boards.
 - Listens: `UpgradeManager.{autodropper_unlocked, advanced_autodropper_unlocked, upgrade_purchased}`, `CurrencyManager.currency_changed`, `LevelManager.rewards_claimed`, per-board `board_rebuilt` / `autodropper_adjust_requested` / `coin_queue.count_changed` (refresh drop-button subtext when the queue rate bonus shifts the effective delay).
@@ -202,6 +202,14 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Borrows BoardManager's and ChallengeGroupingManager's `camera_tween_duration` for the peek's duration; restores on exit (all early-returns are inside `_run_peek` so the restore at the bottom always runs).
 - `LingerTimer` has `ignore_time_scale = true` so `Engine.time_scale` changes during prestige can't warp the linger.
 
+**AutodropperIntroAnimator** — `entities/main/autodropper_intro_animator.gd`
+
+- Child of Main (script-on-Node, wired in `Main._setup_normal()` only — challenges intentionally bypass the intro). Plays a one-time first-autodropper-purchase animation: sparkle particles burst from the autodropper upgrade row in `CoinValues` and swoop to the gold drop button, then `BoardManager.reveal_autodropper_controls()` is called to expose the +/– controls and the `+` button pulses (`VisualTheme.blink_scale_fade`) until the player's first click stops it.
+- Listens: `BoardManager.first_autodropper_purchased`. No signals emitted.
+- Reuses the `level_section.gd` particle pattern (`level_up_particle_count`, `level_up_particle_burst_duration`, `level_up_particle_swoop_duration` from `VisualTheme`). Particle overlay is parented to Main's `CanvasLayer` so it renders above the 3D scene.
+- After particles arrive: calls `OnboardingProgress.mark_autodropper_intro_seen()` + `SaveManager.save_game()` so the intro never replays. A `_completed` re-entry guard makes the per-particle tween_callbacks idempotent.
+- Reads `PlinkoBoard.get_drop_button_screen_center(bid)` (added for this feature) to find the screen-space target for the swoop tween — both the `CoinValues` upgrade row and the drop button are 2D Controls, so `get_global_rect().get_center()` is sufficient (no `unproject_position` needed).
+
 **DropSection** — `entities/drop_section/drop_section.gd` + `.tscn`
 
 - Contains `DropButton` instances (normal + advanced). Each emits `drop_pressed` (wired to `PlinkoBoard.request_drop()`) and `autodropper_adjust_requested` (wired to `BoardManager` via the board's matching signal).
@@ -256,6 +264,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - **Coin lifecycle:** `request_drop` → `Coin.start` → per-row board queries → `final_bounce_started` → `PlinkoBoard.finalize_coin_landing` → `coin_landed` (ChallengeTracker, BoardManager listen) + `AudioManager.play_bucket`.
 - **Peek lifecycle:** `BoardManager.board_unlocked` (or `Main._setup_normal` → `PeekAnimator.queue_peeks_for_existing_unlocks` post-load) → enqueue PeekRequest → `_drain_loop` → `apply_input_lock(true)` → `switch_board_fn` / `switch_to_challenges_fn` → wait → switch back → `OnboardingProgress.mark_*_peeked` → `SaveManager.save_game` → `apply_input_lock(false)`. Suppressed during active challenges, during deserialize, and for already-peeked targets.
 - **Peek-driven side-effect suppression:** `Main._on_mode_changed` / `Main._on_board_switched` consult `peek_animator.is_peeking()` before flipping `challenges_ever_visited` / clearing `_boards_with_unseen_upgrades`, so nav-arrow blinks survive the peek as cues the player still hasn't visited.
+- **Autodropper intro lifecycle:** `UpgradeManager.upgrade_purchased(AUTODROPPER, GOLD, 1)` → `BoardManager._on_upgrade_purchased` (in main mode, with `OnboardingProgress.has_seen_autodropper_intro = false`) → `first_autodropper_purchased.emit()` (early-returns before auto-assigning) → `AutodropperIntroAnimator._on_first_autodropper_purchased` → particle burst+swoop tween → `BoardManager.reveal_autodropper_controls()` (shows +/– on drop button) → `OnboardingProgress.mark_autodropper_intro_seen` + `SaveManager.save_game` → `+` button pulses via `blink_scale_fade` until `FillBar.plus_pressed` fires → `_on_first_plus_pressed` kills the tween. Suppressed during active challenges (signal not emitted) and after first replay (gate flag flipped). Load and `_apply_prestige_rewards` paths are unchanged — they call `set_normal_autodroppers_visible(true)` directly.
 - **Save:** `SaveManager.save_game/load_game` serializes/deserializes managers in the strict order above.
 
 ### Three-Currency Economy

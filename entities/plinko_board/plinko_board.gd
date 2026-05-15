@@ -1709,6 +1709,13 @@ func get_drop_button(btn_id: StringName):
 	return _drop_buttons.get(btn_id)
 
 
+func get_drop_button_screen_center(btn_id: StringName) -> Vector2:
+	var bar: FillBar = _drop_buttons.get(btn_id)
+	if not is_instance_valid(bar):
+		return Vector2.ZERO
+	return bar.get_global_rect().get_center()
+
+
 func get_drop_button_ids() -> Array:
 	return _drop_buttons.keys()
 

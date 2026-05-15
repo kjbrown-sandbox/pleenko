@@ -28,6 +28,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 @onready var challenge_info_panel: ChallengeInfoPanel = $ChallengeInfoPanel
 @onready var prestige_animator: PrestigeAnimator = $PrestigeAnimator
 @onready var peek_animator: PeekAnimator = $PeekAnimator
+@onready var _autodropper_intro_animator: AutodropperIntroAnimator = $AutodropperIntroAnimator
 
 var _options_dialog: CanvasLayer
 var _coming_soon_overlay: CanvasLayer
@@ -106,6 +107,7 @@ func _setup_normal() -> void:
 
 	challenge_grouping_manager.update_group_visibility()
 	_setup_peek_animator()
+	_autodropper_intro_animator.setup(board_manager, coin_values, $CanvasLayer)
 
 
 func _setup_peek_animator() -> void:

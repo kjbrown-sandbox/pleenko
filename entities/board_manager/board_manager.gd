@@ -4,6 +4,7 @@ extends Node3D
 signal board_switched(board: PlinkoBoard)
 signal board_unlocked(board_type: Enums.BoardType)
 signal assignments_changed(assignments: Dictionary)
+signal first_autodropper_purchased
 
 const BoardScene: PackedScene = preload("res://entities/plinko_board/plinko_board.tscn")
 
@@ -386,6 +387,17 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 		_normal_pool += 1
 		if not _normal_autodroppers_unlocked:
 			_normal_autodroppers_unlocked = true
+			# Skip the intro in challenge mode — the animator only lives in
+			# main scene setup, so the signal would fire into the void and
+			# the player would never see the animation.
+			if not OnboardingProgress.has_seen_autodropper_intro() \
+					and not ChallengeManager.is_active_challenge:
+				# First-ever autodropper: fire the intro animation instead of
+				# auto-assigning. AutodropperIntroAnimator calls
+				# reveal_autodropper_controls() when particles land.
+				first_autodropper_purchased.emit()
+				_update_all_button_displays()
+				return
 			for board in _boards:
 				board.set_normal_autodroppers_visible(true)
 		# Auto-assign every new autodropper to gold; player can reassign later
@@ -402,6 +414,14 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 		_update_all_button_displays()
 	if board_type == Enums.BoardType.GOLD:
 		check_and_rescue_gold_soft_lock()
+
+
+## Called by AutodropperIntroAnimator after the intro particles land. Shows
+## +/– controls on all boards and refreshes button state without auto-assigning.
+func reveal_autodropper_controls() -> void:
+	for board in _boards:
+		board.set_normal_autodroppers_visible(true)
+	_update_all_button_displays()
 
 
 ## If the player has 0 gold and no coins are mid-flight or queued on the gold
