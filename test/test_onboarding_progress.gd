@@ -13,6 +13,7 @@ func _run_tests() -> void:
 	test_multiple_boards_peeked()
 	test_reset_clears_all()
 	test_deserialize_missing_keys_defaults()
+	test_autodropper_intro_flag()
 
 
 func _reset() -> void:
@@ -78,3 +79,22 @@ func test_deserialize_missing_keys_defaults() -> void:
 	OnboardingProgress.deserialize({})  # Empty dict — both fields default
 	assert_false(OnboardingProgress.has_peeked_board(Enums.BoardType.ORANGE), "orange defaults to false from empty dict")
 	assert_false(OnboardingProgress.has_peeked_challenges(), "challenges defaults to false from empty dict")
+
+
+func test_autodropper_intro_flag() -> void:
+	print("test_autodropper_intro_flag")
+	_reset()
+	assert_false(OnboardingProgress.has_seen_autodropper_intro(), "intro not seen initially")
+
+	OnboardingProgress.mark_autodropper_intro_seen()
+	assert_true(OnboardingProgress.has_seen_autodropper_intro(), "intro seen after mark")
+
+	# Serialize/deserialize round-trip preserves the flag.
+	var data := OnboardingProgress.serialize()
+	_reset()
+	OnboardingProgress.deserialize(data)
+	assert_true(OnboardingProgress.has_seen_autodropper_intro(), "intro seen survives round-trip")
+
+	# reset() must NOT clear this flag — it is a permanent UX flag.
+	OnboardingProgress.reset()
+	assert_true(OnboardingProgress.has_seen_autodropper_intro(), "intro seen survives reset()")

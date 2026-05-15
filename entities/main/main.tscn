@@ -14,6 +14,7 @@
 [ext_resource type="PackedScene" path="res://entities/tooltip/tooltip.tscn" id="19_tooltip"]
 [ext_resource type="Texture2D" uid="uid://m6iihv3lc8go" path="res://assets/icons/volume-up.png" id="20_volup"]
 [ext_resource type="Script" path="res://entities/main/peek_animator.gd" id="22_peekanim"]
+[ext_resource type="Script" uid="uid://tmu56gpncpxl" path="res://entities/main/autodropper_intro_animator.gd" id="23_aianim"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
@@ -201,3 +202,6 @@ script = ExtResource("22_peekanim")
 process_mode = 3
 one_shot = true
 ignore_time_scale = true
+
+[node name="AutodropperIntroAnimator" type="Node" parent="." unique_id=1823745091]
+script = ExtResource("23_aianim")

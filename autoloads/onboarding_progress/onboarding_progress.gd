@@ -6,6 +6,7 @@ extends Node
 
 var _peeked_boards: Dictionary = {}  # BoardType -> bool
 var _peeked_challenges: bool = false
+var _autodropper_intro_seen: bool = false
 
 
 func has_peeked_board(type: Enums.BoardType) -> bool:
@@ -24,9 +25,19 @@ func mark_challenges_peeked() -> void:
 	_peeked_challenges = true
 
 
+func has_seen_autodropper_intro() -> bool:
+	return _autodropper_intro_seen
+
+
+func mark_autodropper_intro_seen() -> void:
+	_autodropper_intro_seen = true
+
+
 func reset() -> void:
 	_peeked_boards.clear()
 	_peeked_challenges = false
+	# _autodropper_intro_seen is intentionally NOT cleared — it's a permanent UX
+	# flag that survives prestige resets, like _peeked_challenges.
 
 
 func serialize() -> Dictionary:
@@ -37,6 +48,7 @@ func serialize() -> Dictionary:
 	return {
 		"peeked_boards": boards_data,
 		"peeked_challenges": _peeked_challenges,
+		"autodropper_intro_seen": _autodropper_intro_seen,
 	}
 
 
@@ -46,3 +58,4 @@ func deserialize(data: Dictionary) -> void:
 	for board_type_int in boards_data:
 		_peeked_boards[int(board_type_int)] = true
 	_peeked_challenges = data.get("peeked_challenges", false)
+	_autodropper_intro_seen = data.get("autodropper_intro_seen", false)

@@ -15,6 +15,8 @@ func _run_tests() -> void:
 	test_gold_prestige_grants_autodropper()
 	test_prestige_reward_does_not_overwrite_existing_pool()
 	test_prestige_reward_does_not_overwrite_existing_assignment()
+	test_first_purchase_no_auto_assign_when_intro_not_seen()
+	test_second_purchase_auto_assigns_when_already_unlocked()
 	test_all_normal_autodroppers_auto_assign_to_gold()
 	test_all_advanced_autodroppers_auto_assign_to_gold()
 	test_prestige_reward_text_includes_autodropper()
@@ -116,10 +118,50 @@ func test_prestige_reward_does_not_overwrite_existing_assignment() -> void:
 	bm.queue_free()
 
 
+func test_first_purchase_no_auto_assign_when_intro_not_seen() -> void:
+	print("test_first_purchase_no_auto_assign_when_intro_not_seen")
+	_reset()
+	OnboardingProgress.reset()
+	# Intro not seen yet (fresh OnboardingProgress) and autodroppers not yet unlocked.
+	var bm := _make_board_manager()
+	assert_false(bm._normal_autodroppers_unlocked, "should start unlocked=false")
+
+	var signal_count := [0]  # Array used so closure captures by reference
+	bm.first_autodropper_purchased.connect(func(): signal_count[0] += 1, CONNECT_ONE_SHOT)
+
+	bm._on_upgrade_purchased(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD, 1)
+
+	assert_equal(bm._normal_pool, 1, "pool should increment")
+	assert_true(bm._normal_autodroppers_unlocked, "should be marked unlocked")
+	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 0,
+		"first purchase must NOT auto-assign (intro animation handles it)")
+	assert_equal(signal_count[0], 1, "first_autodropper_purchased signal must fire exactly once")
+	bm.queue_free()
+	OnboardingProgress.reset()
+
+
+func test_second_purchase_auto_assigns_when_already_unlocked() -> void:
+	print("test_second_purchase_auto_assigns_when_already_unlocked")
+	_reset()
+	var bm := _make_board_manager()
+	# Simulate already-unlocked state (intro already seen / second purchase).
+	bm._normal_autodroppers_unlocked = true
+	bm._normal_pool = 1
+	bm._assignments[StringName("GOLD_NORMAL")] = 1
+
+	bm._on_upgrade_purchased(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD, 2)
+
+	assert_equal(bm._normal_pool, 2, "pool should be 2")
+	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 2,
+		"second purchase must auto-assign to gold")
+	bm.queue_free()
+
+
 func test_all_normal_autodroppers_auto_assign_to_gold() -> void:
 	print("test_all_normal_autodroppers_auto_assign_to_gold")
 	_reset()
 	var bm := _make_board_manager()
+	# Pre-set unlocked=true so this exercises the post-intro (second+) purchase path.
 	bm._normal_autodroppers_unlocked = true
 	bm._normal_pool = 2
 	bm._assignments[StringName("GOLD_NORMAL")] = 2
