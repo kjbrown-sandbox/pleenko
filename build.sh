@@ -34,14 +34,14 @@ echo "Exporting Web preset..."
 
 echo ""
 echo "Starting local test server at http://localhost:8000"
-echo "Test your build in the browser, then:"
-echo "  - Press Ctrl+C to stop the server and push to itch"
-echo "  - Or press Ctrl+C twice to abort without pushing"
 echo ""
 
-# Bail early if something is already on the port
+# Bail early if something is already on the port (e.g. a server orphaned by a
+# previous run that was SIGKILLed before its cleanup trap could fire).
 if lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "❌ Port 8000 is already in use. Stop the other process and re-run."
+    STALE_PID=$(lsof -nP -tiTCP:8000 -sTCP:LISTEN 2>/dev/null | head -1)
+    echo "❌ Port 8000 is already in use (pid ${STALE_PID:-unknown})."
+    echo "   Kill it and re-run:  kill ${STALE_PID:-<pid>}"
     exit 1
 fi
 
@@ -59,6 +59,26 @@ s = http.server.HTTPServer(('', 8000), functools.partial(Handler, directory='bui
 s.serve_forever()
 " &
 SERVER_PID=$!
+
+# Tear the server down no matter how this script ends: normal exit, Ctrl+C
+# (SIGINT), kill (SIGTERM), or the terminal window being closed (SIGHUP).
+# Without this, `python3 ... &` is orphaned when the shell dies and keeps
+# holding port 8000. (SIGKILL / `kill -9` can't be trapped — the port
+# precheck above is the backstop for that case.)
+cleanup() {
+    if [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+        kill "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
+    fi
+}
+on_signal() {
+    echo ""
+    echo "Interrupted — shutting down the local server and exiting."
+    cleanup
+    exit 130
+}
+trap cleanup EXIT
+trap on_signal INT TERM HUP
 
 # Wait until the server is actually accepting connections before opening the
 # browser. Python needs ~0.5s to import + bind; opening the browser before the
@@ -85,11 +105,12 @@ echo "Server is up at http://localhost:8000"
 # Open in default browser
 open "http://localhost:8000" 2>/dev/null || true
 
-echo "Press Enter when you're done testing..."
+echo "Test the build in the browser."
+echo "  - Press Enter when done   → stops the server, then asks about pushing to itch"
+echo "  - Press Ctrl+C any time   → shuts the server down and exits (no push)"
 read -r
 
-kill $SERVER_PID 2>/dev/null || true
-wait $SERVER_PID 2>/dev/null || true
+cleanup
 
 echo ""
 read -p "Build looks good? Push to itch? [y/N] " -n 1 -r
