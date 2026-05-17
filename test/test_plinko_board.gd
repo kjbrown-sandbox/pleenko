@@ -26,6 +26,9 @@ func _run_tests() -> void:
 	test_reconcile_reward_ignores_wrong_type()
 	test_reconcile_reward_ignores_wrong_board()
 	test_reconcile_reward_ignores_already_set()
+	test_queue_rate_bonus_gold_zero_grants_is_base()
+	test_queue_rate_bonus_gold_applies_grant_count()
+	test_queue_rate_bonus_non_gold_stays_base()
 
 
 # --- Helper ---
@@ -232,4 +235,47 @@ func test_reconcile_reward_ignores_already_set() -> void:
 	reward.target_board = Enums.BoardType.GOLD
 	board._on_reconcile_reward(reward)
 	assert_true(board.should_show_advanced_buckets, "flag remains set")
+	board.free()
+
+
+# --- Queue rate bonus: gold-only challenge reward ---
+
+## Resets ChallengeProgressManager and grants `n` QUEUE_RATE_BONUS rewards
+## (one per synthetic challenge so the one-time-per-challenge guard allows all).
+func _grant_queue_rate_rewards(n: int) -> void:
+	ChallengeProgressManager.deserialize({})
+	for i in n:
+		var reward := ChallengeRewardData.new()
+		reward.type = ChallengeRewardData.RewardType.STARTING_MODIFIER
+		reward.modifier_type = ChallengeRewardData.ModifierType.QUEUE_RATE_BONUS
+		ChallengeProgressManager.complete_challenge("qrb_%d" % i, [], [reward])
+
+
+func test_queue_rate_bonus_gold_zero_grants_is_base() -> void:
+	print("test_queue_rate_bonus_gold_zero_grants_is_base")
+	_grant_queue_rate_rewards(0)
+	var board := _make_board({"board_type": Enums.BoardType.GOLD})
+	assert_near(board._queue_rate_bonus_for_board(Enums.BoardType.GOLD),
+		PlinkoBoard.QUEUE_RATE_BONUS_PER_COIN, 0.0001, "no grants → base bonus")
+	board.free()
+
+
+func test_queue_rate_bonus_gold_applies_grant_count() -> void:
+	print("test_queue_rate_bonus_gold_applies_grant_count")
+	_grant_queue_rate_rewards(2)
+	var board := _make_board({"board_type": Enums.BoardType.GOLD})
+	var expected: float = PlinkoBoard.QUEUE_RATE_BONUS_PER_COIN \
+		+ 2 * PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK
+	assert_near(board._queue_rate_bonus_for_board(Enums.BoardType.GOLD),
+		expected, 0.0001, "gold board stacks 2 grants onto the base")
+	board.free()
+
+
+func test_queue_rate_bonus_non_gold_stays_base() -> void:
+	print("test_queue_rate_bonus_non_gold_stays_base")
+	_grant_queue_rate_rewards(2)
+	var board := _make_board({"board_type": Enums.BoardType.ORANGE})
+	assert_near(board._queue_rate_bonus_for_board(Enums.BoardType.ORANGE),
+		PlinkoBoard.QUEUE_RATE_BONUS_PER_COIN, 0.0001,
+		"non-gold board ignores the gold-only reward")
 	board.free()

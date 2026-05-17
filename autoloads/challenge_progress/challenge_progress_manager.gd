@@ -95,6 +95,18 @@ func get_gold_coin_speed_boost_count() -> int:
 	return count
 
 
+## Number of QUEUE_RATE_BONUS rewards earned. Counted board-agnostically but
+## applied to the gold board only (PlinkoBoard.setup gates on board_type) —
+## each one adds PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK to gold's
+## per-queued-coin drop-rate bonus. Mirrors get_gold_coin_speed_boost_count().
+func get_queue_rate_bonus_count() -> int:
+	var count := 0
+	for mod in _starting_modifiers:
+		if mod.modifier_type == ChallengeRewardData.ModifierType.QUEUE_RATE_BONUS:
+			count += 1
+	return count
+
+
 func get_earliest_incomplete(buttons: Array[ChallengeButton]) -> ChallengeButton:
 	for btn in buttons:
 		var state := get_state(btn.challenge_ui_name)

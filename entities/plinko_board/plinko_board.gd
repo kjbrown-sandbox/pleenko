@@ -15,6 +15,20 @@ var vertical_spacing: float
 ## triples it, ten gives 11x the base rate.
 const QUEUE_RATE_BONUS_PER_COIN := 0.20
 
+## Each QUEUE_RATE_BONUS challenge reward adds this much to the per-queued-coin
+## bonus above. Stackable; gold board only (counted globally, applied to gold —
+## mirrors GOLD_COIN_SPEED_BOOST). Keep in sync with any data/challenges/*.tres
+## description that grants the reward, since ChallengeInfoPanel displays the
+## description verbatim.
+const QUEUE_RATE_BONUS_PER_UNLOCK := 0.10
+
+## Effective per-queued-coin bonus after folding in earned QUEUE_RATE_BONUS
+## rewards. Cached in setup() (challenge progress only changes on a scene
+## reload, like Coin's _fall_speed_multiplier) so the autoload isn't queried
+## every drop cycle. Defaults to the base so a bare PlinkoBoard.new() (tests,
+## null-queue path) works without setup().
+var _queue_rate_bonus_per_coin: float = QUEUE_RATE_BONUS_PER_COIN
+
 ## Pixel offset from the projected spawn point to the top-left of the bonus
 ## label box. +X pushes the label right of the queue (clear of the drop
 ## column); -Y centers a single line vertically against the spawn dot.
@@ -210,6 +224,7 @@ func setup(type: Enums.BoardType) -> void:
 	board_type = type
 	advanced_coin_multiplier = 2.0 + ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board_type)
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
+	_queue_rate_bonus_per_coin = _queue_rate_bonus_for_board(board_type)
 
 	drop_delay = TierRegistry.get_base_drop_delay(board_type)
 	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
@@ -230,7 +245,7 @@ func setup(type: Enums.BoardType) -> void:
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	coin_queue.set_capacity(perm_queue)
 	coin_queue.count_changed.connect(_on_queue_count_changed)
-	drop_section.set_queue_bonus(coin_queue.count, QUEUE_RATE_BONUS_PER_COIN)
+	drop_section.set_queue_bonus(coin_queue.count, _queue_rate_bonus_per_coin)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
@@ -871,14 +886,26 @@ func _start_drop_timer() -> void:
 	_drop_timer_remaining = _last_effective_delay
 
 
+## Per-queued-coin drop-rate bonus for a board. The QUEUE_RATE_BONUS challenge
+## reward is counted globally but applied to the gold board only (mirrors
+## GOLD_COIN_SPEED_BOOST → Coin); other boards stay at the base bonus. Pure
+## given ChallengeProgressManager state — tested via a bare board.
+func _queue_rate_bonus_for_board(type: Enums.BoardType) -> float:
+	if type != Enums.BoardType.GOLD:
+		return QUEUE_RATE_BONUS_PER_COIN
+	return QUEUE_RATE_BONUS_PER_COIN \
+		+ ChallengeProgressManager.get_queue_rate_bonus_count() * QUEUE_RATE_BONUS_PER_UNLOCK
+
+
 ## Drop delay after applying the queue's rate bonus. Each queued coin (FULL or
-## FILLING) adds QUEUE_RATE_BONUS_PER_COIN to the effective rate (rate = 1/delay),
-## which is equivalent to dividing the delay by (1 + bonus * queue.count).
+## FILLING) adds _queue_rate_bonus_per_coin (base + earned QUEUE_RATE_BONUS
+## challenge rewards, gold only) to the effective rate (rate = 1/delay), which
+## is equivalent to dividing the delay by (1 + bonus * queue.count).
 ## Naturally bounded — delay shrinks but never reaches zero.
 func get_effective_drop_delay() -> float:
 	if coin_queue == null:
 		return drop_delay
-	var bonus_mult: float = 1.0 + QUEUE_RATE_BONUS_PER_COIN * float(coin_queue.count)
+	var bonus_mult: float = 1.0 + _queue_rate_bonus_per_coin * float(coin_queue.count)
 	return drop_delay / bonus_mult
 
 
@@ -890,7 +917,7 @@ func _on_queue_count_changed(_new_count: int) -> void:
 		var new_effective: float = get_effective_drop_delay()
 		_drop_timer_remaining *= new_effective / _last_effective_delay
 		_last_effective_delay = new_effective
-	drop_section.set_queue_bonus(coin_queue.count, QUEUE_RATE_BONUS_PER_COIN)
+	drop_section.set_queue_bonus(coin_queue.count, _queue_rate_bonus_per_coin)
 
 
 ## Cached so we don't re-walk the viewport every frame. Refreshed on demand
