@@ -15,11 +15,12 @@ var vertical_spacing: float
 ## triples it, ten gives 11x the base rate.
 const QUEUE_RATE_BONUS_PER_COIN := 0.20
 
-## Each QUEUE_RATE_BONUS challenge reward adds this much to the per-queued-coin
-## bonus above. Stackable; gold board only (counted globally, applied to gold —
-## mirrors GOLD_COIN_SPEED_BOOST). Keep in sync with any data/challenges/*.tres
-## description that grants the reward, since ChallengeInfoPanel displays the
-## description verbatim.
+## Each granted QUEUE_RATE_BONUS challenge reward adds this much to the
+## per-queued-coin bonus above. Stackable; gold board only (counted globally,
+## applied to gold — mirrors GOLD_COIN_SPEED_BOOST).
+## NOTE: changing this value also requires updating the human-readable description
+## on every challenge .tres that grants this reward (e.g. data/challenges/gold_7.tres),
+## since ChallengeInfoPanel displays `reward.description` verbatim.
 const QUEUE_RATE_BONUS_PER_UNLOCK := 0.10
 
 ## Effective per-queued-coin bonus after folding in earned QUEUE_RATE_BONUS

@@ -96,9 +96,9 @@ func get_gold_coin_speed_boost_count() -> int:
 
 
 ## Number of QUEUE_RATE_BONUS rewards earned. Counted board-agnostically but
-## applied to the gold board only (PlinkoBoard.setup gates on board_type) —
-## each one adds PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK to gold's
-## per-queued-coin drop-rate bonus. Mirrors get_gold_coin_speed_boost_count().
+## applied to the gold board only (PlinkoBoard._queue_rate_bonus_for_board gates
+## on board_type) — each one adds PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK to
+## gold's per-queued-coin drop-rate bonus. Mirrors get_gold_coin_speed_boost_count().
 func get_queue_rate_bonus_count() -> int:
 	var count := 0
 	for mod in _starting_modifiers:

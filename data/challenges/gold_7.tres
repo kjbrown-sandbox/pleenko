@@ -29,7 +29,7 @@ amount = 100
 script = ExtResource("3_reward")
 type = 1
 modifier_type = 6
-description = "+10% to queue bonus"
+description = "+10% to gold queue bonus"
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("9_sb")
