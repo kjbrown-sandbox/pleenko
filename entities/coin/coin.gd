@@ -29,6 +29,12 @@ var impact_squash_remaining: float = 0.0
 ## on every row of every coin (hot path — tens of thousands of coins).
 var _fall_speed_multiplier: float = 1.0
 
+## Integer lattice position on the triangular board. Advanced deterministically
+## each bounce so the deflector lookup is exact and noise-free (no float→peg
+## inversion). Starts at (0, 0): row 0 has exactly one peg.
+var _row: int = 0
+var _col: int = 0
+
 ## Each granted GOLD_COIN_SPEED_BOOST challenge reward adds this fraction to
 ## gold coins' fall-speed multiplier. 0.2 → first grant = 1.2x speed, third = 1.6x (additive).
 ## Only gold coins are sped up; other coin types fall at baseline speed.
@@ -92,6 +98,8 @@ func _apply_halo(t: VisualTheme) -> void:
 
 
 func start(target: Vector3) -> void:
+	_row = 0
+	_col = 0
 	var t: VisualTheme = ThemeProvider.theme
 	if coin_type == Enums.CurrencyType.GOLD_COIN:
 		_fall_speed_multiplier = 1.0 + ChallengeProgressManager.get_gold_coin_speed_boost_count() * COIN_SPEED_BOOST_PER_UNLOCK
@@ -141,39 +149,47 @@ func set_mesh_visible(vis: bool) -> void:
 
 
 func _bounce_or_despawn() -> void:
-	if position.y < board.buckets_container.position.y + 0.5:
+	if board.is_terminal_cell(_row, _col):
 		landed.emit(self)
-	else:
-		board.flash_nearest_peg(global_position, coin_type)
-		var t: VisualTheme = ThemeProvider.theme
-		# Trigger the impact squash on peg contact.
-		if t.coin_impact_squash_enabled:
-			impact_squash_remaining = t.coin_impact_squash_duration
-		var direction = 1 if randf() < 0.5 else -1
-		var next_x: float = position.x + direction * board.space_between_pegs / 2.0
-		var next_y: float = position.y - board.vertical_spacing
+		return
 
-		# Check if this is the final bounce (next position will be below bucket row)
-		if next_y < board.buckets_container.position.y + 0.5:
-			var predicted_bucket: Bucket = board.get_nearest_bucket(
-				board.global_position.x + next_x)
-			if predicted_bucket:
-				final_bounce_started.emit(self, predicted_bucket)
+	board.flash_nearest_peg(global_position, coin_type)
+	var t: VisualTheme = ThemeProvider.theme
+	# Trigger the impact squash on peg contact.
+	if t.coin_impact_squash_enabled:
+		impact_squash_remaining = t.coin_impact_squash_duration
 
-		# Add randomness so bounces don't look uniform
-		var bounce_height: float = t.coin_bounce_height * randf_range(0.3, 1.7)
-		var fall_time: float = t.coin_fall_time * randf_range(0.9, 1.1) / _fall_speed_multiplier
+	# Deflector (if placed at this peg) forces the direction; else 50/50.
+	var direction: int = board.resolve_bounce_direction(_row, _col, randf())
+	var next_cell: Vector2i = board.next_lattice_cell(_row, _col, direction)
+	var target: Vector3 = board.cell_to_world(next_cell.x, next_cell.y)
+	var next_x: float = target.x
+	var next_y: float = target.y
 
-		var x_tween: Tween = create_tween()
-		_active_tweens.append(x_tween)
-		x_tween.tween_property(self, "position:x", next_x, fall_time) \
-			.set_ease(Tween.EASE_IN_OUT) \
-			.set_trans(Tween.TRANS_LINEAR)
+	# Check if this is the final bounce (next cell is the bucket row)
+	if board.is_terminal_cell(next_cell.x, next_cell.y):
+		var predicted_bucket: Bucket = board.get_bucket(
+			board.predicted_bucket_index(next_cell.x, next_cell.y))
+		if predicted_bucket:
+			final_bounce_started.emit(self, predicted_bucket)
 
-		var y_tween: Tween = create_tween()
-		_active_tweens.append(y_tween)
-		y_tween.tween_property(self, "position:y", position.y + bounce_height, fall_time / 3) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		y_tween.tween_property(self, "position:y", next_y, fall_time * 2 / 3) \
-			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		y_tween.tween_callback(_bounce_or_despawn)
+	_row = next_cell.x
+	_col = next_cell.y
+
+	# Add randomness so bounces don't look uniform
+	var bounce_height: float = t.coin_bounce_height * randf_range(0.3, 1.7)
+	var fall_time: float = t.coin_fall_time * randf_range(0.9, 1.1) / _fall_speed_multiplier
+
+	var x_tween: Tween = create_tween()
+	_active_tweens.append(x_tween)
+	x_tween.tween_property(self, "position:x", next_x, fall_time) \
+		.set_ease(Tween.EASE_IN_OUT) \
+		.set_trans(Tween.TRANS_LINEAR)
+
+	var y_tween: Tween = create_tween()
+	_active_tweens.append(y_tween)
+	y_tween.tween_property(self, "position:y", position.y + bounce_height, fall_time / 3) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	y_tween.tween_property(self, "position:y", next_y, fall_time * 2 / 3) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	y_tween.tween_callback(_bounce_or_despawn)

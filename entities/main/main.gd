@@ -30,6 +30,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 @onready var peek_animator: PeekAnimator = $PeekAnimator
 @onready var _autodropper_intro_animator: AutodropperIntroAnimator = $AutodropperIntroAnimator
 
+var _deflector_intro_animator: DeflectorIntroAnimator
 var _options_dialog: CanvasLayer
 var _coming_soon_overlay: CanvasLayer
 var _challenge_complete_dialog: CanvasLayer
@@ -108,6 +109,9 @@ func _setup_normal() -> void:
 	challenge_grouping_manager.update_group_visibility()
 	_setup_peek_animator()
 	_autodropper_intro_animator.setup(board_manager, coin_values, $CanvasLayer)
+	_deflector_intro_animator = DeflectorIntroAnimator.new()
+	add_child(_deflector_intro_animator)
+	_deflector_intro_animator.setup(board_manager, coin_values, $CanvasLayer)
 
 
 func _setup_peek_animator() -> void:
@@ -134,6 +138,11 @@ func apply_input_lock(locked: bool) -> void:
 	board_right_icon.disabled = locked
 	challenges_down_icon.disabled = locked
 	challenges_up_icon.disabled = locked
+	# Deflector editors live on the boards (children of BoardManager), outside
+	# the set_process_input chokepoint above — toggle them explicitly.
+	if is_instance_valid(board_manager):
+		for board in board_manager.get_boards():
+			board.set_deflector_input_allowed(not locked)
 
 
 func _setup_challenge() -> void:

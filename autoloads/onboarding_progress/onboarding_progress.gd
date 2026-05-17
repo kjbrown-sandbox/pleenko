@@ -7,6 +7,9 @@ extends Node
 var _peeked_boards: Dictionary = {}  # BoardType -> bool
 var _peeked_challenges: bool = false
 var _autodropper_intro_seen: bool = false
+var _deflector_intro_seen: bool = false
+var _deflector_placed: bool = false
+var _prestige_deflector_seeded: bool = false
 
 
 func has_peeked_board(type: Enums.BoardType) -> bool:
@@ -33,11 +36,41 @@ func mark_autodropper_intro_seen() -> void:
 	_autodropper_intro_seen = true
 
 
+func has_seen_deflector_intro() -> bool:
+	return _deflector_intro_seen
+
+
+func mark_deflector_intro_seen() -> void:
+	_deflector_intro_seen = true
+
+
+## True once the player has placed their first-ever deflector — used to stop
+## the discoverability pulse on the ghost arrow / center-peg hint.
+func has_placed_deflector() -> bool:
+	return _deflector_placed
+
+
+func mark_deflector_placed() -> void:
+	_deflector_placed = true
+
+
+## True once the orange-prestige reward has auto-placed its one permanent
+## deflector on the gold board — so we only seed it once (the player is then
+## free to move or remove it).
+func has_seeded_prestige_deflector() -> bool:
+	return _prestige_deflector_seeded
+
+
+func mark_prestige_deflector_seeded() -> void:
+	_prestige_deflector_seeded = true
+
+
 func reset() -> void:
 	_peeked_boards.clear()
 	_peeked_challenges = false
-	# _autodropper_intro_seen is intentionally NOT cleared — it's a permanent UX
-	# flag that survives prestige resets, like _peeked_challenges.
+	# _autodropper_intro_seen / _deflector_intro_seen / _deflector_placed /
+	# _prestige_deflector_seeded are intentionally NOT cleared — they're
+	# permanent UX flags that survive prestige resets, like _peeked_challenges.
 
 
 func serialize() -> Dictionary:
@@ -49,6 +82,9 @@ func serialize() -> Dictionary:
 		"peeked_boards": boards_data,
 		"peeked_challenges": _peeked_challenges,
 		"autodropper_intro_seen": _autodropper_intro_seen,
+		"deflector_intro_seen": _deflector_intro_seen,
+		"deflector_placed": _deflector_placed,
+		"prestige_deflector_seeded": _prestige_deflector_seeded,
 	}
 
 
@@ -59,3 +95,6 @@ func deserialize(data: Dictionary) -> void:
 		_peeked_boards[int(board_type_int)] = true
 	_peeked_challenges = data.get("peeked_challenges", false)
 	_autodropper_intro_seen = data.get("autodropper_intro_seen", false)
+	_deflector_intro_seen = data.get("deflector_intro_seen", false)
+	_deflector_placed = data.get("deflector_placed", false)
+	_prestige_deflector_seeded = data.get("prestige_deflector_seeded", false)

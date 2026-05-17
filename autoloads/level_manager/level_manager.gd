@@ -110,10 +110,16 @@ func _set_special_slot(data: LevelData, board_type: Enums.BoardType, next_tier: 
 		data.message = "You have unlocked Autodropper."
 		data.rewards = [_unlock_autodropper(), _unlock_upgrade(Enums.UpgradeType.AUTODROPPER, board_type)]
 	elif board_type == Enums.BoardType.ORANGE:
+		# Deflector is the orange board's signature upgrade. (Advanced Autodropper
+		# moved to red — see below. Existing saves keep whatever they already
+		# unlocked on orange; this table only drives NEW unlock events.)
+		data.message = "You have unlocked the Deflector."
+		data.rewards = [_unlock_upgrade(Enums.UpgradeType.PEG_DEFLECTOR, board_type)]
+	elif board_type == Enums.BoardType.RED:
 		data.message = "You have unlocked Advanced Autodropper."
 		data.rewards = [_unlock_advanced_autodropper(), _unlock_upgrade(Enums.UpgradeType.ADVANCED_AUTODROPPER, board_type)]
 	else:
-		# Red (and beyond): drop advanced coin (currently no next tier)
+		# Beyond red: drop advanced coin (currently no next tier)
 		_set_advanced_drop(data, next_tier, board_type)
 
 

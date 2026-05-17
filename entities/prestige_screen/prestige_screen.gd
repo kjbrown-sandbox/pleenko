@@ -102,7 +102,13 @@ func _build_rewards_text() -> String:
 	var rewards_text := "+1 multi-drop for the %s board" % multi_drop_target
 	if _board_type == Enums.BoardType.ORANGE:
 		rewards_text += "\n+1 permanent autodropper"
-	rewards_text += "\nAccess to the %s board" % board_name
+	# Prestige is recorded under the tier it unlocks, so the orange-BOARD
+	# prestige (which grants the permanent deflector) carries the tier after
+	# orange — mirrors PrestigeManager.get_permanent_deflector_count().
+	var after_orange := TierRegistry.get_next_tier(Enums.BoardType.ORANGE)
+	if after_orange and _board_type == after_orange.board_type:
+		rewards_text += "\n+1 permanent peg deflector"
+	rewards_text += "\nAccess to the %s board" % board_name.to_lower()
 	if _board_type == Enums.BoardType.ORANGE:
 		rewards_text += "\nAccess to gold challenges"
 	return rewards_text

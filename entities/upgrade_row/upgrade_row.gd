@@ -173,4 +173,9 @@ func _get_purchase_hover_text() -> String:
 	if at_max:
 		return ""
 	var currency_name: String = _get_currency_name(TierRegistry.primary_currency(_board_type))
-	return "Cost: %s %s" % [FormatUtils.format_number(state.cost), currency_name]
+	var text := "Cost: %s %s" % [FormatUtils.format_number(state.cost), currency_name]
+	if _upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
+		var odds := roundi(PlinkoBoard.deflector_bias_for_strength(
+			PlinkoBoard.DEFLECTOR_BASE_STRENGTH) * 100.0)
+		text += "\ncurrent odds: %d%%" % odds
+	return text

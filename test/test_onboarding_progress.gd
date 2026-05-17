@@ -14,6 +14,7 @@ func _run_tests() -> void:
 	test_reset_clears_all()
 	test_deserialize_missing_keys_defaults()
 	test_autodropper_intro_flag()
+	test_prestige_deflector_seeded_flag()
 
 
 func _reset() -> void:
@@ -98,3 +99,20 @@ func test_autodropper_intro_flag() -> void:
 	# reset() must NOT clear this flag — it is a permanent UX flag.
 	OnboardingProgress.reset()
 	assert_true(OnboardingProgress.has_seen_autodropper_intro(), "intro seen survives reset()")
+
+
+func test_prestige_deflector_seeded_flag() -> void:
+	print("test_prestige_deflector_seeded_flag")
+	_reset()
+	assert_false(OnboardingProgress.has_seeded_prestige_deflector(), "not seeded initially")
+
+	OnboardingProgress.mark_prestige_deflector_seeded()
+	assert_true(OnboardingProgress.has_seeded_prestige_deflector(), "seeded after mark")
+
+	# Round-trips and survives a prestige reset (so it never re-seeds).
+	var data := OnboardingProgress.serialize()
+	_reset()
+	OnboardingProgress.deserialize(data)
+	assert_true(OnboardingProgress.has_seeded_prestige_deflector(), "survives round-trip")
+	OnboardingProgress.reset()
+	assert_true(OnboardingProgress.has_seeded_prestige_deflector(), "survives reset()")

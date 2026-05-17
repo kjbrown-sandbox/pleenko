@@ -137,12 +137,13 @@ func _update_currencies() -> void:
 
 		_try_spawn_upgrade_row(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD)
 		_try_spawn_upgrade_row(Enums.UpgradeType.ADVANCED_AUTODROPPER, Enums.BoardType.ORANGE)
+		_try_spawn_upgrade_row(Enums.UpgradeType.PEG_DEFLECTOR, Enums.BoardType.ORANGE)
 
 	# Hover tooltip — must be last child so it renders below everything
 	_hover_tooltip = TooltipScene.instantiate()
 	_hover_tooltip.use_parent_signals = false
 	_hover_tooltip.position_side = Tooltip.Placement.INLINE
-	_hover_tooltip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hover_tooltip.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_hover_tooltip)
 
 	_update_all_cap_buttons()
@@ -150,7 +151,8 @@ func _update_currencies() -> void:
 
 func _has_any_universal_upgrade() -> bool:
 	return UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER) \
-		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.ADVANCED_AUTODROPPER)
+		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.ADVANCED_AUTODROPPER) \
+		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.PEG_DEFLECTOR)
 
 
 func _try_spawn_upgrade_row(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
@@ -207,7 +209,9 @@ func _on_upgrade_hover_changed(text: String) -> void:
 
 func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
 	# Only care about autodropper-type upgrades
-	if upgrade_type != Enums.UpgradeType.AUTODROPPER and upgrade_type != Enums.UpgradeType.ADVANCED_AUTODROPPER:
+	if upgrade_type != Enums.UpgradeType.AUTODROPPER \
+			and upgrade_type != Enums.UpgradeType.ADVANCED_AUTODROPPER \
+			and upgrade_type != Enums.UpgradeType.PEG_DEFLECTOR:
 		return
 	if upgrade_type in _upgrade_rows:
 		return
@@ -286,7 +290,8 @@ func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:
 
 
 func _get_board_for_upgrade(upgrade_type: Enums.UpgradeType) -> Enums.BoardType:
-	if upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
+	if upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER \
+			or upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
 		return Enums.BoardType.ORANGE
 	return Enums.BoardType.GOLD
 

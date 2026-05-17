@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="BaseUpgradeData" format=3 uid="uid://b8pdfl3ctr0k7"]
+
+[ext_resource type="Script" uid="uid://c571lcduobww" path="res://autoloads/upgrade_manager/base_upgrade_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+type = 6
+display_name = "Peg Deflector"
+base_cost = 30
+max_level = 8
+cost_type = 1
+cost_delta = 30
+delta_escalation = 10
