@@ -48,7 +48,7 @@ Coins should calculate their path **row by row**, not all at once. This way if t
 - `style_lab/` — `VisualTheme` resource, presets under `style_lab/presets/*.tres`, plus the in-editor style lab scene.
 - `assets/` — icons, sounds, fonts.
 
-Autoload init order is set in `project.godot` and matters: `TierRegistry → CurrencyManager → UpgradeManager → LevelManager → PrestigeManager → SaveManager → SceneManager → ChallengeManager → ThemeProvider → ModeManager → ChallengeProgressManager → OnboardingProgress → AudioManager`. Later autoloads may subscribe to earlier ones in `_ready`.
+Autoload init order is set in `project.godot` and matters: `TierRegistry → CurrencyManager → UpgradeManager → LevelManager → PrestigeManager → SaveManager → SceneManager → ChallengeManager → ThemeProvider → ModeManager → ChallengeProgressManager → OnboardingProgress → AudioManager → PerformanceSettings`. Later autoloads may subscribe to earlier ones in `_ready`.
 
 #### Autoloads
 
@@ -87,7 +87,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Orchestrates save/load to `user://save.json`. No signals. `SAVE_VERSION = 6`.
 - Deserialization order (strict): `PrestigeManager → ChallengeProgressManager → OnboardingProgress → LevelManager → CurrencyManager → UpgradeManager → BoardManager`. Order matters so signals fire against fully-initialized state.
 - `_migrate(data, version)` runs sequential version upgrades. v4→v5 seeds `OnboardingProgress` peeked-boards from the existing `boards.board_types` so existing players don't see peeks for things they already unlocked. v5→v6 seeds `OnboardingProgress.autodropper_intro_seen = true` for any save with `boards.normal_autodroppers_unlocked = true`, so existing players don't see the first-time autodropper animation replay on load.
-- `reset_game` / `reset_game_without_reload` preserve `PrestigeManager`, `ChallengeProgressManager`, AND `OnboardingProgress` blobs in the minimal save so peek state survives a prestige reset.
+- `reset_game` / `reset_game_without_reload` preserve `PrestigeManager`, `ChallengeProgressManager`, AND `OnboardingProgress` blobs in the minimal save so peek state survives a prestige reset. Both minimal-save paths also carry the device preferences: audio (`audio_muted`, `master_volume`, `vfx_settings`) and `max_fps` (`PerformanceSettings`).
 - Calls `OfflineCalculator` (`scripts/offline/`) to credit earnings accumulated since last save. Offline credits are gated per-currency: a non-starting-tier currency only accrues if its board appears in `state["prestige"]` with count > 0 — preserves the first-time prestige beat for raw currencies the player has never organically earned.
 
 **SceneManager** — `autoloads/scene_manager/scene_manager.gd`
@@ -139,6 +139,12 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Prestige audio: on SLOW_MO entry, `_prestige_silencing` flag suppresses bucket plays + fades drones/ambient. At contact, `play_prestige()` plays a bass note + bell, then drives an ascending I maj7 arpeggio at 0.125s intervals. Arcade-specific: kick is the only audible backing layer; peg sparkle audio is currently disabled (peg ring VFX still fires).
 - AudioStyle transitions fade all drones over 1s so worlds don't bleed.
 - `get_chord_phase()` / `get_chord_duration()` drive Bucket's chord-synced scale pulse — all active buckets read the same global phase for visual sync.
+
+**PerformanceSettings** — `autoloads/performance_settings/performance_settings.gd`
+
+- Owns the player's display/performance preferences — currently just the frame-rate cap. No signals (pure data + apply).
+- `FPS_OPTIONS = [30, 60, 120, 144]`, `DEFAULT_MAX_FPS = 120`. `set_max_fps(fps)` snaps unknown/stale values to the default (never uncapped), sets `Engine.max_fps`, and disables V-Sync so the cap is authoritative on every display (skipped under the headless driver). Applied on `_ready` and on every change.
+- Persisted by `SaveManager` as `max_fps`; treated as a device preference like audio — preserved across prestige resets (lives in the minimal save like the audio prefs). `OptionsDialog`'s PERFORMANCE section drives it live; persistence rides the normal save cycle (same as master volume).
 
 #### Scene-level systems
 

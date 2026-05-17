@@ -50,6 +50,7 @@ func save_game() -> void:
 		"audio_muted": AudioManager.is_muted(),
 		"master_volume": AudioManager.get_master_volume(),
 		"vfx_settings": AudioManager.get_vfx_overrides(),
+		"max_fps": PerformanceSettings.get_max_fps(),
 	}
 
 	var json_string := JSON.stringify(data, "\t")
@@ -117,6 +118,7 @@ func load_game() -> bool:
 	AudioManager.set_master_volume(data.get("master_volume", 50.0))
 	for key: String in data.get("vfx_settings", {}):
 		AudioManager.set_vfx_override(key, bool(data["vfx_settings"][key]))
+	PerformanceSettings.set_max_fps(int(data.get("max_fps", PerformanceSettings.DEFAULT_MAX_FPS)))
 
 	# Failsafe: reconcile state with the level table.
 	# Heals saves where current_level was saved ahead of claim_rewards().
@@ -199,6 +201,7 @@ func reset_game() -> void:
 		"audio_muted": AudioManager.is_muted(),
 		"master_volume": AudioManager.get_master_volume(),
 		"vfx_settings": AudioManager.get_vfx_overrides(),
+		"max_fps": PerformanceSettings.get_max_fps(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -228,6 +231,7 @@ func reset_game_without_reload() -> void:
 		"audio_muted": AudioManager.is_muted(),
 		"master_volume": AudioManager.get_master_volume(),
 		"vfx_settings": AudioManager.get_vfx_overrides(),
+		"max_fps": PerformanceSettings.get_max_fps(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:

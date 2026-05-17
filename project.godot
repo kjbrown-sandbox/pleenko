@@ -39,6 +39,7 @@ ModeManager="*res://autoloads/mode_manager/mode_manager.gd"
 ChallengeProgressManager="*res://autoloads/challenge_progress/challenge_progress_manager.gd"
 OnboardingProgress="*res://autoloads/onboarding_progress/onboarding_progress.gd"
 AudioManager="*res://autoloads/audio_manager/audio_manager.gd"
+PerformanceSettings="*res://autoloads/performance_settings/performance_settings.gd"
 AnalyticsManager="*res://autoloads/analytics_manager/analytics_manager.gd"
 
 [display]
