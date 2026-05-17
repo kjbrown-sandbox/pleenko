@@ -135,6 +135,18 @@ func complete_challenge(challenge_id: String, next_ids: Array[String], rewards: 
 				_permanent_upgrades.append(reward)
 
 
+## Full wipe of all challenge progress. Used only by SaveManager.full_reset()
+## (the "Reset Game" main-menu option). Unlike deserialize(), this DOES clear
+## _unlocks: a full reset is a true fresh start, not a merge with disk state.
+func reset() -> void:
+	_states.clear()
+	_rewards_claimed.clear()
+	_unlocks.clear()
+	_starting_modifiers.clear()
+	_permanent_upgrades.clear()
+	challenges_ever_visited = false
+
+
 func serialize() -> Dictionary:
 	var states_data := {}
 	for id in _states:
