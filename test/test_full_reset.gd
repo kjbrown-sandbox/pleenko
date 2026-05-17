@@ -31,7 +31,7 @@ func _run_tests() -> void:
 	PrestigeManager.deserialize({"ORANGE": 1})
 	ChallengeProgressManager.deserialize({
 		"states": {"some_challenge": ChallengeProgressManager.ChallengeState.COMPLETED},
-		"unlocks": [0],
+		"unlocks": [ChallengeRewardData.UnlockType.HOLD_TO_DROP],
 		"challenges_ever_visited": true,
 	})
 	OnboardingProgress.mark_autodropper_intro_seen()
@@ -45,7 +45,8 @@ func _run_tests() -> void:
 	assert_equal(ChallengeProgressManager.get_state("some_challenge"),
 		ChallengeProgressManager.ChallengeState.COMPLETED,
 		"challenge marked completed before reset")
-	assert_true(ChallengeProgressManager.is_unlocked(0), "challenge unlock set before reset")
+	assert_true(ChallengeProgressManager.is_unlocked(ChallengeRewardData.UnlockType.HOLD_TO_DROP),
+		"challenge unlock set before reset")
 	assert_true(OnboardingProgress.has_seen_autodropper_intro(),
 		"autodropper intro seen before reset")
 	assert_true(OnboardingProgress.has_placed_deflector(),
@@ -66,7 +67,7 @@ func _run_tests() -> void:
 	assert_equal(ChallengeProgressManager.get_state("some_challenge"),
 		ChallengeProgressManager.ChallengeState.LOCKED,
 		"challenge state cleared after full reset")
-	assert_false(ChallengeProgressManager.is_unlocked(0),
+	assert_false(ChallengeProgressManager.is_unlocked(ChallengeRewardData.UnlockType.HOLD_TO_DROP),
 		"challenge unlock cleared after full reset (deserialize would NOT clear this)")
 	assert_false(ChallengeProgressManager.challenges_ever_visited,
 		"challenges_ever_visited cleared after full reset")

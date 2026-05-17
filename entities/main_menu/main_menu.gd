@@ -23,6 +23,8 @@ func _ready() -> void:
 	# The default PanelContainer stylebox is a dark engine grey, which kills the
 	# dark themed text. Give it an intentional light card from the palette so the
 	# dark text reads — same dark-on-light contrast as the rest of the menu UI.
+	# Colors come from the palette; border width / padding are plain layout
+	# constants (not part of the button theme), matching options_dialog.gd.
 	var card := StyleBoxFlat.new()
 	card.bg_color = t.bg_shade_6
 	card.border_color = t.button_border_color

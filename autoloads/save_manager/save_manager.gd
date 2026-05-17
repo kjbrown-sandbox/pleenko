@@ -182,33 +182,48 @@ func load_prestige_only() -> void:
 	ChallengeProgressManager.deserialize(data.get("challenges", {}))
 
 
-func reset_game() -> void:
-	# Capture persistent data before wiping the save — prestige + challenges +
-	# onboarding + audio preferences survive resets
-	var prestige_data := PrestigeManager.serialize()
-	var challenge_data := ChallengeProgressManager.serialize()
-	var onboarding_data := OnboardingProgress.serialize()
-
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
-
-	# Write a minimal save containing persistent data so it survives reset
-	var minimal_save := {
-		"version": SAVE_VERSION,
-		"prestige": prestige_data,
-		"challenges": challenge_data,
-		"onboarding": onboarding_data,
+## Audio/device preferences that survive EVERY reset variant (settings, not
+## progress). Same rationale as the audio-prefs-survive-reset behavior.
+func _device_prefs() -> Dictionary:
+	return {
 		"audio_muted": AudioManager.is_muted(),
 		"master_volume": AudioManager.get_master_volume(),
 		"vfx_settings": AudioManager.get_vfx_overrides(),
 		"max_fps": PerformanceSettings.get_max_fps(),
 	}
+
+
+## Progress blocks that the prestige-preserving resets keep but full_reset()
+## drops. Serialized before the save file is deleted.
+func _persistent_progress_blocks() -> Dictionary:
+	return {
+		"prestige": PrestigeManager.serialize(),
+		"challenges": ChallengeProgressManager.serialize(),
+		"onboarding": OnboardingProgress.serialize(),
+	}
+
+
+## Deletes the save, rewrites a minimal save (version + device prefs + any
+## extra blocks the caller wants preserved), then resets runtime state. The
+## only axis of variation across the reset variants is `extra_blocks`.
+func _wipe_save(extra_blocks: Dictionary) -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
+
+	var minimal_save := {"version": SAVE_VERSION}
+	minimal_save.merge(_device_prefs())
+	minimal_save.merge(extra_blocks)
+
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(minimal_save, "\t"))
 		file.close()
 
 	reset_state()
+
+
+func reset_game() -> void:
+	_wipe_save(_persistent_progress_blocks())
 	get_tree().reload_current_scene()
 
 
@@ -216,59 +231,26 @@ func reset_game() -> void:
 ## the current scene. Use this when the caller will handle the scene transition
 ## (e.g., transitioning from PrestigeScreen back to Main via SceneManager).
 func reset_game_without_reload() -> void:
-	var prestige_data := PrestigeManager.serialize()
-	var challenge_data := ChallengeProgressManager.serialize()
-	var onboarding_data := OnboardingProgress.serialize()
-
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
-
-	var minimal_save := {
-		"version": SAVE_VERSION,
-		"prestige": prestige_data,
-		"challenges": challenge_data,
-		"onboarding": onboarding_data,
-		"audio_muted": AudioManager.is_muted(),
-		"master_volume": AudioManager.get_master_volume(),
-		"vfx_settings": AudioManager.get_vfx_overrides(),
-		"max_fps": PerformanceSettings.get_max_fps(),
-	}
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(minimal_save, "\t"))
-		file.close()
-
-	reset_state()
+	_wipe_save(_persistent_progress_blocks())
 
 
 ## Hard wipe for the "Reset Game" main-menu option. Unlike reset_game(), this
 ## preserves NOTHING about progress — prestige, challenges, and onboarding are
-## all cleared for a true fresh start. Only audio/device preferences are kept
-## (same rationale as the audio-prefs-survive-reset behavior). The caller is
-## the main menu, so no scene reload is needed: autoload state is cleared in
-## memory here, and the menu shows no save-derived state.
+## all cleared for a true fresh start. Only device preferences are kept. The
+## caller is the main menu, so no scene reload is needed: autoload state is
+## cleared in memory here, and the menu shows no save-derived state.
 func full_reset() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
-
-	# Keep only audio/device preferences across the wipe.
-	var minimal_save := {
-		"version": SAVE_VERSION,
-		"audio_muted": AudioManager.is_muted(),
-		"master_volume": AudioManager.get_master_volume(),
-		"vfx_settings": AudioManager.get_vfx_overrides(),
-		"max_fps": PerformanceSettings.get_max_fps(),
-	}
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(minimal_save, "\t"))
-		file.close()
-
-	reset_state()
+	# Clear the persistent managers BEFORE _wipe_save() (which runs
+	# reset_state()), so the wipe order matches the documented load order
+	# (prestige first) and never rebuilds state off not-yet-cleared prestige.
+	# Note the name asymmetry: PrestigeManager/ChallengeProgressManager have a
+	# single (full) reset(); OnboardingProgress.reset() is the prestige-
+	# preserving partial, so full_reset() is needed for a true wipe there.
 	PrestigeManager.reset()
 	ChallengeProgressManager.reset()
 	OnboardingProgress.full_reset()
-	print("[SaveManager] Game fully reset (all progress wiped, audio prefs kept).")
+	_wipe_save({})  # no progress blocks = true fresh start
+	print("[SaveManager] Game fully reset (all progress wiped, device prefs kept).")
 
 
 func reset_state() -> void:
@@ -277,7 +259,7 @@ func reset_state() -> void:
 	UpgradeManager.reset()
 	toggle_auto_save(false)
 	_board_manager = null
-	print("[SaveManager] Game reset (prestige preserved). Reloading scene.")
+	print("[SaveManager] Runtime state reset (currency/level/upgrades).")
 
 func _migrate(data: Dictionary, version: int) -> Dictionary:
 	if version < 2:
