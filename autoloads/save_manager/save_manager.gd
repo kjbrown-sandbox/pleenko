@@ -181,7 +181,8 @@ func load_prestige_only() -> void:
 
 
 func reset_game() -> void:
-	# Capture persistent data before wiping the save — prestige + challenges + onboarding survive resets
+	# Capture persistent data before wiping the save — prestige + challenges +
+	# onboarding + audio preferences survive resets
 	var prestige_data := PrestigeManager.serialize()
 	var challenge_data := ChallengeProgressManager.serialize()
 	var onboarding_data := OnboardingProgress.serialize()
@@ -195,6 +196,9 @@ func reset_game() -> void:
 		"prestige": prestige_data,
 		"challenges": challenge_data,
 		"onboarding": onboarding_data,
+		"audio_muted": AudioManager.is_muted(),
+		"master_volume": AudioManager.get_master_volume(),
+		"vfx_settings": AudioManager.get_vfx_overrides(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -221,6 +225,9 @@ func reset_game_without_reload() -> void:
 		"prestige": prestige_data,
 		"challenges": challenge_data,
 		"onboarding": onboarding_data,
+		"audio_muted": AudioManager.is_muted(),
+		"master_volume": AudioManager.get_master_volume(),
+		"vfx_settings": AudioManager.get_vfx_overrides(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
