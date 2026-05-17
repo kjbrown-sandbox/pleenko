@@ -11,6 +11,9 @@ enum UnlockType {
 	HOLD_TO_DROP,
 }
 
+# Append-only: ChallengeProgressManager serializes modifier_type by ordinal
+# (no version guard), so reordering or inserting values silently corrupts
+# existing saves. Add new modifiers at the end only.
 enum ModifierType {
 	STARTING_AUTODROPPERS,
 	STARTING_COINS,
@@ -18,6 +21,7 @@ enum ModifierType {
 	ADVANCED_COIN_MULTIPLIER,
 	BUCKET_VALUE_PERCENT,
 	GOLD_COIN_SPEED_BOOST,
+	QUEUE_RATE_BONUS,
 }
 
 @export var type: RewardType

@@ -28,9 +28,8 @@ amount = 100
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
 type = 1
-modifier_type = 3
-modifier_amount = 0.5
-description = "+0.5 orange multiplier"
+modifier_type = 6
+description = "+10% to gold queue bonus"
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("9_sb")
