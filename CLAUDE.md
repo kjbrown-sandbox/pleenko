@@ -80,6 +80,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Owns per-board prestige counts (0 = locked, ≥1 = permanently unlocked) and the current `PrestigePhase` (NONE, SLOW_MO, FREEZE, EXPAND, TRANSITION) which sets `Engine.time_scale`.
 - Emits: `prestige_triggered`, `prestige_claimed`, `prestige_phase_changed`.
+- `reset()` — full wipe of prestige counts + time scale, used only by `SaveManager.full_reset()`. Deliberately signal-free (no listeners exist on the main menu where the wipe runs); separate from the prestige flow, which preserves counts.
 - Reads `ThemeProvider.theme` inside `enter_phase` for time-scale values. BoardManager queries multi-drop; LevelManager checks unlock state when rebuilding the level table.
 
 **SaveManager** — `autoloads/save_manager/save_manager.gd`
@@ -87,7 +88,10 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Orchestrates save/load to `user://save.json`. No signals. `SAVE_VERSION = 6`.
 - Deserialization order (strict): `PrestigeManager → ChallengeProgressManager → OnboardingProgress → LevelManager → CurrencyManager → UpgradeManager → BoardManager`. Order matters so signals fire against fully-initialized state.
 - `_migrate(data, version)` runs sequential version upgrades. v4→v5 seeds `OnboardingProgress` peeked-boards from the existing `boards.board_types` so existing players don't see peeks for things they already unlocked. v5→v6 seeds `OnboardingProgress.autodropper_intro_seen = true` for any save with `boards.normal_autodroppers_unlocked = true`, so existing players don't see the first-time autodropper animation replay on load.
-- `reset_game` / `reset_game_without_reload` preserve `PrestigeManager`, `ChallengeProgressManager`, AND `OnboardingProgress` blobs in the minimal save so peek state survives a prestige reset. Both minimal-save paths also carry the device preferences: audio (`audio_muted`, `master_volume`, `vfx_settings`) and `max_fps` (`PerformanceSettings`).
+- All reset variants funnel through `_wipe_save(extra_blocks)`: delete the save, rewrite a minimal save (`version` + `_device_prefs()`) merged with `extra_blocks`, then `reset_state()`. `_device_prefs()` is the single source of truth for the surviving device preferences — audio (`audio_muted`, `master_volume`, `vfx_settings`) and `max_fps` (`PerformanceSettings`).
+- `reset_game` / `reset_game_without_reload` pass `_persistent_progress_blocks()` (prestige + challenges + onboarding) so that state survives a prestige reset; `reset_game` also reloads the scene.
+- `full_reset()` — the main-menu "Reset Game" path. Passes NO progress blocks (true fresh start: prestige/challenges/onboarding all wiped), and first calls `PrestigeManager.reset()` / `ChallengeProgressManager.reset()` / `OnboardingProgress.full_reset()` *before* the wipe so the clear order matches the documented load order. No scene reload — runs from the menu, which shows no save-derived state. Only `_device_prefs()` survive.
+- `reset_state()` resets the runtime managers only (currency/level/upgrades, autosave off, board ref cleared); it does not preserve or reload anything — those are the callers' jobs.
 - Calls `OfflineCalculator` (`scripts/offline/`) to credit earnings accumulated since last save. Offline credits are gated per-currency: a non-starting-tier currency only accrues if its board appears in `state["prestige"]` with count > 0 — preserves the first-time prestige beat for raw currencies the player has never organically earned.
 
 **SceneManager** — `autoloads/scene_manager/scene_manager.gd`
@@ -119,6 +123,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Persistent state for challenge completion, unlock flags, starting modifiers, permanent upgrades. Survives a prestige reset (alongside PrestigeManager).
 - Emits: `challenge_state_changed(id, state)`, `unlock_granted(unlock_type)`. Read by `PlinkoBoard.setup` to apply per-board bonus multipliers and permanent upgrade levels.
+- `reset()` — full wipe of all challenge state, used only by `SaveManager.full_reset()`. Unlike `deserialize()` (which deliberately does NOT clear `_unlocks`, to merge with newer in-memory state), `reset()` DOES clear `_unlocks` — a full reset is a true fresh start, not a merge.
 - `challenges_ever_visited: bool` — flipped to `true` the first time the player manually enters challenges mode (read by `Main._update_nav_arrow_blinks` to stop the down-arrow blink; peek-driven mode switches do NOT flip this flag, see `PeekAnimator`).
 - `get_gold_coin_speed_boost_count()` — counts `GOLD_COIN_SPEED_BOOST` starting modifiers (board-agnostic, gold-only by design). Read by `Coin.start()` to scale fall-speed; the per-grant magnitude lives on `Coin.COIN_SPEED_BOOST_PER_UNLOCK`.
 
@@ -126,6 +131,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Persistent first-time-UX flags: `_peeked_boards: Dictionary` (BoardType → bool), `_peeked_challenges: bool`, and `_autodropper_intro_seen: bool`. All survive a prestige reset (`SaveManager.reset_game` and `reset_game_without_reload` preserve the serialized blob; `reset()` itself does not clear these).
 - API: `has_peeked_board(type)`, `mark_board_peeked(type)`, `has_peeked_challenges()`, `mark_challenges_peeked()`, `has_seen_autodropper_intro()`, `mark_autodropper_intro_seen()`. No signals — pure data.
+- `reset()` clears only the peek flags (prestige-preserving partial); `full_reset()` calls `reset()` then ALSO clears the permanent UX flags (autodropper/deflector intro etc.) for a true fresh start — used only by `SaveManager.full_reset()`.
 - Read by `PeekAnimator` to decide whether to peek a newly-unlocked target. Read by `BoardManager._on_upgrade_purchased` to decide whether to fire the first-autodropper intro signal. Save migration v4→v5 pre-seeds peeked-boards; v5→v6 pre-seeds `autodropper_intro_seen` from existing autodropper-unlocked saves.
 
 **AudioManager** — `autoloads/audio_manager/audio_manager.gd`
@@ -189,6 +195,10 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 **ChallengeHUD** — `entities/main/challenge_hud.gd` + nodes in `entities/main/main.tscn`
 
 - Challenge UI container: timer label, objective label, progress label, result label, embedded `ChallengeClock`. Polls `ChallengeManager.get_time_remaining` + `get_objective_progress` per frame.
+
+**MainMenu** — `entities/main_menu/main_menu.gd` + `.tscn`
+
+- App entry scene. "Campaign" → loads `main.tscn`. "Reset Game" → shows a confirmation overlay (a `ConfirmLayer` CanvasLayer that toggles `visible` on its child `Overlay` ColorRect, styled in `_ready` from the palette — no raw colors); confirming calls `SaveManager.full_reset()`. No save-derived state is shown, so `full_reset` does not reload the scene.
 
 **Main** — `entities/main/main.gd`
 
