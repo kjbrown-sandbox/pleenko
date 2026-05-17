@@ -50,6 +50,11 @@ func trigger_prestige(board_type: Enums.BoardType) -> void:
 	prestige_triggered.emit(board_type)
 
 
+## CONVENTION: `board_type` is the tier this prestige UNLOCKS, not the board
+## that was prestiged. The first (gold-board) prestige unlocks ORANGE → keyed
+## ORANGE; the second (orange-board) prestige unlocks the tier after orange →
+## keyed there. Consumers that care which *board* was prestiged must offset by
+## one (see get_permanent_deflector_count).
 func claim_prestige(board_type: Enums.BoardType) -> void:
 	_prestige_counts[board_type] = 1
 	prestige_claimed.emit(board_type)

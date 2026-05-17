@@ -1278,18 +1278,23 @@ func _deflector_bias() -> float:
 	return deflector_bias_for_strength(get_deflector_strength())
 
 
+## Legacy 50/50 pick — bit-identical to the old `1 if randf() < 0.5 else -1`.
+func _random_dir(roll: float) -> int:
+	return Enums.Direction.RIGHT if roll < 0.5 else Enums.Direction.LEFT
+
+
 ## The direction a coin leaves peg (row, col): a deflector *encourages* its
 ## direction (followed with probability _deflector_bias(), else the opposite);
 ## otherwise `roll` gives the legacy 50/50 pick. Bit-identical to the old
 ## `1 if randf() < 0.5 else -1` when no deflector is present.
 func resolve_bounce_direction(row: int, col: int, roll: float) -> int:
 	if _deflectors.is_empty():
-		return Enums.Direction.RIGHT if roll < 0.5 else Enums.Direction.LEFT
+		return _random_dir(roll)
 	var idx := peg_index(row, col)
 	if _deflectors.has(idx):
 		var d: int = _deflectors[idx]
 		return d if roll < _deflector_bias() else -d
-	return Enums.Direction.RIGHT if roll < 0.5 else Enums.Direction.LEFT
+	return _random_dir(roll)
 
 
 ## Global slot count = the player's Deflector upgrade level (stored under the
@@ -1368,7 +1373,9 @@ func restore_deflectors(raw: Array) -> void:
 			continue
 		if dir != Enums.Direction.LEFT and dir != Enums.Direction.RIGHT:
 			continue
-		if _deflectors.size() >= cap:
+		# Global cap (boards restore sequentially; deflector_total_query already
+		# wired) — same invariant place_deflector/resolve_click_action enforce.
+		if _global_deflectors_placed() >= cap:
 			break
 		_deflectors[idx] = dir
 
@@ -1410,8 +1417,6 @@ func set_deflector_input_allowed(allowed: bool) -> void:
 		_deflector_editor.set_input_allowed(allowed)
 
 
-
-
 func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, _p_board_type: Enums.BoardType, _new_level: int) -> void:
 	# Universal upgrade — every board's editor reflects the global cap,
 	# regardless of which board the purchase was booked under.
@@ -1426,26 +1431,10 @@ func get_peg_palette_source() -> VisualTheme.Palette:
 	return ThemeProvider.theme.peg_color_source
 
 
-func get_peg_count() -> int:
-	return _peg_positions.size()
-
-
 func get_peg_local_position(idx: int) -> Vector3:
 	if idx < 0 or idx >= _peg_positions.size():
 		return Vector3.ZERO
 	return _peg_positions[idx]
-
-
-## Screen-space centre of the peg field (used by the deflector intro swoop).
-func get_peg_field_screen_center() -> Vector2:
-	var cam := get_active_camera()
-	if cam == null or _peg_positions.is_empty():
-		return Vector2.ZERO
-	var sum := Vector3.ZERO
-	for p in _peg_positions:
-		sum += p
-	var center_local: Vector3 = sum / _peg_positions.size()
-	return cam.unproject_position(to_global(center_local))
 
 
 ## A roughly-central peg (mid row, mid column) — the sparkle/pulse target.

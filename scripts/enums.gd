@@ -33,8 +33,9 @@ enum UpgradeType {
 	PEG_DEFLECTOR,  ## Always append last — .tres files and saves store `type` as an int.
 }
 
-## Left/right bounce convention. +1 = right (+x): a coin moving right does
-## next_x = position.x + RIGHT * space_between_pegs / 2 (see Coin._bounce_or_despawn).
+## Left/right bounce convention. +1 = right (+x): moving RIGHT off lattice cell
+## (row, col) lands on (row+1, col+1); LEFT on (row+1, col).
+## See PlinkoBoard.next_lattice_cell / position_x_for.
 enum Direction {
 	LEFT = -1,
 	RIGHT = 1,

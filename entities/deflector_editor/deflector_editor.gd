@@ -44,6 +44,7 @@ var _last_mouse := Vector2.ZERO
 # hint) until the player places their first-ever deflector.
 var _pulse_tween: Tween
 var _hint: MeshInstance3D
+var _hint_tween: Tween
 
 
 func setup(board: PlinkoBoard) -> void:
@@ -61,6 +62,8 @@ func _exit_tree() -> void:
 		ThemeProvider.theme_changed.disconnect(_apply_theme)
 	if _pulse_tween and _pulse_tween.is_valid():
 		_pulse_tween.kill()
+	if _hint_tween and _hint_tween.is_valid():
+		_hint_tween.kill()
 
 
 # ── External control (called DOWN by PlinkoBoard / BoardManager / Main) ──
@@ -354,13 +357,16 @@ func start_center_peg_hint(peg_idx: int) -> void:
 	var p: Vector3 = _board.get_peg_local_position(peg_idx)
 	_hint.position = Vector3(p.x, p.y, p.z - Z_LIFT)
 	add_child(_hint)
-	_loop_pulse(_hint)
+	_hint_tween = _loop_pulse(_hint)
 
 
 func _stop_pulses() -> void:
 	if _pulse_tween and _pulse_tween.is_valid():
 		_pulse_tween.kill()
 	_pulse_tween = null
+	if _hint_tween and _hint_tween.is_valid():
+		_hint_tween.kill()
+	_hint_tween = null
 	if is_instance_valid(_ghost_arrow):
 		_ghost_arrow.scale = Vector3.ONE
 	if is_instance_valid(_hint):
