@@ -13,7 +13,7 @@ var vertical_spacing: float
 ## Additive in rate (not delay) keeps the curve self-bounded — delay shrinks
 ## but never reaches zero. With 1.0, one queued coin doubles the rate, two
 ## triples it, ten gives 11x the base rate.
-const QUEUE_RATE_BONUS_PER_COIN := 0.20
+const QUEUE_RATE_BONUS_PER_COIN := 0.15
 
 ## Each granted QUEUE_RATE_BONUS challenge reward adds this much to the
 ## per-queued-coin bonus above. Stackable; gold board only (counted globally,
