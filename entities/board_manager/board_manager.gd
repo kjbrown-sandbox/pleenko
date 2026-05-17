@@ -5,6 +5,9 @@ signal board_switched(board: PlinkoBoard)
 signal board_unlocked(board_type: Enums.BoardType)
 signal assignments_changed(assignments: Dictionary)
 signal first_autodropper_purchased
+## Fired once, on the player's very first Deflector purchase (main mode only;
+## suppressed in challenges). DeflectorIntroAnimator listens.
+signal first_deflector_purchased
 
 const BoardScene: PackedScene = preload("res://entities/plinko_board/plinko_board.tscn")
 
@@ -117,6 +120,7 @@ func switch_board(index: int) -> void:
 
 	AudioManager.set_active_board(_boards[_active_index].board_type)
 	_tween_camera_to_active_board()
+	_update_deflector_editors()
 	board_switched.emit(_boards[_active_index])
 
 
@@ -124,6 +128,9 @@ func _spawn_board(type: Enums.BoardType) -> void:
 	var board: PlinkoBoard = BoardScene.instantiate()
 	add_child(board)
 	board.setup(type)
+	# Deflector is a universal upgrade — the slot cap is global, so each board
+	# checks the total placed across every board.
+	board.deflector_total_query = get_total_deflectors
 
 	# Insert at correct tier position so board order always matches tier order
 	var tier_index := TierRegistry.get_tier_index(type)
@@ -152,6 +159,24 @@ func _spawn_board(type: Enums.BoardType) -> void:
 		board.set_normal_autodroppers_visible(true)
 	if _advanced_autodroppers_unlocked:
 		board.set_advanced_autodroppers_visible(true)
+	_update_deflector_editors()
+
+
+## Only the active board's deflector editor consumes mouse input — off-screen
+## boards must not raycast or eat clicks.
+func _update_deflector_editors() -> void:
+	for i in _boards.size():
+		_boards[i].set_deflector_input_active(i == _active_index)
+
+
+## Total deflectors placed across every board (the universal slot pool is
+## global). Injected into each PlinkoBoard as deflector_total_query.
+func get_total_deflectors() -> int:
+	var total := 0
+	for board in _boards:
+		total += board.deflector_count()
+	return total
+
 
 func is_board_unlocked(type: Enums.BoardType) -> bool:
 	for board in _boards:
@@ -412,6 +437,13 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 		# New advanced autodroppers stay in the free pool; the player assigns
 		# them manually. They are never auto-assigned to gold.
 		_update_all_button_displays()
+	elif upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
+		# First-ever deflector: play the intro once. The animator only lives in
+		# main-scene setup, so suppress in challenges (signal would fire into the
+		# void). has_seen_deflector_intro() gates replays; the animator marks it.
+		if not OnboardingProgress.has_seen_deflector_intro() \
+				and not ChallengeManager.is_active_challenge:
+			first_deflector_purchased.emit()
 	if board_type == Enums.BoardType.GOLD:
 		check_and_rescue_gold_soft_lock()
 
@@ -516,6 +548,7 @@ func serialize() -> Dictionary:
 			"advanced_coin_multiplier": board.advanced_coin_multiplier - acm_bonus,
 			"distance_for_advanced_buckets": board.distance_for_advanced_buckets,
 			"multi_drop_count": board.multi_drop_count,
+			"deflectors": board.serialize_deflectors(),
 		}
 	data["board_state"] = board_state
 
@@ -553,6 +586,8 @@ func deserialize(data: Dictionary) -> void:
 		# runs) already shows the bar when balance > 0, so false is safe here.
 		upgrade_state["has_advanced_drop"] = advanced_drops.get(board_key, false)
 		upgrade_state["advanced_coin_multiplier"] = bs.get("advanced_coin_multiplier", 2)
+		# Old saves lack "deflectors" — defaults to none (graceful, no migration).
+		upgrade_state["deflectors"] = bs.get("deflectors", [])
 		board.apply_saved_state(upgrade_state)
 
 	# Restore autodropper state
@@ -589,6 +624,7 @@ func deserialize(data: Dictionary) -> void:
 
 	# Re-frame camera on active board
 	_snap_camera_to_active_board()
+	_update_deflector_editors()
 
 
 ## Apply one-time prestige rewards. Called at the end of deserialize so the
@@ -605,6 +641,16 @@ func _apply_prestige_rewards() -> void:
 			_normal_pool = 1
 		if _assignments.get(StringName("GOLD_NORMAL"), 0) < 1:
 			_assignments[StringName("GOLD_NORMAL")] = 1
+
+	# Orange-board prestige reward: one permanent peg deflector, auto-placed
+	# once on the gold board's first peg. The flag (persisted, survives resets)
+	# means we never re-seed — the player is free to move or remove it after.
+	if PrestigeManager.get_permanent_deflector_count() > 0 \
+			and not OnboardingProgress.has_seeded_prestige_deflector():
+		var gold: PlinkoBoard = _find_board(Enums.BoardType.GOLD)
+		if gold:
+			gold.seed_first_peg_deflector()
+			OnboardingProgress.mark_prestige_deflector_seeded()
 
 
 func _exit_tree() -> void:

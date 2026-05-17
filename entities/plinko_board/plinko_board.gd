@@ -91,6 +91,17 @@ var _peg_basis: Basis
 var _active_flashes: Dictionary = {}  # peg_index -> { start_color: Color, elapsed: float, duration: float }
 var _active_peg_pulses: Dictionary = {}  # peg_index -> { elapsed: float, duration: float }
 
+# Player-placed deflectors. Key is peg_index(row, col); value is an
+# Enums.Direction (+1 right / -1 left) the coin is forced toward at that peg.
+# Owned here (the model); the DeflectorEditor child is a pure view+input node.
+# Lives only in the BoardManager save blob — cleared on prestige reset.
+var _deflectors: Dictionary = {}  # peg_index: int -> dir: int (Enums.Direction)
+var _deflector_editor: DeflectorEditor
+## Set by BoardManager — returns total deflectors placed across ALL boards
+## (the universal cap is global). Falls back to this board's own count when
+## unset (bare unit tests).
+var deflector_total_query: Callable
+
 # MultiMesh coin state
 var _coin_multimesh_instance: MultiMeshInstance3D
 var _coin_free_indices: Array[int] = []
@@ -147,6 +158,8 @@ func _exit_tree() -> void:
 		AudioManager.drum_tier_expired.disconnect(_on_drum_tier_expired)
 	if ThemeProvider.theme_changed.is_connected(_on_theme_changed):
 		ThemeProvider.theme_changed.disconnect(_on_theme_changed)
+	if UpgradeManager.upgrade_purchased.is_connected(_on_upgrade_purchased):
+		UpgradeManager.upgrade_purchased.disconnect(_on_upgrade_purchased)
 
 
 ## Chord advance — buckets now manage their own singing timers, so this is
@@ -221,6 +234,14 @@ func setup(type: Enums.BoardType) -> void:
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
+
+	# Deflector editor (pure view+input child; this board owns the model).
+	_deflector_editor = preload("res://entities/deflector_editor/deflector_editor.tscn").instantiate()
+	add_child(_deflector_editor)
+	_deflector_editor.setup(self)
+	_deflector_editor.deflector_change_requested.connect(_on_deflector_change_requested)
+	_deflector_editor.set_capacity(get_deflector_cap())
+	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
 
 
 func _setup_drop_bars() -> void:
@@ -877,6 +898,14 @@ func _on_queue_count_changed(_new_count: int) -> void:
 var _cached_camera: Camera3D
 
 
+## Lazily-refreshed active camera (shared with the queue-label projection so we
+## don't re-walk the viewport). Used by the DeflectorEditor's hover raycast.
+func get_active_camera() -> Camera3D:
+	if not is_instance_valid(_cached_camera):
+		_cached_camera = get_viewport().get_camera_3d()
+	return _cached_camera
+
+
 ## Project the spawn point (slot 0 of the queue) into screen space and tell
 ## the DropSection to anchor its bonus label there. Skipped when the section
 ## is hidden (non-active board) — saves the unproject + assignment cost.
@@ -1165,6 +1194,299 @@ func _show_advanced_drop_bar() -> void:
 		_setup_autodropper_buttons(adv_id)
 
 
+# ---------------------------------------------------------------------------
+# Lattice model + deflectors
+#
+# The board is a triangular Galton lattice. A coin's position is the integer
+# cell (row, col): row 0 has one peg (col 0); row r has r+1 pegs (col 0..r).
+# Moving RIGHT off (row, col) lands on (row+1, col+1); LEFT lands on (row+1,
+# col). These pure methods are the ONLY lattice math — build_board() and the
+# Coin both go through them, so there is no second "position -> peg" mapping
+# to drift against. (flash_nearest_peg is intentionally separate: it answers
+# "nearest rendered peg to a mid-bounce position", a different question.)
+# ---------------------------------------------------------------------------
+
+## Y of a coin resting on a peg row, slightly above the peg centres. Matches the
+## historical bounce arithmetic (coin spawns at vertical_spacing + 0.2, start()
+## drops it to y = 0.2 = row 0, each bounce subtracts one vertical_spacing).
+const COIN_ROW_Y_OFFSET := 0.2
+
+enum ClickAction { IGNORE, PLACE, REMOVE }
+
+## Deflector is a UNIVERSAL upgrade: its level (the global slot pool) is stored
+## under one canonical board, and deflectors may be placed on ANY board's pegs.
+const DEFLECTOR_BOARD := Enums.BoardType.ORANGE
+
+## Local x of peg/coin lattice cell (row, col). Single source of truth for the
+## horizontal layout — build_board() uses this for every peg.
+func position_x_for(row: int, col: int) -> float:
+	return -row * space_between_pegs / 2.0 + col * space_between_pegs
+
+
+## Flat peg index for (row, col), matching build_board()'s row-major fill order
+## (sum of pegs in the rows above, plus col). Used as the _deflectors key.
+func peg_index(row: int, col: int) -> int:
+	@warning_ignore("integer_division")
+	return row * (row + 1) / 2 + col
+
+
+## Local-space target a coin tweens to when it reaches lattice cell (row, col).
+## Z is left at 0 — the coin keeps its own render-order z (only x/y are tweened).
+func cell_to_world(row: int, col: int) -> Vector3:
+	return Vector3(position_x_for(row, col), COIN_ROW_Y_OFFSET - vertical_spacing * row, 0.0)
+
+
+## Pure integer lattice transition. direction is an Enums.Direction (+1 right).
+func next_lattice_cell(row: int, col: int, direction: int) -> Vector2i:
+	if direction == Enums.Direction.RIGHT:
+		return Vector2i(row + 1, col + 1)
+	return Vector2i(row + 1, col)
+
+
+## True once the coin has fallen past the last peg row into the bucket row.
+## There are `num_rows` peg rows (0 .. num_rows - 1).
+func is_terminal_cell(row: int, _col: int) -> bool:
+	return row >= num_rows
+
+
+## At the terminal row the column maps 1:1 onto the bucket child index
+## (num_buckets == num_rows + 1, col in 0 .. num_rows).
+func predicted_bucket_index(_row: int, col: int) -> int:
+	return col
+
+
+## Base deflector strength. Strength s biases a deflected peg toward its
+## chosen direction with probability (s+1)/(s+2): s=2 → 3/4 (1 in 4 still go
+## the other way — a 1:3 split), s=3 → 4/5, … asymptotic to but never 100%
+## (deflectors *encourage*, they don't *force*). Higher strength is intended
+## to come from challenge rewards later (board-agnostic, like the slot pool).
+const DEFLECTOR_BASE_STRENGTH := 2
+
+
+## Single source of truth for strength → bias. Static so UI (the upgrade row's
+## "current odds") can read it without a board instance.
+static func deflector_bias_for_strength(s: int) -> float:
+	return float(s + 1) / float(s + 2)
+
+
+func get_deflector_strength() -> int:
+	return DEFLECTOR_BASE_STRENGTH
+
+
+## Probability a deflected coin actually follows its deflector's direction.
+func _deflector_bias() -> float:
+	return deflector_bias_for_strength(get_deflector_strength())
+
+
+## The direction a coin leaves peg (row, col): a deflector *encourages* its
+## direction (followed with probability _deflector_bias(), else the opposite);
+## otherwise `roll` gives the legacy 50/50 pick. Bit-identical to the old
+## `1 if randf() < 0.5 else -1` when no deflector is present.
+func resolve_bounce_direction(row: int, col: int, roll: float) -> int:
+	if _deflectors.is_empty():
+		return Enums.Direction.RIGHT if roll < 0.5 else Enums.Direction.LEFT
+	var idx := peg_index(row, col)
+	if _deflectors.has(idx):
+		var d: int = _deflectors[idx]
+		return d if roll < _deflector_bias() else -d
+	return Enums.Direction.RIGHT if roll < 0.5 else Enums.Direction.LEFT
+
+
+## Global slot count = the player's Deflector upgrade level (stored under the
+## canonical board; the upgrade is universal so this is board-agnostic).
+func get_deflector_cap() -> int:
+	return UpgradeManager.get_level(DEFLECTOR_BOARD, Enums.UpgradeType.PEG_DEFLECTOR) \
+		+ PrestigeManager.get_permanent_deflector_count()
+
+
+func deflector_count() -> int:
+	return _deflectors.size()
+
+
+## Total deflectors placed across every board (BoardManager-provided), or this
+## board's own count when the query is unset (bare tests / single board).
+func _global_deflectors_placed() -> int:
+	if deflector_total_query.is_valid():
+		return deflector_total_query.call()
+	return _deflectors.size()
+
+
+func has_deflector(peg_idx: int) -> bool:
+	return _deflectors.has(peg_idx)
+
+
+func get_deflector_keys() -> Array:
+	return _deflectors.keys()
+
+
+func get_deflector_dir(peg_idx: int) -> int:
+	return _deflectors.get(peg_idx, 0)
+
+
+## Place (or re-aim) a deflector. Rejected only when it would exceed the slot
+## cap (re-aiming an existing peg never consumes a new slot).
+func place_deflector(peg_idx: int, dir: int) -> bool:
+	if not _deflectors.has(peg_idx) and _global_deflectors_placed() >= get_deflector_cap():
+		return false
+	_deflectors[peg_idx] = dir
+	return true
+
+
+func remove_deflector(peg_idx: int) -> void:
+	_deflectors.erase(peg_idx)
+
+
+## Pure click→intent decision (testable without the editor/raycast).
+func resolve_click_action(peg_idx: int) -> int:
+	if _deflectors.has(peg_idx):
+		return ClickAction.REMOVE
+	if _global_deflectors_placed() < get_deflector_cap():
+		return ClickAction.PLACE
+	return ClickAction.IGNORE
+
+
+func serialize_deflectors() -> Array:
+	var out: Array = []
+	for idx in _deflectors:
+		out.append({"peg": idx, "dir": _deflectors[idx]})
+	return out
+
+
+## Pure restore — drops entries off the current grid or beyond the slot cap.
+## Safe to call on a bare board (does NOT touch build_board / scene nodes).
+func restore_deflectors(raw: Array) -> void:
+	_deflectors.clear()
+	@warning_ignore("integer_division")
+	var total_pegs: int = num_rows * (num_rows + 1) / 2
+	var cap: int = get_deflector_cap()
+	for entry in raw:
+		if not (entry is Dictionary):
+			continue
+		var idx: int = int(entry.get("peg", -1))
+		var dir: int = int(entry.get("dir", 0))
+		if idx < 0 or idx >= total_pegs:
+			continue
+		if dir != Enums.Direction.LEFT and dir != Enums.Direction.RIGHT:
+			continue
+		if _deflectors.size() >= cap:
+			break
+		_deflectors[idx] = dir
+
+
+## Editor → board intent (signals up, calls down). dir 0 removes; ±1 places.
+func _on_deflector_change_requested(peg_index: int, dir: int) -> void:
+	if dir == 0:
+		remove_deflector(peg_index)
+	else:
+		if place_deflector(peg_index, dir) and not OnboardingProgress.has_placed_deflector():
+			# First-ever placement — stops the discoverability pulse everywhere.
+			OnboardingProgress.mark_deflector_placed()
+	if _deflector_editor:
+		_deflector_editor.refresh()
+	SaveManager.save_game()
+
+
+## Auto-place a deflector on this board's first peg (the apex, row 0 col 0).
+## Used once by the orange-prestige reward seeding; no-op if one is already
+## there. The player can then move or remove it like any other.
+func seed_first_peg_deflector(dir: int = Enums.Direction.RIGHT) -> void:
+	var idx := peg_index(0, 0)
+	if has_deflector(idx):
+		return
+	place_deflector(idx, dir)
+	if _deflector_editor:
+		_deflector_editor.refresh()
+
+
+## Editor enable forwarding (BoardManager / Main call these — they don't poke
+## the private editor directly).
+func set_deflector_input_active(active: bool) -> void:
+	if _deflector_editor:
+		_deflector_editor.set_active(active)
+
+
+func set_deflector_input_allowed(allowed: bool) -> void:
+	if _deflector_editor:
+		_deflector_editor.set_input_allowed(allowed)
+
+
+
+
+func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, _p_board_type: Enums.BoardType, _new_level: int) -> void:
+	# Universal upgrade — every board's editor reflects the global cap,
+	# regardless of which board the purchase was booked under.
+	if upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
+		if _deflector_editor:
+			_deflector_editor.set_capacity(get_deflector_cap())
+
+
+## Palette source the pegs use — so the deflector remove-X (a TintedIcon)
+## resolves to the same neutral peg color and survives theme swaps.
+func get_peg_palette_source() -> VisualTheme.Palette:
+	return ThemeProvider.theme.peg_color_source
+
+
+func get_peg_count() -> int:
+	return _peg_positions.size()
+
+
+func get_peg_local_position(idx: int) -> Vector3:
+	if idx < 0 or idx >= _peg_positions.size():
+		return Vector3.ZERO
+	return _peg_positions[idx]
+
+
+## Screen-space centre of the peg field (used by the deflector intro swoop).
+func get_peg_field_screen_center() -> Vector2:
+	var cam := get_active_camera()
+	if cam == null or _peg_positions.is_empty():
+		return Vector2.ZERO
+	var sum := Vector3.ZERO
+	for p in _peg_positions:
+		sum += p
+	var center_local: Vector3 = sum / _peg_positions.size()
+	return cam.unproject_position(to_global(center_local))
+
+
+## A roughly-central peg (mid row, mid column) — the sparkle/pulse target.
+func get_center_peg_index() -> int:
+	@warning_ignore("integer_division")
+	var row: int = num_rows / 2
+	@warning_ignore("integer_division")
+	var col: int = clampi(row / 2, 0, row)
+	return peg_index(row, col)
+
+
+func get_center_peg_screen_position() -> Vector2:
+	var cam := get_active_camera()
+	if cam == null or _peg_positions.is_empty():
+		return Vector2.ZERO
+	return cam.unproject_position(
+		to_global(get_peg_local_position(get_center_peg_index())))
+
+
+## Called by the intro animator (via the orange board) once the sparkles land:
+## start the pulsing center-peg hint until the player places their first one.
+func start_deflector_center_hint() -> void:
+	if _deflector_editor:
+		_deflector_editor.start_center_peg_hint(get_center_peg_index())
+
+
+## Flat index of the peg nearest a board-local point, or -1 if none within
+## max_dist. Scans the authoritative _peg_positions array (same kind of lookup
+## as flash_nearest_peg) — used by the DeflectorEditor for hover/click, never
+## on the coin hot path.
+func nearest_peg_index_to_local(local_pos: Vector3, max_dist: float) -> int:
+	var best := -1
+	var best_dist := max_dist
+	for i in _peg_positions.size():
+		var d := local_pos.distance_to(_peg_positions[i])
+		if d < best_dist:
+			best_dist = d
+			best = i
+	return best
+
+
 func get_nearest_bucket(x_position: float) -> Bucket:
 	for bucket in buckets_container.get_children():
 		if abs(bucket.global_position.x - x_position) < 0.5:
@@ -1199,10 +1521,11 @@ func build_board() -> void:
 
 	var idx := 0
 	for i in range(num_rows):
-		var x_offset = -i * space_between_pegs / 2
-		var y = -vertical_spacing * i
+		var y := -vertical_spacing * i
 		for j in range(i + 1):
-			_peg_positions[idx] = Vector3(x_offset + (j * space_between_pegs), y, 0)
+			# position_x_for is the single canonical lattice->x formula (also
+			# used by cell_to_world / the Coin), so build and gameplay can't drift.
+			_peg_positions[idx] = Vector3(position_x_for(i, j), y, 0)
 			idx += 1
 
 	# Build MultiMesh
@@ -1331,6 +1654,10 @@ func build_board() -> void:
 					target_bucket.start_gameplay_target_fade(_gameplay_target_timer)
 				else:
 					target_bucket.mark_gameplay_target()
+
+	# Peg positions changed (row add / rebuild) — re-derive paddle positions.
+	if _deflector_editor:
+		_deflector_editor.refresh()
 
 	board_rebuilt.emit()
 
@@ -1530,6 +1857,10 @@ func _show_multi_drop_label(count: int) -> void:
 	tween.tween_callback(label.queue_free)
 
 
+# Intentionally a thresholded nearest-search over rendered positions, NOT the
+# lattice math (position_x_for / peg_index): it runs mid-bounce when the coin is
+# not snapped to a peg, so it must tolerate the bounce arc. Kept separate from
+# the deflector lookup on purpose — they answer different questions.
 func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 	if _peg_positions.is_empty():
 		return
@@ -1775,3 +2106,11 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 		_show_advanced_drop_bar()
 
 	build_board()
+
+	# Restore deflectors LAST: build_board() rebuilt the peg grid, and
+	# UpgradeManager (slot cap source) was deserialized before BoardManager.
+	# restore_deflectors drops entries off-grid or beyond the cap.
+	restore_deflectors(upgrade_state.get("deflectors", []))
+	if _deflector_editor:
+		_deflector_editor.set_capacity(get_deflector_cap())
+		_deflector_editor.refresh()

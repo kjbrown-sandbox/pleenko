@@ -70,6 +70,11 @@ func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:
 		_setup_cap_raise_if_needed(_rows[upgrade_type], upgrade_type)
 
 
+## The UpgradeRow for a type, or null if it hasn't been unlocked/spawned yet.
+func get_upgrade_row(upgrade_type: Enums.UpgradeType) -> UpgradeRow:
+	return _rows.get(upgrade_type)
+
+
 func _spawn_row(upgrade_type: Enums.UpgradeType) -> void:
 	var row = UpgradeRowScene.instantiate()
 	row.setup(_board_type, upgrade_type, _buy_upgrade.bind(upgrade_type))
@@ -122,13 +127,17 @@ func _buy_upgrade(upgrade_type: Enums.UpgradeType) -> void:
 			_board.decrease_drop_delay()
 		Enums.UpgradeType.QUEUE:
 			_board.increase_queue_capacity()
-		Enums.UpgradeType.AUTODROPPER, Enums.UpgradeType.ADVANCED_AUTODROPPER:
-			pass  # Pool size is just the upgrade level; BoardManager reads it directly
+		Enums.UpgradeType.AUTODROPPER, Enums.UpgradeType.ADVANCED_AUTODROPPER, \
+		Enums.UpgradeType.PEG_DEFLECTOR:
+			pass  # Universal upgrades — bought via CoinValues, not here
 
 
 func _is_universal_upgrade(upgrade_type: Enums.UpgradeType) -> bool:
+	# Per-board "unique" upgrades are all universal — they render in the
+	# CoinValues HUD (left), not in this per-board section.
 	return upgrade_type == Enums.UpgradeType.AUTODROPPER \
-		or upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER
+		or upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER \
+		or upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR
 
 
 func _get_section_title() -> String:

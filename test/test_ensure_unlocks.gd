@@ -21,6 +21,8 @@ func _run_tests() -> void:
 	test_advanced_bucket_reconcile_at_level_10()
 	test_no_advanced_bucket_reconcile_below_level_10()
 	test_drop_coins_not_replayed()
+	test_deflector_unlocks_on_orange_only()
+	test_advanced_autodropper_moved_to_red()
 
 
 func _reset_state() -> void:
@@ -173,6 +175,43 @@ func test_drop_coins_not_replayed() -> void:
 	LevelManager.reconcile_reward.disconnect(probe)
 
 	assert_equal(caught.size(), 0, "DROP_COINS rewards must NOT be reconciled (would dupe coins)")
+
+
+# The orange/red special-slot swap is built by _set_special_slot. The full
+# level table only contains a tier once it's prestige-unlocked, so test the
+# builder directly per board (deterministic, no prestige state needed).
+
+func test_deflector_unlocks_on_orange_only() -> void:
+	print("test_deflector_unlocks_on_orange_only")
+	var data := LevelData.new()
+	LevelManager._set_special_slot(data, Enums.BoardType.ORANGE,
+		TierRegistry.get_next_tier(Enums.BoardType.ORANGE))
+	var has_deflector := false
+	for r in data.rewards:
+		if r.type == RewardData.RewardType.UNLOCK_UPGRADE \
+				and r.upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
+			has_deflector = true
+			assert_equal(r.board_type, Enums.BoardType.ORANGE,
+				"deflector unlock targets the orange board")
+		assert_false(
+			r.type == RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER,
+			"orange slot 4 no longer grants Advanced Autodropper")
+	assert_true(has_deflector, "orange slot 4 unlocks PEG_DEFLECTOR")
+
+
+func test_advanced_autodropper_moved_to_red() -> void:
+	print("test_advanced_autodropper_moved_to_red")
+	var data := LevelData.new()
+	LevelManager._set_special_slot(data, Enums.BoardType.RED,
+		TierRegistry.get_next_tier(Enums.BoardType.RED))
+	var has_adv := false
+	for r in data.rewards:
+		if r.type == RewardData.RewardType.UNLOCK_UPGRADE \
+				and r.upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
+			has_adv = true
+			assert_equal(r.board_type, Enums.BoardType.RED,
+				"Advanced Autodropper unlock now targets the red board")
+	assert_true(has_adv, "red slot 4 unlocks ADVANCED_AUTODROPPER")
 
 
 func test_partial_unlocks_repaired() -> void:

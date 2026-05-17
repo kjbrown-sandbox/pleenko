@@ -33,6 +33,19 @@ func get_multi_drop(board_type: Enums.BoardType) -> int:
 	return 1 + bonus
 
 
+## Prestiging the ORANGE board (the Deflector's home tier — the *second*
+## prestige) grants exactly ONE permanent Deflector slot, not one per prestige.
+## A prestige is recorded under the tier it UNLOCKS, so "orange board has been
+## prestiged" == the tier after orange (red) has a prestige count > 0. (The
+## first/gold prestige only sets the ORANGE count, which must NOT grant it.)
+## Survives resets since PrestigeManager state does.
+func get_permanent_deflector_count() -> int:
+	var after_orange: TierData = TierRegistry.get_next_tier(Enums.BoardType.ORANGE)
+	if after_orange == null:
+		return 0
+	return 1 if _prestige_counts.get(after_orange.board_type, 0) > 0 else 0
+
+
 func trigger_prestige(board_type: Enums.BoardType) -> void:
 	prestige_triggered.emit(board_type)
 
