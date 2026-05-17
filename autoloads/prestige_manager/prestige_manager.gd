@@ -81,6 +81,17 @@ func reset_time_scale() -> void:
 	prestige_phase_changed.emit(PrestigePhase.NONE)
 
 
+## Full wipe of prestige progress. Used only by SaveManager.full_reset() (the
+## "Reset Game" main-menu option). The normal prestige flow intentionally
+## preserves _prestige_counts across resets, so this is deliberately separate.
+## No signal is emitted — a full reset runs from the menu where no board /
+## prestige listeners exist, and emitting mid-wipe would be misleading.
+func reset() -> void:
+	_prestige_counts.clear()
+	current_phase = PrestigePhase.NONE
+	Engine.time_scale = 1.0
+
+
 func serialize() -> Dictionary:
 	var data := {}
 	for board_type in _prestige_counts:

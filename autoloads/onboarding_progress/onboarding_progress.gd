@@ -73,6 +73,17 @@ func reset() -> void:
 	# permanent UX flags that survive prestige resets, like _peeked_challenges.
 
 
+## Clears EVERYTHING, including the permanent UX flags that the prestige-
+## preserving reset() intentionally keeps. Used only by SaveManager.full_reset()
+## (the "Reset Game" main-menu option) for a true fresh start.
+func full_reset() -> void:
+	reset()
+	_autodropper_intro_seen = false
+	_deflector_intro_seen = false
+	_deflector_placed = false
+	_prestige_deflector_seeded = false
+
+
 func serialize() -> Dictionary:
 	var boards_data: Array[int] = []
 	for board_type in _peeked_boards:

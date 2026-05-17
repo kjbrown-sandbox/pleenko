@@ -241,6 +241,36 @@ func reset_game_without_reload() -> void:
 	reset_state()
 
 
+## Hard wipe for the "Reset Game" main-menu option. Unlike reset_game(), this
+## preserves NOTHING about progress — prestige, challenges, and onboarding are
+## all cleared for a true fresh start. Only audio/device preferences are kept
+## (same rationale as the audio-prefs-survive-reset behavior). The caller is
+## the main menu, so no scene reload is needed: autoload state is cleared in
+## memory here, and the menu shows no save-derived state.
+func full_reset() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
+
+	# Keep only audio/device preferences across the wipe.
+	var minimal_save := {
+		"version": SAVE_VERSION,
+		"audio_muted": AudioManager.is_muted(),
+		"master_volume": AudioManager.get_master_volume(),
+		"vfx_settings": AudioManager.get_vfx_overrides(),
+		"max_fps": PerformanceSettings.get_max_fps(),
+	}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(minimal_save, "\t"))
+		file.close()
+
+	reset_state()
+	PrestigeManager.reset()
+	ChallengeProgressManager.reset()
+	OnboardingProgress.full_reset()
+	print("[SaveManager] Game fully reset (all progress wiped, audio prefs kept).")
+
+
 func reset_state() -> void:
 	CurrencyManager.reset()
 	LevelManager.reset()
