@@ -126,6 +126,8 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - `reset()` — full wipe of all challenge state, used only by `SaveManager.full_reset()`. Unlike `deserialize()` (which deliberately does NOT clear `_unlocks`, to merge with newer in-memory state), `reset()` DOES clear `_unlocks` — a full reset is a true fresh start, not a merge.
 - `challenges_ever_visited: bool` — flipped to `true` the first time the player manually enters challenges mode (read by `Main._update_nav_arrow_blinks` to stop the down-arrow blink; peek-driven mode switches do NOT flip this flag, see `PeekAnimator`).
 - `get_gold_coin_speed_boost_count()` — counts `GOLD_COIN_SPEED_BOOST` starting modifiers (board-agnostic, gold-only by design). Read by `Coin.start()` to scale fall-speed; the per-grant magnitude lives on `Coin.COIN_SPEED_BOOST_PER_UNLOCK`.
+- `get_queue_rate_bonus_count()` — counts `QUEUE_RATE_BONUS` starting modifiers (board-agnostic count, gold-only by design — same shape as the speed-boost counter). Read by `PlinkoBoard.setup` (via `_queue_rate_bonus_for_board`) to raise the gold board's per-queued-coin drop-rate bonus; the per-grant magnitude lives on `PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK`.
+- `ChallengeRewardData.ModifierType` is **append-only** — it is serialized by ordinal with no save-version guard, so reordering/inserting values silently corrupts existing saves.
 
 **OnboardingProgress** — `autoloads/onboarding_progress/onboarding_progress.gd`
 
@@ -172,7 +174,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - On coin land: `AudioManager.request_bucket_play` + `on_coin_landed`. Singing is suppressed while `_upgrade_animating` is true (the upgrade ripple owns the arpeggio).
 - On peg contact: `flash_nearest_peg` calls `AudioManager.should_sparkle` (gates the ring VFX in coin color); flash + halo + pulse always fire.
 - Bucket value upgrade ripple: `increase_bucket_values` updates buckets in-place with a center-outward arpeggio at `BUCKET_WAIT / 2` intervals via `force_play_bucket`, instead of rebuilding the board.
-- Queue rate bonus: `get_effective_drop_delay()` returns `drop_delay / (1 + QUEUE_RATE_BONUS_PER_COIN * coin_queue.count)` — additive in rate, never reaches zero. `_start_drop_timer` and `decrease_drop_delay` track `_last_effective_delay` so a queue-size change mid-cycle rescales `_drop_timer_remaining` proportionally without losing accumulated progress.
+- Queue rate bonus: `get_effective_drop_delay()` returns `drop_delay / (1 + _queue_rate_bonus_per_coin * coin_queue.count)` — additive in rate, never reaches zero. `_queue_rate_bonus_per_coin` is cached in `setup()` via the pure `_queue_rate_bonus_for_board(type)`: base `QUEUE_RATE_BONUS_PER_COIN` for every board, plus `ChallengeProgressManager.get_queue_rate_bonus_count() * QUEUE_RATE_BONUS_PER_UNLOCK` on the gold board only (mirrors the `GOLD_COIN_SPEED_BOOST` → `Coin` precedent; challenge progress only changes on scene reload so the cache can't go stale). `_start_drop_timer` and `decrease_drop_delay` track `_last_effective_delay` so a queue-size change mid-cycle rescales `_drop_timer_remaining` proportionally without losing accumulated progress.
 - Per frame, `_update_queue_bonus_label_position` projects `coin_queue.global_position + coin_queue.start_position` to viewport space (using a cached `Camera3D`) and tells `DropSection` where to anchor its bonus label. Skipped when `drop_section.visible` is false.
 
 **Coin** — `entities/coin/coin.gd`
