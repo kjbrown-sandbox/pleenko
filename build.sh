@@ -39,6 +39,12 @@ echo "  - Press Ctrl+C to stop the server and push to itch"
 echo "  - Or press Ctrl+C twice to abort without pushing"
 echo ""
 
+# Bail early if something is already on the port
+if lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "❌ Port 8000 is already in use. Stop the other process and re-run."
+    exit 1
+fi
+
 # Start server with COOP/COEP headers required by Godot 4 web exports
 python3 -c "
 import http.server, functools
@@ -53,6 +59,28 @@ s = http.server.HTTPServer(('', 8000), functools.partial(Handler, directory='bui
 s.serve_forever()
 " &
 SERVER_PID=$!
+
+# Wait until the server is actually accepting connections before opening the
+# browser. Python needs ~0.5s to import + bind; opening the browser before the
+# socket is listening is what causes "connection refused".
+echo "Waiting for server to come up..."
+for i in $(seq 1 50); do
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "❌ Server process exited before it could bind to port 8000."
+        wait "$SERVER_PID" 2>/dev/null || true
+        exit 1
+    fi
+    if curl -s -o /dev/null "http://localhost:8000/"; then
+        break
+    fi
+    sleep 0.2
+    if [ "$i" -eq 50 ]; then
+        echo "❌ Server did not become ready within 10s."
+        kill "$SERVER_PID" 2>/dev/null || true
+        exit 1
+    fi
+done
+echo "Server is up at http://localhost:8000"
 
 # Open in default browser
 open "http://localhost:8000" 2>/dev/null || true
