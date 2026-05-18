@@ -18,6 +18,28 @@ static func upgrade_name(type: Enums.UpgradeType) -> String:
 	return Enums.UpgradeType.keys()[type].to_lower().replace("_", " ")
 
 
+## Shared prestige-reward phrasing. The prestige screen and the prestige dialog
+## both describe the same rewards; routing the overlapping lines through these
+## helpers keeps their wording identical and removes the duplicated tier loop.
+
+## "gold", "gold and orange", ... — lower-tier display names for the multi-drop
+## bonus, which applies to every tier below the prestiged one. "lower" if none.
+static func lower_tier_names_phrase(board_type: Enums.BoardType) -> String:
+	var idx := TierRegistry.get_tier_index(board_type)
+	var lower_names: Array[String] = []
+	for i in range(0, idx):
+		lower_names.append(TierRegistry.get_tier_by_index(i).display_name.to_lower())
+	return " and ".join(lower_names) if lower_names.size() > 0 else "lower"
+
+
+static func multi_drop_phrase(target: String) -> String:
+	return "+1 multi-drop for the %s board" % target
+
+
+static func access_board_phrase(board_display_name: String) -> String:
+	return "Access to the %s board" % board_display_name.to_lower()
+
+
 ## Formats a number with K/M/B suffixes for readability.
 ## Under 10: one decimal (1.5K). 10+: whole number (10K, 200M).
 ## Examples: 1500 → "1.5K", 15000 → "15K", 2300000 → "2.3M"

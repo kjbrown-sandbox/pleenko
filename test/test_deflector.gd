@@ -34,6 +34,7 @@ func _run_tests() -> void:
 	test_restore_drops_invalid()
 	test_restore_cleared_when_cap_zero()
 	test_seed_first_peg_deflector()
+	test_seed_first_peg_deflector_noop_when_unavailable()
 
 
 func _make_board() -> PlinkoBoard:
@@ -373,4 +374,16 @@ func test_seed_first_peg_deflector() -> void:
 	b.seed_first_peg_deflector(Enums.Direction.LEFT)
 	assert_equal(b.deflector_count(), 1, "still one deflector")
 	assert_equal(b.get_deflector_dir(0), Enums.Direction.RIGHT, "unchanged on re-seed")
+	b.free()
+
+
+## Challenge auto-assign hook relies on this: when no deflector slot is
+## available (cap 0), seeding must do nothing.
+func test_seed_first_peg_deflector_noop_when_unavailable() -> void:
+	print("test_seed_first_peg_deflector_noop_when_unavailable")
+	_set_cap(0)
+	var b := _make_board()
+	b.seed_first_peg_deflector()
+	assert_equal(b.deflector_count(), 0, "no slot available ⇒ nothing seeded")
+	assert_false(b.has_deflector(0), "apex stays empty when unavailable")
 	b.free()

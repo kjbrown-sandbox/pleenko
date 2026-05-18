@@ -93,13 +93,9 @@ func _build_rewards_text() -> String:
 	var board_name: String = tier.display_name if tier else "Unknown"
 
 	# Multi-drop bonus applies to all tiers below this one
-	var idx := TierRegistry.get_tier_index(_board_type)
-	var lower_names: Array[String] = []
-	for i in range(0, idx):
-		lower_names.append(TierRegistry.get_tier_by_index(i).display_name.to_lower())
-	var multi_drop_target: String = " and ".join(lower_names) if lower_names.size() > 0 else "lower"
+	var multi_drop_target := FormatUtils.lower_tier_names_phrase(_board_type)
 
-	var rewards_text := "+1 multi-drop for the %s board" % multi_drop_target
+	var rewards_text := FormatUtils.multi_drop_phrase(multi_drop_target)
 	if _board_type == Enums.BoardType.ORANGE:
 		rewards_text += "\n+1 permanent autodropper"
 	# Prestige is recorded under the tier it unlocks, so the orange-BOARD
@@ -108,7 +104,7 @@ func _build_rewards_text() -> String:
 	var after_orange := TierRegistry.get_next_tier(Enums.BoardType.ORANGE)
 	if after_orange and _board_type == after_orange.board_type:
 		rewards_text += "\n+1 permanent peg deflector"
-	rewards_text += "\nAccess to the %s board" % board_name.to_lower()
+	rewards_text += "\n" + FormatUtils.access_board_phrase(board_name)
 	if _board_type == Enums.BoardType.ORANGE:
 		rewards_text += "\nAccess to gold challenges"
 	return rewards_text

@@ -90,6 +90,12 @@ func _ready() -> void:
 	_update_nav_arrows()
 	_update_lockdown_overlay()
 
+	# A just-finished challenge returns the player to the challenge menu, not
+	# the board. ModeManager (autoload) carried the intent across the reload.
+	if not ChallengeManager.is_active_challenge and ModeManager.pending_challenges_menu:
+		ModeManager.pending_challenges_menu = false
+		ModeManager.switch_to_challenges()
+
 
 func _setup_normal() -> void:
 	challenge_hud.visible = false
@@ -174,7 +180,7 @@ func _on_challenge_completed() -> void:
 	# Build reward summary lines from the rewards list
 	var reward_lines: Array[String] = []
 	for reward in challenge.rewards:
-		reward_lines.append(_format_reward(reward))
+		reward_lines.append(reward.display_text())
 
 	# Refresh the HUD progress label one more time so the final n/n shows before
 	# clear_challenge() nulls the tracker.
@@ -186,46 +192,21 @@ func _on_challenge_completed() -> void:
 	_challenge_complete_dialog.show_with_results(stats, reward_lines)
 	await _challenge_complete_dialog.closed
 
-	SaveManager.reset_state()
-	SceneManager.set_new_scene(load("res://entities/main/main.tscn"), false, ThemeProvider.Kind.NORMAL)
-
-
-func _format_reward(reward: ChallengeRewardData) -> String:
-	match reward.type:
-		ChallengeRewardData.RewardType.UNLOCK:
-			return "Unlocked: %s" % ChallengeRewardData.UnlockType.keys()[reward.unlock_type].capitalize().replace("_", " ")
-		ChallengeRewardData.RewardType.STARTING_MODIFIER:
-			return _format_starting_modifier(reward)
-		ChallengeRewardData.RewardType.PERMANENT_UPGRADE:
-			var board_name: String = Enums.BoardType.keys()[reward.board_type].capitalize()
-			var upgrade_name: String = Enums.UpgradeType.keys()[reward.upgrade_type].capitalize().replace("_", " ")
-			return "+%d %s level (%s)" % [int(reward.modifier_amount), upgrade_name, board_name]
-	return ""
-
-
-func _format_starting_modifier(reward: ChallengeRewardData) -> String:
-	var board_name: String = Enums.BoardType.keys()[reward.board_type].capitalize()
-	match reward.modifier_type:
-		ChallengeRewardData.ModifierType.STARTING_COINS:
-			var currency_name: String = FormatUtils.currency_name(reward.currency_type, false)
-			return "+%d starting %s" % [int(reward.modifier_amount), currency_name]
-		ChallengeRewardData.ModifierType.MULTI_DROP:
-			return "+%d multi-drop (%s)" % [int(reward.modifier_amount), board_name]
-		ChallengeRewardData.ModifierType.ADVANCED_COIN_MULTIPLIER:
-			return "+%.1fx advanced multiplier (%s)" % [reward.modifier_amount, board_name]
-		ChallengeRewardData.ModifierType.BUCKET_VALUE_PERCENT:
-			return "+%d%% bucket value (%s)" % [int(reward.modifier_amount * 100), board_name]
-		ChallengeRewardData.ModifierType.STARTING_AUTODROPPERS:
-			return "+%d starting autodroppers (%s)" % [int(reward.modifier_amount), board_name]
-		ChallengeRewardData.ModifierType.GOLD_COIN_SPEED_BOOST:
-			return "+%d%% gold coin speed" % int(Coin.COIN_SPEED_BOOST_PER_UNLOCK * 100)
-	return ""
+	_exit_challenge_to_menu()
 
 
 func _on_challenge_failed(reason: String) -> void:
 	challenge_hud.show_result("Failed: %s" % reason)
 	await get_tree().create_timer(2.0).timeout
 	ChallengeManager.clear_challenge()
+	_exit_challenge_to_menu()
+
+
+## Shared challenge teardown: flag the return-to-menu intent (consumed by
+## _ready after the reload), wipe runtime state, and reload the main scene.
+## Single source for the exit so the completed/failed paths can't drift.
+func _exit_challenge_to_menu() -> void:
+	ModeManager.pending_challenges_menu = true
 	SaveManager.reset_state()
 	SceneManager.set_new_scene(load("res://entities/main/main.tscn"), false, ThemeProvider.Kind.NORMAL)
 

@@ -16,7 +16,6 @@ exact = true
 script = ExtResource("3_reward")
 type = 2
 upgrade_type = 2
-description = "+1 permanent drop rate (gold)"
 
 [resource]
 script = ExtResource("1_data")

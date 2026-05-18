@@ -20,7 +20,6 @@ amount = 50
 script = ExtResource("4_reward")
 type = 2
 upgrade_type = 1
-description = "+1 permanent bucket value (gold)"
 
 [resource]
 script = ExtResource("1_data")
