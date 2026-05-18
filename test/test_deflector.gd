@@ -22,6 +22,8 @@ func _run_tests() -> void:
 	test_resolve_direction_no_deflector_matches_legacy()
 	test_resolve_direction_deflector_encourages()
 	test_deflector_bias_value()
+	test_deflector_outcome()
+	test_notify_deflector_resolved_null_editor_safe()
 	test_cap_includes_prestige_permanent()
 	test_resolve_click_action()
 	test_place_respects_slot_cap()
@@ -130,8 +132,8 @@ func test_resolve_direction_no_deflector_matches_legacy() -> void:
 
 func test_resolve_direction_deflector_encourages() -> void:
 	print("test_resolve_direction_deflector_encourages")
-	# Base strength 2 → bias 3/4: roll < 0.75 follows the deflector,
-	# roll >= 0.75 goes the other way (a 1:3 split — encourage, not force).
+	# Base strength 5 → bias 6/7 (~0.857): roll < 6/7 follows the deflector,
+	# roll >= 6/7 goes the other way (a 1:6 split — encourage, not force).
 	_set_cap(4)
 	var b := _make_board()
 	var idx := b.peg_index(2, 1)
@@ -139,9 +141,11 @@ func test_resolve_direction_deflector_encourages() -> void:
 	assert_equal(b.resolve_bounce_direction(2, 1, 0.0), Enums.Direction.RIGHT,
 		"low roll follows the deflector (RIGHT)")
 	assert_equal(b.resolve_bounce_direction(2, 1, 0.7), Enums.Direction.RIGHT,
-		"roll 0.7 < 3/4 still follows RIGHT")
-	assert_equal(b.resolve_bounce_direction(2, 1, 0.8), Enums.Direction.LEFT,
-		"roll 0.8 >= 3/4 goes the other way (not forced)")
+		"roll 0.7 < 6/7 still follows RIGHT")
+	assert_equal(b.resolve_bounce_direction(2, 1, 0.84), Enums.Direction.RIGHT,
+		"roll 0.84 < 6/7 follows RIGHT (would have missed at the old 4/5)")
+	assert_equal(b.resolve_bounce_direction(2, 1, 0.9), Enums.Direction.LEFT,
+		"roll 0.9 >= 6/7 goes the other way (not forced)")
 	assert_equal(b.resolve_bounce_direction(2, 1, 0.99), Enums.Direction.LEFT,
 		"high roll goes the other way")
 	b.place_deflector(idx, Enums.Direction.LEFT)
@@ -158,9 +162,59 @@ func test_resolve_direction_deflector_encourages() -> void:
 func test_deflector_bias_value() -> void:
 	print("test_deflector_bias_value")
 	var b := _make_board()
-	# Base strength 2 → bias (2+1)/(2+2) = 3/4 (a 1:3 split).
-	assert_equal(b.get_deflector_strength(), 2, "base strength is 2")
-	assert_near(b._deflector_bias(), 3.0 / 4.0, 0.0001, "bias = 3/4 at strength 2")
+	# Base strength 5 → bias (5+1)/(5+2) = 6/7 (a 1:6 split).
+	assert_equal(b.get_deflector_strength(), 5, "base strength is 5")
+	assert_near(b._deflector_bias(), 6.0 / 7.0, 0.0001, "bias = 6/7 at strength 5")
+	b.free()
+
+
+func test_deflector_outcome() -> void:
+	print("test_deflector_outcome")
+	# Pure classifier driving the reaction VFX. NONE when no deflector here;
+	# FOLLOWED when the resolved direction equals the deflector's set dir;
+	# MISSED when it's the opposite. Does not consume RNG.
+	_set_cap(4)
+	var b := _make_board()
+	# No deflectors anywhere → NONE regardless of direction.
+	assert_equal(b.deflector_outcome(2, 1, Enums.Direction.RIGHT),
+		PlinkoBoard.DeflectorOutcome.NONE, "empty board → NONE")
+	assert_equal(b.deflector_outcome(2, 1, Enums.Direction.LEFT),
+		PlinkoBoard.DeflectorOutcome.NONE, "empty board → NONE (other dir)")
+
+	var idx := b.peg_index(2, 1)
+	b.place_deflector(idx, Enums.Direction.RIGHT)
+	assert_equal(b.deflector_outcome(2, 1, Enums.Direction.RIGHT),
+		PlinkoBoard.DeflectorOutcome.FOLLOWED, "RIGHT deflector, coin RIGHT → FOLLOWED")
+	assert_equal(b.deflector_outcome(2, 1, Enums.Direction.LEFT),
+		PlinkoBoard.DeflectorOutcome.MISSED, "RIGHT deflector, coin LEFT → MISSED")
+	# A different peg, with a deflector present elsewhere → still NONE.
+	assert_equal(b.deflector_outcome(2, 0, Enums.Direction.RIGHT),
+		PlinkoBoard.DeflectorOutcome.NONE, "non-deflected peg → NONE")
+
+	# Re-aim LEFT — the classification must follow the new direction.
+	b.place_deflector(idx, Enums.Direction.LEFT)
+	assert_equal(b.deflector_outcome(2, 1, Enums.Direction.LEFT),
+		PlinkoBoard.DeflectorOutcome.FOLLOWED, "LEFT deflector, coin LEFT → FOLLOWED")
+	assert_equal(b.deflector_outcome(2, 1, Enums.Direction.RIGHT),
+		PlinkoBoard.DeflectorOutcome.MISSED, "LEFT deflector, coin RIGHT → MISSED")
+	b.free()
+
+
+func test_notify_deflector_resolved_null_editor_safe() -> void:
+	print("test_notify_deflector_resolved_null_editor_safe")
+	# A bare board never instantiates _deflector_editor (only _setup does) —
+	# that is exactly the state every pure test runs under, and the state the
+	# new Coin._bounce_or_despawn call must tolerate. Assert the guard makes it
+	# a no-op that neither errors nor mutates the model.
+	_set_cap(1)
+	var b := _make_board()
+	var idx := b.peg_index(2, 1)
+	b.place_deflector(idx, Enums.Direction.RIGHT)
+	b.notify_deflector_resolved(2, 1, Enums.Direction.RIGHT, Enums.CurrencyType.GOLD_COIN)
+	b.notify_deflector_resolved(2, 1, Enums.Direction.LEFT, Enums.CurrencyType.GOLD_COIN)
+	b.notify_deflector_resolved(0, 0, Enums.Direction.RIGHT, Enums.CurrencyType.GOLD_COIN)
+	assert_equal(b.deflector_count(), 1, "notify never mutates the deflector model")
+	assert_true(b.has_deflector(idx), "deflector untouched by notify")
 	b.free()
 
 

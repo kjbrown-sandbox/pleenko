@@ -31,6 +31,14 @@ var _x_canvas: CanvasLayer
 var _x_icon: TintedIcon
 var _x_peg := -1                     # peg the remove-X currently targets, or -1
 var _placed: Array[MeshInstance3D] = []  # pooled solid arrows, one per deflector
+# peg_idx -> {elapsed, color, pulse, duration} for an active HIT/MISS reaction.
+# The arrow snaps to `color` on the bounce; _process eases it back to the peg
+# colour (and, when `pulse`, scales it up then back to 1.0) over `duration`.
+# No tween — same allocation-free _process fade PlinkoBoard.flash_nearest_peg
+# uses for peg flashes. Cleared wherever the pooled arrows are re-bound or
+# re-materialised (refresh / theme / deactivate / exit) so a half-finished
+# reaction can't leave the wrong arrow stuck coloured or scaled.
+var _active_glows: Dictionary = {}
 
 # Enable gates — input runs only when all are satisfied.
 var _input_allowed := true  # toggled by Main.apply_input_lock (peek/prestige)
@@ -55,6 +63,7 @@ func setup(board: PlinkoBoard) -> void:
 	if not OnboardingProgress.has_placed_deflector():
 		_pulse_tween = _loop_pulse(_ghost_arrow)
 	_update_input_enabled()
+	set_process(false)  # only runs while a HIT glow is active
 
 
 func _exit_tree() -> void:
@@ -64,6 +73,7 @@ func _exit_tree() -> void:
 		_pulse_tween.kill()
 	if _hint_tween and _hint_tween.is_valid():
 		_hint_tween.kill()
+	_clear_glows()
 
 
 # ── External control (called DOWN by PlinkoBoard / BoardManager / Main) ──
@@ -78,6 +88,7 @@ func set_active(active: bool) -> void:
 	_is_active = active
 	if not active:
 		_hide_hover()
+		_clear_glows()
 	_update_input_enabled()
 
 
@@ -93,6 +104,9 @@ func set_input_allowed(allowed: bool) -> void:
 func refresh() -> void:
 	if not is_instance_valid(_board) or _placed == null:
 		return
+	# Pool slots are about to be re-bound by index — drop any active glow first
+	# so it can't keep colouring a now-different peg's arrow.
+	_clear_glows()
 	var keys: Array = _board.get_deflector_keys()
 	for i in keys.size():
 		var peg_idx: int = keys[i]
@@ -285,10 +299,16 @@ func _arrow_mat(color: Color) -> ShaderMaterial:
 	return mat
 
 
+## The arrow's local position for a peg + dir — the single source of truth for
+## arrow placement, used by _orient_arrow (placed arrows and the MISS ghost).
+func _arrow_rest_position(peg_pos: Vector3, dir: int) -> Vector3:
+	var off: float = _board.space_between_pegs * ARROW_SIDE_FACTOR
+	return Vector3(peg_pos.x + dir * off, peg_pos.y, peg_pos.z - Z_LIFT)
+
+
 ## Position an arrow on the dir side of a peg, apex pointing that way.
 func _orient_arrow(arrow: MeshInstance3D, peg_pos: Vector3, dir: int) -> void:
-	var off := _board.space_between_pegs * ARROW_SIDE_FACTOR
-	arrow.position = Vector3(peg_pos.x + dir * off, peg_pos.y, peg_pos.z - Z_LIFT)
+	arrow.position = _arrow_rest_position(peg_pos, dir)
 	# Shader draws the apex at +Y; rotate so it points +x (right) or -x (left).
 	arrow.rotation = Vector3(0, 0, -PI / 2.0 if dir == Enums.Direction.RIGHT else PI / 2.0)
 
@@ -301,6 +321,9 @@ func _apply_theme() -> void:
 	# Pegs render via their own always-unshaded shader, so deflector visuals
 	# must be unshaded too (unconditionally) to match them under any theme.
 
+	# Stop active glows BEFORE swapping materials, so _process can't keep
+	# writing tint to a now-detached material and pop the arrow.
+	_clear_glows()
 	# Placed arrows read as structural board elements → peg color.
 	for arrow in _placed:
 		arrow.material_override = _arrow_mat(t.peg_color)
@@ -324,11 +347,13 @@ func _flat_mat(color: Color) -> StandardMaterial3D:
 	return mat
 
 
-## Ghost/hint color: a real palette color (the board's tier/coin color) so the
-## preview reads as a vivid hint, distinct from the peg-colored placed arrow.
+## Placement-preview ("ghost") arrow colour: the neutral peg colour at 50%
+## opacity — a subtle hint, never a vivid tier colour, and distinct from the
+## opaque peg-coloured placed arrow.
 func _ghost_color() -> Color:
-	var currency := TierRegistry.primary_currency(_board.board_type)
-	return ThemeProvider.theme.get_coin_color(currency)
+	var c: Color = ThemeProvider.theme.peg_color
+	c.a = 0.5
+	return c
 
 
 ## A looping subtle scale pulse (same cadence as the UI attention blink).
@@ -383,3 +408,106 @@ func _get_or_make_arrow(i: int) -> MeshInstance3D:
 		add_child(mi)
 		_placed.append(mi)
 	return _placed[i]
+
+
+# ── Reaction VFX ───────────────────────────────────────────────────────
+# Both HIT and MISS briefly tint the real pooled arrow, then _process eases it
+# back to the peg colour — the same allocation-free fade
+# PlinkoBoard.flash_nearest_peg uses for peg flashes (no tween, no spawned
+# nodes). HIT also adds a soft grow→shrink scale pulse. Colours are palette
+# assignments on the theme. Pure view, driven DOWN by
+# PlinkoBoard.notify_deflector_resolved.
+
+
+## HIT: the coin FOLLOWED the placed deflector at peg_idx. Tints its arrow one
+## neutral shade darker (theme.deflector_hit_color) and gives it a soft
+## grow→shrink pulse; both ease back over deflector_hit_glow_duration.
+func play_deflector_hit(peg_idx: int) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	_start_reaction(peg_idx, t.deflector_hit_color, true, t.deflector_hit_glow_duration)
+
+
+## MISS: the coin escaped AGAINST the placed deflector at peg_idx. Flashes that
+## same arrow red (theme.deflector_miss_color), easing back over
+## deflector_miss_fade_duration. No pulse, no opposite-side ghost.
+func play_deflector_miss(peg_idx: int) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	_start_reaction(peg_idx, t.deflector_miss_color, false, t.deflector_miss_fade_duration)
+
+
+## Begin a reaction on peg_idx's placed arrow: snap it to `color` (and reset
+## scale), record it, and let _process ease the colour back to the peg colour
+## — and, when `pulse`, the scale up then back to 1.0 — over `duration`.
+func _start_reaction(peg_idx: int, color: Color, pulse: bool, duration: float) -> void:
+	if not ThemeProvider.theme.deflector_reaction_enabled or not is_instance_valid(_board):
+		return
+	var i: int = _board.get_deflector_keys().find(peg_idx)
+	if i < 0 or i >= _placed.size():
+		return
+	var arrow: MeshInstance3D = _placed[i]
+	if not is_instance_valid(arrow) or not arrow.visible:
+		return
+	var mat: Material = arrow.material_override
+	if not (mat is ShaderMaterial):
+		return
+	arrow.scale = Vector3.ONE  # clean start (a prior pulse may have left it scaled)
+	mat.set_shader_parameter("tint_color", color)
+	_active_glows[peg_idx] = {
+		"elapsed": 0.0,
+		"color": color,
+		"pulse": pulse,
+		"duration": maxf(duration, 0.001),
+	}
+	set_process(true)
+
+
+## Eases every active reaction back toward the peg colour (and scale 1.0), then
+## stops itself once none remain. peg_idx → _placed slot is resolved each frame
+## (the pool is re-bound by index on refresh, but refresh also _clear_glows()).
+func _process(delta: float) -> void:
+	if _active_glows.is_empty() or not is_instance_valid(_board):
+		set_process(false)
+		return
+	var peg: Color = ThemeProvider.theme.peg_color
+	var peak: float = ThemeProvider.theme.deflector_hit_pulse_scale
+	var keys: Array = _board.get_deflector_keys()
+	var done: Array = []
+	for peg_idx in _active_glows:
+		var g: Dictionary = _active_glows[peg_idx]
+		g["elapsed"] += delta
+		var k: float = clampf(g["elapsed"] / g["duration"], 0.0, 1.0)
+		var i: int = keys.find(peg_idx)
+		if i >= 0 and i < _placed.size() and is_instance_valid(_placed[i]):
+			var arrow: MeshInstance3D = _placed[i]
+			var m: Material = arrow.material_override
+			if m is ShaderMaterial:
+				m.set_shader_parameter("tint_color", (g["color"] as Color).lerp(peg, k))
+			if g["pulse"]:
+				# sin(k·π): 0 at start/end, 1 at the midpoint — grow then shrink.
+				arrow.scale = Vector3.ONE * (1.0 + (peak - 1.0) * sin(k * PI))
+		if k >= 1.0:
+			done.append(peg_idx)
+	for peg_idx in done:
+		_active_glows.erase(peg_idx)
+	if _active_glows.is_empty():
+		set_process(false)
+
+
+## Stop every active reaction and snap those arrows back to the peg colour and
+## scale 1.0. Called wherever the pooled arrows are about to be re-bound or
+## re-materialised (refresh / theme / deactivate / exit), so a half-finished
+## reaction can't leave the wrong arrow stuck coloured or scaled. Deterministic.
+func _clear_glows() -> void:
+	for peg_idx in _active_glows.keys():
+		if not is_instance_valid(_board):
+			break
+		var i: int = _board.get_deflector_keys().find(peg_idx)
+		if i < 0 or i >= _placed.size() or not is_instance_valid(_placed[i]):
+			continue
+		var arrow: MeshInstance3D = _placed[i]
+		arrow.scale = Vector3.ONE
+		if arrow.material_override is ShaderMaterial:
+			arrow.material_override.set_shader_parameter(
+				"tint_color", ThemeProvider.theme.peg_color)
+	_active_glows.clear()
+	set_process(false)

@@ -81,6 +81,8 @@ enum Palette {
 @export var overlay_source: Palette = Palette.BG_7
 @export var overlay_opacity := 0.6
 @export var prestige_flash_source: Palette = Palette.BG_6  # color coin/bucket lerp toward during prestige
+@export var deflector_hit_color_source: Palette = Palette.BG_3   # placed deflector tints to this on a followed bounce — one neutral shade darker than the default peg (BG_4)
+@export var deflector_miss_color_source: Palette = Palette.RED_MAIN  # placed deflector flashes to this when a coin escapes against it
 
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")
@@ -207,6 +209,15 @@ const coin_shape := CoinShape.CYLINDER
 @export var peg_ring_duration := 0.9                              # seconds
 @export var peg_ring_max_opacity := 0.35                          # peak alpha at sine apex
 @export var peg_ring_thickness := 0.06                            # UV-space ring half-width
+
+# Deflector reactions — the placed arrow briefly tints then eases back to the
+# peg colour. HIT: one neutral shade darker + a soft grow→shrink pulse.
+# MISS: red flash, no pulse. Colours come from the Color Assignments above.
+# Pure view; no gameplay effect.
+@export var deflector_reaction_enabled := true                    # master toggle for both HIT/MISS reactions
+@export var deflector_hit_glow_duration := 0.3                    # seconds — HIT tint + pulse ease back to the peg colour over this
+@export var deflector_hit_pulse_scale := 1.15                     # peak scale of the soft HIT pulse (grows to this, shrinks back to 1.0)
+@export var deflector_miss_fade_duration := 0.45                  # seconds — MISS red flash eases back to the peg colour over this
 
 # ── Vignette ─────────────────────────────────────────────────────────
 @export_group("Vignette")
@@ -345,6 +356,10 @@ var directional_light_color: Color:
 	get: return resolve(directional_light_source)
 var peg_color: Color:
 	get: return resolve(peg_color_source)
+var deflector_hit_color: Color:
+	get: return resolve(deflector_hit_color_source)
+var deflector_miss_color: Color:
+	get: return resolve(deflector_miss_color_source)
 var high_multiplier_color: Color:
 	get: return resolve(high_multiplier_source)
 var hit_bucket_color: Color:

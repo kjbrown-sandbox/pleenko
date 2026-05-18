@@ -1241,6 +1241,12 @@ const COIN_ROW_Y_OFFSET := 0.2
 
 enum ClickAction { IGNORE, PLACE, REMOVE }
 
+## Outcome of a coin bouncing off a peg, w.r.t. any deflector placed there.
+## NONE = no deflector at that peg; FOLLOWED = coin went the deflector's set
+## way; MISSED = coin escaped against it. Drives the deflector reaction VFX.
+## Named (not a ±1/0 int) so it never reads as an Enums.Direction.
+enum DeflectorOutcome { NONE, FOLLOWED, MISSED }
+
 ## Deflector is a UNIVERSAL upgrade: its level (the global slot pool) is stored
 ## under one canonical board, and deflectors may be placed on ANY board's pegs.
 const DEFLECTOR_BOARD := Enums.BoardType.ORANGE
@@ -1284,11 +1290,11 @@ func predicted_bucket_index(_row: int, col: int) -> int:
 
 
 ## Base deflector strength. Strength s biases a deflected peg toward its
-## chosen direction with probability (s+1)/(s+2): s=2 → 3/4 (1 in 4 still go
-## the other way — a 1:3 split), s=3 → 4/5, … asymptotic to but never 100%
+## chosen direction with probability (s+1)/(s+2): s=5 → 6/7 (1 in 7 still go
+## the other way — a 1:6 split), s=6 → 7/8, … asymptotic to but never 100%
 ## (deflectors *encourage*, they don't *force*). Higher strength is intended
 ## to come from challenge rewards later (board-agnostic, like the slot pool).
-const DEFLECTOR_BASE_STRENGTH := 2
+const DEFLECTOR_BASE_STRENGTH := 5
 
 
 ## Single source of truth for strength → bias. Static so UI (the upgrade row's
@@ -1323,6 +1329,37 @@ func resolve_bounce_direction(row: int, col: int, roll: float) -> int:
 		var d: int = _deflectors[idx]
 		return d if roll < _deflector_bias() else -d
 	return _random_dir(roll)
+
+
+## Did the coin follow or fight the deflector at cell (row, col)? Pure query —
+## reads _deflectors only, no RNG, no side effects. `direction` is the already
+## resolved bounce direction (an Enums.Direction); this just compares it to the
+## stored deflector dir, so resolve_bounce_direction stays bit-identical and the
+## trajectory tests are unaffected. NONE when this peg has no deflector.
+func deflector_outcome(row: int, col: int, direction: int) -> DeflectorOutcome:
+	if _deflectors.is_empty():
+		return DeflectorOutcome.NONE
+	var idx := peg_index(row, col)
+	if not _deflectors.has(idx):
+		return DeflectorOutcome.NONE
+	return DeflectorOutcome.FOLLOWED if _deflectors[idx] == direction \
+		else DeflectorOutcome.MISSED
+
+
+## Event hook (called DOWN by Coin alongside flash_nearest_peg, before its cell
+## reassignment): the coin's deflector interaction at (row, col) is decided —
+## drive the reaction VFX. Fire-and-forget and a safe no-op when no deflector
+## editor exists (bare test boards) or this peg has no deflector. Pure view:
+## never mutates _deflectors and never saves.
+func notify_deflector_resolved(row: int, col: int, direction: int, _coin_type: int) -> void:
+	if not _deflector_editor:
+		return
+	var idx := peg_index(row, col)
+	match deflector_outcome(row, col, direction):
+		DeflectorOutcome.FOLLOWED:
+			_deflector_editor.play_deflector_hit(idx)
+		DeflectorOutcome.MISSED:
+			_deflector_editor.play_deflector_miss(idx)
 
 
 ## Global slot count = the player's Deflector upgrade level (stored under the
