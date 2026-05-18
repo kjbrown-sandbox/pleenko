@@ -176,12 +176,14 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Bucket value upgrade ripple: `increase_bucket_values` updates buckets in-place with a center-outward arpeggio at `BUCKET_WAIT / 2` intervals via `force_play_bucket`, instead of rebuilding the board.
 - Queue rate bonus: `get_effective_drop_delay()` returns `drop_delay / (1 + _queue_rate_bonus_per_coin * coin_queue.count)` — additive in rate, never reaches zero. `_queue_rate_bonus_per_coin` is cached in `setup()` via the pure `_queue_rate_bonus_for_board(type)`: base `QUEUE_RATE_BONUS_PER_COIN` for every board, plus `ChallengeProgressManager.get_queue_rate_bonus_count() * QUEUE_RATE_BONUS_PER_UNLOCK` on the gold board only (mirrors the `GOLD_COIN_SPEED_BOOST` → `Coin` precedent; challenge progress only changes on scene reload so the cache can't go stale). `_start_drop_timer` and `decrease_drop_delay` track `_last_effective_delay` so a queue-size change mid-cycle rescales `_drop_timer_remaining` proportionally without losing accumulated progress.
 - Per frame, `_update_queue_bonus_label_position` projects `coin_queue.global_position + coin_queue.start_position` to viewport space (using a cached `Camera3D`) and tells `DropSection` where to anchor its bonus label. Skipped when `drop_section.visible` is false.
+- Deflectors: `_deflectors` (peg_index → ±1 dir) is the model; `DEFLECTOR_BASE_STRENGTH = 5` → bias `(s+1)/(s+2) = 6/7 ≈ 86%` (a 1:6 split — *encourage, never force*). Single source of truth: `resolve_bounce_direction` reads it live (bit-identical to the legacy 50/50 when no deflector — trajectory tests depend on this) and `UpgradeRow`'s "current odds" hover reads the static `deflector_bias_for_strength(s)`. `deflector_outcome(row, col, direction) -> DeflectorOutcome {NONE, FOLLOWED, MISSED}` is a pure RNG-free comparator over `_deflectors` (does NOT re-roll). `notify_deflector_resolved(row, col, direction)` is a pure-view event hook called DOWN by `Coin` that dispatches FOLLOWED/MISSED to `_deflector_editor.play_deflector_hit/miss`; safe no-op when no editor (bare test boards), never mutates the model, never saves.
 
 **Coin** — `entities/coin/coin.gd`
 
 - Individual coin animation. Picks left/right at each row, queries the board for the next waypoint, determines final bucket at landing time.
 - Emits: `final_bounce_started(coin, predicted_bucket)` (triggers prestige handover), `landed`.
 - `start()` caches `_fall_speed_multiplier` from `ChallengeProgressManager.get_gold_coin_speed_boost_count()` (gold coins only); reused by `_bounce_or_despawn()` so the autoload isn't queried per bounce. Per-grant magnitude is the local `COIN_SPEED_BOOST_PER_UNLOCK` constant — keep it in sync with any `data/challenges/*.tres` description that grants the reward, since `ChallengeInfoPanel` displays the description verbatim.
+- `_bounce_or_despawn()`, after resolving the bounce direction and while `_row/_col` still point at the peg just struck (before reassignment), calls `board.notify_deflector_resolved(_row, _col, direction)` next to the existing `flash_nearest_peg` call — drives the deflector reaction VFX. Pure view, no gameplay effect; never reads `_deflectors` itself.
 
 **Bucket** — `entities/bucket/bucket.gd`
 
@@ -189,6 +191,12 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Buckets always start in the faded color and only light up while activated. `mark_active` snaps to full main color, then schedules a tween that holds full color and fades to faded over `bucket_fade_duration` aligned with chord end. While active, `_process` reads `AudioManager.get_chord_phase()` and eases scale from `bucket_active_scale_peak` to 1.0 — uniform across all active buckets.
 - `mark_inactive(duration)` is a backstop on chord change. All `mark_*` methods go through `_apply_color`/`_kill_color_tween`/`_stop_pulsing`. Both `mark_active` and `mark_inactive` no-op when `_is_hit` is true so challenge markers win.
 - Visual activation is coupled to the audio rate-limit gate: `mark_active` only fires on accepted `try_consume_bucket_activation` calls (see AudioManager).
+
+**DeflectorEditor** — `entities/deflector_editor/deflector_editor.gd` (child of `PlinkoBoard`)
+
+- Player-facing peg-deflector placement UI: pooled solid arrows (`_placed`, one per `_deflectors` key, re-bound by enumeration order on `refresh`), the hover placement preview (`_ghost_arrow`, peg colour @ 50% opacity via `_ghost_color`), and the screen-space remove-X. Emits `deflector_change_requested(peg_index, dir)` UP; everything else is called DOWN by PlinkoBoard/BoardManager/Main (`setup`, `refresh`, `set_active`, `set_input_allowed`, `set_capacity`). Signals up, calls down.
+- Reaction VFX: `play_deflector_hit(peg_idx)` / `play_deflector_miss(peg_idx)` (called DOWN by `PlinkoBoard.notify_deflector_resolved`) route through `_start_reaction`, which snaps the pooled arrow to a colour and records `_active_reactions[peg_idx] = {elapsed, color, pulse, duration}`. `_process` eases the tint back to `peg_color` (and, when `pulse`, scales it up→back to 1.0 via `sin(k·π)`) — an allocation-free fade mirroring `PlinkoBoard.flash_nearest_peg`'s `_active_flashes` (no tween, no spawned nodes; `set_process` gated to only run while reactions are active). HIT = `theme.deflector_hit_color` (one neutral shade darker, default `BG_3`) + pulse over `deflector_hit_glow_duration`; MISS = `theme.deflector_miss_color` (`RED_MAIN`, no pulse) over `deflector_miss_fade_duration`. Gated by `theme.deflector_reaction_enabled`.
+- `_placed_arrow_for(peg_idx)` is the single peg_idx → `_placed` slot resolver (recomputed each use, never cached, since `refresh` re-binds slots). `_clear_reactions()` snaps tracked arrows back to peg colour + scale 1.0 and is called wherever the pool is re-bound or re-materialised (`refresh` / `_apply_theme` / `set_active(false)` / `_exit_tree`) so a half-finished reaction can't stick on the wrong arrow. Pure view: no save, no model mutation.
 
 **ChallengeClock** — `entities/challenge_clock/challenge_clock.gd` + `.tscn`
 
@@ -245,6 +253,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 **VisualTheme** — `style_lab/visual_theme.gd`, presets in `style_lab/presets/*.tres`
 
 - Bundle of visual configuration: background shades, per-currency colors, coin/bucket/label materials, VFX toggles, coin physics timings, audio flags. Consumed via `ThemeProvider.theme`.
+- Deflector reaction config (palette-sourced, consumed by `DeflectorEditor`): `deflector_reaction_enabled`, `deflector_hit_color`/`deflector_miss_color` (resolved from `deflector_hit_color_source`/`deflector_miss_color_source` Palette assignments), `deflector_hit_glow_duration`, `deflector_hit_pulse_scale`, `deflector_miss_fade_duration`.
 - Audio-related: `audio_lofi_enabled`, `audio_style: AudioStyle` (optional override; null = main harp).
 
 **AudioStyle** — `autoloads/audio_manager/audio_style.gd`

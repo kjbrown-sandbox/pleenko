@@ -161,6 +161,9 @@ func _bounce_or_despawn() -> void:
 
 	# Deflector (if placed at this peg) forces the direction; else 50/50.
 	var direction: int = board.resolve_bounce_direction(_row, _col, randf())
+	# Drive the deflector reaction VFX while _row/_col still point at the peg we
+	# just bounced off (they're reassigned below). Pure view, no gameplay effect.
+	board.notify_deflector_resolved(_row, _col, direction)
 	var next_cell: Vector2i = board.next_lattice_cell(_row, _col, direction)
 	var target: Vector3 = board.cell_to_world(next_cell.x, next_cell.y)
 	var next_x: float = target.x

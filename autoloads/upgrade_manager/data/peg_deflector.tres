@@ -6,8 +6,8 @@
 script = ExtResource("1")
 type = 6
 display_name = "Peg Deflector"
-base_cost = 30
-max_level = 8
+base_cost = 50
+max_level = 5
 cost_type = 1
-cost_delta = 30
-delta_escalation = 10
+cost_delta = 100
+delta_escalation = 50
