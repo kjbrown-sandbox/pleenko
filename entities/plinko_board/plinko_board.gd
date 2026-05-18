@@ -1351,7 +1351,7 @@ func deflector_outcome(row: int, col: int, direction: int) -> DeflectorOutcome:
 ## drive the reaction VFX. Fire-and-forget and a safe no-op when no deflector
 ## editor exists (bare test boards) or this peg has no deflector. Pure view:
 ## never mutates _deflectors and never saves.
-func notify_deflector_resolved(row: int, col: int, direction: int, _coin_type: int) -> void:
+func notify_deflector_resolved(row: int, col: int, direction: int) -> void:
 	if not _deflector_editor:
 		return
 	var idx := peg_index(row, col)

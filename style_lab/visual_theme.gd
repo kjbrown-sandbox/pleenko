@@ -82,7 +82,7 @@ enum Palette {
 @export var overlay_opacity := 0.6
 @export var prestige_flash_source: Palette = Palette.BG_6  # color coin/bucket lerp toward during prestige
 @export var deflector_hit_color_source: Palette = Palette.BG_3   # placed deflector tints to this on a followed bounce — one neutral shade darker than the default peg (BG_4)
-@export var deflector_miss_color_source: Palette = Palette.RED_MAIN  # placed deflector flashes to this when a coin escapes against it
+@export var deflector_miss_color_source: Palette = Palette.RED_MAIN  # placed deflector flashes to this when a coin escapes against it — RED_MAIN as a universal "miss" cue, deliberately NOT the board's tier colour (deflectors are board-agnostic)
 
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")

@@ -85,7 +85,7 @@ func test_deflector_shifts_landing_vs_control() -> void:
 	print("test_deflector_shifts_landing_vs_control")
 	UpgradeManager.reset()
 	UpgradeManager.get_state(PlinkoBoard.DEFLECTOR_BOARD, Enums.UpgradeType.PEG_DEFLECTOR).level = 1
-	# roll 0.55: legacy (no deflector) → LEFT (>=0.5); but < bias 3/4 so a
+	# roll 0.55: legacy (no deflector) → LEFT (>=0.5); but < bias 6/7 so a
 	# deflector IS followed. Lets one deflector visibly shift the landing.
 	var rolls := [0.55]
 
@@ -111,7 +111,7 @@ func test_full_right_deflector_funnel() -> void:
 	# (0,0) → (1,1) → (2,2) → (3,3) → (4,4).
 	for row in range(0, 5):
 		b.place_deflector(b.peg_index(row, row), Enums.Direction.RIGHT)
-	# roll 0.55 < bias (3/4): every visited deflector is followed RIGHT, so the
+	# roll 0.55 < bias (6/7): every visited deflector is followed RIGHT, so the
 	# funnel beats the otherwise-LEFT legacy roll → last bucket.
 	assert_equal(_simulate(b, [0.55]), 5, "deflector funnel steers rolls → bucket 5")
 	b.free()
