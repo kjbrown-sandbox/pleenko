@@ -103,7 +103,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Lifecycle manager for active challenges. Owns `is_active_challenge`, the current `ChallengeData`, and a child `ChallengeTracker` node that runs live tracking.
 - Emits: `challenge_completed`, `challenge_failed(reason)`, `challenge_state_changed` (AudioManager listens), `tick(seconds_remaining)` (per integer second from the tracker — AudioManager and ChallengeClock listen).
 - Challenge start flow: caller calls `set_challenge`, then `ThemeProvider.set_theme(CHALLENGE)`, then `get_tree().reload_current_scene()`. After reload, `Main._setup_challenge` calls `ChallengeManager.setup(board_manager)` which creates the tracker.
-- `setup(board_manager)` installs `upgrade_gate` on `UpgradeManager` and `board_gate` on `BoardManager`; `clear_challenge` removes them.
+- `setup(board_manager)` installs `upgrade_gate` on `UpgradeManager` and `board_gate` on `BoardManager`; `clear_challenge` removes them. After starting conditions are applied (boards built), it calls `get_active_board().seed_first_peg_deflector()` so a player who owns a deflector slot starts the challenge with one on the active board's top peg (no-ops when no slot is available).
 
 **ChallengeTracker** (child of ChallengeManager) — `autoloads/challenge_manager/challenge_tracker.gd`
 
@@ -118,6 +118,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 **ModeManager** — `autoloads/mode_manager/mode_manager.gd`
 
 - Tracks `MAIN` vs `CHALLENGES` mode. Emits `mode_changed(new_mode)`. `are_challenges_unlocked` queries `PrestigeManager`.
+- `pending_challenges_menu: bool` — one-shot intent flag. Set when a challenge ends; survives the scene reload (autoload), consumed once by `Main._ready` to switch back into the challenge menu instead of the board.
 
 **ChallengeProgressManager** — `autoloads/challenge_progress/challenge_progress_manager.gd`
 
@@ -217,6 +218,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - `apply_input_lock(locked)` — called by `PeekAnimator` to toggle navigation input across BoardManager, ChallengeGroupingManager, Main's own `_input`, and the four nav-arrow buttons. Single chokepoint for "all navigation locked" (covers both peek and prestige).
 - `_on_mode_changed` / `_on_board_switched` consult `peek_animator.is_peeking()` and skip the "mark visited / clear unseen" side effects when the switch is peek-driven — preserves the blink as a real signal of "you haven't been here yet."
 - `is_loading_from_save()` accessor exposes `_loading_from_save` to `PeekAnimator` so it can suppress peek enqueues during deserialize.
+- `_exit_challenge_to_menu()` — single teardown shared by `_on_challenge_completed`/`_on_challenge_failed`: sets `ModeManager.pending_challenges_menu`, `SaveManager.reset_state()`, reloads `main.tscn` (NORMAL). `_ready` then consumes the flag and calls `ModeManager.switch_to_challenges()` so the player lands back on the challenge selection menu.
 
 **PeekAnimator** — `entities/main/peek_animator.gd`
 
@@ -265,6 +267,12 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Per-challenge metadata: `id`, `display_name`, `time_limit_seconds`, `objectives[]`, `constraints[]`, `starting_conditions[]`, `rewards[]`.
 
+**ChallengeRewardData** — `autoloads/challenge_manager/challenge_reward_data.gd`
+
+- Structured challenge reward (`type`, `modifier_type`, `modifier_amount`, board/currency/upgrade refs). No hand-written `description` — removed.
+- `display_text()` is the **single source of truth** for reward text: both the pre-challenge info panel (`ChallengeInfoPanel`) and the post-challenge modal (`Main`) call it, so they can't drift. Generated from the structured fields; `GOLD_COIN_SPEED_BOOST`/`QUEUE_RATE_BONUS` pull their magnitude live from `Coin.COIN_SPEED_BOOST_PER_UNLOCK` / `PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK` (those constants are canonical — no `.tres` edits needed when they change). `ADVANCED_COIN_MULTIPLIER` is gold-only by design (text hardcodes "raw orange"). Every `RewardType`/`ModifierType` must map to non-empty text — `test_challenge_reward_data` guards this for the append-only enum.
+- Board/upgrade/currency naming and the prestige multi-drop/board-access phrasing all route through shared `FormatUtils` helpers (`board_name`, `upgrade_name`, `currency_name`, `lower_tier_names_phrase`, `multi_drop_phrase`, `access_board_phrase`); the prestige screen + dialog reuse the same helpers so wording stays identical everywhere.
+
 **Objective types** (`autoloads/challenge_manager/objectives/`): `Survive`, `LandInEveryBucket`, `HitBucketsInOrder`, `HitXBucketYTimes`, `GetSameBucketXTimes`, `EarnWithinXDrops`, `BoardGoal`, `CoinGoal`. Evaluated by `ChallengeTracker`.
 
 **StartingCondition** subclasses (also under challenge_manager/): `StartingCap`, `StartingCoins`, `StartingUpgrades`, `StartingBoards`, `StartingDropDelay`. Applied by `ChallengeManager._apply_starting_conditions`.
@@ -292,6 +300,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - **Peek lifecycle:** `BoardManager.board_unlocked` (or `Main._setup_normal` → `PeekAnimator.queue_peeks_for_existing_unlocks` post-load) → enqueue PeekRequest → `_drain_loop` → `apply_input_lock(true)` → `switch_board_fn` / `switch_to_challenges_fn` → wait → switch back → `OnboardingProgress.mark_*_peeked` → `SaveManager.save_game` → `apply_input_lock(false)`. Suppressed during active challenges, during deserialize, and for already-peeked targets.
 - **Peek-driven side-effect suppression:** `Main._on_mode_changed` / `Main._on_board_switched` consult `peek_animator.is_peeking()` before flipping `challenges_ever_visited` / clearing `_boards_with_unseen_upgrades`, so nav-arrow blinks survive the peek as cues the player still hasn't visited.
 - **Autodropper intro lifecycle:** `UpgradeManager.upgrade_purchased(AUTODROPPER, GOLD, 1)` → `BoardManager._on_upgrade_purchased` (in main mode, with `OnboardingProgress.has_seen_autodropper_intro = false`) → `first_autodropper_purchased.emit()` (early-returns before auto-assigning) → `AutodropperIntroAnimator._on_first_autodropper_purchased` → particle burst+swoop tween → `BoardManager.reveal_autodropper_controls()` (shows +/– on drop button) → `OnboardingProgress.mark_autodropper_intro_seen` + `SaveManager.save_game` → `+` button pulses via `blink_scale_fade` until `FillBar.plus_pressed` fires → `_on_first_plus_pressed` kills the tween. Suppressed during active challenges (signal not emitted) and after first replay (gate flag flipped). Load and `_apply_prestige_rewards` paths are unchanged — they call `set_normal_autodroppers_visible(true)` directly.
+- **Challenge exit lifecycle:** `ChallengeTracker` completed/failed → `ChallengeManager.challenge_{completed,failed}` → `Main._on_challenge_{completed,failed}` → (results dialog) → `Main._exit_challenge_to_menu()` sets `ModeManager.pending_challenges_menu` + `SaveManager.reset_state()` + reload `main.tscn` → `Main._ready` consumes the flag → `ModeManager.switch_to_challenges()` → `_on_mode_changed` → `ChallengeGroupingManager.enter_challenges_mode()`. Player returns to the challenge selection menu, not the board.
 - **Save:** `SaveManager.save_game/load_game` serializes/deserializes managers in the strict order above.
 
 ### Three-Currency Economy
