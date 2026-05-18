@@ -19,13 +19,12 @@ func _on_prestige_triggered(board_type: Enums.BoardType) -> void:
 	var tier := TierRegistry.get_tier(board_type)
 	var board_name: String = tier.display_name if tier else "Unknown"
 	# Multi-drop bonus applies to all tiers below this one
-	var idx := TierRegistry.get_tier_index(board_type)
-	var lower_names: Array[String] = []
-	for i in range(0, idx):
-		lower_names.append(TierRegistry.get_tier_by_index(i).display_name.to_lower())
-	var multi_drop_target: String = " and ".join(lower_names) if lower_names.size() > 0 else "lower"
+	var multi_drop_target := FormatUtils.lower_tier_names_phrase(board_type)
 
-	message_label.text = "+1 multi-drop for the %s board\nAccess to the %s board" % [multi_drop_target, board_name]
+	message_label.text = "%s\n%s" % [
+		FormatUtils.multi_drop_phrase(multi_drop_target),
+		FormatUtils.access_board_phrase(board_name),
+	]
 	show_dialog()
 
 

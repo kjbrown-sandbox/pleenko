@@ -38,9 +38,9 @@ var _col: int = 0
 ## Each granted GOLD_COIN_SPEED_BOOST challenge reward adds this fraction to
 ## gold coins' fall-speed multiplier. 0.2 → first grant = 1.2x speed, third = 1.6x (additive).
 ## Only gold coins are sped up; other coin types fall at baseline speed.
-## NOTE: changing this value also requires updating the human-readable description
-## on every challenge .tres that grants this reward (e.g. data/challenges/gold_3.tres),
-## since ChallengeInfoPanel displays `reward.description` verbatim.
+## The reward's displayed text is derived live from this constant by
+## ChallengeRewardData.display_text() (GOLD_COIN_SPEED_BOOST case), so changing
+## the value updates every reward display automatically — no .tres edits needed.
 const COIN_SPEED_BOOST_PER_UNLOCK := 0.2
 
 ## MultiMesh rendering state

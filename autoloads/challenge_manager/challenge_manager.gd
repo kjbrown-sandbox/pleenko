@@ -72,6 +72,14 @@ func setup(board_manager: BoardManager) -> void:
 		board.drop_blocked = _drop_blocked
 		board.upgrade_allowed = _upgrade_gate
 
+	# Challenges run on a clean board. If the player owns a deflector slot
+	# (e.g. the orange-prestige permanent one), auto-place it on the active
+	# board's top peg so it's usable from the start. Caps already enforced —
+	# seed_first_peg_deflector no-ops when no slot is available.
+	var active_board: PlinkoBoard = _board_manager.get_active_board()
+	if active_board:
+		active_board.seed_first_peg_deflector()
+
 	# Create and start the tracker
 	_tracker = ChallengeTracker.new()
 	_tracker.setup(_challenge, _board_manager)

@@ -91,10 +91,7 @@ func show_challenge(data: ChallengeData) -> void:
 	else:
 		var parts: PackedStringArray = []
 		for reward in data.rewards:
-			if reward.description != "":
-				parts.append(reward.description)
-			else:
-				parts.append("Reward")
+			parts.append(reward.display_text())
 		_rewards_label.text = "\n".join(parts)
 
 

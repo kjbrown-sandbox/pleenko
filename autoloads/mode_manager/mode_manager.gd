@@ -6,6 +6,12 @@ signal mode_changed(new_mode: Mode)
 
 var current_mode: Mode = Mode.MAIN
 
+## When true, the next time Main loads outside an active challenge it opens the
+## challenge selection menu instead of the board. Set when a challenge ends so
+## the player returns to the menu, not the main screen. Survives the scene
+## reload because ModeManager is an autoload; consumed once by Main._ready.
+var pending_challenges_menu: bool = false
+
 
 func switch_to_challenges() -> void:
 	if not are_challenges_unlocked():

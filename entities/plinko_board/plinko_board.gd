@@ -18,9 +18,9 @@ const QUEUE_RATE_BONUS_PER_COIN := 0.15
 ## Each granted QUEUE_RATE_BONUS challenge reward adds this much to the
 ## per-queued-coin bonus above. Stackable; gold board only (counted globally,
 ## applied to gold — mirrors GOLD_COIN_SPEED_BOOST).
-## NOTE: changing this value also requires updating the human-readable description
-## on every challenge .tres that grants this reward (e.g. data/challenges/gold_7.tres),
-## since ChallengeInfoPanel displays `reward.description` verbatim.
+## The reward's displayed text is derived live from this constant by
+## ChallengeRewardData.display_text() (QUEUE_RATE_BONUS case), so changing the
+## value updates every reward display automatically — no .tres edits needed.
 const QUEUE_RATE_BONUS_PER_UNLOCK := 0.10
 
 ## Effective per-queued-coin bonus after folding in earned QUEUE_RATE_BONUS
