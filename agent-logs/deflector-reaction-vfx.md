@@ -93,26 +93,62 @@ All other items reached consensus without conflict. No escalation to the user.
 
 ---
 
-## Final Plan
+## Final Plan (as approved)
 
-See `/Users/kjbrown/.claude/plans/groovy-crunching-clock.md` (approved). Summary:
+See `/Users/kjbrown/.claude/plans/groovy-crunching-clock.md`. The original plan
+was a coin-coloured "swat" tween HIT + a transient opposite-side red ghost MISS.
 
-- `visual_theme.gd`: `deflector_reaction_enabled` + `deflector_hit_swat_factor` +
-  `deflector_hit_swat_duration` + `deflector_hit_recover_duration` +
-  `deflector_miss_fade_duration` (`@export`, doc-commented, in the `peg_*` block).
-- `plinko_board.gd`: `enum DeflectorOutcome { NONE, FOLLOWED, MISSED }`; pure
-  `deflector_outcome(row,col,direction)`; `notify_deflector_resolved(...)`
-  (null-editor guard, dispatches down, no save/mutation).
-- `coin.gd`: one `board.notify_deflector_resolved(...)` call adjacent to
-  `flash_nearest_peg`, before `_row/_col` reassignment.
-- `deflector_editor.gd`: extract `_arrow_rest_position`; `# ── Reaction VFX ──`
-  with `play_deflector_hit` (Bucket tween, `_hit_tweens` dict, kill discipline in
-  refresh/_apply_theme/set_active/_exit_tree) and `play_deflector_miss`
-  (spawn + alpha fade + `queue_free`, no pool); both gated on
-  `deflector_reaction_enabled`.
-- `test/test_deflector.gd`: `test_deflector_outcome`,
-  `test_notify_deflector_resolved_null_editor_safe`, registered in `_run_tests()`.
+## As Shipped (design evolved during playtest iteration)
+
+The user playtested and redirected the visuals (the tween read as buggy; green
+too distracting; the spawned red ghost too distracting), and asked to strengthen
+the deflector. Final shipped behaviour:
+
+- **HIT** (coin follows): the pooled placed arrow tints **one neutral palette
+  shade darker** (`theme.deflector_hit_color`, default `BG_3`) + a soft
+  grow→shrink scale pulse (`deflector_hit_pulse_scale`), eased back to peg colour
+  over `deflector_hit_glow_duration` by an allocation-free `_process` fade — **no
+  tween, no spawned nodes** (mirrors `flash_nearest_peg`'s `_active_flashes`).
+- **MISS** (coin escapes): the **same placed arrow flashes red**
+  (`theme.deflector_miss_color` = `RED_MAIN`), no pulse, no opposite-side ghost.
+- **Placement-preview ghost** is now neutral peg colour @ 50% opacity (was the
+  vivid tier colour).
+- **Odds buff (deliberate gameplay change, user-requested):**
+  `DEFLECTOR_BASE_STRENGTH 2 → 5` → bias `3/4 → 6/7` (~86%, a 1:6 split). This
+  changes real coin trajectories on any board with a deflector — intentional,
+  not "zero gameplay impact". `resolve_bounce_direction` itself untouched
+  (bit-identical); `deflector_outcome` is a separate pure comparator.
+- HIT/MISS share `_start_reaction` + `_placed_arrow_for`; state dict
+  `_active_reactions`, cleared via `_clear_reactions` on
+  refresh/theme/deactivate/exit. Tests: `test_deflector_outcome`,
+  `test_notify_deflector_resolved_null_editor_safe`, plus bias/encourage tests
+  updated for 6/7.
+- The branch also carries the user's prior unrelated commit `761d7f8 "Make queue
+  less strong"` (`QUEUE_RATE_BONUS_PER_COIN 0.20 → 0.15`), explicitly approved to
+  ship here.
 
 ## Post-Implementation Review
 
-_(to be appended after the implementation review per CLAUDE.md)_
+Six-personality review on `git diff main...HEAD` (Janitor, Godot Guru, Architect,
+Newcomer, Consistency Lover, Test Lead).
+
+- **BLOCKING (1):** Architect — CLAUDE.md "System Responsibilities" stale (no
+  `DeflectorEditor` entry; `Coin`/`PlinkoBoard`/`VisualTheme` bullets missing the
+  new call-down/enum/fields). → Fixed in the `docs:` commit (this update).
+- **No blocking code issues.** Godot Guru, Test Lead, Consistency Lover explicitly
+  cleared it ("ship it"): per-bounce work is allocation-free and bounded by
+  deflector count (not coin count); `set_process` correctly gated; pulse returns
+  to 1.0; colours all theme-resolved; tests correct (Test Lead re-derived every
+  encourage-test roll against bias 6/7).
+- **Advisories fixed** (commit `Fix review feedback…`): extracted
+  `_placed_arrow_for` (dedup the triplicated slot lookup — Janitor); dropped the
+  unused `_coin_type` param from `notify_deflector_resolved` + caller + tests
+  (Janitor/Architect); renamed `_active_glows`/`_clear_glows` →
+  `_active_reactions`/`_clear_reactions` (Newcomer/Consistency); fixed stale
+  comments (`_arrow_rest_position` "MISS ghost", trajectory-test `3/4`→`6/7`,
+  documented `RED_MAIN` as a deliberate board-agnostic miss cue).
+- **Advisories deferred** (judged defensible/cosmetic): `*_color_source` vs
+  `*_source` export naming (the existing `peg_color_source` sets the precedent);
+  bracket+`as Color` vs dot dictionary access (the cast is the safer form).
+- Verdict: shipped after the docs blocker + high-value advisories were resolved;
+  full suite (19 suites) green throughout.
