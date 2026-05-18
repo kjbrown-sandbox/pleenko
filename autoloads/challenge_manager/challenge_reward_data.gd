@@ -44,7 +44,8 @@ func display_text() -> String:
 		RewardType.STARTING_MODIFIER:
 			return _starting_modifier_text()
 		RewardType.PERMANENT_UPGRADE:
-			# Board name reads as an adjective ("gold drop rate"), upgrade name lower-case.
+			# board_type/upgrade_type both lower-cased so they read inline
+			# as one phrase ("+1 gold drop rate level").
 			var board: String = FormatUtils.board_name(board_type, false)
 			var upgrade: String = FormatUtils.upgrade_name(upgrade_type)
 			return "+%d %s %s level" % [int(modifier_amount), board, upgrade]
@@ -60,8 +61,9 @@ func _starting_modifier_text() -> String:
 		ModifierType.MULTI_DROP:
 			return "+%d %s multi-drop" % [int(modifier_amount), board]
 		ModifierType.ADVANCED_COIN_MULTIPLIER:
-			# Gold-board reward (like GOLD_COIN_SPEED_BOOST): the advanced-bucket
-			# multiplier boosts the gold board's raw-orange payout.
+			# board_type is intentionally ignored: this reward only ever applies
+			# to the gold board, whose advanced buckets pay out raw orange
+			# (gold-only by design, like GOLD_COIN_SPEED_BOOST).
 			return "+%.1f raw orange multiplier" % modifier_amount
 		ModifierType.BUCKET_VALUE_PERCENT:
 			return "+%d%% %s bucket value" % [int(modifier_amount * 100), board]

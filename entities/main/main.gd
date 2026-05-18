@@ -192,15 +192,20 @@ func _on_challenge_completed() -> void:
 	_challenge_complete_dialog.show_with_results(stats, reward_lines)
 	await _challenge_complete_dialog.closed
 
-	ModeManager.pending_challenges_menu = true
-	SaveManager.reset_state()
-	SceneManager.set_new_scene(load("res://entities/main/main.tscn"), false, ThemeProvider.Kind.NORMAL)
+	_exit_challenge_to_menu()
 
 
 func _on_challenge_failed(reason: String) -> void:
 	challenge_hud.show_result("Failed: %s" % reason)
 	await get_tree().create_timer(2.0).timeout
 	ChallengeManager.clear_challenge()
+	_exit_challenge_to_menu()
+
+
+## Shared challenge teardown: flag the return-to-menu intent (consumed by
+## _ready after the reload), wipe runtime state, and reload the main scene.
+## Single source for the exit so the completed/failed paths can't drift.
+func _exit_challenge_to_menu() -> void:
 	ModeManager.pending_challenges_menu = true
 	SaveManager.reset_state()
 	SceneManager.set_new_scene(load("res://entities/main/main.tscn"), false, ThemeProvider.Kind.NORMAL)
