@@ -1,51 +1,88 @@
 [gd_scene format=3 uid="uid://cfuxy0nnxo0pt"]
 
 [ext_resource type="Script" uid="uid://bi7eoe88lya5s" path="res://entities/main_menu/main_menu.gd" id="1_6wyxo"]
+[ext_resource type="PackedScene" uid="uid://b8mnpq3vk2xra" path="res://entities/menu_board/menu_board.tscn" id="2_mboard"]
 
 [node name="MainMenu" type="Node3D" unique_id=1111347995]
 script = ExtResource("1_6wyxo")
 
+[node name="MenuBoard" parent="." unique_id=672892091 instance=ExtResource("2_mboard")]
+
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=527360778]
 
-[node name="HBoxContainer" type="VBoxContainer" parent="CanvasLayer" unique_id=2131159827]
-anchors_preset = 15
+[node name="ButtonColumn" type="VBoxContainer" parent="CanvasLayer" unique_id=2131159827]
+anchors_preset = 11
+anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
+offset_left = -320.0
+offset_right = -48.0
+grow_horizontal = 0
 grow_vertical = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
 theme_override_constants/separation = 12
 alignment = 1
 
-[node name="PlayButton" type="Button" parent="CanvasLayer/HBoxContainer" unique_id=1475028527]
-custom_minimum_size = Vector2(220, 0)
+[node name="PlayButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=1475028527]
+custom_minimum_size = Vector2(272, 0)
 layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
-text = "Campaign"
+text = "Play"
 
-[node name="ResetButton" type="Button" parent="CanvasLayer/HBoxContainer"]
-custom_minimum_size = Vector2(220, 0)
+[node name="TopSpacer" type="Control" parent="CanvasLayer/ButtonColumn" unique_id=1415988380]
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
-text = "Reset Game"
 
-[node name="ConfirmLayer" type="CanvasLayer" parent="."]
+[node name="SettingsButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=2106973345]
+custom_minimum_size = Vector2(272, 0)
+layout_mode = 2
+text = "Settings"
+
+[node name="DiscordButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=1565460847]
+custom_minimum_size = Vector2(272, 0)
+layout_mode = 2
+text = "Join the Discord"
+
+[node name="PressKitButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=1718095997]
+custom_minimum_size = Vector2(272, 0)
+layout_mode = 2
+text = "Press Kit"
+
+[node name="ReportBugButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=2023400125]
+custom_minimum_size = Vector2(272, 0)
+layout_mode = 2
+text = "Report a Bug"
+
+[node name="BottomSpacer" type="Control" parent="CanvasLayer/ButtonColumn" unique_id=1884065678]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+
+[node name="QuitButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=1515010506]
+custom_minimum_size = Vector2(272, 0)
+layout_mode = 2
+text = "Quit"
+
+[node name="TitleLabel" type="Label" parent="CanvasLayer" unique_id=867308398]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 56.0
+offset_top = -220.0
+offset_right = 720.0
+offset_bottom = -48.0
+grow_vertical = 0
+
+[node name="ConfirmLayer" type="CanvasLayer" parent="." unique_id=1201945472]
 layer = 10
 
-[node name="Overlay" type="ColorRect" parent="ConfirmLayer"]
+[node name="Overlay" type="ColorRect" parent="ConfirmLayer" unique_id=1643047356]
 visible = false
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 0
 
-[node name="Panel" type="PanelContainer" parent="ConfirmLayer/Overlay"]
-anchors_preset = 8
+[node name="Panel" type="PanelContainer" parent="ConfirmLayer/Overlay" unique_id=1843576638]
+layout_mode = 0
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
@@ -53,29 +90,29 @@ anchor_bottom = 0.5
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBox" type="VBoxContainer" parent="ConfirmLayer/Overlay/Panel"]
+[node name="VBox" type="VBoxContainer" parent="ConfirmLayer/Overlay/Panel" unique_id=335179807]
 layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="ConfirmLabel" type="Label" parent="ConfirmLayer/Overlay/Panel/VBox"]
+[node name="ConfirmLabel" type="Label" parent="ConfirmLayer/Overlay/Panel/VBox" unique_id=1204630543]
 layout_mode = 2
-horizontal_alignment = 1
 text = "Reset all progress?
 This erases everything and cannot be undone."
+horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="ButtonRow" type="HBoxContainer" parent="ConfirmLayer/Overlay/Panel/VBox"]
+[node name="ButtonRow" type="HBoxContainer" parent="ConfirmLayer/Overlay/Panel/VBox" unique_id=1912745230]
 layout_mode = 2
 theme_override_constants/separation = 16
 alignment = 1
 
-[node name="CancelButton" type="Button" parent="ConfirmLayer/Overlay/Panel/VBox/ButtonRow"]
+[node name="CancelButton" type="Button" parent="ConfirmLayer/Overlay/Panel/VBox/ButtonRow" unique_id=1010917559]
 layout_mode = 2
 focus_mode = 0
 text = "Cancel"
 
-[node name="ConfirmResetButton" type="Button" parent="ConfirmLayer/Overlay/Panel/VBox/ButtonRow"]
+[node name="ConfirmResetButton" type="Button" parent="ConfirmLayer/Overlay/Panel/VBox/ButtonRow" unique_id=1356933696]
 layout_mode = 2
 focus_mode = 0
 text = "Reset"

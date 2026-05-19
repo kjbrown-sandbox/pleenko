@@ -169,6 +169,7 @@ func _setup_environment() -> void:
 			cam.name = "DemoCamera"
 			add_child(cam)
 		# Frame the boards — zoom to fit content with minimal padding
+		# TODO(Lattice): editor-only @tool; collapse these re-derivations onto Lattice.
 		var vertical_spacing := theme.space_between_pegs * sqrt(3) / 2
 		var board_height := vertical_spacing * theme.board_rows
 		var y_center := -board_height / 2.0
@@ -190,6 +191,7 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 	if Engine.is_editor_hint():
 		board_root.owner = get_tree().edited_scene_root
 
+	# TODO(Lattice): editor-only @tool; collapse this onto Lattice.
 	var vertical_spacing := theme.space_between_pegs * sqrt(3) / 2
 	var peg_mesh := theme.make_peg_mesh()
 	var peg_list: Array[MeshInstance3D] = []
@@ -299,6 +301,7 @@ func _spawn_demo_coin() -> void:
 		currency = primaries[0] if primaries.size() > 0 else GOLD_COIN
 	_coin_index += 1
 
+	# TODO(Lattice): editor-only @tool; collapse this onto Lattice.
 	var vertical_spacing := theme.space_between_pegs * sqrt(3) / 2
 
 	# Determine board offset

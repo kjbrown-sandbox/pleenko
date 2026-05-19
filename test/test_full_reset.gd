@@ -98,3 +98,26 @@ func _run_tests() -> void:
 		wf.close()
 	elif FileAccess.file_exists(path):
 		DirAccess.remove_absolute(path)
+
+	await _assert_menu_reset_path_reaches_full_reset()
+
+
+## Regression guard: "Reset Game" moved from a top-level main-menu button into
+## Settings. A lost or no-op Reset would be a shipped data bug, so assert the
+## Settings → confirm → reset chain still routes to SaveManager.full_reset.
+## Uses a spy seam — no real wipe here (the destructive path is covered above).
+func _assert_menu_reset_path_reaches_full_reset() -> void:
+	print("_assert_menu_reset_path_reaches_full_reset")
+	var menu: MainMenu = preload("res://entities/main_menu/main_menu.tscn").instantiate()
+	# Deferred: the test scene's _ready is still on the stack (no awaits before
+	# here), so the tree root is busy setting up children.
+	get_tree().root.add_child.call_deferred(menu)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var calls := [0]
+	menu._full_reset_fn = func() -> void: calls[0] += 1
+	menu._options_dialog.reset_requested.emit()
+	assert_true(menu.confirm_overlay.visible, "menu confirm reachable from Settings")
+	menu._on_confirm_reset_pressed()
+	assert_equal(calls[0], 1, "menu Settings reset routes to full_reset")
+	menu.free()

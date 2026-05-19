@@ -1,7 +1,19 @@
 class_name OptionsDialog
 extends CanvasLayer
 
+## IN_GAME-only: the path the "Return to Main Menu" footer button loads. The
+## MAIN_MENU footer never constructs that button, so this is unreachable there.
 const MAIN_MENU_PATH := "res://entities/main_menu/main_menu.tscn"
+
+## Where this dialog was opened from. Set by the parent BEFORE `add_child` (the
+## whole UI, including the footer, is built in `_ready`). MAIN_MENU swaps the
+## in-game "Return to Game / Main Menu" footer for "Reset Game / Close".
+enum Context { IN_GAME, MAIN_MENU }
+var context: Context = Context.IN_GAME
+
+## Emitted (MAIN_MENU context only) when the player asks to reset their save.
+## The parent owns the confirm + the destructive call (signals up, calls down).
+signal reset_requested
 
 var _overlay: ColorRect
 var _panel: VBoxContainer
@@ -49,6 +61,31 @@ func _ready() -> void:
 	_panel.add_child(_make_fps_row(font))
 	_panel.add_child(HSeparator.new())
 
+	_build_footer(t)
+
+	visible = false
+
+
+## The only context-dependent part of the dialog. IN_GAME keeps the original
+## "Return to Game / Return to Main Menu" pair. MAIN_MENU builds "Reset Game /
+## Close" instead — and deliberately does NOT construct `_return_button` nor
+## reference `_on_return_pressed` / `MAIN_MENU_PATH`, so that in-game-only
+## navigation is structurally unreachable from the menu (not merely hidden).
+func _build_footer(t: VisualTheme) -> void:
+	if context == Context.MAIN_MENU:
+		var reset_button := Button.new()
+		reset_button.text = "Reset Game"
+		t.apply_button_theme(reset_button)
+		reset_button.pressed.connect(_on_reset_button_pressed)
+		_panel.add_child(reset_button)
+
+		var close_button := Button.new()
+		close_button.text = "Close"
+		t.apply_button_theme(close_button)
+		close_button.pressed.connect(hide_dialog)
+		_panel.add_child(close_button)
+		return
+
 	_resume_button = Button.new()
 	_resume_button.text = "Return to Game"
 	t.apply_button_theme(_resume_button)
@@ -61,7 +98,11 @@ func _ready() -> void:
 	_return_button.pressed.connect(_on_return_pressed)
 	_panel.add_child(_return_button)
 
-	visible = false
+
+## MAIN_MENU only. The parent (MainMenu) owns the confirm overlay and the
+## destructive SaveManager.full_reset() call — we just signal the intent up.
+func _on_reset_button_pressed() -> void:
+	reset_requested.emit()
 
 
 func _make_section_header(text: String, font: Font) -> Label:
@@ -208,6 +249,7 @@ func _on_overlay_input(event: InputEvent) -> void:
 			hide_dialog()
 
 
+## IN_GAME only — wired solely by the IN_GAME branch of `_build_footer`.
 func _on_return_pressed() -> void:
 	if not ChallengeManager.is_active_challenge:
 		SaveManager.save_game()

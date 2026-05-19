@@ -155,7 +155,7 @@ var _hold_drop_accumulator: float = HOLD_DROP_INTERVAL
 
 func _ready() -> void:
 	space_between_pegs = ThemeProvider.theme.space_between_pegs
-	vertical_spacing = space_between_pegs * sqrt(3) / 2 # sqrt because of the 30/60/90 triangle babyyyy
+	vertical_spacing = Lattice.vertical_spacing(space_between_pegs)
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
 	AudioManager.chord_changed.connect(_on_chord_changed)
 	AudioManager.drum_tier_fired.connect(_on_drum_tier_fired)
@@ -1228,10 +1228,11 @@ func _show_advanced_drop_bar() -> void:
 # The board is a triangular Galton lattice. A coin's position is the integer
 # cell (row, col): row 0 has one peg (col 0); row r has r+1 pegs (col 0..r).
 # Moving RIGHT off (row, col) lands on (row+1, col+1); LEFT lands on (row+1,
-# col). These pure methods are the ONLY lattice math — build_board() and the
-# Coin both go through them, so there is no second "position -> peg" mapping
-# to drift against. (flash_nearest_peg is intentionally separate: it answers
-# "nearest rendered peg to a mid-bounce position", a different question.)
+# col). The geometry lives in the shared Lattice module; these methods are thin
+# forwarders so build_board(), the Coin, and the decorative MenuBoard all go
+# through the ONE mapping and can't drift against each other. (flash_nearest_peg
+# is intentionally separate: it answers "nearest rendered peg to a mid-bounce
+# position", a different question.)
 # ---------------------------------------------------------------------------
 
 ## Y of a coin resting on a peg row, slightly above the peg centres. Matches the
@@ -1251,10 +1252,10 @@ enum DeflectorOutcome { NONE, FOLLOWED, MISSED }
 ## under one canonical board, and deflectors may be placed on ANY board's pegs.
 const DEFLECTOR_BOARD := Enums.BoardType.ORANGE
 
-## Local x of peg/coin lattice cell (row, col). Single source of truth for the
-## horizontal layout — build_board() uses this for every peg.
+## Local x of peg/coin lattice cell (row, col). Forwards to the shared Lattice
+## module — build_board() uses this for every peg.
 func position_x_for(row: int, col: int) -> float:
-	return -row * space_between_pegs / 2.0 + col * space_between_pegs
+	return Lattice.x_for(row, col, space_between_pegs)
 
 
 ## Flat peg index for (row, col), matching build_board()'s row-major fill order
@@ -1266,15 +1267,15 @@ func peg_index(row: int, col: int) -> int:
 
 ## Local-space target a coin tweens to when it reaches lattice cell (row, col).
 ## Z is left at 0 — the coin keeps its own render-order z (only x/y are tweened).
+## vertical_spacing/COIN_ROW_Y_OFFSET are passed in (not recomputed) so a manual
+## vertical_spacing override stays exact.
 func cell_to_world(row: int, col: int) -> Vector3:
-	return Vector3(position_x_for(row, col), COIN_ROW_Y_OFFSET - vertical_spacing * row, 0.0)
+	return Lattice.cell_to_world(row, col, space_between_pegs, vertical_spacing, COIN_ROW_Y_OFFSET)
 
 
 ## Pure integer lattice transition. direction is an Enums.Direction (+1 right).
 func next_lattice_cell(row: int, col: int, direction: int) -> Vector2i:
-	if direction == Enums.Direction.RIGHT:
-		return Vector2i(row + 1, col + 1)
-	return Vector2i(row + 1, col)
+	return Lattice.next_cell(row, col, direction)
 
 
 ## True once the coin has fallen past the last peg row into the bucket row.
