@@ -27,7 +27,7 @@ static func x_for(row: int, col: int, space: float) -> float:
 ## Local-space target a coin tweens to at cell (row, col). `vert_spacing` and
 ## `row_y_offset` are passed in (NOT derived) so callers that store
 ## vertical_spacing as an independent field — and tests that set it
-## independently — stay exact. Z is left 0; the coin keeps its own render-order z.
+## independently — stay exact. Z is left 0; callers apply their own z.
 static func cell_to_world(row: int, col: int, space: float,
 		vert_spacing: float, row_y_offset: float) -> Vector3:
 	return Vector3(x_for(row, col, space), row_y_offset - vert_spacing * row, 0.0)

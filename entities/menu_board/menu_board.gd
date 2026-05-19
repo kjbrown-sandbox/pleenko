@@ -25,10 +25,12 @@ extends Node3D
 ## field reads as receding into the distance under the perspective camera.
 const MENU_BOARD_ROWS := 25
 
-## Hard cap on simultaneously-falling coins (anti-leak backstop). Must stay
-## ABOVE steady-state (spawn_rate × full-board fall time ≈ 0.45s⁻¹ × ~60s ≈
-## ~135 at 140 rows) so the cap is never actually hit — coins must never stop
-## dropping. Bump this if MENU_BOARD_ROWS or the fall time grows.
+## Hard cap on simultaneously-falling coins (anti-leak backstop). Kept well
+## ABOVE steady-state so the cap is never actually hit — coins must never stop
+## dropping. Steady-state ≈ full-board fall time ÷ spawn interval ≈
+## (MENU_BOARD_ROWS × ~0.4s) ÷ COIN_SPAWN_INTERVAL_SEC; at 25 rows that's ≈ 22,
+## so 180 is a large safety margin. Bump this if MENU_BOARD_ROWS or the fall
+## time grows a lot.
 const MAX_DECORATIVE_COINS := 180
 
 ## Seconds between decorative coin spawns.
@@ -51,8 +53,9 @@ const MENU_PEG_THICKNESS := 0.001
 ## Scales peg radius + thickness (menu-only; not the theme's peg_radius).
 const MENU_PEG_SIZE_MULT := 1.0
 
-## Peg opacity fades down the board: row 0 = 0.99, then -0.01 per row, floored
-## at 0 (far rows fade out entirely → depth). alpha(row) = TOP - FALLOFF*row.
+## Peg opacity fades down the board: alpha(row) = PEG_ALPHA_TOP −
+## PEG_ALPHA_FALLOFF_PER_ROW * row, floored at 0 (far rows fade out entirely →
+## depth). With the values below, pegs reach full transparency near the last row.
 const PEG_ALPHA_TOP := 0.99
 const PEG_ALPHA_FALLOFF_PER_ROW := 0.04
 
@@ -237,17 +240,12 @@ func _peg_index(row: int, col: int) -> int:
 ## deliberately overrides that with lit StandardMaterial3D + a DirectionalLight
 ## (in menu_board.tscn) so the 3D pegs/coins read with form. Colour still comes
 ## from the theme palette (never a raw Color).
-func _make_shaded_material(albedo: Color, metallic: float, roughness: float,
-		disable_specular := false, alpha := 1.0) -> StandardMaterial3D:
+func _make_shaded_material(albedo: Color, metallic: float,
+		roughness: float) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(albedo.r, albedo.g, albedo.b, alpha)
+	mat.albedo_color = albedo
 	mat.metallic = metallic
 	mat.roughness = roughness
-	if alpha < 1.0:
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	if disable_specular:
-		# Kills the hard specular hotspot → soft, matte shading.
-		mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 	return mat
 
 
@@ -471,7 +469,9 @@ func _wobble_peg(row: int, col: int) -> void:
 	tw.tween_callback(func() -> void:
 		if _peg_mm != null:
 			_peg_mm.set_instance_transform(idx, base_xform)
-		_peg_wobbles.erase(idx))
+		# Only clear our own entry — a newer wobble may already own this idx.
+		if _peg_wobbles.get(idx) == tw:
+			_peg_wobbles.erase(idx))
 	_peg_wobbles[idx] = tw
 
 
