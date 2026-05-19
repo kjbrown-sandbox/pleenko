@@ -44,7 +44,7 @@ Coins should calculate their path **row by row**, not all at once. This way if t
 
 - `autoloads/` — singleton managers. One subdirectory per autoload.
 - `entities/` — scenes (`.tscn` + `.gd` pairs). Each is self-contained.
-- `scripts/` — shared data classes, utilities (enums, reward/tier data, format utils, offline earnings).
+- `scripts/` — shared data classes, utilities (enums, reward/tier data, format utils, offline earnings, `lattice.gd` Galton-lattice geometry).
 - `style_lab/` — `VisualTheme` resource, presets under `style_lab/presets/*.tres`, plus the in-editor style lab scene.
 - `assets/` — icons, sounds, fonts.
 
@@ -177,6 +177,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Bucket value upgrade ripple: `increase_bucket_values` updates buckets in-place with a center-outward arpeggio at `BUCKET_WAIT / 2` intervals via `force_play_bucket`, instead of rebuilding the board.
 - Queue rate bonus: `get_effective_drop_delay()` returns `drop_delay / (1 + _queue_rate_bonus_per_coin * coin_queue.count)` — additive in rate, never reaches zero. `_queue_rate_bonus_per_coin` is cached in `setup()` via the pure `_queue_rate_bonus_for_board(type)`: base `QUEUE_RATE_BONUS_PER_COIN` for every board, plus `ChallengeProgressManager.get_queue_rate_bonus_count() * QUEUE_RATE_BONUS_PER_UNLOCK` on the gold board only (mirrors the `GOLD_COIN_SPEED_BOOST` → `Coin` precedent; challenge progress only changes on scene reload so the cache can't go stale). `_start_drop_timer` and `decrease_drop_delay` track `_last_effective_delay` so a queue-size change mid-cycle rescales `_drop_timer_remaining` proportionally without losing accumulated progress.
 - Per frame, `_update_queue_bonus_label_position` projects `coin_queue.global_position + coin_queue.start_position` to viewport space (using a cached `Camera3D`) and tells `DropSection` where to anchor its bonus label. Skipped when `drop_section.visible` is false.
+- Lattice math (`position_x_for`, `cell_to_world`, `next_lattice_cell`, and the `vertical_spacing = space*√3/2` derivation) forwards to the shared pure `Lattice` module (`scripts/lattice.gd`) — single source of truth shared with `Coin` and the decorative `MenuBoard`, so they can't drift. Public signatures unchanged; `cell_to_world` passes the stored `vertical_spacing`/`COIN_ROW_Y_OFFSET` in (not recomputed). `style_lab.gd`'s editor-only re-derivations are deliberately deferred (`# TODO(Lattice)`).
 - Deflectors: `_deflectors` (peg_index → ±1 dir) is the model; `DEFLECTOR_BASE_STRENGTH = 5` → bias `(s+1)/(s+2) = 6/7 ≈ 86%` (a 1:6 split — *encourage, never force*). Single source of truth: `resolve_bounce_direction` reads it live (bit-identical to the legacy 50/50 when no deflector — trajectory tests depend on this) and `UpgradeRow`'s "current odds" hover reads the static `deflector_bias_for_strength(s)`. `deflector_outcome(row, col, direction) -> DeflectorOutcome {NONE, FOLLOWED, MISSED}` is a pure RNG-free comparator over `_deflectors` (does NOT re-roll). `notify_deflector_resolved(row, col, direction)` is a pure-view event hook called DOWN by `Coin` that dispatches FOLLOWED/MISSED to `_deflector_editor.play_deflector_hit/miss`; safe no-op when no editor (bare test boards), never mutates the model, never saves.
 
 **Coin** — `entities/coin/coin.gd`
@@ -207,9 +208,25 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Challenge UI container: timer label, objective label, progress label, result label, embedded `ChallengeClock`. Polls `ChallengeManager.get_time_remaining` + `get_objective_progress` per frame.
 
+**MenuBoard** — `entities/menu_board/menu_board.{gd,tscn}` (`class_name MenuBoard`)
+
+- Decorative, visual-only Plinko board behind the main menu; instanced by `main_menu.tscn`. Self-contained: reads ONLY `ThemeProvider.theme` (+ shared `Lattice`), emits nothing, no Currency/Save/Upgrade/BoardManager/`Coin` coupling, no buckets/rewards.
+- Perspective `Camera3D` + `fov` are **authored in `menu_board.tscn`** (editor-tunable); code never writes the camera transform (only the menu-only `DirectionalLight3D` rotation/energy, since the gameplay theme is `unshaded`). Theme is read once in `_ready` — static for the node's lifetime by design (no `theme_changed` subscription).
+- MultiMesh near-flat disc pegs with per-row alpha fade (vertex-colour albedo) + an elastic "jello" scale wobble on coin contact (`_peg_wobbles` per-peg dedupe). Lightweight `MeshInstance3D` coins spawned on a `Timer`, bounce row-by-row via `Lattice`, ride `COIN_ROW_Y_OFFSET` above the pegs (same Z plane → no parallax). Sparkle ring every Nth coin; rare per-bounce particle burst reusing a prebuilt shared mesh + the coin's shared material. All tweens tracked + killed in `_exit_tree` (SceneManager frees the menu mid-fade); `_track_tween` prune is amortized. All tuning is local `MENU_*`/`PEG_*` consts (never the shared `VisualTheme` schema).
+
+**MenuTriangleField** — `entities/menu_triangle_field/menu_triangle_field.{gd,tscn}` (`class_name MenuTriangleField`)
+
+- Pooled drifting sepia-triangle backdrop, child of `menu_board.tscn`. Fixed MultiMesh pool (count = hard cap), per-instance fade-in/hold/fade-out + drift + spin + recycle (no runtime alloc/free). Colour from `ThemeProvider.theme.background_color` darken/lighten (mirrors `background_particles._pick_color`); deliberately decoupled from the gameplay `VisualTheme.bg_particles_*` flag. 1-tri `ArrayMesh` + shared `drop_burst_multimesh.gdshader` with `render_priority = -1` so it always sorts behind the (also-transparent) pegs.
+
 **MainMenu** — `entities/main_menu/main_menu.gd` + `.tscn`
 
-- App entry scene. "Campaign" → loads `main.tscn`. "Reset Game" → shows a confirmation overlay (a `ConfirmLayer` CanvasLayer that toggles `visible` on its child `Overlay` ColorRect, styled in `_ready` from the palette — no raw colors); confirming calls `SaveManager.full_reset()`. No save-derived state is shown, so `full_reset` does not reload the scene.
+- App entry scene. Instances `MenuBoard` (decorative backdrop) + a themed title; styles all buttons + the reused confirm card from the palette (no raw colors) and adds the gameplay `Vignette`.
+- Buttons: "Play" → `SceneManager.set_new_scene(main.tscn)`; Discord/Press Kit/Report-a-Bug → `OS.shell_open` placeholder URLs; "Quit" → `get_tree().quit()`; "Settings" → opens the reused `OptionsDialog` (MAIN_MENU context). Side-effecting actions go through injectable `_shell_open_fn`/`_quit_fn`/`_full_reset_fn` Callable seams (PeekAnimator precedent) for headless tests.
+- Reset Game lives inside Settings: `OptionsDialog` emits `reset_requested` UP; MainMenu owns the reused palette-styled `ConfirmLayer` and calls `SaveManager.full_reset()` on confirm (no scene reload — menu shows no save-derived state). Cancel re-opens Settings.
+
+**OptionsDialog** — `entities/options_dialog/options_dialog.gd`
+
+- Reused by both the in-game gear menu and the main menu. `enum Context { IN_GAME, MAIN_MENU }` (default IN_GAME) must be set by the parent BEFORE `add_child` (the whole UI, incl. footer, builds in `_ready`). `_build_footer` branches: IN_GAME → "Return to Game / Return to Main Menu"; MAIN_MENU → "Reset Game" (emits `reset_requested`) + "Close", and deliberately does NOT construct the return button or reference `_on_return_pressed`/`MAIN_MENU_PATH` (in-game scene-nav is structurally unreachable from the menu, not just hidden). In-game caller `Main._setup_options_dialog` sets `IN_GAME` explicitly before `add_child`.
 
 **Main** — `entities/main/main.gd`
 
