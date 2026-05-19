@@ -139,6 +139,11 @@ var _drop_burst_mm_instance: MultiMeshInstance3D
 var _drop_burst_free_indices: Array[int] = []
 var _active_drop_bursts: Array[Dictionary] = []
 
+# Downward particle spray played when a coin lands in a bucket. Self-contained
+# pooled node — created once, persists across rebuilds (like the MultiMeshes).
+const _COIN_BURST_FIELD_SCENE := preload("res://entities/coin_burst_field/coin_burst_field.tscn")
+var _coin_burst_field: CoinBurstField
+
 var _drop_timer_remaining: float = 0.0
 # Effective delay (after queue bonus) at the time the active timer cycle started
 # or was last rescaled. Used to proportionally rescale _drop_timer_remaining
@@ -1040,6 +1045,11 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	if has_multiplier_text:
 		_show_floating_text(coin.global_position, effective_multiplier, amount)
 	if not coin.is_prestige_coin:
+		# Downward burst in the coin's own color, then despawn. Prestige coins
+		# skip both (PrestigeAnimator owns their lifecycle). The field gates
+		# itself on theme.coin_burst_enabled + its own rate limit.
+		if _coin_burst_field:
+			_coin_burst_field.spawn(coin.global_position, t.get_coin_color(coin.coin_type))
 		coin.queue_free()
 
 
@@ -1651,6 +1661,11 @@ func build_board() -> void:
 
 		for i in range(burst_capacity - 1, -1, -1):
 			_drop_burst_free_indices.append(i)
+
+	# --- Coin landing burst (only created once, persists across rebuilds) ---
+	if not _coin_burst_field:
+		_coin_burst_field = _COIN_BURST_FIELD_SCENE.instantiate()
+		add_child(_coin_burst_field)
 
 	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		_coin_mesh_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
