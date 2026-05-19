@@ -87,4 +87,36 @@ sync with time-scale-corrected delta; `spawn(world_pos, color)` called from
 
 ## Post-Implementation Review
 
-_(Appended after implementation, before merge.)_
+Six personalities reviewed `git diff main...HEAD` (Janitor, Godot Guru,
+Architect, Newcomer, Consistency, Test Lead).
+
+**Zero blocking from Janitor / Godot Guru / Architect / Consistency.** Clean
+separation, no duplication of drop_burst, correct prestige skip, correct
+live-theme read, conventions followed.
+
+Triaged concerns + resolutions:
+
+- **Rate-limit charged even on a zero-particle (pool-exhausted) burst**
+  (Newcomer BLOCKING; Guru/Architect called it intended). Verdict: near-
+  unreachable under default config (rate cap ≪ pool) but trivially
+  improvable. **Fixed:** timestamp recorded only when ≥1 particle spawned;
+  partial burst still counts as one event (`return`→`break`).
+- **Rate limit untested** (Test Lead BLOCKING). Valid per project test
+  policy. **Fixed:** added `test_rate_limit_blocks_excess_bursts`,
+  `…_not_charged_when_pool_empty`, `…_window_prunes_old_entries`,
+  `test_enabled_spawn_enqueues_particles`.
+- **`_process` expiry/slot-release untested** (Test Lead BLOCKING). **Fixed:**
+  null-guarded the MultiMesh writes (only scene-tree side effects) so the
+  lifetime bookkeeping is headlessly unit-testable; added
+  `test_process_expiry_releases_slot`.
+- **Magic numbers / docs** (`-9999`, time-scale epsilon, RNG seeding)
+  (Newcomer). **Fixed:** added explaining comments.
+- **`_HIDDEN_XFORM` should use `Basis.IDENTITY.scaled(...)`** (Guru ADVISORY).
+  **Rejected (agent error):** `.scaled()` is a method call, not a constant
+  expression — invalid for a `const`. Reverted and added a comment so it
+  isn't "fixed" again. (Triage caught this; the project's "agents sometimes
+  flag non-issues" guidance applied.)
+- **CLAUDE.md docs not updated** (Architect). Done as a separate docs commit
+  per the Branch Workflow.
+
+Result: full suite green (24 suites, `test_coin_burst` 33 passed).
