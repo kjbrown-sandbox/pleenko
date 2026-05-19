@@ -167,7 +167,22 @@ Recommended order is at the bottom.
   `background_particles.gd:30,38` spam every theme setup.
 - 3D burst-particle free-list logic copy-pasted across `_spawn_drop_burst_3d` /
   `_spawn_ripple_particles` / `_spawn_edge_splash` (`plinko_board.gd:742-855`)
-  — folds into the T1.1 `CoinPool`/`PegRenderer` extraction.
+  — folds into the T1.1 `CoinPool`/`PegRenderer` extraction. **Now a 4th
+  independent copy:** `entities/coin_burst_field/coin_burst_field.gd` (pooled
+  MultiMesh + free-index stack + `_sync`/expiry + per-second rate limit)
+  re-implements the same pattern. This was a *deliberate* call in the
+  coin-landing-burst plan (self-contained node; don't refactor working
+  `drop_burst` unprompted), but it raises the duplication-per-future-particle-
+  effect multiplier. Consolidation target: one `PooledParticleField`
+  class/scene (MultiMesh + slot pool + analytic `_sync` + rate cap) that
+  `drop_burst`, `CoinBurstField`, ripple/edge-splash, and `menu_board._explode_coin`
+  / `prestige_vfx` all parameterize. Janitor flagged this in both the planning
+  and post-impl reviews (`agent-logs/coin-landing-burst.md`).
+- `Engine.time_scale` divide-by-zero guard epsilon is inconsistent:
+  `0.0001` in `coin_burst_field.gd` (`_process`) vs `0.001` in
+  `prestige_animator.gd` / `audio_manager.gd`. Harmless (any small positive
+  value works) but should be one shared named constant when the slow-mo
+  correction is factored out.
 
 ### T3.5 — CLAUDE.md "living documentation" has drifted **[Architect — process debt, enabled T0.1]**
 - `PerformanceSettings` & `AnalyticsManager` autoloads and the entire deflector
