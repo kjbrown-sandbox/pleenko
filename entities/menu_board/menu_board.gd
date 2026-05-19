@@ -33,17 +33,14 @@ const MENU_BOARD_ROWS := 25
 ## time grows a lot.
 const MAX_DECORATIVE_COINS := 180
 
-## Seconds between decorative coin spawns.
 const COIN_SPAWN_INTERVAL_SEC := 0.45
 
 ## Fraction of one bounce spent rising; the rest is the fall to the next row
 ## (matches the real Coin's 1/3-up, 2/3-down arc).
 const BOUNCE_RISE_FRACTION := 1.0 / 3.0
 
-## Height a coin spawns above row 0 before its initial drop-in.
 const COIN_SPAWN_DROP_HEIGHT := 1.6
 
-## Seconds for the initial spawn -> row 0 drop.
 const COIN_INITIAL_DROP_SEC := 0.3
 
 ## Menu pegs are near-flat discs (a cylinder collapsed along its axis) facing
@@ -80,7 +77,6 @@ const MENU_BOUNCE_HEIGHT_MULT := 1.5
 const PEG_WOBBLE_SCALE_PEAK := 1.5
 const PEG_WOBBLE_DURATION := 2.7
 
-## Every Nth spawned coin emits a sparkle ring at each peg it strikes.
 const SPARKLE_EVERY_NTH_COIN := 4
 
 ## Per-bounce chance a coin bursts into particles instead of continuing.
@@ -325,14 +321,12 @@ func _spawn_coin() -> void:
 	var sparkle := _spawn_count % SPARKLE_EVERY_NTH_COIN == 0
 	var coin_color: Color = _coin_colors[currency]
 
-	# +Z so the coin always renders in FRONT of the pegs (peg plane is z=0).
 	var entry := _cell_position(0, 0) + Vector3(0.0, 0.0, COIN_Z_OFFSET)
 	coin.position = entry + Vector3(0.0, COIN_SPAWN_DROP_HEIGHT, 0.0)
 	_coins.add_child(coin)
 	_live_coin_count += 1
 
-	# Drop in from above the top peg, then start bouncing row by row. The drop
-	# keeps the +Z offset; bounces only tween x/y, so z stays fixed thereafter.
+	# Drop in from above, then bounce row by row (bounces tween only x/y).
 	var drop := _track_tween(create_tween())
 	drop.tween_property(coin, "position", entry, COIN_INITIAL_DROP_SEC) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
@@ -353,15 +347,12 @@ func _advance_coin_bounce(coin: MeshInstance3D, row: int, col: int,
 
 	var t: VisualTheme = ThemeProvider.theme
 
-	# Decide the bounce direction first so the peg can lean the way the coin goes.
 	var direction: int = Enums.Direction.RIGHT if randf() < 0.5 else Enums.Direction.LEFT
 
-	# The coin is striking the peg at (row, col): wobble it, ring it if sparkly.
 	_wobble_peg(row, col)
 	if sparkle:
 		_spawn_peg_ring(_peg_position(row, col), coin_color, t)
 
-	# Rare: the coin bursts into particles on this peg instead of bouncing on.
 	if randf() < COIN_EXPLODE_CHANCE:
 		_explode_coin(coin, t)
 		return
@@ -476,8 +467,7 @@ func _wobble_peg(row: int, col: int) -> void:
 
 
 ## Expanding sparkle ring at a struck peg — same shader/animation as the
-## gameplay board's _spawn_peg_ring, in the coin's colour. Placed at the peg's
-## camera-facing tip (in front of the peg body, still behind the coins).
+## gameplay board's _spawn_peg_ring, in the coin's colour.
 func _spawn_peg_ring(peg_pos: Vector3, ring_color: Color, t: VisualTheme) -> void:
 	var ring := MeshInstance3D.new()
 	var ring_mesh := QuadMesh.new()
