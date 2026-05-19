@@ -58,7 +58,7 @@ Conflicts that genuinely required the user to pick (not blocking concerns):
 
 | Topic | Decision |
 |---|---|
-| Glissando pace | Per-bucket at `AudioManager.BUCKET_WAIT / 2.0` (0.25s) — reuse the exact ripple expression; no new tunable. User chose to match the ripple's literal rate over the recommended faster 0.06s. |
+| Glissando pace | Iterated: initially per-bucket at `AudioManager.BUCKET_WAIT / 2.0` (0.25s) reusing the ripple's expression; later decoupled into its own theme field `row_upgrade_glissando_interval` (default 0.125s) after user feedback that the cascade should overlap more buckets and be independent of the per-bucket fall duration. |
 | Glissando pitch | Ascending left→right: `degree = column index`. Diatonic harp-style run that re-octaves every ~8 buckets (chord array length) — intended, do not modify shared audio. |
 | Camera | Zoom in → track X with the wavefront → zoom out to fit the bigger board. Driven by BoardManager (it owns the camera); PlinkoBoard only emits signals up. |
 | New pegs | No fade/drop. Hidden on rebuild, revealed instantly column-by-column once the bucket to that peg's left has started dropping. |

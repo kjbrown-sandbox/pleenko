@@ -116,7 +116,10 @@ func _apply_starting_conditions() -> void:
 			if board:
 				var rows_to_add: int = (condition.rows - 2) / 2
 				for i in rows_to_add:
-					board.add_two_rows()
+					# animated=false: challenge setup must not fire the add-rows
+					# glissando + camera sweep before the player has even seen the
+					# board.
+					board.add_two_rows(false)
 		elif condition is StartingDropDelay:
 			var board := _get_board(condition.board_type)
 			if board:

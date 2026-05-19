@@ -1749,17 +1749,31 @@ func get_bounds() -> Rect2:
 	return Rect2(-half_width, bottom, half_width * 2.0, top - bottom)
 
 
-func add_two_rows() -> void:
-	# Snapshot the OLD row count first — the scheduler needs it to identify the
-	# two new peg rows (those with row >= old_num_rows) that get hidden until
-	# the wavefront passes them. Emit `row_upgrade_starting` BEFORE build_board
-	# so BoardManager suppresses the default fit-tween that board_rebuilt will
-	# fire mid-call; otherwise it would race the sweep camera.
+## `animated` defaults to true (the player-purchase path runs the full juice).
+## ChallengeManager._apply_starting_conditions sets it false so challenge setup
+## doesn't fire the glissando + camera sweep before the player has even seen
+## the board — the prior bug was that every `StartingBoards` row count fired
+## row_upgrade_starting/sweep, suppressing BoardManager's normal fit-tween and
+## playing audio cues during scene init.
+func add_two_rows(animated: bool = true) -> void:
+	if not animated:
+		num_rows += 2
+		build_board()
+		return
+	# Snapshot the OLD row count + container Y first — the scheduler needs the
+	# row count to identify the two new peg rows (those with row >= old_num_rows)
+	# that get hidden until the wavefront passes them, and the assert in
+	# _play_row_upgrade_glissando uses the container delta to verify the lift
+	# math against any future change to build_board's offset formula.
+	# Emit `row_upgrade_starting` BEFORE build_board so BoardManager suppresses
+	# the default fit-tween that board_rebuilt will fire mid-call; otherwise it
+	# would race the sweep camera.
 	var old_num_rows := num_rows
+	var old_container_y := buckets_container.position.y
 	row_upgrade_starting.emit()
 	num_rows += 2
 	build_board()                       # rebuilds geometry at NEW positions; emits board_rebuilt
-	_play_row_upgrade_glissando(old_num_rows)
+	_play_row_upgrade_glissando(old_num_rows, old_container_y)
 
 ## Computes the value for a bucket at a given distance from center.
 ## Used by both build_board() and the upgrade ripple to keep the formula in one place.
@@ -1951,7 +1965,7 @@ func _compute_row_upgrade_schedule(num_rows_before: int, num_rows_after: int,
 ## _play_bucket_value_upgrade_ripple's tween cadence and reuses
 ## _upgrade_animating + _upgrade_ripple_tween (so build_board()'s kill-on-rebuild
 ## handles re-trigger mid-animation for free).
-func _play_row_upgrade_glissando(old_num_rows: int) -> void:
+func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> void:
 	_upgrade_animating = true
 	if _upgrade_ripple_tween and _upgrade_ripple_tween.is_valid():
 		_upgrade_ripple_tween.kill()
@@ -1977,10 +1991,12 @@ func _play_row_upgrade_glissando(old_num_rows: int) -> void:
 	var start_offset: float = schedule["start_offset"]
 	var columns: Array = schedule["columns"]
 
-	# Guard the load-bearing claim that lifts every bucket back to the old row
-	# height. If buckets_container's y-offset formula ever changes, this assert
-	# trips before the glissando looks wrong.
-	assert(is_equal_approx(start_offset, 2.0 * vertical_spacing))
+	# Guard the load-bearing claim that lifting buckets by `start_offset` puts
+	# them at the OLD bucket-row height. The scheduler computes `start_offset`
+	# from `vertical_spacing` alone; this assert verifies it matches the actual
+	# container Y delta produced by build_board. If build_board's offset
+	# formula ever drifts, this trips before the glissando looks wrong.
+	assert(is_equal_approx(start_offset, old_container_y - buckets_container.position.y))
 
 	# Pre-stage in one frame, before the tween starts: every bucket up to the
 	# old height, every new-row peg hidden. New EDGE buckets (positions that

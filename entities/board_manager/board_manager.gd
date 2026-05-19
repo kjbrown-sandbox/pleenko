@@ -277,7 +277,7 @@ func _on_row_upgrade_sweep(start_local_x: float, end_local_x: float,
 	# camera should hold at the start position for the remainder so it begins
 	# tracking the wavefront exactly when bucket 0 starts dropping. (When the
 	# pan-in is the longer of the two, no extra wait is needed; the camera
-	# just finishes pannig in slightly after buckets start.)
+	# just finishes panning in slightly after buckets start.)
 	var post_zoom_hold: float = maxf(0.0, pre_drop_delay - zoom_in_duration)
 
 	var pre_size: float = _camera.size
