@@ -21,7 +21,11 @@ extends MultiMeshInstance3D
 const _SPEED_JITTER_MIN := 0.7   # fraction of coin_burst_speed (downward)
 const _DURATION_JITTER_MIN := 0.8  # fraction of coin_burst_duration
 
-# Reused for any pooled slot that isn't currently a live particle.
+# Parks an unused pooled slot: zero basis (degenerate, draws nothing) moved
+# far below the board so it's never visible — same idiom + sentinel Y as the
+# drop_burst / coin / background MultiMeshes. NOTE: the explicit Basis(0,0,0)
+# constructor is required because this is a `const` — `Basis.IDENTITY.scaled()`
+# (used by drop_burst's local var) is a method call, not a constant expression.
 const _HIDDEN_XFORM := Transform3D(Basis(Vector3.ZERO, Vector3.ZERO, Vector3.ZERO), Vector3(0, -9999, 0))
 
 # Timestamps (seconds) of recent bursts; only the last ~1s is kept. Used to
@@ -33,6 +37,8 @@ var _free_indices: Array[int] = []
 # One dict per live particle: { idx, start, vel, gravity, elapsed, duration, size, color }.
 var _active: Array[Dictionary] = []
 
+# Unseeded by design: production wants per-run visual variety. The pure
+# helpers take an injected RNG so tests stay deterministic without touching this.
 var _rng := RandomNumberGenerator.new()
 
 
@@ -75,14 +81,14 @@ func spawn(world_pos: Vector3, color: Color) -> void:
 		_emit_times.remove_at(0)
 	if _emit_times.size() >= t.coin_burst_max_per_second:
 		return
-	_emit_times.append(now)
 
 	var local_pos: Vector3 = to_local(world_pos)
 	var count: int = t.coin_burst_particle_count
+	var spawned: int = 0
 	for i in count:
 		var idx: int = _acquire_slot()
 		if idx < 0:
-			return  # pool saturated — drop the rest of this burst, no error
+			break  # pool saturated — drop the rest of this burst, no error
 		var seed: Dictionary = seed_particle(_rng, t.coin_burst_speed, t.coin_burst_spread, t.coin_burst_duration)
 		_active.append({
 			"idx": idx,
@@ -94,32 +100,46 @@ func spawn(world_pos: Vector3, color: Color) -> void:
 			"size": t.coin_burst_particle_size,
 			"color": color,
 		})
+		spawned += 1
+
+	# Count this against the per-second cap only if it actually produced a
+	# burst — a fully-exhausted pool emits nothing and must not suppress the
+	# next visible burst. A partial burst still counts as one event.
+	if spawned > 0:
+		_emit_times.append(now)
 
 
 func _process(delta: float) -> void:
 	if _active.is_empty():
 		return
-	# Advance in real time: process `delta` is already scaled by
-	# Engine.time_scale, so divide it back out (the prestige slow-mo pattern
-	# used by prestige_animator / audio_manager). Keeps bursts raining at
-	# normal speed even while the board is in slow-mo.
+	# Advance in real time: a `_process` delta is already multiplied by
+	# Engine.time_scale, so divide it back out to undo prestige slow-mo (the
+	# same correction prestige_animator / audio_manager use). Keeps bursts
+	# raining at normal speed even while the board is frozen/slowed. The
+	# maxf(..., 0.0001) floor guards the hard-freeze case (time_scale == 0)
+	# against a divide-by-zero — any tiny epsilon works here.
 	var d: float = delta / maxf(Engine.time_scale, 0.0001)
+	# Null only on a bare test instance (no _ready, so no MultiMesh). The
+	# pool/lifetime bookkeeping below still runs and stays unit-testable; the
+	# guarded calls are the only scene-tree-dependent side effects.
 	var mm := multimesh
 	var i: int = 0
 	while i < _active.size():
 		var p: Dictionary = _active[i]
 		p.elapsed += d
 		if p.elapsed >= p.duration:
-			mm.set_instance_transform(p.idx, _HIDDEN_XFORM)
+			if mm:
+				mm.set_instance_transform(p.idx, _HIDDEN_XFORM)
 			_release_slot(p.idx)
 			_active.remove_at(i)
 			continue
-		var pos: Vector3 = position_at(p.start, p.vel, p.gravity, p.elapsed)
-		var s: float = p.size
-		mm.set_instance_transform(p.idx, Transform3D(Basis.IDENTITY.scaled(Vector3(s, s, s)), pos))
-		var c: Color = p.color
-		c.a = alpha_at(p.elapsed, p.duration)
-		mm.set_instance_color(p.idx, c)
+		if mm:
+			var pos: Vector3 = position_at(p.start, p.vel, p.gravity, p.elapsed)
+			var s: float = p.size
+			mm.set_instance_transform(p.idx, Transform3D(Basis.IDENTITY.scaled(Vector3(s, s, s)), pos))
+			var c: Color = p.color
+			c.a = alpha_at(p.elapsed, p.duration)
+			mm.set_instance_color(p.idx, c)
 		i += 1
 
 

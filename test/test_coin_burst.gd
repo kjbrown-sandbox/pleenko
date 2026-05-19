@@ -30,6 +30,11 @@ func _run_tests() -> void:
 	test_alpha_monotonic_decreasing()
 
 	test_disabled_spawn_is_noop()
+	test_enabled_spawn_enqueues_particles()
+	test_rate_limit_blocks_excess_bursts()
+	test_rate_limit_not_charged_when_pool_empty()
+	test_rate_limit_window_prunes_old_entries()
+	test_process_expiry_releases_slot()
 	test_vfx_override_toggles_theme()
 
 
@@ -188,6 +193,104 @@ func test_disabled_spawn_is_noop() -> void:
 	f.spawn(Vector3.ZERO, Color.WHITE)
 	assert_true(f._active.is_empty(), "disabled → spawn enqueues nothing")
 	ThemeProvider.theme.coin_burst_enabled = prev
+	f.free()
+
+
+func test_enabled_spawn_enqueues_particles() -> void:
+	print("test_enabled_spawn_enqueues_particles")
+	var f := _make_field()
+	var t: VisualTheme = ThemeProvider.theme
+	var prev_en: bool = t.coin_burst_enabled
+	var prev_cnt: int = t.coin_burst_particle_count
+	var prev_max: int = t.coin_burst_max_per_second
+	t.coin_burst_enabled = true
+	t.coin_burst_particle_count = 3
+	t.coin_burst_max_per_second = 100
+	f._free_indices = [0, 1, 2]
+	f.spawn(Vector3.ZERO, Color.WHITE)
+	assert_equal(f._active.size(), 3, "enabled spawn enqueues particle_count particles")
+	assert_true(f._free_indices.is_empty(), "all slots consumed")
+	assert_equal(f._emit_times.size(), 1, "successful burst charges the rate limit once")
+	t.coin_burst_enabled = prev_en
+	t.coin_burst_particle_count = prev_cnt
+	t.coin_burst_max_per_second = prev_max
+	f.free()
+
+
+func test_rate_limit_blocks_excess_bursts() -> void:
+	print("test_rate_limit_blocks_excess_bursts")
+	var f := _make_field()
+	var t: VisualTheme = ThemeProvider.theme
+	var prev_en: bool = t.coin_burst_enabled
+	var prev_max: int = t.coin_burst_max_per_second
+	t.coin_burst_enabled = true
+	t.coin_burst_max_per_second = 2
+	var now: float = Time.get_ticks_msec() / 1000.0
+	f._emit_times = [now, now]  # cap already reached this second
+	f._free_indices = [0, 1, 2]
+	f.spawn(Vector3.ZERO, Color.WHITE)
+	assert_true(f._active.is_empty(), "burst at the per-second cap is dropped")
+	assert_equal(f._emit_times.size(), 2, "rate-limited burst does not add a timestamp")
+	t.coin_burst_enabled = prev_en
+	t.coin_burst_max_per_second = prev_max
+	f.free()
+
+
+func test_rate_limit_not_charged_when_pool_empty() -> void:
+	print("test_rate_limit_not_charged_when_pool_empty")
+	var f := _make_field()
+	var t: VisualTheme = ThemeProvider.theme
+	var prev_en: bool = t.coin_burst_enabled
+	var prev_max: int = t.coin_burst_max_per_second
+	t.coin_burst_enabled = true
+	t.coin_burst_max_per_second = 100
+	f._emit_times = []
+	f._free_indices = []  # pool fully exhausted → zero particles spawn
+	f.spawn(Vector3.ZERO, Color.WHITE)
+	assert_true(f._active.is_empty(), "no slots → nothing enqueued")
+	assert_true(f._emit_times.is_empty(), "an empty burst must NOT suppress the next visible one")
+	t.coin_burst_enabled = prev_en
+	t.coin_burst_max_per_second = prev_max
+	f.free()
+
+
+func test_rate_limit_window_prunes_old_entries() -> void:
+	print("test_rate_limit_window_prunes_old_entries")
+	var f := _make_field()
+	var t: VisualTheme = ThemeProvider.theme
+	var prev_en: bool = t.coin_burst_enabled
+	var prev_max: int = t.coin_burst_max_per_second
+	t.coin_burst_enabled = true
+	t.coin_burst_max_per_second = 1
+	var now: float = Time.get_ticks_msec() / 1000.0
+	f._emit_times = [now - 2.0]  # older than the 1s window → should be pruned
+	f._free_indices = [0, 1, 2]
+	f.spawn(Vector3.ZERO, Color.WHITE)
+	assert_false(f._active.is_empty(), "stale timestamp pruned, so burst is allowed")
+	assert_equal(f._emit_times.size(), 1, "old entry dropped, new one recorded")
+	assert_true(f._emit_times[0] >= now - 0.001, "remaining timestamp is the fresh one")
+	t.coin_burst_enabled = prev_en
+	t.coin_burst_max_per_second = prev_max
+	f.free()
+
+
+# --- _process lifecycle (bare instance: MultiMesh writes are guarded) ---
+
+func test_process_expiry_releases_slot() -> void:
+	print("test_process_expiry_releases_slot")
+	var f := _make_field()
+	f._free_indices = []
+	f._active = [
+		{"idx": 5, "start": Vector3.ZERO, "vel": Vector3.DOWN, "gravity": 6.0,
+			"elapsed": 0.0, "duration": 0.1, "size": 0.1, "color": Color.WHITE},
+		{"idx": 6, "start": Vector3.ZERO, "vel": Vector3.DOWN, "gravity": 6.0,
+			"elapsed": 0.0, "duration": 10.0, "size": 0.1, "color": Color.WHITE},
+	]
+	f._process(0.2)  # > short duration, < long duration
+	assert_equal(f._active.size(), 1, "expired particle removed, live one kept")
+	assert_equal(f._active[0]["idx"], 6, "the surviving particle is the long-lived one")
+	assert_equal(f._free_indices, [5] as Array[int], "expired slot returned to pool exactly once")
+	assert_true(f._active[0]["elapsed"] >= 0.2 - 0.0001, "live particle advanced by delta")
 	f.free()
 
 
