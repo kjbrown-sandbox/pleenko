@@ -201,6 +201,7 @@ const coin_shape := CoinShape.CYLINDER
 @export var peg_pulse_duration := 0.15                            # seconds from peg-pulse start to full settle
 @export var bucket_pulse_enabled := true                          # bucket scale-pulse on receive
 @export var drop_burst_enabled := true                            # particle burst at drop point
+@export var coin_burst_enabled := true                            # downward particle burst when a coin lands in a bucket
 @export var bg_particles_enabled := false                         # ambient drifting particles in background
 
 # Peg rings — expanding ripple at each peg hit, alternative/complement to the glow halo.
@@ -276,6 +277,25 @@ const coin_shape := CoinShape.CYLINDER
 @export var drop_burst_duration := 0.8                    ## Seconds for particles to fade out
 @export var drop_burst_spread := 0.8                      ## Max world-unit distance particles travel
 @export var drop_burst_max_per_second := 6                ## Rate limit per board
+
+# ── Coin Burst VFX ───────────────────────────────────────────────────
+# Downward particle spray when a coin lands in a bucket. Distinct from the
+# Drop Burst above (which fires at the *drop point*); this fires at the
+# *bucket* and sprays down so it rains out below the board. Color is taken
+# per-coin from get_coin_color(coin_type) (same as coin_halo / drop_burst),
+# NOT a Palette source — the player explicitly wants the coin's own color.
+@export_group("Coin Burst VFX")
+@export var coin_burst_particle_count := 5                ## Particles per landing burst
+## World-unit edge length. Matched to the on-screen weight of the level-up
+## burst particles (6px 2D ColorRects); this is a 3D world quad so it's an
+## eyeballed equivalent, not a shared literal — tune live to taste.
+@export var coin_burst_particle_size := 0.08
+@export var coin_burst_duration := 0.5                    ## Seconds for a particle to fade out
+@export var coin_burst_speed := 1.6                       ## Initial downward-cone speed (world units/sec)
+@export var coin_burst_spread := 1.8                      ## Horizontal velocity jitter (± world units/sec) — wider = broader scatter fan
+@export var coin_burst_gravity := 6.0                     ## Downward accel (world units/sec²) — the "falling" feel
+@export var coin_burst_pool_size := 400                   ## Fixed MultiMesh slots; bursts skip when exhausted
+@export var coin_burst_max_per_second := 30               ## Rate limit per board — bounds cost at any coin volume
 
 # ── Audio ────────────────────────────────────────────────────────────
 @export_group("Audio")

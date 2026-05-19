@@ -1003,6 +1003,7 @@ func _apply_vfx_override(key: String, enabled: bool, t: VisualTheme) -> void:
 		"coin_halo":          t.coin_halo_enabled = enabled
 		"coin_impact_squash": t.coin_impact_squash_enabled = enabled
 		"drop_burst":         t.drop_burst_enabled = enabled
+		"coin_burst":         t.coin_burst_enabled = enabled
 		"level_bar_shimmer":  t.level_bar_shimmer_enabled = enabled
 		"level_bar_particle": t.level_bar_particle_enabled = enabled
 		"vignette":           t.vignette_enabled = enabled
