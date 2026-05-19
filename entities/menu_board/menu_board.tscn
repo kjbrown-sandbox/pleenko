@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://b8mnpq3vk2xra"]
+
+[ext_resource type="Script" uid="uid://0b44uf36plao" path="res://entities/menu_board/menu_board.gd" id="1_mb001"]
+[ext_resource type="PackedScene" path="res://entities/menu_triangle_field/menu_triangle_field.tscn" id="2_tri"]
+
+[node name="MenuBoard" type="Node3D" unique_id=1970096278]
+script = ExtResource("1_mb001")
+
+[node name="Triangles" parent="." unique_id=1062206491 instance=ExtResource("2_tri")]
+
+[node name="Pegs" type="Node3D" parent="." unique_id=1393169170]
+
+[node name="Coins" type="Node3D" parent="." unique_id=827579870]
+
+[node name="SpawnTimer" type="Timer" parent="." unique_id=918830882]
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=160519594]
+; transform = Transform3D(0.97081, 0.13557, -0.19782, 0, 0.82486, 0.56529, 0.23982, -0.5488, 0.80078, -1.492, 0.906, 14.194)
+transform = Transform3D(0.9555, 0.1902, -0.2256, 0, 0.7646, 0.6446, 0.2951, -0.6159, 0.7305, -1.117, -0.167, 12.674) 
+current = true
+fov = 42.0
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=895865031]

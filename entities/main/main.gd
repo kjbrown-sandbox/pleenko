@@ -292,6 +292,9 @@ func _setup_options_dialog() -> void:
 	_options_dialog = CanvasLayer.new()
 	_options_dialog.layer = 10
 	_options_dialog.set_script(OptionsDialogScript)
+	# Explicit (it's the default too) so the in-game footer stays even if the
+	# default ever changes. Must be set before add_child — _ready builds the UI.
+	_options_dialog.context = OptionsDialog.Context.IN_GAME
 	add_child(_options_dialog)
 
 
