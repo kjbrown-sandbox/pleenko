@@ -38,7 +38,14 @@ Coins should calculate their path **row by row**, not all at once. This way if t
 
 ### System Responsibilities
 
-> **Living documentation.** Map of how systems own state, emit signals, and call into each other. Updated when feature branches merge. Reading this section should be enough to understand how systems fit together — for method-level detail, read the source.
+> **Living documentation — scope is deliberately narrow.** This is ONLY (1) a
+> system map (who owns what state, what signals exist, who depends on whom) and
+> (2) a ledger of non-obvious decisions/invariants ("why X, not Y" — things NOT
+> derivable from reading the code). It is NOT a per-method behavior reference:
+> do not add bullets that restate mechanics the code already shows. The code is
+> the source of truth for *what* it does; this section exists for *why* and
+> *how it connects*. Method-level prose goes stale fast and is re-read from
+> source anyway — keep entries to ownership/signals + invariants, terse.
 
 #### Project layout
 
@@ -387,7 +394,7 @@ After the user confirms the implementation looks good, run a post-implementation
 4. **Round 2+ — Resolution:** Same multi-round debate as planning. Up to 3 rounds.
 5. **Escalation:** Unresolved disagreements go to the user.
 6. **Fix:** Address all blocking concerns on the feature branch.
-7. **Update living documentation:** Edit "System Responsibilities" so it reflects the state of the code on the branch — for every system touched, update ownership/signals/data-flow bullets; add subsections for new systems; remove deleted ones; capture cross-system relations explicitly. Prefer behavior over implementation detail. Commit as its own commit (e.g. `docs: update system responsibilities for <feature>`). If the branch made no system-level change, note that explicitly in the commit message.
+7. **Update living documentation (only if the system map changed):** If the branch added/removed a system, changed an ownership/signal/dependency relationship, or established a non-obvious invariant, update "System Responsibilities" — terse, per its narrow scope (map + invariants only; NOT per-method mechanics). Add a subsection for a new system, remove a deleted one, fix a now-wrong relationship/invariant. Do NOT restate mechanics or re-summarize the diff. If nothing at the map/invariant level changed (most refactors, tweaks, bug fixes), skip this step entirely — don't write prose just to have written it. When you do update, commit it separately (`docs: update system responsibilities for <feature>`).
 8. **Merge:** Once blocking concerns are resolved and docs are updated, merge into `main` and delete the feature branch.
 
 #### Logging
