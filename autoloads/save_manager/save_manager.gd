@@ -51,6 +51,7 @@ func save_game() -> void:
 		"master_volume": AudioManager.get_master_volume(),
 		"vfx_settings": AudioManager.get_vfx_overrides(),
 		"max_fps": PerformanceSettings.get_max_fps(),
+		"window_mode": PerformanceSettings.get_window_mode(),
 	}
 
 	var json_string := JSON.stringify(data, "\t")
@@ -119,6 +120,7 @@ func load_game() -> bool:
 	for key: String in data.get("vfx_settings", {}):
 		AudioManager.set_vfx_override(key, bool(data["vfx_settings"][key]))
 	PerformanceSettings.set_max_fps(int(data.get("max_fps", PerformanceSettings.DEFAULT_MAX_FPS)))
+	PerformanceSettings.set_window_mode(int(data.get("window_mode", PerformanceSettings.DEFAULT_WINDOW_MODE)))
 
 	# Failsafe: reconcile state with the level table.
 	# Heals saves where current_level was saved ahead of claim_rewards().
@@ -190,6 +192,7 @@ func _device_prefs() -> Dictionary:
 		"master_volume": AudioManager.get_master_volume(),
 		"vfx_settings": AudioManager.get_vfx_overrides(),
 		"max_fps": PerformanceSettings.get_max_fps(),
+		"window_mode": PerformanceSettings.get_window_mode(),
 	}
 
 

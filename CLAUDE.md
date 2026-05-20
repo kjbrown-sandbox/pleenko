@@ -95,7 +95,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Orchestrates save/load to `user://save.json`. No signals. `SAVE_VERSION = 6`.
 - Deserialization order (strict): `PrestigeManager → ChallengeProgressManager → OnboardingProgress → LevelManager → CurrencyManager → UpgradeManager → BoardManager`. Order matters so signals fire against fully-initialized state.
 - `_migrate(data, version)` runs sequential version upgrades. v4→v5 seeds `OnboardingProgress` peeked-boards from the existing `boards.board_types` so existing players don't see peeks for things they already unlocked. v5→v6 seeds `OnboardingProgress.autodropper_intro_seen = true` for any save with `boards.normal_autodroppers_unlocked = true`, so existing players don't see the first-time autodropper animation replay on load.
-- All reset variants funnel through `_wipe_save(extra_blocks)`: delete the save, rewrite a minimal save (`version` + `_device_prefs()`) merged with `extra_blocks`, then `reset_state()`. `_device_prefs()` is the single source of truth for the surviving device preferences — audio (`audio_muted`, `master_volume`, `vfx_settings`) and `max_fps` (`PerformanceSettings`).
+- All reset variants funnel through `_wipe_save(extra_blocks)`: delete the save, rewrite a minimal save (`version` + `_device_prefs()`) merged with `extra_blocks`, then `reset_state()`. `_device_prefs()` is the single source of truth for the surviving device preferences — audio (`audio_muted`, `master_volume`, `vfx_settings`) and `max_fps` + `window_mode` (`PerformanceSettings`).
 - `reset_game` / `reset_game_without_reload` pass `_persistent_progress_blocks()` (prestige + challenges + onboarding) so that state survives a prestige reset; `reset_game` also reloads the scene.
 - `full_reset()` — the main-menu "Reset Game" path. Passes NO progress blocks (true fresh start: prestige/challenges/onboarding all wiped), and first calls `PrestigeManager.reset()` / `ChallengeProgressManager.reset()` / `OnboardingProgress.full_reset()` *before* the wipe so the clear order matches the documented load order. No scene reload — runs from the menu, which shows no save-derived state. Only `_device_prefs()` survive.
 - `reset_state()` resets the runtime managers only (currency/level/upgrades, autosave off, board ref cleared); it does not preserve or reload anything — those are the callers' jobs.
@@ -158,9 +158,10 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 **PerformanceSettings** — `autoloads/performance_settings/performance_settings.gd`
 
-- Owns the player's display/performance preferences — currently just the frame-rate cap. No signals (pure data + apply).
+- Owns the player's display/performance preferences — frame-rate cap and window mode. No signals (pure data + apply).
 - `FPS_OPTIONS = [30, 60, 120, 144]`, `DEFAULT_MAX_FPS = 120`. `set_max_fps(fps)` snaps unknown/stale values to the default (never uncapped), sets `Engine.max_fps`, and disables V-Sync so the cap is authoritative on every display (skipped under the headless driver). Applied on `_ready` and on every change.
-- Persisted by `SaveManager` as `max_fps`; treated as a device preference like audio — preserved across prestige resets (lives in the minimal save like the audio prefs). `OptionsDialog`'s PERFORMANCE section drives it live; persistence rides the normal save cycle (same as master volume).
+- `WINDOW_MODE_OPTIONS = [Window.MODE_WINDOWED, Window.MODE_FULLSCREEN]`, `DEFAULT_WINDOW_MODE = Window.MODE_FULLSCREEN`. `set_window_mode(mode)` snaps unknown values to the default (same defensive pattern as `set_max_fps`) and writes `get_window().mode`. The window-mode apply is additionally gated on `not OS.has_feature("web")` — the browser Fullscreen API needs a real user gesture, so a startup-applied saved preference would silently fail; `OptionsDialog` hides the Display row on web for the same reason (the saved value sits dormant until the player returns to desktop).
+- Persisted by `SaveManager` as `max_fps` + `window_mode`; treated as device preferences like audio — preserved across prestige resets (live in the minimal save like the audio prefs). `OptionsDialog`'s PERFORMANCE section drives them live; persistence rides the normal save cycle (same as master volume).
 
 #### Scene-level systems
 
