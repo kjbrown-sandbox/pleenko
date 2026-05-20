@@ -20,6 +20,9 @@ const RAW_GREEN := 9
 const GREEN_COIN := 10
 
 # ── Palette enum ─────────────────────────────────────────────────────
+# APPEND-ONLY: indices are serialized into theme .tres files as raw integers
+# (e.g. `background_source = 5`). Never reorder or insert values — only
+# add new entries at the end with a fresh index.
 enum Palette {
 	BG_1 = 0, BG_2 = 1, BG_3 = 2, BG_4 = 3, BG_5 = 4, BG_6 = 5,
 	GOLD_FADED = 6, GOLD_MAIN = 7,
@@ -29,6 +32,7 @@ enum Palette {
 	VIOLET_FADED = 16, VIOLET_MAIN = 17,
 	BLUE_FADED = 18, BLUE_MAIN = 19,
 	GREEN_FADED = 20, GREEN_MAIN = 21,
+	PEG_BROWN = 22,
 }
 
 # ── Colors (master palette) ──────────────────────────────────────────
@@ -67,6 +71,12 @@ enum Palette {
 @export var green_main := Color(0.35, 0.52, 0.30)
 @export var green_faded := Color(0.20, 0.35, 0.18)
 
+@export_group("Colors – Misc")
+## Dark brown for pegs (lofi theme's peg_color_source points here). Raw hex
+## #8B6F5B → Color(0.5451, 0.4353, 0.3569). Lives on the palette so any
+## assignment slot can point at it without needing `darkened()` math.
+@export var peg_brown := Color(0.5451, 0.4353, 0.3569)
+
 # ── Color assignments (pick from palette via dropdown) ───────────────
 @export_group("Color Assignments")
 @export var background_source: Palette = Palette.BG_7
@@ -83,6 +93,11 @@ enum Palette {
 @export var prestige_flash_source: Palette = Palette.BG_6  # color coin/bucket lerp toward during prestige
 @export var deflector_hit_color_source: Palette = Palette.BG_3   # placed deflector tints to this on a followed bounce — one neutral shade darker than the default peg (BG_4)
 @export var deflector_miss_color_source: Palette = Palette.RED_MAIN  # placed deflector flashes to this when a coin escapes against it — RED_MAIN as a universal "miss" cue, deliberately NOT the board's tier colour (deflectors are board-agnostic)
+## Two shades the gameplay backdrop's ParallaxBackdrop triangles can spawn in
+## (one lighter than the background, one darker). The MenuTriangleField picks
+## one per triangle when `use_theme_triangle_shades = true`.
+@export var triangle_light_source: Palette = Palette.BG_6
+@export var triangle_dark_source: Palette = Palette.BG_1
 
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")
@@ -378,6 +393,7 @@ func resolve(source: Palette) -> Color:
 		Palette.BLUE_FADED: return blue_faded
 		Palette.GREEN_MAIN: return green_main
 		Palette.GREEN_FADED: return green_faded
+		Palette.PEG_BROWN: return peg_brown
 		_: return bg_shade_6
 
 
@@ -395,6 +411,10 @@ var deflector_hit_color: Color:
 	get: return resolve(deflector_hit_color_source)
 var deflector_miss_color: Color:
 	get: return resolve(deflector_miss_color_source)
+var triangle_light_color: Color:
+	get: return resolve(triangle_light_source)
+var triangle_dark_color: Color:
+	get: return resolve(triangle_dark_source)
 var high_multiplier_color: Color:
 	get: return resolve(high_multiplier_source)
 var hit_bucket_color: Color:

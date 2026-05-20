@@ -29,6 +29,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 @onready var prestige_animator: PrestigeAnimator = $PrestigeAnimator
 @onready var peek_animator: PeekAnimator = $PeekAnimator
 @onready var _autodropper_intro_animator: AutodropperIntroAnimator = $AutodropperIntroAnimator
+@onready var _parallax_backdrop: ParallaxBackdrop = $ParallaxBackdrop
 
 var _deflector_intro_animator: DeflectorIntroAnimator
 var _options_dialog: CanvasLayer
@@ -57,6 +58,7 @@ func _ready() -> void:
 			SaveManager.load_prestige_only()
 
 	board_manager.setup(camera)
+	_parallax_backdrop.setup(camera)
 	AnalyticsManager.setup(board_manager)
 	level_section.setup(board_manager, camera, coin_values)
 	challenge_grouping_manager.setup(camera, challenge_info_panel)

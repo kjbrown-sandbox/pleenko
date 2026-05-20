@@ -17,34 +17,46 @@ extends Node3D
 ## Why filled triangles in shades very close to the background: low contrast so
 ## overlaps read as soft tonal depth, not hard stripes.
 ##
-## Why no `theme_changed` subscription: the menu's theme is static for this
-## node's lifetime (changing it is a full scene reload, like MenuBoard's
-## build-once `_ready` read). Colour is read once from `ThemeProvider.theme`.
+## Color is re-read on each recycle (and live each `_process`), so theme swaps
+## fade through naturally as the pool turns over — no `theme_changed`
+## subscription needed.
 
 ## Pool size. Fixed — never grows — so an idle menu can't leak instances; this
 ## count IS the hard cap by construction.
-const MENU_TRI_COUNT := 120
+@export var triangle_count: int = 120
 
 ## Z of the backdrop. Pegs/coins ride z=0 (see MenuBoard `COIN_Z_OFFSET`); this
 ## sits behind them so triangles never occlude the lattice.
-const MENU_TRI_Z := -3.0
+@export var triangle_z: float = -3.0
 
-## Centre of the spawn band in world XY (roughly the board's mid-height) and
-## its half-size. Constant + camera-independent on purpose: the menu's
-## perspective camera has no orthographic `.size`, and a hand-tuned world rect
-## is stable across resolutions (consistent with MenuBoard's "tuned by eye").
-const MENU_TRI_CENTER := Vector2(0.0, -17.0)
-const MENU_TRI_HALF_EXTENT := Vector2(34.0, 28.0)
+## Centre of the spawn band in node-local XY (the menu uses a hand-tuned world
+## rect; gameplay parents this under ParallaxBackdrop and centres at (0,0) so
+## the spawn band tracks the camera). Half-size is the spawn extent.
+@export var spawn_zone_center: Vector2 = Vector2(0.0, -17.0)
+@export var spawn_zone_half_extent: Vector2 = Vector2(34.0, 28.0)
 
 ## 15% padding so triangles drift in from off-screen rather than popping.
 const MENU_TRI_SPAWN_PAD := 1.15
 
 ## Per-triangle world size is randomised between these (centroid-to-vertex *2-ish).
-const MENU_TRI_SIZE_MIN := 1.5
-const MENU_TRI_SIZE_MAX := 7.0
+@export var triangle_size_min: float = 1.5
+@export var triangle_size_max: float = 7.0
 
 ## Drift speed CEILING in units/sec (each picks randf_range(half, this)).
-const MENU_TRI_DRIFT_SPEED := 0.35
+@export var triangle_drift_speed: float = 0.35
+
+## When true, every triangle picks ONE of the theme's two configured shades
+## (`triangle_light_color` / `triangle_dark_color`) as a flat raw colour —
+## no theme-background-derived darken/lighten. The menu leaves this false
+## (background-tinted greys); the gameplay backdrop sets it true.
+@export var use_theme_triangle_shades: bool = false
+
+## Per-triangle PEAK alpha is rolled randomly in [min, max] at spawn — varies
+## triangle-to-triangle, multiplied into the fade-in/hold/fade-out curve. Menu
+## defaults to a flat 1.0 (no variation); the gameplay backdrop overrides to
+## 0.2/0.8 so dense overlap doesn't wash the background.
+@export_range(0.0, 1.0, 0.01) var min_peak_alpha: float = 1.0
+@export_range(0.0, 1.0, 0.01) var max_peak_alpha: float = 1.0
 
 ## Spin speed MAGNITUDE in rad/sec (each picks randf_range(-this, this)).
 const MENU_TRI_ROT_SPEED := 0.2
@@ -77,6 +89,7 @@ class TriangleState:
 	var current_rotation := 0.0
 	var size := 0.0
 	var base_color := Color.WHITE
+	var peak_alpha := 1.0
 
 
 var _triangles: Array[TriangleState] = []
@@ -94,10 +107,10 @@ func _build_multimesh() -> void:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
-	mm.instance_count = MENU_TRI_COUNT
+	mm.instance_count = triangle_count
 	mm.mesh = _make_triangle_mesh()
 
-	for i in MENU_TRI_COUNT:
+	for i in triangle_count:
 		mm.set_instance_transform(i, _hidden_xform)
 
 	_mm_instance = MultiMeshInstance3D.new()
@@ -133,9 +146,9 @@ func _make_triangle_mesh() -> ArrayMesh:
 
 
 func _init_triangles(t: VisualTheme) -> void:
-	_triangles.resize(MENU_TRI_COUNT)
+	_triangles.resize(triangle_count)
 	var total_cycle := MENU_TRI_FADE_SEC + MENU_TRI_HOLD_SEC + MENU_TRI_FADE_SEC
-	for i in MENU_TRI_COUNT:
+	for i in triangle_count:
 		var tri := TriangleState.new()
 		_randomize_triangle(tri, t)
 		# Stagger so they don't all sync on first load.
@@ -154,7 +167,7 @@ func _process(delta: float) -> void:
 		if tri.elapsed >= tri.total_life:
 			_recycle_triangle(tri, t)
 		tri.current_rotation += tri.rotation_speed * delta
-		var alpha := compute_alpha(tri.elapsed, MENU_TRI_FADE_SEC, MENU_TRI_HOLD_SEC)
+		var alpha := compute_alpha(tri.elapsed, MENU_TRI_FADE_SEC, MENU_TRI_HOLD_SEC) * tri.peak_alpha
 		var pos: Vector3 = tri.start_pos + tri.drift * tri.elapsed
 		var basis := Basis.IDENTITY.scaled(Vector3.ONE * tri.size).rotated(
 			Vector3.FORWARD, tri.current_rotation)
@@ -187,22 +200,27 @@ func _recycle_triangle(tri: TriangleState, t: VisualTheme) -> void:
 
 func _randomize_triangle(tri: TriangleState, t: VisualTheme) -> void:
 	tri.total_life = MENU_TRI_FADE_SEC + MENU_TRI_HOLD_SEC + MENU_TRI_FADE_SEC
-	tri.size = randf_range(MENU_TRI_SIZE_MIN, MENU_TRI_SIZE_MAX)
+	tri.size = randf_range(triangle_size_min, triangle_size_max)
 	tri.rotation_speed = randf_range(-MENU_TRI_ROT_SPEED, MENU_TRI_ROT_SPEED)
 	tri.base_color = _pick_color(t)
+	tri.peak_alpha = randf_range(min_peak_alpha, max_peak_alpha)
 	var rect := _spawn_rect()
 	tri.start_pos = Vector3(
 		randf_range(rect.position.x, rect.end.x),
 		randf_range(rect.position.y, rect.end.y),
-		MENU_TRI_Z)
+		triangle_z)
 	var angle := randf() * TAU
-	var speed := randf_range(MENU_TRI_DRIFT_SPEED * 0.5, MENU_TRI_DRIFT_SPEED)
+	var speed := randf_range(triangle_drift_speed * 0.5, triangle_drift_speed)
 	tri.drift = Vector3(cos(angle) * speed, sin(angle) * speed, 0.0)
 
 
 ## Colour very close to the background (theme-sourced), nudged toward whichever
 ## direction reads against it. Mirrors background_particles._pick_color.
+## Short-circuits to a coin-flip pick between the theme's two configured
+## shades (triangle_light_color / triangle_dark_color) when two-shade mode is on.
 func _pick_color(t: VisualTheme) -> Color:
+	if use_theme_triangle_shades:
+		return t.triangle_light_color if randf() < 0.5 else t.triangle_dark_color
 	var bg: Color = t.background_color
 	var shift := MENU_TRI_COLOR_SHIFT
 	var luminance := bg.get_luminance()
@@ -215,11 +233,16 @@ func _pick_color(t: VisualTheme) -> Color:
 	return bg.darkened(randf_range(shift * 0.3, shift * 0.7))
 
 
-func _spawn_rect() -> Rect2:
-	var half_w := MENU_TRI_HALF_EXTENT.x * MENU_TRI_SPAWN_PAD
-	var half_h := MENU_TRI_HALF_EXTENT.y * MENU_TRI_SPAWN_PAD
+## Pure static rect helper — unit-testable on a bare instance (no scene tree).
+static func spawn_rect_for(center: Vector2, half_extent: Vector2, pad: float) -> Rect2:
+	var half_w := half_extent.x * pad
+	var half_h := half_extent.y * pad
 	return Rect2(
-		MENU_TRI_CENTER.x - half_w,
-		MENU_TRI_CENTER.y - half_h,
+		center.x - half_w,
+		center.y - half_h,
 		half_w * 2.0,
 		half_h * 2.0)
+
+
+func _spawn_rect() -> Rect2:
+	return spawn_rect_for(spawn_zone_center, spawn_zone_half_extent, MENU_TRI_SPAWN_PAD)
