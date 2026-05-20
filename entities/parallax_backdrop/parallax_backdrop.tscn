@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://entities/parallax_backdrop/parallax_backdrop.gd" id="1_pb"]
+[ext_resource type="PackedScene" path="res://entities/menu_triangle_field/menu_triangle_field.tscn" id="2_tri"]
+
+[node name="ParallaxBackdrop" type="Node3D"]
+script = ExtResource("1_pb")
+
+[node name="MenuTriangleField" parent="." instance=ExtResource("2_tri")]
+triangle_count = 180
+triangle_size_min = 0.8
+triangle_size_max = 4.0
+triangle_drift_speed = 0.12
+use_theme_triangle_shades = true
+min_peak_alpha = 0.2
+max_peak_alpha = 0.5
+spawn_zone_center = Vector2(0, 0)
+spawn_zone_half_extent = Vector2(20, 16)
