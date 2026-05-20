@@ -47,8 +47,11 @@ const COIN_INITIAL_DROP_SEC := 0.3
 ## the camera — effectively a round plane, no 3D depth.
 const MENU_PEG_THICKNESS := 0.001
 
-## Scales peg radius + thickness (menu-only; not the theme's peg_radius).
-const MENU_PEG_SIZE_MULT := 1.0
+## Scales peg radius + thickness (menu-only; not the theme's peg_radius). 1.5x
+## compensates for the gameplay theme default being shrunk to 0.053 (was 0.08)
+## so the menu's pegs stay visually their original 0.08 size — pair with
+## MENU_PEG_SPACING_MULT = 1.5 to keep the menu's peg-to-spacing ratio.
+const MENU_PEG_SIZE_MULT := 1.5
 
 ## Peg opacity fades down the board: alpha(row) = PEG_ALPHA_TOP −
 ## PEG_ALPHA_FALLOFF_PER_ROW * row, floored at 0 (far rows fade out entirely →

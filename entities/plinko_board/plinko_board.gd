@@ -504,12 +504,11 @@ func _update_peg_pulses(delta: float) -> void:
 		var pulse: Dictionary = _active_peg_pulses[idx]
 		pulse.elapsed += delta
 		var t_ratio: float = clampf(pulse.elapsed / pulse.duration, 0.0, 1.0)
-		# Scale up then back down: peak at t_ratio=0.4
-		var scale: float
-		if t_ratio < 0.4:
-			scale = lerpf(1.0, pulse_scale, t_ratio / 0.4)
-		else:
-			scale = lerpf(pulse_scale, 1.0, (t_ratio - 0.4) / 0.6)
+		# Snap to peak, then elastic-out settle back to 1.0 — same jello feel
+		# as MenuBoard's _wobble_peg, but driven by a manual delta loop instead
+		# of a per-peg Tween (cheaper at scale; gameplay can have many pegs
+		# pulsing simultaneously).
+		var scale: float = lerpf(pulse_scale, 1.0, _elastic_out(t_ratio))
 		var scaled_basis: Basis = _peg_basis.scaled(Vector3.ONE * scale)
 		mm.set_instance_transform(idx, Transform3D(scaled_basis, _peg_positions[idx]))
 
@@ -519,6 +518,16 @@ func _update_peg_pulses(delta: float) -> void:
 	for idx in finished:
 		mm.set_instance_transform(idx, Transform3D(_peg_basis, _peg_positions[idx]))
 		_active_peg_pulses.erase(idx)
+
+
+## Elastic-out easing — equivalent to `Tween.TRANS_ELASTIC + EASE_OUT`. Pure
+## static so the peg-pulse curve can be unit-tested without a scene tree.
+static func _elastic_out(x: float) -> float:
+	if x <= 0.0:
+		return 0.0
+	if x >= 1.0:
+		return 1.0
+	return pow(2.0, -10.0 * x) * sin((x * 10.0 - 0.75) * (TAU / 3.0)) + 1.0
 
 
 ## Pacing for hold-to-drop. Returns true when a drop should fire this frame.

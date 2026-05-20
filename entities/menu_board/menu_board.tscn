@@ -7,6 +7,9 @@
 script = ExtResource("1_mb001")
 
 [node name="Triangles" parent="." unique_id=1062206491 instance=ExtResource("2_tri")]
+use_theme_triangle_shades = true
+min_peak_alpha = 0.2
+max_peak_alpha = 0.5
 
 [node name="Pegs" type="Node3D" parent="." unique_id=1393169170]
 

@@ -110,7 +110,7 @@ enum Palette {
 @export_group("Pegs")
 enum PegShape { SPHERE, CYLINDER }
 @export var peg_shape: PegShape = PegShape.SPHERE
-@export var peg_radius := 0.08
+@export var peg_radius := 0.053
 @export var peg_height := 0.05                                    # cylinder only
 @export var peg_roughness := 0.9
 @export var peg_metallic := 0.0
@@ -213,7 +213,7 @@ const coin_shape := CoinShape.CYLINDER
 @export var peg_glow_halo_opacity := 0.06
 @export var peg_flash_enabled := true                             # peg briefly takes coin color on contact
 @export var peg_pulse_enabled := true                             # peg scale-pulse on coin contact
-@export var peg_pulse_duration := 0.15                            # seconds from peg-pulse start to full settle
+@export var peg_pulse_duration := 1.2                             # seconds from peg-pulse start to full elastic settle
 @export var bucket_pulse_enabled := true                          # bucket scale-pulse on receive
 @export var drop_burst_enabled := true                            # particle burst at drop point
 @export var coin_burst_enabled := true                            # downward particle burst when a coin lands in a bucket
