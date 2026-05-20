@@ -130,6 +130,16 @@ signal autodrop_failed(board_type: Enums.BoardType)
 signal coin_dropped
 signal prestige_coin_landed(coin: Coin, bucket: Bucket)
 
+## Add-rows juice. `row_upgrade_starting` fires at the top of add_two_rows
+## (before build_board) so BoardManager can suppress the default fit-tween
+## that board_rebuilt would otherwise trigger; `row_upgrade_sweep_started`
+## carries the sweep geometry so BoardManager can drive the zoom-in/track/
+## settle camera. Signals up, calls down — PlinkoBoard never touches the
+## camera. Naming pair matches the lifecycle: `_starting` (prepare,
+## suppression flag) → `_sweep_started` (commit, with payload).
+signal row_upgrade_starting
+signal row_upgrade_sweep_started(start_local_x: float, end_local_x: float, focus_local_y: float, sweep_duration: float)
+
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
 var _drop_burst_times: Array[float] = []
@@ -1685,7 +1695,7 @@ func build_board() -> void:
 		var distance_from_center = (abs(i - floor(num_buckets / 2))) 
 
 		var bucket_currency: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
-		if distance_from_center >= distance_for_advanced_buckets and should_show_advanced_buckets:
+		if _is_advanced_at_distance(distance_from_center):
 			bucket_currency = advanced_bucket_type
 
 		var value: int = _bucket_value_for_distance(distance_from_center)
@@ -1741,15 +1751,45 @@ func get_bounds() -> Rect2:
 	return Rect2(-half_width, bottom, half_width * 2.0, top - bottom)
 
 
-func add_two_rows() -> void:
+## `animated` defaults to true (the player-purchase path runs the full juice).
+## ChallengeManager._apply_starting_conditions sets it false so challenge setup
+## doesn't fire the glissando + camera sweep before the player has even seen
+## the board — the prior bug was that every `StartingBoards` row count fired
+## row_upgrade_starting/sweep, suppressing BoardManager's normal fit-tween and
+## playing audio cues during scene init.
+func add_two_rows(animated: bool = true) -> void:
+	if not animated:
+		num_rows += 2
+		build_board()
+		return
+	# Snapshot the OLD row count + container Y first — the scheduler needs the
+	# row count to identify the two new peg rows (those with row >= old_num_rows)
+	# that get hidden until the wavefront passes them, and the assert in
+	# _play_row_upgrade_glissando uses the container delta to verify the lift
+	# math against any future change to build_board's offset formula.
+	# Emit `row_upgrade_starting` BEFORE build_board so BoardManager suppresses
+	# the default fit-tween that board_rebuilt will fire mid-call; otherwise it
+	# would race the sweep camera.
+	var old_num_rows := num_rows
+	var old_container_y := buckets_container.position.y
+	row_upgrade_starting.emit()
 	num_rows += 2
-	build_board()
+	build_board()                       # rebuilds geometry at NEW positions; emits board_rebuilt
+	_play_row_upgrade_glissando(old_num_rows, old_container_y)
+
+## Whether a bucket at this distance-from-center is an "advanced" bucket
+## (alternate currency). Single predicate so build_board, _bucket_value_for_distance,
+## the bucket-value ripple, and the add-rows glissando can't drift on the
+## condition.
+func _is_advanced_at_distance(distance: int) -> bool:
+	return distance >= distance_for_advanced_buckets and should_show_advanced_buckets
+
 
 ## Computes the value for a bucket at a given distance from center.
 ## Used by both build_board() and the upgrade ripple to keep the formula in one place.
 func _bucket_value_for_distance(distance: int) -> int:
 	var effective_distance: int = distance
-	if distance >= distance_for_advanced_buckets and should_show_advanced_buckets:
+	if _is_advanced_at_distance(distance):
 		effective_distance = distance - distance_for_advanced_buckets
 	var val: int = 1 + effective_distance * bucket_value_multiplier
 	var pct_bonus := ChallengeProgressManager.get_bucket_value_percent_bonus(board_type)
@@ -1785,7 +1825,7 @@ func _play_bucket_value_upgrade_ripple() -> void:
 		if not distance_groups.has(distance):
 			distance_groups[distance] = []
 
-		var is_adv: bool = distance >= distance_for_advanced_buckets and should_show_advanced_buckets
+		var is_adv: bool = _is_advanced_at_distance(distance)
 		var new_value: int = _bucket_value_for_distance(distance)
 
 		distance_groups[distance].append({
@@ -1872,6 +1912,197 @@ func _play_bucket_value_upgrade_ripple() -> void:
 	_upgrade_ripple_tween.tween_callback(func() -> void:
 		_upgrade_animating = false
 	)
+
+
+## Pure scheduler for the add-rows glissando + new-peg reveal. No scene tree,
+## no autoloads — primitives in, dictionary out (testable like get_bounds).
+##
+## A left→right wavefront drops bucket column i at step i. Each newly-added peg
+## (row in [num_rows_before, num_rows_after - 1]) is revealed on the step of the
+## bucket immediately to its left, so a peg never appears before the bucket left
+## of it starts dropping.
+##
+## start_offset = 2 * vertical_spacing: after add_two_rows the buckets_container
+## drops by 2 * vertical_spacing, so lifting each bucket's local y by that much
+## puts the new row visually at the OLD row height; the fall tween brings it
+## back to rest.
+func _compute_row_upgrade_schedule(num_rows_before: int, num_rows_after: int,
+		num_buckets: int, space: float, vert_spacing: float,
+		glissando_interval: float) -> Dictionary:
+	var start_offset: float = 2.0 * vert_spacing
+	var sweep_duration: float = maxf(0.0, (num_buckets - 1) * glissando_interval)
+	var bucket_x_offset: float = -space * (num_buckets - 1) / 2.0
+
+	# One reveal list per column, indexed by bucket column 0..num_buckets-1.
+	var reveal_by_col: Array = []
+	for i in num_buckets:
+		reveal_by_col.append(PackedInt32Array())
+
+	for row in range(num_rows_before, num_rows_after):
+		for col in range(row + 1):
+			var peg_x: float = Lattice.x_for(row, col, space)
+			# Largest bucket column i with (bucket_x_offset + i*space) <= peg_x,
+			# clamped to [0, num_buckets-1]. If a peg sits to the left of every
+			# bucket (rare; buckets span wider than pegs by design) we clamp to
+			# 0 so it reveals on the very first step.
+			var raw_col: int = floori((peg_x - bucket_x_offset) / space)
+			var trigger_col: int = clampi(raw_col, 0, num_buckets - 1)
+			# Triangular index — sum of pegs in all rows above (= row*(row+1)/2)
+			# plus the column. Matches build_board's row-major fill order at
+			# :1591-1594 and `peg_index()` at :1273; must stay in sync.
+			@warning_ignore("integer_division")
+			var flat_idx: int = row * (row + 1) / 2 + col
+			reveal_by_col[trigger_col].append(flat_idx)
+
+	var columns: Array = []
+	for i in num_buckets:
+		columns.append({
+			"index": i,
+			"glissando_degree": i,
+			"reveal_peg_indices": reveal_by_col[i],
+		})
+
+	return {
+		"start_offset": start_offset,
+		"sweep_duration": sweep_duration,
+		"start_local_x": bucket_x_offset,
+		"end_local_x": bucket_x_offset + (num_buckets - 1) * space,
+		"columns": columns,
+	}
+
+
+## Animates Add Rows as a left→right "piano glissando": the just-rebuilt bucket
+## row is pre-lifted to the OLD row height, then each column falls + bounces +
+## sings one at a time, with ascending pitch. Newly-added peg rows stay hidden
+## until the bucket to their left begins dropping. Mirrors
+## _play_bucket_value_upgrade_ripple's tween cadence and reuses
+## _upgrade_animating + _upgrade_ripple_tween (so build_board()'s kill-on-rebuild
+## handles re-trigger mid-animation for free).
+func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> void:
+	_upgrade_animating = true
+	if _upgrade_ripple_tween and _upgrade_ripple_tween.is_valid():
+		_upgrade_ripple_tween.kill()
+
+	var num_buckets: int = buckets_container.get_child_count()
+	if num_buckets == 0:
+		_upgrade_animating = false
+		return
+
+	# ThemeProvider is an autoload, always present in the live path — same
+	# assumption as `_play_bucket_value_upgrade_ripple` above. No fallback
+	# ladder; defaults live exactly once, in `VisualTheme`.
+	var t: VisualTheme = ThemeProvider.theme
+	var fall_duration: float = t.row_upgrade_fall_duration
+	var overshoot: float = t.row_upgrade_bounce_overshoot
+	var pre_drop_delay: float = t.row_upgrade_pre_drop_delay
+	# Stagger is its own dial, deliberately NOT derived from fall_duration —
+	# the density of the cascade (how many buckets are co-animating) is a
+	# separate feel decision from how long each bucket takes. With the default
+	# 0.125s stagger and 1.0s fall, eight buckets are concurrently in motion.
+	var glissando_interval: float = t.row_upgrade_glissando_interval
+
+	var schedule: Dictionary = _compute_row_upgrade_schedule(
+		old_num_rows, num_rows, num_buckets,
+		space_between_pegs, vertical_spacing, glissando_interval)
+	var start_offset: float = schedule["start_offset"]
+	var columns: Array = schedule["columns"]
+
+	# Guard the load-bearing claim that lifting buckets by `start_offset` puts
+	# them at the OLD bucket-row height. The scheduler computes `start_offset`
+	# from `vertical_spacing` alone; this assert verifies it matches the actual
+	# container Y delta produced by build_board. If build_board's offset
+	# formula ever drifts, this trips before the glissando looks wrong.
+	assert(is_equal_approx(start_offset, old_container_y - buckets_container.position.y))
+
+	# Pre-stage in one frame, before the tween starts: every bucket up to the
+	# old height, every new-row peg hidden. New EDGE buckets (positions that
+	# didn't exist on the previous bucket row — always indices 0 and
+	# num_buckets-1, since each add-rows widens by exactly 2) also start
+	# invisible; they fade in during their fall.
+	var last_idx: int = num_buckets - 1
+	for i in num_buckets:
+		var b: Bucket = get_bucket(i)
+		if b:
+			b.lift_for_fall(start_offset)
+			if i == 0 or i == last_idx:
+				b.snap_invisible()
+	_set_new_pegs_hidden(columns)
+
+	# Hand the sweep geometry to BoardManager (signals up, calls down — the
+	# camera lives there). focus_local_y is in board-local space; BoardManager
+	# adds board.position.y to get world.
+	var sweep_duration: float = schedule["sweep_duration"]
+	row_upgrade_sweep_started.emit(schedule["start_local_x"], schedule["end_local_x"],
+		buckets_container.position.y, sweep_duration)
+
+	# Same V-shape center used by build_board and _bucket_value_for_distance:
+	# distance-from-center indexes into the chord array for normal landings.
+	# For the glissando we pass the column index as `degree` instead (ascending
+	# diatonic run); `center` is only used here for the is_adv classification.
+	@warning_ignore("integer_division")
+	var center: int = num_buckets / 2
+
+	_upgrade_ripple_tween = create_tween()
+	_upgrade_ripple_tween.bind_node(self)
+
+	# Pause before the first bucket drops so the camera has time to pan over.
+	# The audio cascade also waits — silence then the run, instead of starting
+	# notes while the camera is mid-pan.
+	if pre_drop_delay > 0.0:
+		_upgrade_ripple_tween.tween_interval(pre_drop_delay)
+
+	# Per-column step: fall, sing, glissando note (pitch = column index so it
+	# ascends left→right), reveal that column's new pegs. Captures `entry` per
+	# iteration the same way the ripple captures `group` (each iteration's
+	# local var is its own binding in the closure).
+	for col_data in columns:
+		var entry: Dictionary = col_data
+		_upgrade_ripple_tween.tween_callback(func() -> void:
+			var i: int = entry["index"]
+			var bucket: Bucket = get_bucket(i)
+			if not bucket:
+				return
+			var distance: int = absi(i - center)
+			var is_adv: bool = _is_advanced_at_distance(distance)
+			bucket.fall_to_rest(start_offset, overshoot, fall_duration)
+			if i == 0 or i == last_idx:
+				bucket.fade_in(fall_duration)
+			bucket.mark_singing()
+			AudioManager.force_play_bucket(board_type, i, entry["glissando_degree"], is_adv)
+			_reveal_new_pegs(entry["reveal_peg_indices"])
+		)
+		_upgrade_ripple_tween.tween_interval(glissando_interval)
+
+	# Clean up after the full glissando.
+	_upgrade_ripple_tween.tween_callback(func() -> void:
+		_upgrade_animating = false
+	)
+
+
+## Zero-scales every new-row peg in the MultiMesh so it's invisible until its
+## column's step reveals it. No-op without the multimesh (e.g. bare-instance
+## tests, which never reach this code path).
+func _set_new_pegs_hidden(columns: Array) -> void:
+	if not _peg_multimesh_instance:
+		return
+	var mm: MultiMesh = _peg_multimesh_instance.multimesh
+	var hidden_basis: Basis = _peg_basis.scaled(Vector3.ZERO)
+	for col_data in columns:
+		for flat_idx in col_data["reveal_peg_indices"]:
+			mm.set_instance_transform(flat_idx,
+				Transform3D(hidden_basis, _peg_positions[flat_idx]))
+
+
+## Restores the given peg MultiMesh instances to their full transform —
+## triggered per-column by the glissando wavefront.
+func _reveal_new_pegs(indices: PackedInt32Array) -> void:
+	if not _peg_multimesh_instance:
+		return
+	var mm: MultiMesh = _peg_multimesh_instance.multimesh
+	for flat_idx in indices:
+		mm.set_instance_transform(flat_idx,
+			Transform3D(_peg_basis, _peg_positions[flat_idx]))
+
 
 func decrease_drop_delay() -> void:
 	var old_delay := drop_delay

@@ -25,6 +25,11 @@ var _assignments: Dictionary = {}  # StringName -> int (button_id → assigned c
 var _autodrop_timer: Timer
 var _last_tick_msec: float = 0.0
 var _camera_tween: Tween
+## True while an add-rows glissando is driving the camera. Set by
+## `row_upgrade_starting` (emitted *before* build_board, so _on_board_rebuilt
+## sees it in time and skips its default fit-tween) and cleared at the end of
+## the sweep tween.
+var _row_upgrade_camera_active: bool = false
 
 ## Optional gate callable: Callable(board_type: Enums.BoardType) -> bool
 ## Set by ChallengeManager to restrict boards during challenges.
@@ -152,6 +157,8 @@ func _spawn_board(type: Enums.BoardType) -> void:
 		board.set_coins_visible(false)
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
+	board.row_upgrade_starting.connect(_on_row_upgrade_starting.bind(board))
+	board.row_upgrade_sweep_started.connect(_on_row_upgrade_sweep_started.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
 	# Queue count changes shift the effective drop delay — refresh subtext.
 	board.coin_queue.count_changed.connect(_on_board_queue_count_changed)
@@ -222,10 +229,111 @@ func _switch_to_board_type(type: Enums.BoardType) -> void:
 
 
 func _on_board_rebuilt(board: PlinkoBoard) -> void:
-	# Only adjust the camera if the rebuilt board is the one we're looking at
-	if board == _boards[_active_index]:
+	# Only adjust the camera if the rebuilt board is the one we're looking at —
+	# and not when an add-rows glissando is driving it, since that owns the
+	# camera for the whole sweep + settle. Button displays always refresh.
+	if board == _boards[_active_index] and not _row_upgrade_camera_active:
 		_tween_camera_to_active_board()
 	_update_all_button_displays()
+
+
+## Add-rows glissando is about to begin on this board. Setting the flag here —
+## *before* build_board() emits board_rebuilt — is what keeps the default
+## fit-tween from racing the sweep camera in _on_board_rebuilt above.
+func _on_row_upgrade_starting(board: PlinkoBoard) -> void:
+	if board == _boards[_active_index]:
+		_row_upgrade_camera_active = true
+
+
+## Drive the camera through three phases: push in toward the start of the new
+## bucket row, track horizontally with the glissando wavefront, then pull back
+## out to frame the now-bigger board. Sequential single _camera_tween (kills any
+## prior tween, same pattern as _tween_camera_to_active_board) so nothing fights
+## it; the final callback clears the suppress flag.
+##
+## Args (forwarded from `PlinkoBoard.row_upgrade_sweep_started` + `.bind(board)`):
+## - `start_local_x`, `end_local_x`: board-local X of bucket 0 and bucket N-1.
+## - `focus_local_y`: board-local Y of the bucket row (camera dips to this Y
+##   during the track phase for an intimate "watch the keys" framing).
+## - `sweep_duration`: total wavefront travel time (= (N-1) * glissando_interval).
+## - `board`: bound by .connect — used to compute the world-space settle target.
+func _on_row_upgrade_sweep_started(start_local_x: float, end_local_x: float,
+		focus_local_y: float, sweep_duration: float, board: PlinkoBoard) -> void:
+	if board != _boards[_active_index]:
+		# Defensive: `_on_row_upgrade_starting` only sets the flag when the
+		# emitting board is active, so this clear should be unreachable.
+		# Keeping it for paranoia in case a future caller emits from a
+		# different board than the one currently active.
+		_row_upgrade_camera_active = false
+		return
+	if _camera_tween and _camera_tween.is_valid():
+		_camera_tween.kill()
+
+	var t: VisualTheme = ThemeProvider.theme
+	var zoom_factor: float = t.row_upgrade_camera_zoom_factor
+	var zoom_in_duration: float = t.row_upgrade_camera_zoom_in_duration
+	var zoom_out_duration: float = t.row_upgrade_camera_zoom_out_duration
+	var settle_lead: float = t.row_upgrade_camera_settle_lead
+	var pre_drop_delay: float = t.row_upgrade_pre_drop_delay
+	var min_track_duration: float = t.row_upgrade_camera_min_track_duration
+	var track_extension: float = t.row_upgrade_camera_track_extension
+	# Cap the lead to 40% of the sweep so small boards don't end up with a
+	# tiny track_duration that whips the camera across well above the
+	# wavefront's natural speed (world-units / second = space_between_pegs /
+	# glissando_interval = 1.0 / 0.125 = 8 u/s). A 5-bucket board without
+	# this cap was hitting 20 u/s — 2.5× the wavefront — and felt whippy.
+	# On large boards this is a no-op: the full 0.3s lead still applies.
+	var effective_settle_lead: float = minf(settle_lead, sweep_duration * 0.4)
+	# If the bucket pre-drop pause is longer than the camera pan-in, the
+	# camera should hold at the start position for the remainder so it begins
+	# tracking the wavefront exactly when bucket 0 starts dropping. (When the
+	# pan-in is the longer of the two, no extra wait is needed; the camera
+	# just finishes panning in slightly after buckets start.)
+	var post_zoom_hold: float = maxf(0.0, pre_drop_delay - zoom_in_duration)
+
+	var pre_size: float = _camera.size
+	var cam_z: float = _camera.position.z
+	var start_pos: Vector3 = Vector3(board.position.x + start_local_x,
+		board.position.y + focus_local_y, cam_z)
+	var end_x: float = board.position.x + end_local_x
+	var settle_pos: Vector3 = _get_camera_target(board)
+	var settle_size: float = _get_camera_size_for_board(board)
+	# Floor at min_track_duration so the smallest boards (first-purchase 5-bucket
+	# case) feel no whippier than mid-sized boards. On boards big enough that
+	# the natural track is already ≥ this floor, no change. Then extend by
+	# track_extension so the camera doesn't snap back to centre the instant
+	# the wavefront finishes — it lingers on the right side of the row.
+	var track_duration: float = maxf(min_track_duration, sweep_duration - effective_settle_lead) + track_extension
+
+	_camera_tween = create_tween()
+	# Phase 1 — push in toward the left edge of the new row. TRANS_QUINT gives a
+	# pronounced slow-start / slow-end so the camera glides in instead of
+	# snapping; the track phase below uses the gentler CUBIC since it's a
+	# steady linear pan.
+	_camera_tween.tween_property(_camera, "position", start_pos, zoom_in_duration) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUINT)
+	_camera_tween.parallel().tween_property(_camera, "size", pre_size * zoom_factor, zoom_in_duration) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUINT)
+	# Optional hold so tracking starts in lockstep with the first bucket drop.
+	if post_zoom_hold > 0.0:
+		_camera_tween.tween_interval(post_zoom_hold)
+	# Phase 2 — track the wavefront, holding the zoomed-in framing.
+	_camera_tween.tween_property(_camera, "position:x", end_x, track_duration) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
+	# Phase 3 — pull back to fit the bigger board. Same TRANS_QUINT softness as
+	# the zoom-in, on its own longer duration so the resolve breathes.
+	_camera_tween.tween_property(_camera, "position", settle_pos, zoom_out_duration) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUINT)
+	_camera_tween.parallel().tween_property(_camera, "size", settle_size, zoom_out_duration) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUINT)
+	_camera_tween.tween_callback(_clear_row_upgrade_camera_flag)
+
+
+## Called from the final tween_callback at the end of the add-rows camera
+## sweep; method ref over an inline lambda matches the codebase convention
+## for non-tween-internal callbacks.
+func _clear_row_upgrade_camera_flag() -> void:
+	_row_upgrade_camera_active = false
 
 
 func _get_camera_target(board: PlinkoBoard) -> Vector3:

@@ -25,6 +25,7 @@ var _sing_timer: float = 0.0
 var _color_tween: Tween
 var _press_tween: Tween
 var _upgrade_label_tween: Tween
+var _fade_tween: Tween
 var _rest_y: float
 
 @onready var _mesh: MeshInstance3D = $MeshInstance3D
@@ -200,6 +201,53 @@ func pulse_up() -> void:
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 
+## Snap to `offset` above rest with no animation. Used by the add-rows glissando
+## to pre-stage the whole new bucket row at the OLD row height in one frame
+## before the wavefront reaches each column; fall_to_rest then drops each
+## column when its step fires.
+func lift_for_fall(offset: float) -> void:
+	if _press_tween and _press_tween.is_valid():
+		_press_tween.kill()
+	position.y = _rest_y + offset
+
+
+## Drop from `start_offset` above rest, plunging `overshoot` world-units past
+## rest, then swoop back up to rest — the "fall + swoop" for the add-rows
+## glissando, shaped exactly like a ball under gravity.
+##
+## TRANS_QUAD is the load-bearing choice here: position-under-constant-
+## acceleration is quadratic in time, so a ball thrown into the air follows
+## a parabola, and so does this bucket. EASE_OUT/QUAD for the plunge means
+## velocity starts fast and decreases LINEARLY to zero at the dip; EASE_IN/QUAD
+## for the lift mirrors it — velocity starts at zero and increases linearly
+## back to fast at rest. 50/50 split so the down-half and up-half are
+## time-symmetric, mirroring the "same speed in reverse" feel.
+##
+## Why not QUINT/SINE: QUINT decelerates too aggressively (lingers at the
+## bottom in a soft, floaty way), SINE is too gentle — neither reads as
+## gravity. QUAD is the actual physics shape.
+##
+## If bucket_pulse_enabled is off, snaps to rest with no animation. Owns
+## _press_tween (killing any in flight) so it can't fight a stray pulse on
+## position:y.
+func fall_to_rest(start_offset: float, overshoot: float, duration: float) -> void:
+	var t: VisualTheme = ThemeProvider.theme if ThemeProvider else null
+	if not t or not t.bucket_pulse_enabled:
+		position.y = _rest_y
+		return
+	if _press_tween and _press_tween.is_valid():
+		_press_tween.kill()
+	position.y = _rest_y + start_offset
+	_press_tween = create_tween()
+	_press_tween.bind_node(self)
+	# Plunge: starts fast, decelerates linearly to zero velocity at the dip.
+	_press_tween.tween_property(self, "position:y", _rest_y - overshoot, duration * 0.5) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	# Lift: starts at zero velocity, accelerates linearly back to fast at rest.
+	_press_tween.tween_property(self, "position:y", _rest_y, duration * 0.5) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+
 ## Rapidly increments the label from old_value to new_value over duration seconds.
 ## The internal value property should already be set before calling this.
 func animate_value_upgrade(old_value: int, new_value: int, duration: float) -> void:
@@ -244,9 +292,72 @@ func _resolve_default_color() -> Color:
 	return ThemeProvider.theme.get_bucket_color_faded(currency_type)
 
 
+## Sets albedo + label color, preserving the bucket's current alpha. Alpha is
+## owned by the fade-in mechanism (snap_invisible / fade_in) — colour-marking
+## operations (mark_singing / mark_hit / etc.) must funnel through here and
+## must not clobber the fade. Direct `tween_property(... "albedo_color" ...)`
+## calls bypass this preservation; the existing `_color_tween` in
+## `_stop_singing` does so but fires at SING_DURATION (4s) — well after any
+## add-rows fade-in has completed — so it can't race in practice.
 func _apply_color(color: Color) -> void:
-	_base_material.albedo_color = color
-	_label.modulate = color
+	var c: Color = color
+	c.a = _base_material.albedo_color.a
+	_base_material.albedo_color = c
+	var m: Color = color
+	m.a = _label.modulate.a
+	_label.modulate = m
+
+
+## Snap to alpha=0 with no animation. Used by the add-rows glissando to hide
+## the two new edge buckets (positions that didn't exist on the previous
+## bucket row) before the wavefront reaches them; fade_in() then animates
+## them back to visible as they fall.
+func snap_invisible() -> void:
+	if not _base_material:
+		return
+	if _fade_tween and _fade_tween.is_valid():
+		_fade_tween.kill()
+	_base_material.transparency = StandardMaterial3D.TRANSPARENCY_ALPHA
+	var albedo: Color = _base_material.albedo_color
+	albedo.a = 0.0
+	_base_material.albedo_color = albedo
+	var m: Color = _label.modulate
+	m.a = 0.0
+	_label.modulate = m
+
+
+## Tween alpha from current to 1.0 over `duration` (call snap_invisible first
+## to start from 0). Restores the material's opaque mode at the end so future
+## colour marks don't pay the transparency-sort cost.
+func fade_in(duration: float) -> void:
+	if not _base_material:
+		return
+	if _fade_tween and _fade_tween.is_valid():
+		_fade_tween.kill()
+	var start_alpha: float = _base_material.albedo_color.a
+	_fade_tween = create_tween()
+	_fade_tween.bind_node(self)
+	_fade_tween.tween_method(_set_fade_alpha, start_alpha, 1.0, duration) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_fade_tween.tween_callback(_finish_fade_in)
+
+
+func _set_fade_alpha(alpha: float) -> void:
+	if not _base_material:
+		return
+	var albedo: Color = _base_material.albedo_color
+	albedo.a = alpha
+	_base_material.albedo_color = albedo
+	var m: Color = _label.modulate
+	m.a = alpha
+	_label.modulate = m
+
+
+func _finish_fade_in() -> void:
+	if not _base_material:
+		return
+	_set_fade_alpha(1.0)
+	_base_material.transparency = StandardMaterial3D.TRANSPARENCY_DISABLED
 
 
 func _kill_color_tween() -> void:

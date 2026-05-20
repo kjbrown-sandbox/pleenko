@@ -220,6 +220,21 @@ const coin_shape := CoinShape.CYLINDER
 @export var deflector_hit_pulse_scale := 1.15                     # peak scale of the soft HIT pulse (grows to this, shrinks back to 1.0)
 @export var deflector_miss_fade_duration := 0.45                  # seconds — MISS red flash eases back to the peg colour over this
 
+# Row-upgrade glissando — the "juicy add-rows" cascade: buckets fall in
+# left→right with a piano-glissando feel, the camera tracks the wavefront,
+# new edge buckets fade in. See `PlinkoBoard._play_row_upgrade_glissando`.
+@export_subgroup("Row Upgrade Glissando")
+@export var row_upgrade_fall_duration := 1.0                      # per-bucket total fall + swoop duration. Independent of glissando interval.
+@export var row_upgrade_glissando_interval := 0.125               # seconds between bucket drops. Independent of fall duration — sets how many buckets co-animate (fall_duration / this).
+@export var row_upgrade_pre_drop_delay := 0.25                    # pause after the upgrade triggers before the first bucket drops, so the camera has time to pan over
+@export var row_upgrade_bounce_overshoot := 0.36                  # world-units the bucket dips below rest before settling — deep dip loads the "trampoline spring" feel
+@export var row_upgrade_camera_zoom_factor := 0.7                 # multiplies pre-upgrade ortho size for the zoom-in phase
+@export var row_upgrade_camera_zoom_in_duration := 0.6            # seconds to push the camera in before tracking the wavefront (long, softly eased)
+@export var row_upgrade_camera_zoom_out_duration := 0.7           # seconds for the final pull-back to fit the bigger board (long, softly eased)
+@export var row_upgrade_camera_settle_lead := 0.3                 # seconds before sweep end that the zoom-out begins, so it resolves with the final note
+@export var row_upgrade_camera_min_track_duration := 0.45         # minimum seconds for the L→R pan, so smallest boards (first purchase) feel no whippier than mid-sized ones
+@export var row_upgrade_camera_track_extension := 0.5             # extra seconds added to the L→R pan so the camera doesn't return to centre so quickly
+
 # ── Vignette ─────────────────────────────────────────────────────────
 @export_group("Vignette")
 @export var vignette_enabled := false

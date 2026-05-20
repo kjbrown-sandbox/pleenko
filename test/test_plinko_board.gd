@@ -29,6 +29,10 @@ func _run_tests() -> void:
 	test_queue_rate_bonus_gold_zero_grants_is_base()
 	test_queue_rate_bonus_gold_applies_grant_count()
 	test_queue_rate_bonus_non_gold_stays_base()
+	test_row_upgrade_start_offset_is_two_vertical_spacings()
+	test_row_upgrade_schedule_monotonic()
+	test_row_upgrade_glissando_degrees_ascend()
+	test_row_upgrade_new_pegs_revealed_left_to_right()
 
 
 # --- Helper ---
@@ -278,4 +282,87 @@ func test_queue_rate_bonus_non_gold_stays_base() -> void:
 	assert_near(board._queue_rate_bonus_for_board(Enums.BoardType.ORANGE),
 		PlinkoBoard.QUEUE_RATE_BONUS_PER_COIN, 0.0001,
 		"non-gold board ignores the gold-only reward")
+	board.free()
+
+
+# --- Add-rows glissando scheduler ---
+# Pure-logic tests for _compute_row_upgrade_schedule. The actual tween, audio,
+# and camera orchestration is integration-only (matches the bucket-value ripple
+# precedent — its visuals are also untested headlessly).
+
+func test_row_upgrade_start_offset_is_two_vertical_spacings() -> void:
+	print("test_row_upgrade_start_offset_is_two_vertical_spacings")
+	# Lifts the new bucket row by EXACTLY 2 * vertical_spacing so it visually
+	# spawns at the OLD row height. If the buckets_container y-offset formula
+	# ever changes, this is what catches the silent regression.
+	var board := _make_board()
+	var sched: Dictionary = board._compute_row_upgrade_schedule(2, 4, 5, 1.0, 1.0, 0.25)
+	assert_near(sched["start_offset"], 2.0, 0.0001, "vs=1.0 → offset=2.0")
+	var sched2: Dictionary = board._compute_row_upgrade_schedule(2, 4, 5, 1.0, 0.866, 0.25)
+	assert_near(sched2["start_offset"], 1.732, 0.001, "vs=0.866 → offset≈1.732")
+	board.free()
+
+
+func test_row_upgrade_schedule_monotonic() -> void:
+	print("test_row_upgrade_schedule_monotonic")
+	# 5 buckets at 0.25s interval → sweep_duration = (5-1) * 0.25 = 1.0s.
+	# Column indices run 0..N-1 in order — the left→right wavefront.
+	var board := _make_board()
+	var sched: Dictionary = board._compute_row_upgrade_schedule(2, 4, 5, 1.0, 1.0, 0.25)
+	assert_near(sched["sweep_duration"], 1.0, 0.0001, "(N-1)*interval = 1.0")
+	var cols: Array = sched["columns"]
+	assert_equal(cols.size(), 5, "one column entry per bucket")
+	for i in cols.size():
+		assert_equal(cols[i]["index"], i, "column index ascends")
+	# Degenerate: 1 bucket → 0 sweep duration (guards the maxf clamp).
+	var sched_one: Dictionary = board._compute_row_upgrade_schedule(0, 0, 1, 1.0, 1.0, 0.25)
+	assert_near(sched_one["sweep_duration"], 0.0, 0.0001, "num_buckets=1 → 0")
+	board.free()
+
+
+func test_row_upgrade_glissando_degrees_ascend() -> void:
+	print("test_row_upgrade_glissando_degrees_ascend")
+	# degree = column index when passed to AudioManager.force_play_bucket. Pitch
+	# = chord[degree % chord.size()], so a 0..N-1 degree sequence becomes an
+	# ascending diatonic run (a harp-style glissando) — and importantly NOT the
+	# V-shaped distance-from-center pattern normal landings use.
+	var board := _make_board()
+	var sched: Dictionary = board._compute_row_upgrade_schedule(2, 4, 5, 1.0, 1.0, 0.25)
+	var cols: Array = sched["columns"]
+	for i in cols.size():
+		assert_equal(cols[i]["glissando_degree"], i, "degree == column index")
+	board.free()
+
+
+func test_row_upgrade_new_pegs_revealed_left_to_right() -> void:
+	print("test_row_upgrade_new_pegs_revealed_left_to_right")
+	# num_rows_before=2 (3 pegs in rows 0+1, flat 0..2); num_rows_after=4 adds
+	# row 2 (3 pegs, flat 3..5) and row 3 (4 pegs, flat 6..9) — 7 new pegs.
+	# space=1.0 → bucket_x_offset = -2.0, bucket xs = -2,-1,0,+1,+2.
+	# Each new peg maps to the bucket column immediately to its left:
+	#   col 0: row3 col0 (peg_x=-1.5, flat 6)
+	#   col 1: row2 col0 (-1.0, flat 3), row3 col1 (-0.5, flat 7)
+	#   col 2: row2 col1 ( 0.0, flat 4), row3 col2 (+0.5, flat 8)
+	#   col 3: row2 col2 (+1.0, flat 5), row3 col3 (+1.5, flat 9)
+	#   col 4: ∅ (no peg sits to the right of bucket 3)
+	var board := _make_board()
+	var sched: Dictionary = board._compute_row_upgrade_schedule(2, 4, 5, 1.0, 1.0, 0.25)
+	var cols: Array = sched["columns"]
+	var total_revealed: int = 0
+	for col_data in cols:
+		for idx in col_data["reveal_peg_indices"]:
+			assert_true(idx >= 3, "every revealed peg is in a new row (idx >= 3)")
+			total_revealed += 1
+	assert_equal(total_revealed, 7, "all 7 new pegs are scheduled exactly once")
+	# The leftmost peg (row 3 col 0, flat idx 6) reveals on column 0; the
+	# rightmost (row 3 col 3, flat idx 9) reveals on column 3, never col 4.
+	var col0: PackedInt32Array = cols[0]["reveal_peg_indices"]
+	var col4: PackedInt32Array = cols[4]["reveal_peg_indices"]
+	assert_equal(col0.size(), 1, "col 0 reveals exactly 1 new peg (leftmost)")
+	assert_equal(col0[0], 6, "col 0 reveals row 3 col 0 (flat idx 6)")
+	assert_equal(col4.size(), 0, "col 4 (rightmost) reveals no new pegs")
+	# Spot-check col 3 contains both row-2-col-2 (flat 5) and row-3-col-3 (flat 9).
+	var col3: PackedInt32Array = cols[3]["reveal_peg_indices"]
+	assert_equal(col3.size(), 2, "col 3 reveals 2 pegs")
+	assert_true(col3.has(5) and col3.has(9), "col 3 reveals flat indices 5 and 9")
 	board.free()
