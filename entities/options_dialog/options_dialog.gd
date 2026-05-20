@@ -22,6 +22,7 @@ var _return_button: Button
 var _volume_slider: HSlider
 var _volume_label: Label
 var _fps_option: OptionButton
+var _display_option: OptionButton
 
 
 func _ready() -> void:
@@ -58,6 +59,12 @@ func _ready() -> void:
 	_panel.add_child(HSeparator.new())
 
 	_panel.add_child(_make_section_header("PERFORMANCE", font))
+	# Display row is desktop-only. On a Web export the browser's Fullscreen API
+	# requires a real user gesture and itch.io's embed wrapper already exposes
+	# its own fullscreen button, so an in-game toggle would be unreliable and
+	# redundant — hide it entirely instead of disabling it.
+	if not OS.has_feature("web"):
+		_panel.add_child(_make_display_row(font))
 	_panel.add_child(_make_fps_row(font))
 	_panel.add_child(HSeparator.new())
 
@@ -227,6 +234,52 @@ func _on_fps_selected(index: int) -> void:
 	# Applied live here; persisted via the normal save cycle (auto-save /
 	# return-to-menu), matching the master-volume control above.
 	PerformanceSettings.set_max_fps(PerformanceSettings.FPS_OPTIONS[index])
+
+
+## Desktop-only — `_ready` skips building this row on a Web export, so the
+## display preference cannot be changed from the browser. Mirrors the FPS row.
+func _make_display_row(font: Font) -> HBoxContainer:
+	var t: VisualTheme = ThemeProvider.theme
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+
+	var label := Label.new()
+	label.text = "Display"
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_color_override("font_color", t.normal_text_color)
+	if font:
+		label.add_theme_font_override("font", font)
+	row.add_child(label)
+
+	_display_option = OptionButton.new()
+	_display_option.custom_minimum_size = Vector2(200.0, 0.0)
+	_display_option.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	t.apply_button_theme(_display_option)
+	var current := PerformanceSettings.get_window_mode()
+	for i in PerformanceSettings.WINDOW_MODE_OPTIONS.size():
+		var mode: int = PerformanceSettings.WINDOW_MODE_OPTIONS[i]
+		_display_option.add_item(_label_for_window_mode(mode), i)
+		if mode == current:
+			_display_option.select(i)
+	_style_option_popup(_display_option, font)
+	_display_option.item_selected.connect(_on_display_mode_selected)
+	row.add_child(_display_option)
+
+	return row
+
+
+func _label_for_window_mode(mode: int) -> String:
+	if mode == Window.MODE_FULLSCREEN:
+		return "Fullscreen"
+	return "Windowed"
+
+
+func _on_display_mode_selected(index: int) -> void:
+	# Applied live here; persisted via the normal save cycle (auto-save /
+	# return-to-menu), matching the FPS control above.
+	PerformanceSettings.set_window_mode(PerformanceSettings.WINDOW_MODE_OPTIONS[index])
 
 
 func _unhandled_input(event: InputEvent) -> void:
