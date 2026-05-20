@@ -130,13 +130,15 @@ signal autodrop_failed(board_type: Enums.BoardType)
 signal coin_dropped
 signal prestige_coin_landed(coin: Coin, bucket: Bucket)
 
-## Add-rows juice. `row_upgrade_starting` fires at the top of add_two_rows (before
-## build_board) so BoardManager can suppress the default fit-tween that
-## board_rebuilt would otherwise trigger; `row_upgrade_sweep` carries the sweep
-## geometry so BoardManager can drive the zoom-in/track/settle camera. Signals
-## up, calls down — PlinkoBoard never touches the camera.
+## Add-rows juice. `row_upgrade_starting` fires at the top of add_two_rows
+## (before build_board) so BoardManager can suppress the default fit-tween
+## that board_rebuilt would otherwise trigger; `row_upgrade_sweep_started`
+## carries the sweep geometry so BoardManager can drive the zoom-in/track/
+## settle camera. Signals up, calls down — PlinkoBoard never touches the
+## camera. Naming pair matches the lifecycle: `_starting` (prepare,
+## suppression flag) → `_sweep_started` (commit, with payload).
 signal row_upgrade_starting
-signal row_upgrade_sweep(start_local_x: float, end_local_x: float, focus_local_y: float, sweep_duration: float)
+signal row_upgrade_sweep_started(start_local_x: float, end_local_x: float, focus_local_y: float, sweep_duration: float)
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
@@ -1693,7 +1695,7 @@ func build_board() -> void:
 		var distance_from_center = (abs(i - floor(num_buckets / 2))) 
 
 		var bucket_currency: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
-		if distance_from_center >= distance_for_advanced_buckets and should_show_advanced_buckets:
+		if _is_advanced_at_distance(distance_from_center):
 			bucket_currency = advanced_bucket_type
 
 		var value: int = _bucket_value_for_distance(distance_from_center)
@@ -1775,11 +1777,19 @@ func add_two_rows(animated: bool = true) -> void:
 	build_board()                       # rebuilds geometry at NEW positions; emits board_rebuilt
 	_play_row_upgrade_glissando(old_num_rows, old_container_y)
 
+## Whether a bucket at this distance-from-center is an "advanced" bucket
+## (alternate currency). Single predicate so build_board, _bucket_value_for_distance,
+## the bucket-value ripple, and the add-rows glissando can't drift on the
+## condition.
+func _is_advanced_at_distance(distance: int) -> bool:
+	return distance >= distance_for_advanced_buckets and should_show_advanced_buckets
+
+
 ## Computes the value for a bucket at a given distance from center.
 ## Used by both build_board() and the upgrade ripple to keep the formula in one place.
 func _bucket_value_for_distance(distance: int) -> int:
 	var effective_distance: int = distance
-	if distance >= distance_for_advanced_buckets and should_show_advanced_buckets:
+	if _is_advanced_at_distance(distance):
 		effective_distance = distance - distance_for_advanced_buckets
 	var val: int = 1 + effective_distance * bucket_value_multiplier
 	var pct_bonus := ChallengeProgressManager.get_bucket_value_percent_bonus(board_type)
@@ -1815,7 +1825,7 @@ func _play_bucket_value_upgrade_ripple() -> void:
 		if not distance_groups.has(distance):
 			distance_groups[distance] = []
 
-		var is_adv: bool = distance >= distance_for_advanced_buckets and should_show_advanced_buckets
+		var is_adv: bool = _is_advanced_at_distance(distance)
 		var new_value: int = _bucket_value_for_distance(distance)
 
 		distance_groups[distance].append({
@@ -1937,6 +1947,9 @@ func _compute_row_upgrade_schedule(num_rows_before: int, num_rows_after: int,
 			# 0 so it reveals on the very first step.
 			var raw_col: int = floori((peg_x - bucket_x_offset) / space)
 			var trigger_col: int = clampi(raw_col, 0, num_buckets - 1)
+			# Triangular index — sum of pegs in all rows above (= row*(row+1)/2)
+			# plus the column. Matches build_board's row-major fill order at
+			# :1591-1594 and `peg_index()` at :1273; must stay in sync.
 			@warning_ignore("integer_division")
 			var flat_idx: int = row * (row + 1) / 2 + col
 			reveal_by_col[trigger_col].append(flat_idx)
@@ -1975,15 +1988,18 @@ func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> v
 		_upgrade_animating = false
 		return
 
+	# ThemeProvider is an autoload, always present in the live path — same
+	# assumption as `_play_bucket_value_upgrade_ripple` above. No fallback
+	# ladder; defaults live exactly once, in `VisualTheme`.
 	var t: VisualTheme = ThemeProvider.theme
-	var fall_duration: float = t.row_upgrade_fall_duration if t else 1.0
-	var overshoot: float = t.row_upgrade_bounce_overshoot if t else 0.36
-	var pre_drop_delay: float = t.row_upgrade_pre_drop_delay if t else 0.25
+	var fall_duration: float = t.row_upgrade_fall_duration
+	var overshoot: float = t.row_upgrade_bounce_overshoot
+	var pre_drop_delay: float = t.row_upgrade_pre_drop_delay
 	# Stagger is its own dial, deliberately NOT derived from fall_duration —
 	# the density of the cascade (how many buckets are co-animating) is a
 	# separate feel decision from how long each bucket takes. With the default
 	# 0.125s stagger and 1.0s fall, eight buckets are concurrently in motion.
-	var glissando_interval: float = t.row_upgrade_glissando_interval if t else 0.125
+	var glissando_interval: float = t.row_upgrade_glissando_interval
 
 	var schedule: Dictionary = _compute_row_upgrade_schedule(
 		old_num_rows, num_rows, num_buckets,
@@ -2016,9 +2032,13 @@ func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> v
 	# camera lives there). focus_local_y is in board-local space; BoardManager
 	# adds board.position.y to get world.
 	var sweep_duration: float = schedule["sweep_duration"]
-	row_upgrade_sweep.emit(schedule["start_local_x"], schedule["end_local_x"],
+	row_upgrade_sweep_started.emit(schedule["start_local_x"], schedule["end_local_x"],
 		buckets_container.position.y, sweep_duration)
 
+	# Same V-shape center used by build_board and _bucket_value_for_distance:
+	# distance-from-center indexes into the chord array for normal landings.
+	# For the glissando we pass the column index as `degree` instead (ascending
+	# diatonic run); `center` is only used here for the is_adv classification.
 	@warning_ignore("integer_division")
 	var center: int = num_buckets / 2
 
@@ -2043,7 +2063,7 @@ func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> v
 			if not bucket:
 				return
 			var distance: int = absi(i - center)
-			var is_adv: bool = distance >= distance_for_advanced_buckets and should_show_advanced_buckets
+			var is_adv: bool = _is_advanced_at_distance(distance)
 			bucket.fall_to_rest(start_offset, overshoot, fall_duration)
 			if i == 0 or i == last_idx:
 				bucket.fade_in(fall_duration)

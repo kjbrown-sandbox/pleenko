@@ -30,7 +30,7 @@ implementation; **no lens raised a blocking concern.**
   `_press_tween` first (matching `pulse_down` `:181-182`).
 - **Architect** — Camera ownership stays in BoardManager (CLAUDE.md "signals
   up, calls down" rule). PlinkoBoard emits two signals: `row_upgrade_starting`
-  (BoardManager suppresses the default fit-tween) and `row_upgrade_sweep`
+  (BoardManager suppresses the default fit-tween) and `row_upgrade_sweep_started`
   (BoardManager drives the zoom/track/settle). A Main-level animator was
   considered and rejected — this animation needs no time-scale control, no
   coin ejection, no scene transition; a signal seam is strictly smaller than

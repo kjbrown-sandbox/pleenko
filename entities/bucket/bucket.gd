@@ -294,12 +294,16 @@ func _resolve_default_color() -> Color:
 
 ## Sets albedo + label color, preserving the bucket's current alpha. Alpha is
 ## owned by the fade-in mechanism (snap_invisible / fade_in) — colour-marking
-## operations (mark_singing / mark_hit / etc.) must not clobber the fade.
+## operations (mark_singing / mark_hit / etc.) must funnel through here and
+## must not clobber the fade. Direct `tween_property(... "albedo_color" ...)`
+## calls bypass this preservation; the existing `_color_tween` in
+## `_stop_singing` does so but fires at SING_DURATION (4s) — well after any
+## add-rows fade-in has completed — so it can't race in practice.
 func _apply_color(color: Color) -> void:
-	var c := color
+	var c: Color = color
 	c.a = _base_material.albedo_color.a
 	_base_material.albedo_color = c
-	var m := color
+	var m: Color = color
 	m.a = _label.modulate.a
 	_label.modulate = m
 
@@ -314,10 +318,10 @@ func snap_invisible() -> void:
 	if _fade_tween and _fade_tween.is_valid():
 		_fade_tween.kill()
 	_base_material.transparency = StandardMaterial3D.TRANSPARENCY_ALPHA
-	var albedo := _base_material.albedo_color
+	var albedo: Color = _base_material.albedo_color
 	albedo.a = 0.0
 	_base_material.albedo_color = albedo
-	var m := _label.modulate
+	var m: Color = _label.modulate
 	m.a = 0.0
 	_label.modulate = m
 
@@ -341,10 +345,10 @@ func fade_in(duration: float) -> void:
 func _set_fade_alpha(alpha: float) -> void:
 	if not _base_material:
 		return
-	var albedo := _base_material.albedo_color
+	var albedo: Color = _base_material.albedo_color
 	albedo.a = alpha
 	_base_material.albedo_color = albedo
-	var m := _label.modulate
+	var m: Color = _label.modulate
 	m.a = alpha
 	_label.modulate = m
 

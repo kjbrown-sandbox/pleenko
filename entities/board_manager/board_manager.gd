@@ -158,7 +158,7 @@ func _spawn_board(type: Enums.BoardType) -> void:
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
 	board.row_upgrade_starting.connect(_on_row_upgrade_starting.bind(board))
-	board.row_upgrade_sweep.connect(_on_row_upgrade_sweep.bind(board))
+	board.row_upgrade_sweep_started.connect(_on_row_upgrade_sweep_started.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
 	# Queue count changes shift the effective drop delay — refresh subtext.
 	board.coin_queue.count_changed.connect(_on_board_queue_count_changed)
@@ -250,11 +250,20 @@ func _on_row_upgrade_starting(board: PlinkoBoard) -> void:
 ## out to frame the now-bigger board. Sequential single _camera_tween (kills any
 ## prior tween, same pattern as _tween_camera_to_active_board) so nothing fights
 ## it; the final callback clears the suppress flag.
-func _on_row_upgrade_sweep(start_local_x: float, end_local_x: float,
+##
+## Args (forwarded from `PlinkoBoard.row_upgrade_sweep_started` + `.bind(board)`):
+## - `start_local_x`, `end_local_x`: board-local X of bucket 0 and bucket N-1.
+## - `focus_local_y`: board-local Y of the bucket row (camera dips to this Y
+##   during the track phase for an intimate "watch the keys" framing).
+## - `sweep_duration`: total wavefront travel time (= (N-1) * glissando_interval).
+## - `board`: bound by .connect — used to compute the world-space settle target.
+func _on_row_upgrade_sweep_started(start_local_x: float, end_local_x: float,
 		focus_local_y: float, sweep_duration: float, board: PlinkoBoard) -> void:
 	if board != _boards[_active_index]:
-		# Not our active board (rare) — let any future board_rebuilt for this
-		# board re-engage the default tween path.
+		# Defensive: `_on_row_upgrade_starting` only sets the flag when the
+		# emitting board is active, so this clear should be unreachable.
+		# Keeping it for paranoia in case a future caller emits from a
+		# different board than the one currently active.
 		_row_upgrade_camera_active = false
 		return
 	if _camera_tween and _camera_tween.is_valid():
@@ -269,9 +278,11 @@ func _on_row_upgrade_sweep(start_local_x: float, end_local_x: float,
 	var min_track_duration: float = t.row_upgrade_camera_min_track_duration
 	var track_extension: float = t.row_upgrade_camera_track_extension
 	# Cap the lead to 40% of the sweep so small boards don't end up with a
-	# tiny track_duration that whips the camera across at 2-3× the wavefront
-	# speed (a 5-bucket board was hitting 20 u/s vs the wavefront's 8 u/s).
-	# On large boards this is a no-op — the full 0.3s lead still applies.
+	# tiny track_duration that whips the camera across well above the
+	# wavefront's natural speed (world-units / second = space_between_pegs /
+	# glissando_interval = 1.0 / 0.125 = 8 u/s). A 5-bucket board without
+	# this cap was hitting 20 u/s — 2.5× the wavefront — and felt whippy.
+	# On large boards this is a no-op: the full 0.3s lead still applies.
 	var effective_settle_lead: float = minf(settle_lead, sweep_duration * 0.4)
 	# If the bucket pre-drop pause is longer than the camera pan-in, the
 	# camera should hold at the start position for the remainder so it begins
@@ -282,7 +293,7 @@ func _on_row_upgrade_sweep(start_local_x: float, end_local_x: float,
 
 	var pre_size: float = _camera.size
 	var cam_z: float = _camera.position.z
-	var start_pos := Vector3(board.position.x + start_local_x,
+	var start_pos: Vector3 = Vector3(board.position.x + start_local_x,
 		board.position.y + focus_local_y, cam_z)
 	var end_x: float = board.position.x + end_local_x
 	var settle_pos: Vector3 = _get_camera_target(board)
@@ -315,9 +326,14 @@ func _on_row_upgrade_sweep(start_local_x: float, end_local_x: float,
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUINT)
 	_camera_tween.parallel().tween_property(_camera, "size", settle_size, zoom_out_duration) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_QUINT)
-	_camera_tween.tween_callback(func() -> void:
-		_row_upgrade_camera_active = false
-	)
+	_camera_tween.tween_callback(_clear_row_upgrade_camera_flag)
+
+
+## Called from the final tween_callback at the end of the add-rows camera
+## sweep; method ref over an inline lambda matches the codebase convention
+## for non-tween-internal callbacks.
+func _clear_row_upgrade_camera_flag() -> void:
+	_row_upgrade_camera_active = false
 
 
 func _get_camera_target(board: PlinkoBoard) -> Vector3:
