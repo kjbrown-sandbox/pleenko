@@ -30,6 +30,10 @@ var _camera_tween: Tween
 ## sees it in time and skips its default fit-tween) and cleared at the end of
 ## the sweep tween.
 var _row_upgrade_camera_active: bool = false
+## True while a transient non-prestige cinematic (the cap-raise reveal) has
+## borrowed the camera via begin_cinematic_camera(). Suppresses the default
+## board_rebuilt fit-tween, exactly like the row-upgrade flag above.
+var _cinematic_camera_active: bool = false
 
 ## Optional gate callable: Callable(board_type: Enums.BoardType) -> bool
 ## Set by ChallengeManager to restrict boards during challenges.
@@ -232,7 +236,8 @@ func _on_board_rebuilt(board: PlinkoBoard) -> void:
 	# Only adjust the camera if the rebuilt board is the one we're looking at —
 	# and not when an add-rows glissando is driving it, since that owns the
 	# camera for the whole sweep + settle. Button displays always refresh.
-	if board == _boards[_active_index] and not _row_upgrade_camera_active:
+	if board == _boards[_active_index] and not _row_upgrade_camera_active \
+			and not _cinematic_camera_active:
 		_tween_camera_to_active_board()
 	_update_all_button_displays()
 
@@ -350,6 +355,22 @@ func _get_camera_size_for_board(board: PlinkoBoard) -> float:
 	var height := bounds.size.y + 5.0  # Add some padding so the top row isn't cut off
 	var width := bounds.size.x
 	return max(height, width)
+
+
+## Hand the camera to a transient cinematic (the cap-raise reveal). Kills any
+## in-flight camera tween and raises the suppress flag so a board_rebuilt
+## fit-tween can't race the cinematic. The caller writes the camera transform
+## directly while held, and MUST pair this with end_cinematic_camera().
+func begin_cinematic_camera() -> void:
+	if _camera_tween and _camera_tween.is_valid():
+		_camera_tween.kill()
+	_cinematic_camera_active = true
+
+
+## Return the camera after a cinematic, easing it back to frame the active board.
+func end_cinematic_camera() -> void:
+	_cinematic_camera_active = false
+	_tween_camera_to_active_board()
 
 
 func _snap_camera_to_active_board() -> void:

@@ -16,6 +16,7 @@
 [ext_resource type="Script" uid="uid://b3kxjvb0j2qia" path="res://entities/main/peek_animator.gd" id="22_peekanim"]
 [ext_resource type="Script" path="res://entities/main/autodropper_intro_animator.gd" id="23_aianim"]
 [ext_resource type="PackedScene" path="res://entities/parallax_backdrop/parallax_backdrop.tscn" id="24_parallax"]
+[ext_resource type="Script" path="res://entities/main/cap_raise_reveal_animator.gd" id="25_crranim"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
@@ -208,3 +209,6 @@ ignore_time_scale = true
 
 [node name="AutodropperIntroAnimator" type="Node" parent="." unique_id=1823745091]
 script = ExtResource("23_aianim")
+
+[node name="CapRaiseRevealAnimator" type="Node" parent="." unique_id=1100220037]
+script = ExtResource("25_crranim")

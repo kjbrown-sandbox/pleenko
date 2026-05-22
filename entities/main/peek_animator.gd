@@ -17,6 +17,9 @@ var wait_fn: Callable  # (seconds: float) -> void awaitable
 
 var _queue: Array[PeekRequest] = []
 var _is_peeking: bool = false
+## Set true by CapRaiseRevealAnimator so a newly-unlocked-board peek waits until
+## its reveal cinematic finishes; the peek stays queued, just not drained.
+var _drain_deferred: bool = false
 var _board_manager: BoardManager
 var _challenge_grouping_manager: ChallengeGroupingManager
 
@@ -98,8 +101,19 @@ func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
 		_try_drain()
 
 
+## Hold (or release) the peek queue. CapRaiseRevealAnimator defers the
+## new-board peek until its reveal cinematic is done; releasing drains whatever
+## queued up in the meantime.
+func set_drain_deferred(deferred: bool) -> void:
+	_drain_deferred = deferred
+	if not deferred:
+		_try_drain()
+
+
 func _try_drain() -> void:
 	if _is_peeking:
+		return
+	if _drain_deferred:
 		return
 	if _queue.is_empty():
 		return
