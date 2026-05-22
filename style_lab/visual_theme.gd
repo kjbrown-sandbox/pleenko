@@ -33,6 +33,8 @@ enum Palette {
 	BLUE_FADED = 18, BLUE_MAIN = 19,
 	GREEN_FADED = 20, GREEN_MAIN = 21,
 	PEG_BROWN = 22,
+	BG_HAZE = 23,
+	BG_HAZE_SUBTLE = 24,
 }
 
 # ── Colors (master palette) ──────────────────────────────────────────
@@ -77,6 +79,16 @@ enum Palette {
 ## assignment slot can point at it without needing `darkened()` math.
 @export var peg_brown := Color(0.5451, 0.4353, 0.3569)
 
+## Soft tone between background and a one-step-darker shade — used as the
+## "dark" cloud-triangle source so it reads as a subtle haze instead of a
+## hard band. Schema default sits between BG_5 and BG_6; themes override.
+@export var bg_haze := Color(0.905, 0.89, 0.86)
+
+## Even softer haze — half the distance of BG_HAZE from the background. Used
+## by the gameplay backdrop where the larger field needs a gentler max-dark
+## than the menu (cumulative ink is heavier in gameplay).
+@export var bg_haze_subtle := Color(0.9325, 0.92, 0.89)
+
 # ── Color assignments (pick from palette via dropdown) ───────────────
 @export_group("Color Assignments")
 @export var background_source: Palette = Palette.BG_7
@@ -93,11 +105,6 @@ enum Palette {
 @export var prestige_flash_source: Palette = Palette.BG_6  # color coin/bucket lerp toward during prestige
 @export var deflector_hit_color_source: Palette = Palette.BG_3   # placed deflector tints to this on a followed bounce — one neutral shade darker than the default peg (BG_4)
 @export var deflector_miss_color_source: Palette = Palette.RED_MAIN  # placed deflector flashes to this when a coin escapes against it — RED_MAIN as a universal "miss" cue, deliberately NOT the board's tier colour (deflectors are board-agnostic)
-## Two shades the gameplay backdrop's ParallaxBackdrop triangles can spawn in
-## (one lighter than the background, one darker). The MenuTriangleField picks
-## one per triangle when `use_theme_triangle_shades = true`.
-@export var triangle_light_source: Palette = Palette.BG_6
-@export var triangle_dark_source: Palette = Palette.BG_1
 
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")
@@ -394,6 +401,8 @@ func resolve(source: Palette) -> Color:
 		Palette.GREEN_MAIN: return green_main
 		Palette.GREEN_FADED: return green_faded
 		Palette.PEG_BROWN: return peg_brown
+		Palette.BG_HAZE: return bg_haze
+		Palette.BG_HAZE_SUBTLE: return bg_haze_subtle
 		_: return bg_shade_6
 
 
@@ -411,10 +420,6 @@ var deflector_hit_color: Color:
 	get: return resolve(deflector_hit_color_source)
 var deflector_miss_color: Color:
 	get: return resolve(deflector_miss_color_source)
-var triangle_light_color: Color:
-	get: return resolve(triangle_light_source)
-var triangle_dark_color: Color:
-	get: return resolve(triangle_dark_source)
 var high_multiplier_color: Color:
 	get: return resolve(high_multiplier_source)
 var hit_bucket_color: Color:

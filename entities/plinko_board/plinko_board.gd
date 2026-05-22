@@ -52,7 +52,8 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var _drop_advanced_column: VBoxContainer = $DropSection/DropButtons/DropAdvancedColumn
 @onready var _drop_advanced = $DropSection/DropButtons/DropAdvancedColumn/DropAdvanced
 @onready var _drop_advanced_label: Label = $DropSection/DropButtons/DropAdvancedColumn/DropAdvancedLabel
-@onready var _drop_tooltip: Tooltip = $DropSection/DropTooltip
+@onready var _drop_main_tooltip: Tooltip = $DropSection/DropMainTooltip
+@onready var _drop_advanced_tooltip: Tooltip = $DropSection/DropAdvancedTooltip
 
 var board_type: Enums.BoardType
 var advanced_bucket_type: Enums.CurrencyType
@@ -77,10 +78,12 @@ var multi_drop_count: int = -1
 @export var hack_space: bool = false
 @export var hack_burst: int = 10 
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
-# True while the mouse is hovering either drop button — used by the tooltip
-# refresh logic so the persistent "Needs X" message is suppressed in favor of
-# the regular cost tooltip during hover.
-var _drop_button_hovered: bool = false
+# True while the mouse is hovering the respective drop button — used by the
+# tooltip refresh logic so that button's persistent "Needs X" message is
+# suppressed in favor of the regular cost tooltip during hover. Tracked per
+# button so hovering one never suppresses the other's "Needs X" message.
+var _drop_main_hovered: bool = false
+var _drop_advanced_hovered: bool = false
 
 ## Optional gate: () -> bool. Returns true if drops should be blocked.
 ## Set externally (e.g. by BoardManager during challenges).
@@ -292,8 +295,8 @@ func _setup_drop_bars() -> void:
 	_drop_main.update_text("Drop %s" % FormatUtils.currency_name(label_currency))
 	_drop_main.main_pressed.connect(func(): request_drop())
 	_drop_main.main_mouse_entered.connect(_on_drop_main_hover)
-	_drop_main.main_mouse_exited.connect(_on_drop_hover_exit)
-	_drop_main.side_button_hover.connect(_on_drop_side_hover)
+	_drop_main.main_mouse_exited.connect(_on_drop_main_hover_exit)
+	_drop_main.side_button_hover.connect(_on_drop_side_hover.bind(_drop_main_tooltip))
 
 	# Spacebar shortcut
 	var shortcut := Shortcut.new()
@@ -381,10 +384,39 @@ func _format_cost_text(costs: Array) -> String:
 
 func _on_drop_main_hover() -> void:
 	_drop_main.pulse_main(1.005)
-	_drop_button_hovered = true
+	_drop_main_hovered = true
 	# Hover always shows the regular cost tooltip, overriding any persistent
 	# "Needs X" message until the mouse exits.
-	_drop_tooltip.update_and_show("Cost: %s\nHotkey: SPACE" % _format_cost_text(_get_drop_costs()))
+	_drop_main_tooltip.update_and_show("Cost: %s\nHotkey: SPACE" % _format_cost_text(_get_drop_costs()))
+
+
+func _on_drop_advanced_hover() -> void:
+	_drop_advanced.pulse_main(1.005)
+	_drop_advanced_hovered = true
+	_drop_advanced_tooltip.update_and_show("Cost: %s\nHotkey: B" % _format_cost_text(_get_advanced_drop_costs()))
+
+
+func _on_drop_main_hover_exit() -> void:
+	_drop_main_hovered = false
+	_drop_main_tooltip.hide_tooltip()
+	# Re-evaluate the persistent needs message after the hover ends.
+	_refresh_needs_tooltips()
+
+
+func _on_drop_advanced_hover_exit() -> void:
+	_drop_advanced_hovered = false
+	_drop_advanced_tooltip.hide_tooltip()
+	_refresh_needs_tooltips()
+
+
+## Side-button (autodropper +/-) hover. The tooltip is bound per drop column at
+## connection time. Empty text means the hover ended — restore the "Needs X"
+## messages instead of leaving the tooltip blank.
+func _on_drop_side_hover(text: String, tooltip: Tooltip) -> void:
+	if text.is_empty():
+		_refresh_needs_tooltips()
+	else:
+		tooltip.update_and_show(text)
 
 
 func _format_missing_cost_text(costs: Array) -> String:
@@ -397,35 +429,39 @@ func _format_missing_cost_text(costs: Array) -> String:
 	return ", ".join(parts)
 
 
-## Persistent "Needs X" tooltip on the normal drop button — visible whenever
-## the player can't afford a drop and isn't just waiting on cooldown. Hidden
-## while the mouse is hovering either drop button (the hover handler shows
-## the regular cost tooltip instead).
-func _refresh_needs_tooltip() -> void:
-	if _drop_button_hovered:
-		return
-	var costs := _get_drop_costs()
-	if not is_waiting and not _can_afford(costs):
-		_drop_tooltip.update_and_show_colored("Needs %s" % _format_missing_cost_text(costs), ThemeProvider.theme.red_main)
-	else:
-		_drop_tooltip.hide_tooltip()
+## Outcome of `_needs_tooltip_action` for one drop button's "Needs X" tooltip.
+enum NeedsTooltipAction { SHOW, HIDE, KEEP }
 
 
-func _on_drop_advanced_hover() -> void:
-	_drop_advanced.pulse_main(1.005)
-	_drop_button_hovered = true
-	_drop_tooltip.update_and_show("Cost: %s\nHotkey: B" % _format_cost_text(_get_advanced_drop_costs()))
+## Decides what to do with a drop button's persistent "Needs X" tooltip.
+## Cooldown is deliberately NOT a factor — if the player can't afford a drop the
+## warning stays put steadily while the drop timer cycles (otherwise it flickers
+## once per drop). KEEP means the button is hovered, so its hover handler owns
+## the tooltip (showing cost) and the refresh must not clobber it.
+func _needs_tooltip_action(affordable: bool, hovered: bool) -> NeedsTooltipAction:
+	if hovered:
+		return NeedsTooltipAction.KEEP
+	return NeedsTooltipAction.HIDE if affordable else NeedsTooltipAction.SHOW
 
 
-func _on_drop_hover_exit() -> void:
-	_drop_button_hovered = false
-	_drop_tooltip.hide_tooltip()
-	# Re-evaluate the persistent needs message after the hover ends.
-	_refresh_needs_tooltip()
+## Refreshes the persistent "Needs X" tooltip for both drop buttons. Each message
+## is anchored above its own button; the advanced button is skipped until its
+## column is visible.
+func _refresh_needs_tooltips() -> void:
+	_apply_needs_tooltip(_drop_main_tooltip, _get_drop_costs(), _drop_main_hovered)
+	if _drop_advanced_column.visible:
+		_apply_needs_tooltip(_drop_advanced_tooltip, _get_advanced_drop_costs(), _drop_advanced_hovered)
 
 
-func _on_drop_side_hover(text: String) -> void:
-	_drop_tooltip.show_or_hide(text)
+## Applies the computed action to a single drop button's "Needs X" tooltip.
+func _apply_needs_tooltip(tooltip: Tooltip, costs: Array, hovered: bool) -> void:
+	match _needs_tooltip_action(_can_afford(costs), hovered):
+		NeedsTooltipAction.SHOW:
+			tooltip.update_and_show_colored("Needs %s" % _format_missing_cost_text(costs), ThemeProvider.theme.red_main)
+		NeedsTooltipAction.HIDE:
+			tooltip.hide_tooltip()
+		NeedsTooltipAction.KEEP:
+			pass
 
 
 func _process(delta: float) -> void:
@@ -1013,7 +1049,7 @@ func _update_drop_fill() -> void:
 		_drop_advanced.set_main_disabled(not can_drop_advanced)
 		_drop_advanced.apply_fill_colors(not can_drop_advanced)
 
-	_refresh_needs_tooltip()
+	_refresh_needs_tooltips()
 
 
 func on_coin_landed(coin: Coin) -> void:
@@ -1233,8 +1269,8 @@ func _show_advanced_drop_bar() -> void:
 	_drop_advanced.update_text("Drop %s" % FormatUtils.currency_name(advanced_bucket_type))
 	_drop_advanced.main_pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
 	_drop_advanced.main_mouse_entered.connect(_on_drop_advanced_hover)
-	_drop_advanced.main_mouse_exited.connect(_on_drop_hover_exit)
-	_drop_advanced.side_button_hover.connect(_on_drop_side_hover)
+	_drop_advanced.main_mouse_exited.connect(_on_drop_advanced_hover_exit)
+	_drop_advanced.side_button_hover.connect(_on_drop_side_hover.bind(_drop_advanced_tooltip))
 
 	# B key shortcut for advanced drop
 	var adv_shortcut := Shortcut.new()
