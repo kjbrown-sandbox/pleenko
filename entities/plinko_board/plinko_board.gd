@@ -82,8 +82,8 @@ var _coin_z_counter: int = 0  # Increments per coin so later coins render in fro
 # tooltip refresh logic so that button's persistent "Needs X" message is
 # suppressed in favor of the regular cost tooltip during hover. Tracked per
 # button so hovering one never suppresses the other's "Needs X" message.
-var _main_hovered: bool = false
-var _advanced_hovered: bool = false
+var _drop_main_hovered: bool = false
+var _drop_advanced_hovered: bool = false
 
 ## Optional gate: () -> bool. Returns true if drops should be blocked.
 ## Set externally (e.g. by BoardManager during challenges).
@@ -384,7 +384,7 @@ func _format_cost_text(costs: Array) -> String:
 
 func _on_drop_main_hover() -> void:
 	_drop_main.pulse_main(1.005)
-	_main_hovered = true
+	_drop_main_hovered = true
 	# Hover always shows the regular cost tooltip, overriding any persistent
 	# "Needs X" message until the mouse exits.
 	_drop_main_tooltip.update_and_show("Cost: %s\nHotkey: SPACE" % _format_cost_text(_get_drop_costs()))
@@ -392,19 +392,19 @@ func _on_drop_main_hover() -> void:
 
 func _on_drop_advanced_hover() -> void:
 	_drop_advanced.pulse_main(1.005)
-	_advanced_hovered = true
+	_drop_advanced_hovered = true
 	_drop_advanced_tooltip.update_and_show("Cost: %s\nHotkey: B" % _format_cost_text(_get_advanced_drop_costs()))
 
 
 func _on_drop_main_hover_exit() -> void:
-	_main_hovered = false
+	_drop_main_hovered = false
 	_drop_main_tooltip.hide_tooltip()
 	# Re-evaluate the persistent needs message after the hover ends.
 	_refresh_needs_tooltips()
 
 
 func _on_drop_advanced_hover_exit() -> void:
-	_advanced_hovered = false
+	_drop_advanced_hovered = false
 	_drop_advanced_tooltip.hide_tooltip()
 	_refresh_needs_tooltips()
 
@@ -429,17 +429,18 @@ func _format_missing_cost_text(costs: Array) -> String:
 	return ", ".join(parts)
 
 
-## What to do with a drop button's persistent "Needs X" tooltip. Cooldown is
-## deliberately NOT a factor — if the player can't afford a drop the warning
-## stays put steadily while the drop timer cycles (otherwise it flickers once
-## per drop). LEAVE means the button is hovered, so its hover handler owns the
-## tooltip (showing cost) — the refresh must not clobber it.
-enum NeedsTooltipAction { SHOW, HIDE, LEAVE }
+## Outcome of `_needs_tooltip_action` for one drop button's "Needs X" tooltip.
+enum NeedsTooltipAction { SHOW, HIDE, KEEP }
 
 
+## Decides what to do with a drop button's persistent "Needs X" tooltip.
+## Cooldown is deliberately NOT a factor — if the player can't afford a drop the
+## warning stays put steadily while the drop timer cycles (otherwise it flickers
+## once per drop). KEEP means the button is hovered, so its hover handler owns
+## the tooltip (showing cost) and the refresh must not clobber it.
 func _needs_tooltip_action(affordable: bool, hovered: bool) -> NeedsTooltipAction:
 	if hovered:
-		return NeedsTooltipAction.LEAVE
+		return NeedsTooltipAction.KEEP
 	return NeedsTooltipAction.HIDE if affordable else NeedsTooltipAction.SHOW
 
 
@@ -447,18 +448,19 @@ func _needs_tooltip_action(affordable: bool, hovered: bool) -> NeedsTooltipActio
 ## is anchored above its own button; the advanced button is skipped until its
 ## column is visible.
 func _refresh_needs_tooltips() -> void:
-	_refresh_needs_tooltip(_drop_main_tooltip, _get_drop_costs(), _main_hovered)
+	_apply_needs_tooltip(_drop_main_tooltip, _get_drop_costs(), _drop_main_hovered)
 	if _drop_advanced_column.visible:
-		_refresh_needs_tooltip(_drop_advanced_tooltip, _get_advanced_drop_costs(), _advanced_hovered)
+		_apply_needs_tooltip(_drop_advanced_tooltip, _get_advanced_drop_costs(), _drop_advanced_hovered)
 
 
-func _refresh_needs_tooltip(tooltip: Tooltip, costs: Array, hovered: bool) -> void:
+## Applies the computed action to a single drop button's "Needs X" tooltip.
+func _apply_needs_tooltip(tooltip: Tooltip, costs: Array, hovered: bool) -> void:
 	match _needs_tooltip_action(_can_afford(costs), hovered):
 		NeedsTooltipAction.SHOW:
 			tooltip.update_and_show_colored("Needs %s" % _format_missing_cost_text(costs), ThemeProvider.theme.red_main)
 		NeedsTooltipAction.HIDE:
 			tooltip.hide_tooltip()
-		NeedsTooltipAction.LEAVE:
+		NeedsTooltipAction.KEEP:
 			pass
 
 

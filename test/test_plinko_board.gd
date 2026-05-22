@@ -35,8 +35,8 @@ func _run_tests() -> void:
 	test_row_upgrade_new_pegs_revealed_left_to_right()
 	test_needs_tooltip_show_when_unaffordable()
 	test_needs_tooltip_hide_when_affordable()
-	test_needs_tooltip_leave_when_hovered_unaffordable()
-	test_needs_tooltip_leave_when_hovered_affordable()
+	test_needs_tooltip_keep_when_hovered_unaffordable()
+	test_needs_tooltip_keep_when_hovered_affordable()
 
 
 # --- Helper ---
@@ -375,7 +375,7 @@ func test_row_upgrade_new_pegs_revealed_left_to_right() -> void:
 # --- Needs-tooltip decision tests ---
 # _needs_tooltip_action(affordable, hovered) drives the per-button persistent
 # "Needs X" tooltip. Cooldown is intentionally not an input — the warning must
-# stay steady while the drop timer cycles. Hover yields LEAVE so the per-frame
+# stay steady while the drop timer cycles. Hover yields KEEP so the per-frame
 # refresh never clobbers the hover cost tooltip.
 
 func test_needs_tooltip_show_when_unaffordable() -> void:
@@ -394,17 +394,17 @@ func test_needs_tooltip_hide_when_affordable() -> void:
 	board.free()
 
 
-func test_needs_tooltip_leave_when_hovered_unaffordable() -> void:
-	print("test_needs_tooltip_leave_when_hovered_unaffordable")
+func test_needs_tooltip_keep_when_hovered_unaffordable() -> void:
+	print("test_needs_tooltip_keep_when_hovered_unaffordable")
 	var board := _make_board()
-	assert_equal(board._needs_tooltip_action(false, true), PlinkoBoard.NeedsTooltipAction.LEAVE,
-		"LEAVE when hovered (hover handler owns the tooltip), even if unaffordable")
+	assert_equal(board._needs_tooltip_action(false, true), PlinkoBoard.NeedsTooltipAction.KEEP,
+		"KEEP when hovered (hover handler owns the tooltip), even if unaffordable")
 	board.free()
 
 
-func test_needs_tooltip_leave_when_hovered_affordable() -> void:
-	print("test_needs_tooltip_leave_when_hovered_affordable")
+func test_needs_tooltip_keep_when_hovered_affordable() -> void:
+	print("test_needs_tooltip_keep_when_hovered_affordable")
 	var board := _make_board()
-	assert_equal(board._needs_tooltip_action(true, true), PlinkoBoard.NeedsTooltipAction.LEAVE,
-		"LEAVE when hovered regardless of affordability")
+	assert_equal(board._needs_tooltip_action(true, true), PlinkoBoard.NeedsTooltipAction.KEEP,
+		"KEEP when hovered regardless of affordability")
 	board.free()
