@@ -54,4 +54,37 @@ See `/Users/kjbrown/.claude/plans/i-ve-got-an-idea-tender-wozniak.md` (approved)
 
 ## Post-Implementation Review
 
-_(to be appended after implementation review)_
+Six-personality review of the full `main...HEAD` diff.
+
+### Concerns
+
+- **Janitor:** no blockers. Advisory — the 2D-particle burst/swoop pattern is now
+  triplicated (level_section, autodropper_intro, cap_raise_reveal); recommends a
+  shared helper as a tracked follow-up.
+- **Godot Guru:** no blockers after tracing. `Engine.time_scale` restore, camera
+  borrow/release balance, tween node-binding, and coroutine abort-safety all hold.
+  Advisory — the burst timer doubling as the CoinValues-rebuild settle window is
+  brittle; recommends an explicit frame wait.
+- **Architect:** one blocker — the reveal did not abort on `board_switched`, and
+  `BoardManager._on_rewards_claimed` is a non-input path to `switch_board` the
+  cap-raise coin's own currency credit can trigger.
+- **Newcomer:** flagged `_explosion_color`'s source as a name/intent mismatch —
+  on review the code is correct (uses the cap-raise *spend* currency, per the
+  user's explicit color choice); resolved with a clarifying comment.
+- **Consistency Lover:** no blockers — branch is highly consistent with siblings.
+  Advisory — missing theme-group banner comment.
+- **Test Lead:** two blockers — `PeekAnimator.set_drain_deferred` had zero
+  coverage, and the anti-soft-lock invariant only covered the all-unrevealed
+  case, not the realistic partial-reveal interrupt.
+
+### Fixes applied (commit "Fix review feedback for cap-raise reveal")
+
+- Abort the reveal on `BoardManager.board_switched` (mirrors the prestige abort).
+- Explicit `await get_tree().process_frame` settle before querying targets.
+- `_is_animating` guard on `_on_coin_landed`.
+- Clarifying comment on `_explosion_color`; theme-group banner comment.
+- Tests: `set_drain_deferred` (hold/release/empty-queue) in `test_peek_animator`;
+  partial-reveal anti-soft-lock case in `test_cap_raise_reveal`.
+
+Advisory items not addressed (particle-helper extraction, handshake dedup) are
+left for a tracked cleanup follow-up. Full suite: 28 suites, all passing.
