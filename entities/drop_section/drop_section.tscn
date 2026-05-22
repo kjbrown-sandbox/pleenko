@@ -82,7 +82,12 @@ layout_mode = 2
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="DropTooltip" parent="." unique_id=183251445 instance=ExtResource("2_tooltip")]
+[node name="DropMainTooltip" parent="." unique_id=183251445 instance=ExtResource("2_tooltip")]
 use_parent_signals = false
-anchor_node_path = NodePath("../DropButtons")
+anchor_node_path = NodePath("../DropButtons/DropMainColumn")
+horizontal_alignment = 1
+
+[node name="DropAdvancedTooltip" parent="." unique_id=183251446 instance=ExtResource("2_tooltip")]
+use_parent_signals = false
+anchor_node_path = NodePath("../DropButtons/DropAdvancedColumn")
 horizontal_alignment = 1
