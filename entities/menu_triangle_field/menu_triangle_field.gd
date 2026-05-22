@@ -45,11 +45,14 @@ const MENU_TRI_SPAWN_PAD := 1.15
 ## Drift speed CEILING in units/sec (each picks randf_range(half, this)).
 @export var triangle_drift_speed: float = 0.35
 
-## When true, every triangle picks ONE of the theme's two configured shades
-## (`triangle_light_color` / `triangle_dark_color`) as a flat raw colour —
-## no theme-background-derived darken/lighten. The menu leaves this false
-## (background-tinted greys); the gameplay backdrop sets it true.
+## When true, every triangle lerps between two palette colours picked by
+## this instance (`triangle_light_source` / `triangle_dark_source`, resolved
+## through `ThemeProvider.theme`) at a random mix per triangle. Each scene
+## chooses its own range so the menu and gameplay backdrop can have
+## different "max darkness" (gameplay's cumulative ink is heavier).
 @export var use_theme_triangle_shades: bool = false
+@export var triangle_light_source: VisualTheme.Palette = VisualTheme.Palette.BG_6
+@export var triangle_dark_source: VisualTheme.Palette = VisualTheme.Palette.BG_1
 
 ## Per-triangle PEAK alpha is rolled randomly in [min, max] at spawn — varies
 ## triangle-to-triangle, multiplied into the fade-in/hold/fade-out curve. Menu
@@ -216,11 +219,15 @@ func _randomize_triangle(tri: TriangleState, t: VisualTheme) -> void:
 
 ## Colour very close to the background (theme-sourced), nudged toward whichever
 ## direction reads against it. Mirrors background_particles._pick_color.
-## Short-circuits to a coin-flip pick between the theme's two configured
-## shades (triangle_light_color / triangle_dark_color) when two-shade mode is on.
+## Short-circuits to a random lerp between this instance's two configured
+## palette sources (triangle_light_source / triangle_dark_source) when
+## two-shade mode is on — every triangle gets a unique tone somewhere in
+## [light, dark]. Each scene picks its own range.
 func _pick_color(t: VisualTheme) -> Color:
 	if use_theme_triangle_shades:
-		return t.triangle_light_color if randf() < 0.5 else t.triangle_dark_color
+		var light_color: Color = t.resolve(triangle_light_source)
+		var dark_color: Color = t.resolve(triangle_dark_source)
+		return light_color.lerp(dark_color, randf())
 	var bg: Color = t.background_color
 	var shift := MENU_TRI_COLOR_SHIFT
 	var luminance := bg.get_luminance()
