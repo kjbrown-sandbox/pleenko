@@ -6,9 +6,9 @@ const OptionsDialogScript := preload("res://entities/options_dialog/options_dial
 const VignetteScript := preload("res://entities/vignette/vignette.gd")
 
 # TODO: real URLs before launch (stubbed placeholders for now).
-const DISCORD_URL := "https://discord.gg/pleenko-placeholder"
-const PRESS_KIT_URL := "https://pleenko.example.com/press"
-const REPORT_BUG_URL := "https://github.com/kjbrown/pleenko/issues/new"
+const DISCORD_URL := "https://discord.gg/plunk-placeholder"
+const PRESS_KIT_URL := "https://plunk.example.com/press"
+const REPORT_BUG_URL := "https://github.com/kjbrown/plunk/issues/new"
 
 @onready var play_button: Button = $CanvasLayer/ButtonColumn/PlayButton
 @onready var settings_button: Button = $CanvasLayer/ButtonColumn/SettingsButton
