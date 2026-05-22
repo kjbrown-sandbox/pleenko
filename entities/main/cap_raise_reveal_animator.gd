@@ -60,6 +60,7 @@ func setup(camera: Camera3D, board_manager: BoardManager, coin_values: Node,
 	_coin_values = coin_values
 	_canvas_layer = canvas_layer
 	_peek_animator = peek_animator
+	board_manager.board_switched.connect(_on_board_switched)
 	PrestigeManager.prestige_phase_changed.connect(_on_prestige_phase_changed)
 
 
@@ -91,6 +92,8 @@ func _on_cap_raise_coin_landed(coin: Coin, predicted_bucket: Bucket) -> void:
 	_torn_down = false
 	_target_coin = coin
 	_upgrade_section = board.upgrade_section
+	# Particles take the cap-raise currency's color — the currency the player
+	# SPENDS to raise caps (e.g. refined orange for the gold board).
 	var cap_currency: int = TierRegistry.cap_raise_currency(board.board_type)
 	_explosion_color = ThemeProvider.theme.get_coin_color(cap_currency)
 
@@ -131,7 +134,7 @@ func _process(delta: float) -> void:
 
 
 func _on_coin_landed(_coin: Coin) -> void:
-	if not _following:
+	if not _is_animating or not _following:
 		return
 	_following = false
 	set_process(false)
@@ -166,6 +169,12 @@ func _run_reveal_sequence() -> void:
 	# rebuild, never before; the burst's scatter phase is that settle window.
 	var particles: Array[ColorRect] = _spawn_burst(_coin_screen_pos)
 	await get_tree().create_timer(t.cap_raise_swoop_burst_duration).timeout
+	if not _is_animating:
+		return
+	# Explicit settle frame: the cap-raise coin's currency credit triggers a
+	# deferred CoinValues rebuild (the new raw-currency bar). Guarantee that has
+	# run before querying targets, independent of the burst timer's duration.
+	await get_tree().process_frame
 	if not _is_animating:
 		return
 
@@ -362,6 +371,14 @@ func _pop_in(button: Control) -> void:
 func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
 	# A prestige must own the camera + time_scale alone — abort if one starts.
 	if phase != PrestigeManager.PrestigePhase.NONE and _is_animating:
+		_teardown()
+
+
+func _on_board_switched(_board: PlinkoBoard) -> void:
+	# A board switch mid-reveal (e.g. a level reward auto-switching boards via
+	# BoardManager._on_rewards_claimed) would strand the cinematic on the old
+	# board's panel — abort cleanly, like the prestige guard above.
+	if _is_animating:
 		_teardown()
 
 

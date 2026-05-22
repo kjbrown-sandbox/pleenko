@@ -334,6 +334,7 @@ const coin_shape := CoinShape.CYLINDER
 @export var coin_burst_pool_size := 400                   ## Fixed MultiMesh slots; bursts skip when exhausted
 @export var coin_burst_max_per_second := 30               ## Rate limit per board — bounds cost at any coin volume
 
+# ── Cap Raise Reveal VFX ─────────────────────────────────────────────
 @export_group("Cap Raise Reveal VFX")
 ## The one-time-per-tier cinematic that reveals max-cap "+" buttons when a
 ## player first earns a raw currency after a prestige (see CapRaiseRevealAnimator).

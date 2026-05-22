@@ -25,6 +25,7 @@ func _run_tests() -> void:
 	test_currency_cap_button_shows_normally_without_reveal()
 	test_delayed_currency_bar_hidden_then_revealed()
 	test_upgrade_section_handshake()
+	test_partial_reveal_still_force_shows_all()
 
 
 # --- Helpers ---
@@ -259,6 +260,41 @@ func test_upgrade_section_handshake() -> void:
 	us.end_cap_raise_reveal()
 	assert_true(row.fill_bar.plus_button.visible,
 		"end_cap_raise_reveal force-shows the board upgrade's '+' button")
+
+	us.queue_free()
+	board.free()
+	UpgradeManager.reset()
+
+
+## Anti-soft-lock: an interrupt mid-sequence (reveal one cap, then abort) must
+## still leave EVERY cap button visible — both the revealed and the un-revealed.
+func test_partial_reveal_still_force_shows_all() -> void:
+	print("test_partial_reveal_still_force_shows_all")
+	_reset()
+	UpgradeManager.unlock(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+	UpgradeManager.unlock(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+	UpgradeManager.get_state(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW).base_cap = 5
+	UpgradeManager.get_state(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE).base_cap = 5
+
+	var board := _make_gold_board()
+	var us := preload("res://entities/plinko_board/upgrade_section.tscn").instantiate()
+	add_child(us)
+	us.setup(board, Enums.BoardType.GOLD)
+
+	us.begin_cap_raise_reveal()
+	UpgradeManager._cap_raise_available[Enums.BoardType.GOLD] = true
+	us._on_cap_raise_unlocked(Enums.BoardType.GOLD)
+
+	var targets: Array[Dictionary] = us.get_pending_cap_raise_targets()
+	assert_true(targets.size() >= 2, "precondition: two board upgrade cap targets")
+	# Reveal only the first — simulate the cinematic being interrupted partway.
+	targets[0]["reveal"].call()
+	us.end_cap_raise_reveal()
+
+	var add_row: UpgradeRow = us.get_upgrade_row(Enums.UpgradeType.ADD_ROW)
+	var bucket_row: UpgradeRow = us.get_upgrade_row(Enums.UpgradeType.BUCKET_VALUE)
+	assert_true(add_row.fill_bar.plus_button.visible and bucket_row.fill_bar.plus_button.visible,
+		"end_cap_raise_reveal force-shows every cap button — revealed AND un-revealed")
 
 	us.queue_free()
 	board.free()

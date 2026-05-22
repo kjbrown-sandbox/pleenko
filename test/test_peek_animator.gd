@@ -34,6 +34,8 @@ func _run_tests() -> void:
 	test_mark_board_peeked_after_drain()
 	test_prestige_phase_change_clears_queue()
 	test_board_peek_no_op_when_already_on_target()
+	test_drain_deferred_holds_peek_then_releases()
+	test_drain_deferred_release_is_noop_when_queue_empty()
 
 
 # --- Fixtures ---
@@ -407,5 +409,41 @@ func test_board_peek_no_op_when_already_on_target() -> void:
 	# Already on target — no switch needed
 	assert_equal(_count_calls("switch_board"), 0, "no switch when already on target")
 	assert_true(OnboardingProgress.has_peeked_board(Enums.BoardType.ORANGE), "orange still marked peeked")
+	bm.queue_free()
+	p.queue_free()
+
+
+# --- set_drain_deferred (CapRaiseRevealAnimator holds the new-board peek) ---
+
+func test_drain_deferred_holds_peek_then_releases() -> void:
+	print("test_drain_deferred_holds_peek_then_releases")
+	_reset_world()
+	var bm := _make_bm([Enums.BoardType.GOLD, Enums.BoardType.ORANGE])
+	bm._active_index = 0
+	var p := _make_peek_animator()
+	_setup_peek(p, bm)
+
+	p.set_drain_deferred(true)
+	bm.board_unlocked.emit(Enums.BoardType.ORANGE)
+	assert_equal(_count_calls("switch_board"), 0, "deferred: the peek does not drain yet")
+	assert_equal(p._queue.size(), 1, "deferred: the peek stays queued")
+
+	p.set_drain_deferred(false)
+	assert_equal(_count_calls("switch_board"), 2, "released: the queued peek drains (out + back)")
+	bm.queue_free()
+	p.queue_free()
+
+
+func test_drain_deferred_release_is_noop_when_queue_empty() -> void:
+	print("test_drain_deferred_release_is_noop_when_queue_empty")
+	_reset_world()
+	var bm := _make_bm([Enums.BoardType.GOLD, Enums.BoardType.ORANGE])
+	bm._active_index = 0
+	var p := _make_peek_animator()
+	_setup_peek(p, bm)
+
+	p.set_drain_deferred(true)
+	p.set_drain_deferred(false)  # nothing queued — must be a clean no-op
+	assert_equal(_count_calls("switch_board"), 0, "releasing an empty queue does nothing")
 	bm.queue_free()
 	p.queue_free()
