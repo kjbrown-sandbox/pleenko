@@ -132,6 +132,11 @@ signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type
 signal autodrop_failed(board_type: Enums.BoardType)
 signal coin_dropped
 signal prestige_coin_landed(coin: Coin, bucket: Bucket)
+## Fires when a coin begins the final bounce that will FIRST earn a raw currency
+## after a prestige — the moment the max-cap "+" buttons would silently appear.
+## Like prestige_coin_landed this fires at final-bounce *start* (not landing),
+## so CapRaiseRevealAnimator can borrow the camera before the coin touches down.
+signal cap_raise_coin_landed(coin: Coin, predicted_bucket: Bucket)
 
 ## Add-rows juice. `row_upgrade_starting` fires at the top of add_two_rows
 ## (before build_board) so BoardManager can suppress the default fit-tween
@@ -156,6 +161,11 @@ var _active_drop_bursts: Array[Dictionary] = []
 # pooled node — created once, persists across rebuilds (like the MultiMeshes).
 const _COIN_BURST_FIELD_SCENE := preload("res://entities/coin_burst_field/coin_burst_field.tscn")
 var _coin_burst_field: CoinBurstField
+
+## The coin armed for the cap-raise reveal — set when cap_raise_coin_landed is
+## emitted, consumed once by finalize_coin_landing to swap the normal downward
+## landing spray for the doubled 360° radial burst.
+var _cap_raise_intro_coin: Coin = null
 
 var _drop_timer_remaining: float = 0.0
 # Effective delay (after queue bonus) at the time the active timer cycle started
@@ -1104,15 +1114,26 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		# skip both (PrestigeAnimator owns their lifecycle). The field gates
 		# itself on theme.coin_burst_enabled + its own rate limit.
 		if _coin_burst_field:
-			_coin_burst_field.spawn(coin.global_position, t.get_coin_color(coin.coin_type))
+			if coin == _cap_raise_intro_coin:
+				# Cap-raise reveal coin: no in-world spray at all. CapRaiseRevealAnimator
+				# plays its own orange particle burst on the HUD overlay, which then
+				# swoops up to the new cap buttons.
+				_cap_raise_intro_coin = null
+			else:
+				_coin_burst_field.spawn(coin.global_position, t.get_coin_color(coin.coin_type))
 		coin.queue_free()
 
 
 ## Called when a coin starts its final bounce and we can predict which bucket it will land in.
 ## If this landing would trigger a prestige, emit prestige_coin_landed so the animator can take over.
 func _on_final_bounce_started(coin: Coin, predicted_bucket: Bucket) -> void:
+	# The two branches are mutually exclusive: _will_trigger_prestige requires
+	# can_prestige true, _will_reveal_cap_raise requires it false.
 	if _will_trigger_prestige(predicted_bucket.currency_type):
 		prestige_coin_landed.emit(coin, predicted_bucket)
+	elif _will_reveal_cap_raise(predicted_bucket.currency_type):
+		_cap_raise_intro_coin = coin
+		cap_raise_coin_landed.emit(coin, predicted_bucket)
 
 
 ## Checks if earning this currency type would trigger a prestige for a new board.
@@ -1121,6 +1142,37 @@ func _will_trigger_prestige(currency_type: Enums.CurrencyType) -> bool:
 		var tier := TierRegistry.get_tier_by_index(i)
 		if tier.raw_currency == currency_type:
 			return PrestigeManager.can_prestige(tier.board_type)
+	return false
+
+
+## True when THIS coin's landing will be the one that first reveals the max-cap
+## "+" buttons for this board — the trigger for the cap-raise reveal cinematic
+## (CapRaiseRevealAnimator). Each clause guards a real failure mode:
+##  - the currency must be a RAW currency: cap raises unlock off the
+##    currency_changed → cap_raise_unlocked path in UpgradeManager.
+##  - NOT a prestige (can_prestige false): the FIRST raw-currency coin triggers
+##    prestige instead and never credits currency. The reveal coin is always a
+##    later, post-prestige coin — and prestige owns the camera, so the two
+##    cinematics must never fire on the same coin.
+##  - cap raises not yet available: this is a ONE-TIME-per-tier reveal. Once
+##    UpgradeManager.is_cap_raise_available(board) is true the buttons exist.
+##    Because _cap_raise_available is already serialized, this clause is what
+##    makes the reveal one-shot per tier with no extra persistent flag.
+##  - the cap-raise board is THIS board: keeps the revealed UI on the board the
+##    player is looking at (a raw-red coin can land on the gold board — skipping
+##    that deep edge case avoids exploding off-screen UI).
+func _will_reveal_cap_raise(currency_type: Enums.CurrencyType) -> bool:
+	if not ThemeProvider.theme.cap_raise_reveal_enabled:
+		return false
+	for i in range(1, TierRegistry.get_tier_count()):
+		var tier := TierRegistry.get_tier_by_index(i)
+		if tier.raw_currency == currency_type:
+			var prev := TierRegistry.get_tier_by_index(i - 1)
+			if prev == null or prev.board_type != board_type:
+				return false
+			if PrestigeManager.can_prestige(tier.board_type):
+				return false
+			return not UpgradeManager.is_cap_raise_available(prev.board_type)
 	return false
 
 

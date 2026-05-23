@@ -334,6 +334,24 @@ const coin_shape := CoinShape.CYLINDER
 @export var coin_burst_pool_size := 400                   ## Fixed MultiMesh slots; bursts skip when exhausted
 @export var coin_burst_max_per_second := 30               ## Rate limit per board — bounds cost at any coin volume
 
+# ── Cap Raise Reveal VFX ─────────────────────────────────────────────
+@export_group("Cap Raise Reveal VFX")
+## The one-time-per-tier cinematic that reveals max-cap "+" buttons when a
+## player first earns a raw currency after a prestige (see CapRaiseRevealAnimator).
+@export var cap_raise_reveal_enabled := true              ## Master toggle for the whole reveal cinematic
+@export var cap_raise_slow_mo_scale := 0.225              ## Engine.time_scale during the coin's descent (gentler than prestige's 0.15)
+@export var cap_raise_zoom_size := 4.0                    ## Orthographic camera size when zoomed on the coin (smaller = closer)
+@export var cap_raise_camera_follow_rate := 3.0           ## Camera lerp rate toward the coin (1/sec, real time)
+@export var cap_raise_hold_duration := 0.4                ## Real-time seconds to hold the zoom after the coin lands
+@export var cap_raise_peek_delay := 0.5                   ## Real-time seconds after the last button reveal before the new-board peek
+@export var cap_raise_explosion_interval := 0.25          ## Real-time seconds between each "+" button reveal
+@export var cap_raise_explosion_particle_count := 14      ## 2D particles per button-reveal explosion
+@export var cap_raise_explosion_duration := 0.5           ## Seconds for an explosion particle to fly out and fade
+@export var cap_raise_explosion_radius := 90.0            ## Pixels each explosion particle travels outward
+@export var cap_raise_swoop_burst_duration := 0.3         ## Seconds particles scatter out before swooping to the next cap
+@export var cap_raise_swoop_duration := 0.55              ## Seconds particles swoop from one cap location to the next
+@export var cap_raise_currency_appear_duration := 0.35    ## Seconds the new raw-currency bar fades in mid-reveal
+
 # ── Audio ────────────────────────────────────────────────────────────
 @export_group("Audio")
 

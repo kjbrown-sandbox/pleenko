@@ -14,6 +14,16 @@ var _board_manager: BoardManager
 var _upgrade_rows: Dictionary = {}  # UpgradeType -> UpgradeRow node
 var _initial_setup_complete := false
 
+# Cap-raise reveal cinematic (CapRaiseRevealAnimator): while active, cap "+"
+# buttons for the reveal board are wired but kept hidden so the animator can
+# reveal them one at a time. See begin/get_pending/end_cap_raise_reveal.
+var _cap_raise_reveal_active := false
+var _cap_raise_reveal_board: Enums.BoardType = Enums.BoardType.GOLD
+# The raw-currency bar that appears mid-reveal (e.g. raw orange): created hidden
+# during the reveal so the animator can fade it in after the currency cap
+# explodes, instead of it popping in the instant the coin lands. -1 = none.
+var _cap_raise_delayed_currency: int = -1
+
 # Debounce: collapse multiple currency_changed signals into one deferred update
 var _dirty := false
 var _dirty_types: Array[Enums.CurrencyType] = []
@@ -127,6 +137,11 @@ func _update_currencies() -> void:
 
 		_bars[currency_type] = bar
 
+		# During a reveal, the freshly-earned raw-currency bar starts hidden —
+		# CapRaiseRevealAnimator fades it in mid-sequence (reveal_delayed_currency_bar).
+		if _cap_raise_reveal_active and currency_type == _cap_raise_delayed_currency:
+			bar.visible = false
+
 	# Universal upgrades section
 	if has_upgrades:
 		var spacer := Control.new()
@@ -192,6 +207,10 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 			r.fill_bar.set_plus_disabled(not can_raise)
 			r.fill_bar.set_plus_filled(can_raise),
 	)
+
+	if _is_cap_reveal_suppressed(board_type):
+		# Wired but hidden — CapRaiseRevealAnimator reveals it on its own clock.
+		row.fill_bar.show_plus_button(false)
 
 
 func _buy_upgrade(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
@@ -296,6 +315,115 @@ func _get_board_for_upgrade(upgrade_type: Enums.UpgradeType) -> Enums.BoardType:
 	return Enums.BoardType.GOLD
 
 
+# ── Cap-raise reveal handshake (called down by CapRaiseRevealAnimator) ────────
+# While a reveal is active, cap "+" buttons for the reveal board are wired but
+# kept hidden (the normal reveal paths self-suppress via _is_cap_reveal_suppressed).
+# The animator pulls them via get_pending_cap_raise_targets() and reveals them one
+# at a time; end_cap_raise_reveal() force-shows whatever is left so a button can
+# never be stranded if the cinematic is interrupted.
+
+func begin_cap_raise_reveal(board_type: Enums.BoardType) -> void:
+	_cap_raise_reveal_active = true
+	_cap_raise_reveal_board = board_type
+	# The raw currency just earned (e.g. raw orange for the gold reveal) is the
+	# next tier's raw currency — its bar is delayed so it slots in mid-reveal.
+	var next_tier: TierData = TierRegistry.get_next_tier(board_type)
+	_cap_raise_delayed_currency = next_tier.raw_currency if next_tier else -1
+
+
+## Cap "+" buttons on the CURRENCY bars (top of the HUD) that are wired but
+## still hidden. Each entry:
+## { node: Control (for explosion position), plus_button: Control, reveal: Callable }.
+func get_pending_currency_cap_targets() -> Array[Dictionary]:
+	var targets: Array[Dictionary] = []
+	if not _cap_raise_reveal_active:
+		return targets
+	for currency_type in _bars:
+		var bar = _bars[currency_type]
+		if bar.plus_button.visible:
+			continue
+		var board: int = CurrencyManager.cap_raise_board(currency_type)
+		if board != _cap_raise_reveal_board or not UpgradeManager.is_cap_raise_available(board):
+			continue
+		var captured_bar = bar
+		var captured_currency: Enums.CurrencyType = currency_type
+		targets.append({
+			"node": bar,
+			"plus_button": bar.plus_button,
+			"reveal": func() -> void: _reveal_currency_cap_button(captured_bar, captured_currency),
+		})
+	return targets
+
+
+## Cap "+" buttons on the UNIVERSAL upgrade rows that are wired but still hidden.
+## Same entry shape as get_pending_currency_cap_targets().
+func get_pending_universal_cap_targets() -> Array[Dictionary]:
+	var targets: Array[Dictionary] = []
+	if not _cap_raise_reveal_active:
+		return targets
+	for upgrade_type in _upgrade_rows:
+		var row: UpgradeRow = _upgrade_rows[upgrade_type]
+		if _get_board_for_upgrade(upgrade_type) != _cap_raise_reveal_board:
+			continue
+		if row.fill_bar.plus_button.visible:
+			continue
+		var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_cap_raise_reveal_board, upgrade_type)
+		if state.base_cap <= 0 or not UpgradeManager.is_cap_raise_available(_cap_raise_reveal_board):
+			continue
+		var captured_row := row
+		targets.append({
+			"node": row,
+			"plus_button": row.fill_bar.plus_button,
+			"reveal": func() -> void: _reveal_row_cap_button(captured_row),
+		})
+	return targets
+
+
+## Fades in the raw-currency bar that was created hidden for this reveal. Called
+## by the animator after the currency cap explodes; idempotent and self-clearing
+## so end_cap_raise_reveal() can also call it as an anti-stuck backstop.
+func reveal_delayed_currency_bar() -> void:
+	if _cap_raise_delayed_currency == -1:
+		return
+	var bar = _bars.get(_cap_raise_delayed_currency)
+	_cap_raise_delayed_currency = -1
+	if not is_instance_valid(bar) or bar.visible:
+		return
+	bar.visible = true
+	bar.modulate.a = 0.0
+	bar.create_tween().tween_property(bar, "modulate:a", 1.0,
+		ThemeProvider.theme.cap_raise_currency_appear_duration).set_ease(Tween.EASE_OUT)
+
+
+func end_cap_raise_reveal() -> void:
+	var board := _cap_raise_reveal_board
+	_cap_raise_reveal_active = false
+	# Anti-stuck backstops: force-show the delayed bar and every cap button if
+	# the cinematic was interrupted before reaching them.
+	reveal_delayed_currency_bar()
+	_on_cap_raise_unlocked(board)
+
+
+func _is_cap_reveal_suppressed(board: int) -> bool:
+	return _cap_raise_reveal_active and board == _cap_raise_reveal_board
+
+
+func _reveal_currency_cap_button(bar, currency_type: Enums.CurrencyType) -> void:
+	if not is_instance_valid(bar):
+		return
+	bar.show_plus_button(true)
+	var can_afford := CurrencyManager.can_buy_cap_raise(currency_type)
+	bar.set_plus_disabled(not can_afford)
+	bar.set_plus_filled(can_afford)
+
+
+func _reveal_row_cap_button(row: UpgradeRow) -> void:
+	if not is_instance_valid(row):
+		return
+	row.fill_bar.show_plus_button(true)
+	row.fill_bar.update_plus()
+
+
 func _on_cap_raise_pressed(type: Enums.CurrencyType) -> void:
 	CurrencyManager.buy_cap_raise(type)
 	_update_all_cap_buttons()
@@ -317,6 +445,10 @@ func _update_all_cap_buttons() -> void:
 		var bar = _bars[currency_type]
 		var board: int = CurrencyManager.cap_raise_board(currency_type)
 		var show := board != -1 and UpgradeManager.is_cap_raise_available(board)
+		# Keep a not-yet-shown button hidden while its board's reveal runs; never
+		# hide one that is already visible.
+		if show and _is_cap_reveal_suppressed(board) and not bar.plus_button.visible:
+			show = false
 		bar.show_plus_button(show)
 		if show:
 			var can_afford := CurrencyManager.can_buy_cap_raise(currency_type)

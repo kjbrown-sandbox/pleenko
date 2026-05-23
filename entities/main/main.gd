@@ -10,7 +10,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 ## Demo lockdown toggle. When true, the red board and orange/red challenge
 ## groups are blocked behind a "It's not done yet :D" overlay. Toggle from the
 ## Inspector on the Main node to switch between demo and full play.
-@export var demo_mode: bool = true
+@export var demo_mode: bool = false
 
 @onready var board_manager: BoardManager = $BoardManager
 @onready var challenge_grouping_manager: ChallengeGroupingManager = $ChallengeGroupingManager
@@ -29,6 +29,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 @onready var prestige_animator: PrestigeAnimator = $PrestigeAnimator
 @onready var peek_animator: PeekAnimator = $PeekAnimator
 @onready var _autodropper_intro_animator: AutodropperIntroAnimator = $AutodropperIntroAnimator
+@onready var _cap_raise_reveal_animator: CapRaiseRevealAnimator = $CapRaiseRevealAnimator
 @onready var _parallax_backdrop: ParallaxBackdrop = $ParallaxBackdrop
 
 var _deflector_intro_animator: DeflectorIntroAnimator
@@ -117,6 +118,7 @@ func _setup_normal() -> void:
 	challenge_grouping_manager.update_group_visibility()
 	_setup_peek_animator()
 	_autodropper_intro_animator.setup(board_manager, coin_values, $CanvasLayer)
+	_setup_cap_raise_reveal_animator()
 	_deflector_intro_animator = DeflectorIntroAnimator.new()
 	add_child(_deflector_intro_animator)
 	_deflector_intro_animator.setup(board_manager, coin_values, $CanvasLayer)
@@ -394,6 +396,13 @@ func _setup_prestige_animator() -> void:
 		prestige_animator.connect_board(board)
 
 
+func _setup_cap_raise_reveal_animator() -> void:
+	_cap_raise_reveal_animator.apply_input_lock_fn = apply_input_lock
+	_cap_raise_reveal_animator.setup(camera, board_manager, coin_values, $CanvasLayer, peek_animator)
+	for board in board_manager.get_boards():
+		_cap_raise_reveal_animator.connect_board(board)
+
+
 func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
 	if phase == PrestigeManager.PrestigePhase.SLOW_MO:
 		# Hide all HUD elements when the coin touches the bucket
@@ -426,10 +435,12 @@ func _is_peek_active() -> bool:
 
 
 func _on_board_unlocked(board_type: Enums.BoardType) -> void:
-	# Connect the newly unlocked board to the prestige animator
+	# Connect the newly unlocked board to the prestige + cap-raise animators
 	for board in board_manager.get_boards():
 		if board.board_type == board_type:
 			prestige_animator.connect_board(board)
+			if not ChallengeManager.is_active_challenge:
+				_cap_raise_reveal_animator.connect_board(board)
 			break
 	if not _loading_from_save:
 		_boards_with_unseen_upgrades[board_type] = true

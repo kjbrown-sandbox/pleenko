@@ -13,6 +13,11 @@ var _rows: Dictionary = {}  # UpgradeType -> UpgradeRow node
 var _initial_setup_complete := false
 var _section_label: Label
 
+# Cap-raise reveal cinematic (CapRaiseRevealAnimator): while active, this board's
+# cap "+" buttons are wired but kept hidden so the animator can reveal them one
+# at a time. See begin/get_pending/end_cap_raise_reveal.
+var _cap_raise_reveal_active := false
+
 func setup(board: PlinkoBoard, board_type: Enums.BoardType) -> void:
 	_board = board
 	_board_type = board_type
@@ -108,6 +113,56 @@ func _setup_cap_raise_if_needed(row, upgrade_type: Enums.UpgradeType) -> void:
 			r.fill_bar.set_plus_disabled(not can_raise)
 			r.fill_bar.set_plus_filled(can_raise),
 	)
+
+	if _cap_raise_reveal_active:
+		# Wired but hidden — CapRaiseRevealAnimator reveals it on its own clock.
+		row.fill_bar.show_plus_button(false)
+
+
+# ── Cap-raise reveal handshake (called down by CapRaiseRevealAnimator) ───────
+# While a reveal is active, this board's cap "+" buttons are wired but kept
+# hidden (_setup_cap_raise_if_needed self-suppresses). The animator pulls them
+# via get_pending_cap_raise_targets() and reveals them one at a time;
+# end_cap_raise_reveal() force-shows whatever is left if the cinematic is cut short.
+
+func begin_cap_raise_reveal() -> void:
+	_cap_raise_reveal_active = true
+
+
+## This board's cap "+" buttons that are wired but still hidden, in row order
+## (top-to-bottom). Each entry:
+## { node: Control (for explosion position), plus_button: Control, reveal: Callable }.
+func get_pending_cap_raise_targets() -> Array[Dictionary]:
+	var targets: Array[Dictionary] = []
+	if not _cap_raise_reveal_active or not UpgradeManager.is_cap_raise_available(_board_type):
+		return targets
+	for upgrade_type in _rows:
+		var row: UpgradeRow = _rows[upgrade_type]
+		if row.fill_bar.plus_button.visible:
+			continue
+		var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, upgrade_type)
+		if state.base_cap <= 0:
+			continue
+		var captured_row := row
+		targets.append({
+			"node": row,
+			"plus_button": row.fill_bar.plus_button,
+			"reveal": func() -> void: _reveal_row_cap_button(captured_row),
+		})
+	return targets
+
+
+func end_cap_raise_reveal() -> void:
+	_cap_raise_reveal_active = false
+	# Re-run the normal reveal — now unsuppressed it force-shows every cap button.
+	_on_cap_raise_unlocked(_board_type)
+
+
+func _reveal_row_cap_button(row: UpgradeRow) -> void:
+	if not is_instance_valid(row):
+		return
+	row.fill_bar.show_plus_button(true)
+	row.fill_bar.update_plus()
 
 
 func _on_hover_info_changed(text: String) -> void:
