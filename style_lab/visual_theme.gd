@@ -35,6 +35,7 @@ enum Palette {
 	PEG_BROWN = 22,
 	BG_HAZE = 23,
 	BG_HAZE_SUBTLE = 24,
+	BG_TRIANGLE_LIGHT = 25,
 }
 
 # ── Colors (master palette) ──────────────────────────────────────────
@@ -88,6 +89,13 @@ enum Palette {
 ## by the gameplay backdrop where the larger field needs a gentler max-dark
 ## than the menu (cumulative ink is heavier in gameplay).
 @export var bg_haze_subtle := Color(0.9325, 0.92, 0.89)
+
+## Light endpoint for the GAMEPLAY parallax-backdrop triangle lerp ONLY.
+## Lives on its own palette slot (not BG_6) because BG_6 in dark themes is
+## forced light for text contrast, which would force triangles white on a
+## black background. Each theme can pick a value that sits close to its own
+## background. Schema default mirrors the gameplay board's bg_shade_6 tone.
+@export var bg_triangle_light := Color(0.86, 0.83, 0.77)
 
 # ── Color assignments (pick from palette via dropdown) ───────────────
 @export_group("Color Assignments")
@@ -421,6 +429,7 @@ func resolve(source: Palette) -> Color:
 		Palette.PEG_BROWN: return peg_brown
 		Palette.BG_HAZE: return bg_haze
 		Palette.BG_HAZE_SUBTLE: return bg_haze_subtle
+		Palette.BG_TRIANGLE_LIGHT: return bg_triangle_light
 		_: return bg_shade_6
 
 
