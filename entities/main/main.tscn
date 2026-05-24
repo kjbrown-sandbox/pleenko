@@ -26,7 +26,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.08165e-12, -1.7165763, 6.98
 projection = 1
 size = 11.0
 
-[node name="ParallaxBackdrop" parent="." instance=ExtResource("24_parallax")]
+[node name="ParallaxBackdrop" parent="." unique_id=784739157 instance=ExtResource("24_parallax")]
 
 [node name="BoardManager" type="Node3D" parent="." unique_id=934128328]
 script = ExtResource("2_brdmgr")
