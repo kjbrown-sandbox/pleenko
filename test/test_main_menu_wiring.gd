@@ -30,7 +30,7 @@ func _make_menu() -> MainMenu:
 
 func test_url_constants_well_formed() -> void:
 	print("test_url_constants_well_formed")
-	for url in [MainMenu.DISCORD_URL, MainMenu.PRESS_KIT_URL, MainMenu.REPORT_BUG_URL]:
+	for url in [MainMenu.DISCORD_URL, MainMenu.FEEDBACK_URL]:
 		assert_true(url.length() > 0, "url non-empty: %s" % url)
 		assert_true(url.begins_with("http"), "url is http(s): %s" % url)
 
@@ -42,13 +42,11 @@ func test_external_links_route_to_shell_open() -> void:
 	menu._shell_open_fn = func(u: String) -> void: opened.append(u)
 
 	menu._on_discord_pressed()
-	menu._on_press_kit_pressed()
-	menu._on_report_bug_pressed()
+	menu._on_feedback_pressed()
 
-	assert_equal(opened.size(), 3, "three links opened")
+	assert_equal(opened.size(), 2, "two links opened")
 	assert_equal(opened[0], MainMenu.DISCORD_URL, "discord → DISCORD_URL")
-	assert_equal(opened[1], MainMenu.PRESS_KIT_URL, "press kit → PRESS_KIT_URL")
-	assert_equal(opened[2], MainMenu.REPORT_BUG_URL, "report bug → REPORT_BUG_URL")
+	assert_equal(opened[1], MainMenu.FEEDBACK_URL, "feedback → FEEDBACK_URL")
 	menu.free()
 
 

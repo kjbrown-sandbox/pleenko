@@ -5,16 +5,13 @@ const MainScene := preload("res://entities/main/main.tscn")
 const OptionsDialogScript := preload("res://entities/options_dialog/options_dialog.gd")
 const VignetteScript := preload("res://entities/vignette/vignette.gd")
 
-# TODO: real URLs before launch (stubbed placeholders for now).
-const DISCORD_URL := "https://discord.gg/plunk-placeholder"
-const PRESS_KIT_URL := "https://plunk.example.com/press"
-const REPORT_BUG_URL := "https://github.com/kjbrown/plunk/issues/new"
+const DISCORD_URL := "https://discord.gg/uadVU3K63y"
+const FEEDBACK_URL := "https://docs.google.com/forms/d/e/1FAIpQLSdRHDVqaQzeNyE8e4Wtf-kIO_pXKOPUvtnAt3X3wrnBU2Xk5g/viewform?usp=publish-editor"
 
 @onready var play_button: Button = $CanvasLayer/ButtonColumn/PlayButton
 @onready var settings_button: Button = $CanvasLayer/ButtonColumn/SettingsButton
 @onready var discord_button: Button = $CanvasLayer/ButtonColumn/DiscordButton
-@onready var press_kit_button: Button = $CanvasLayer/ButtonColumn/PressKitButton
-@onready var report_bug_button: Button = $CanvasLayer/ButtonColumn/ReportBugButton
+@onready var feedback_button: Button = $CanvasLayer/ButtonColumn/FeedbackButton
 @onready var quit_button: Button = $CanvasLayer/ButtonColumn/QuitButton
 @onready var title_label: Label = $CanvasLayer/TitleLabel
 @onready var confirm_overlay: ColorRect = $ConfirmLayer/Overlay
@@ -34,8 +31,8 @@ var _options_dialog: CanvasLayer
 
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	for button in [play_button, settings_button, discord_button, press_kit_button,
-			report_bug_button, quit_button, cancel_button, confirm_reset_button]:
+	for button in [play_button, settings_button, discord_button, feedback_button,
+			quit_button, cancel_button, confirm_reset_button]:
 		t.apply_button_theme(button)
 
 	# Title: themed font + palette color (never raw Color/Font) — same idiom as
@@ -67,8 +64,7 @@ func _ready() -> void:
 	play_button.pressed.connect(_on_play_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	discord_button.pressed.connect(_on_discord_pressed)
-	press_kit_button.pressed.connect(_on_press_kit_pressed)
-	report_bug_button.pressed.connect(_on_report_bug_pressed)
+	feedback_button.pressed.connect(_on_feedback_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	confirm_reset_button.pressed.connect(_on_confirm_reset_pressed)
@@ -108,12 +104,8 @@ func _on_discord_pressed() -> void:
 	_open_url(DISCORD_URL)
 
 
-func _on_press_kit_pressed() -> void:
-	_open_url(PRESS_KIT_URL)
-
-
-func _on_report_bug_pressed() -> void:
-	_open_url(REPORT_BUG_URL)
+func _on_feedback_pressed() -> void:
+	_open_url(FEEDBACK_URL)
 
 
 func _open_url(url: String) -> void:

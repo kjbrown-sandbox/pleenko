@@ -41,15 +41,10 @@ custom_minimum_size = Vector2(272, 0)
 layout_mode = 2
 text = "Join the Discord"
 
-[node name="PressKitButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=1718095997]
+[node name="FeedbackButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=2023400125]
 custom_minimum_size = Vector2(272, 0)
 layout_mode = 2
-text = "Press Kit"
-
-[node name="ReportBugButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=2023400125]
-custom_minimum_size = Vector2(272, 0)
-layout_mode = 2
-text = "Report a Bug"
+text = "Feedback & Bugs"
 
 [node name="BottomSpacer" type="Control" parent="CanvasLayer/ButtonColumn" unique_id=1884065678]
 custom_minimum_size = Vector2(0, 44)
