@@ -121,6 +121,8 @@ const PRESTIGE_ARPEGGIO_INTERVAL := 0.125  # seconds between arpeggio notes (rea
 const PRESTIGE_BASS_VOLUME_DB := -10.0
 const PRESTIGE_BELL_VOLUME_DB := -12.0
 const PRESTIGE_ARPEGGIO_VOLUME_DB := -14.0
+# Global gain boost applied on top of the user's master volume slider. 3x linear ≈ +9.54 dB.
+const MASTER_GAIN_BOOST_DB := 9.542425
 var _silenced: bool = false  # gates all new sounds (prestige, scene transitions)
 var _muted: bool = false  # user preference — mutes the Master bus
 var _master_volume_percent: float = 50.0
@@ -969,7 +971,7 @@ func is_muted() -> bool:
 func set_master_volume(percent: float) -> void:
 	_master_volume_percent = clampf(percent, 0.0, 100.0)
 	var linear: float = _master_volume_percent / 100.0
-	AudioServer.set_bus_volume_db(0, linear_to_db(linear) if linear > 0.0 else -80.0)
+	AudioServer.set_bus_volume_db(0, linear_to_db(linear) + MASTER_GAIN_BOOST_DB if linear > 0.0 else -80.0)
 
 
 func get_master_volume() -> float:

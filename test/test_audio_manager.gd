@@ -62,6 +62,8 @@ func _run_tests() -> void:
 	test_set_master_volume_stores_value()
 	test_master_volume_clamped_to_range()
 	test_get_master_volume_default()
+	test_master_volume_applies_gain_boost()
+	test_master_volume_zero_is_silent()
 
 	# VFX overrides
 	test_set_vfx_override_updates_theme()
@@ -514,6 +516,26 @@ func test_get_master_volume_default() -> void:
 	_save_state()
 	AudioManager._master_volume_percent = 50.0
 	assert_near(AudioManager.get_master_volume(), 50.0, 0.001, "default volume is 50")
+	_restore_state()
+
+
+func test_master_volume_applies_gain_boost() -> void:
+	print("test_master_volume_applies_gain_boost")
+	_save_state()
+	AudioManager.set_master_volume(100.0)
+	# At 100%, linear=1.0, so bus dB should equal the boost constant.
+	assert_near(AudioServer.get_bus_volume_db(0), AudioManager.MASTER_GAIN_BOOST_DB, 0.001, "100% applies MASTER_GAIN_BOOST_DB")
+	AudioManager.set_master_volume(50.0)
+	# At 50%, linear=0.5 → -6.02 dB, plus the boost.
+	assert_near(AudioServer.get_bus_volume_db(0), linear_to_db(0.5) + AudioManager.MASTER_GAIN_BOOST_DB, 0.001, "50% applies boost on top of slider")
+	_restore_state()
+
+
+func test_master_volume_zero_is_silent() -> void:
+	print("test_master_volume_zero_is_silent")
+	_save_state()
+	AudioManager.set_master_volume(0.0)
+	assert_near(AudioServer.get_bus_volume_db(0), -80.0, 0.001, "0% silences bus (boost not applied)")
 	_restore_state()
 
 
