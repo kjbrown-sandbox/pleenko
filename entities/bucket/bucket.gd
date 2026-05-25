@@ -264,6 +264,30 @@ func animate_value_upgrade(old_value: int, new_value: int, duration: float) -> v
 	, 0.0, 1.0, duration)
 
 
+## Bomb hazard. State (color + countdown label) — kept distinct from the
+## ambient mark_* family because bombs carry live data (seconds remaining)
+## while every other mark is static once applied.
+func mark_bomb() -> void:
+	_kill_color_tween()
+	_is_hit = true
+	_apply_color(ThemeProvider.theme.bomb_color)
+
+
+## Live update — written every integer-second decrement by the hazard runtime.
+## Replaces the bucket value label with the countdown (e.g. "3"); restored to
+## the static value by unmark_bomb.
+func set_bomb_countdown(seconds_remaining: int) -> void:
+	_label.text = str(maxi(0, seconds_remaining))
+
+
+func unmark_bomb() -> void:
+	_kill_color_tween()
+	_is_hit = false
+	scale = Vector3.ONE
+	_label.text = _label_text()
+	_apply_color(_resolve_default_color())
+
+
 func mark_gameplay_target() -> void:
 	_kill_color_tween()
 	_is_hit = true

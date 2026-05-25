@@ -1,30 +1,24 @@
-[gd_resource type="Resource" script_class="ChallengeData" format=3 uid="uid://crdaxtxdqmc14"]
+[gd_resource type="Resource" script_class="ChallengeData" format=3 uid="uid://bwkudht0etvh1"]
 
-[ext_resource type="Script" uid="uid://cprkqdv24lv2s" path="res://autoloads/challenge_manager/challenge_constraint.gd" id="1_con"]
 [ext_resource type="Script" uid="uid://co7w0klc1bfgq" path="res://autoloads/challenge_manager/challenge_data.gd" id="1_data"]
 [ext_resource type="Script" uid="uid://u0aimm0ql1ts" path="res://autoloads/challenge_manager/objectives/coin_goal.gd" id="2_obj"]
 [ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_obj_base"]
 [ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
 [ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_start"]
-[ext_resource type="Script" uid="uid://dusuom0lv25os" path="res://autoloads/challenge_manager/hazards/forbidden_bucket_hazard.gd" id="7_fbh"]
-[ext_resource type="Script" uid="uid://d2im52kpqsq1i" path="res://autoloads/challenge_manager/constraints/upgrades_limited.gd" id="8_ul"]
 [ext_resource type="Script" uid="uid://ck6ikghmwasmr" path="res://autoloads/challenge_manager/starting_conditions/starting_boards.gd" id="9_sb"]
-[ext_resource type="Script" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="10_hzd"]
-
-[sub_resource type="Resource" id="constraint_3"]
-script = ExtResource("8_ul")
-blocked_upgrades = Array[int]([0])
+[ext_resource type="Script" uid="uid://bd6xgc6vor27l" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="10_hzd"]
+[ext_resource type="Script" uid="uid://brhls2wcpq44m" path="res://autoloads/challenge_manager/hazards/bomb_hazard.gd" id="11_bomb"]
 
 [sub_resource type="Resource" id="hazard_1"]
-script = ExtResource("7_fbh")
-
-[sub_resource type="Resource" id="hazard_2"]
-script = ExtResource("7_fbh")
-bucket_index = 6
+script = ExtResource("11_bomb")
+board_type = 0
+bomb_count = 1
+timer_seconds = 8.0
+defuse_multiplier = 2.0
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")
-amount = 100
+amount = 80
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
@@ -37,11 +31,10 @@ rows = 6
 
 [resource]
 script = ExtResource("1_data")
-id = "gold_7"
-display_name = "Danger Zone"
+id = "gold_minefield"
+display_name = "Minefield"
 time_limit_seconds = 60.0
 objectives = Array[ExtResource("2_obj_base")]([SubResource("objective_1")])
-constraints = Array[ExtResource("1_con")]([SubResource("constraint_3")])
 starting_conditions = Array[ExtResource("6_start")]([SubResource("starting_1")])
-hazards = Array[ExtResource("10_hzd")]([SubResource("hazard_1"), SubResource("hazard_2")])
+hazards = Array[ExtResource("10_hzd")]([SubResource("hazard_1")])
 rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])

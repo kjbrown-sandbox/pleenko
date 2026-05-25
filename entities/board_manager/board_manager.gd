@@ -51,6 +51,11 @@ func setup(camera: Camera3D) -> void:
 	_spawn_board(TierRegistry.get_tier_by_index(0).board_type)
 	# Frame the camera on the initial board immediately (no tween)
 	_snap_camera_to_active_board()
+	# AudioManager is an autoload and survives scene reloads — its _active_board
+	# can be stale from a prior scene (e.g. orange-board challenge exit, or a
+	# prestige reset that lands the player back on the lower tier). Sync on
+	# setup so request_bucket_play accepts drops on the actual starting board.
+	AudioManager.set_active_board(_boards[_active_index].board_type)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 

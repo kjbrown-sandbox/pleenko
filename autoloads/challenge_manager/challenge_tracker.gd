@@ -11,6 +11,10 @@ var challenge: ChallengeData
 var board_manager: BoardManager
 var time_remaining: float = 0.0
 
+# Live hazard runtimes, parented to this tracker. Setup in setup_hazards();
+# torn down in disconnect_all() via queue_free cascade.
+var _hazard_runtimes: Array[ChallengeHazardRuntime] = []
+
 # Tracking state
 var _bucket_hits: Dictionary = {}  # _bucket_key() -> int (lifetime hits, for LandInEveryBucket etc.)
 var _group_hits: Dictionary = {}   # _bucket_key() -> bool (hits within current bucket group only)
@@ -81,6 +85,31 @@ func connect_to_boards() -> void:
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 
+## Called by ChallengeManager.setup after connect_to_boards. Instantiates a
+## runtime per authored hazard, parents it to this tracker (for _process +
+## queue_free cascade), and runs setup so initial visuals + signal wires land.
+func setup_hazards() -> void:
+	for hazard in challenge.hazards:
+		var runtime: ChallengeHazardRuntime = hazard.create_runtime()
+		if not runtime:
+			continue
+		# Single chokepoint for hazard-triggered failure — runtimes call up via
+		# fail_challenge_fn (default goes through hazard_fail).
+		add_child(runtime)
+		_hazard_runtimes.append(runtime)
+		runtime.setup(board_manager)
+
+
+## Funnel for any hazard runtime that wants to fail the challenge. Mirrors the
+## inline failure paths in _on_coin_landed / _on_currency_changed so all
+## failures route through the single `failed` signal.
+func hazard_fail(reason: String) -> void:
+	if _has_failed:
+		return
+	_has_failed = true
+	failed.emit(reason)
+
+
 func _connect_board(board: PlinkoBoard) -> void:
 	if board.coin_landed.is_connected(_on_coin_landed):
 		return
@@ -92,6 +121,12 @@ func _connect_board(board: PlinkoBoard) -> void:
 func _on_coin_dropped() -> void:
 	if not _timer_started:
 		_timer_started = true
+		# Arm hazard countdowns now — they sit visible-but-paused until the
+		# player engages, then they all start ticking together. Keeps the
+		# "hazards exist on the board from the start, but the timer is the
+		# challenge timer" framing.
+		for runtime in _hazard_runtimes:
+			runtime.start_ticking()
 
 
 func _on_board_switched(_board: PlinkoBoard) -> void:
@@ -219,13 +254,12 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 		_same_bucket_streak[board_type] = 1
 	_last_bucket[board_type] = bucket_index
 
-	# Check bucket constraints
-	for constraint in challenge.constraints:
-		if constraint is NeverTouchBucket:
-			if board_type == constraint.board_type and bucket_index == constraint.bucket_index:
-				_has_failed = true
-				failed.emit("Landed in forbidden bucket!")
-				return
+	# Forward to hazard runtimes (ForbiddenBucketHazard et al. dispatch their
+	# own fail / defuse logic).
+	for runtime in _hazard_runtimes:
+		runtime.on_coin_landed(board_type, bucket_index, _currency_type, _amount, multiplier)
+		if _has_failed:
+			return
 
 	# Check drop-limit failures
 	for objective in challenge.objectives:
@@ -285,11 +319,6 @@ func mark_initial_visuals() -> void:
 				for bi in objective.bucket_groups[0]:
 					board.mark_bucket_target(bi)
 
-	for constraint in challenge.constraints:
-		if constraint is NeverTouchBucket:
-			var board := _get_board(constraint.board_type)
-			if board:
-				board.mark_bucket_forbidden(constraint.bucket_index)
 
 
 # ── Objective validation ──────────────────────────────────────────
@@ -430,6 +459,11 @@ static func _bucket_key_prefix(board_type: Enums.BoardType) -> String:
 # ── Teardown ──────────────────────────────────────────────────────
 
 func disconnect_all() -> void:
+	for runtime in _hazard_runtimes:
+		runtime.disconnect_all()
+	_hazard_runtimes.clear()
+	# Runtime Nodes are children of this tracker, so queue_free cascades from
+	# ChallengeManager.clear_challenge.
 	if CurrencyManager.currency_changed.is_connected(_on_currency_changed):
 		CurrencyManager.currency_changed.disconnect(_on_currency_changed)
 	if board_manager:
