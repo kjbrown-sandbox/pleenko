@@ -1444,24 +1444,37 @@ func next_lattice_cell(row: int, col: int, direction: int) -> Vector2i:
 
 
 # ── Voided columns (bomb-hazard "saw-off-the-limb" fallout) ───────
+# Vocabulary used throughout this section:
+#   • detonate — the event (BombHazardRuntime calls void_column)
+#   • void     — the state (`_voided_columns`, `is_column_voided`, `column_voided`)
+#   • cut      — the geometry (`cell_in_cut`, `peg_indices_on_cut`, `bomb_cut_side`)
+#
 # When a bomb detonates at bucket B, the cut runs from the bomb through the
 # nearer board edge: every bucket and peg with world-x on that side of B
-# (including B's own column) falls away. The surviving buckets are always a
-# contiguous range bounded by the cuts from previous detonations.
+# (including B's own column) falls away. CENTER bombs (only on odd-bucket-
+# count boards) take the whole board down. The surviving buckets are always
+# a contiguous range bounded by the cuts from previous detonations.
 #
 # State lives in `_voided_columns` (PackedInt32Array of voided bucket indices).
 # Voids persist across build_board() rebuilds (e.g. add_two_rows mid-challenge)
 # — only `clear_all_markings` resets them, which the tracker calls on challenge
 # end.
 
-## Pure: which side of the board bucket B sits on. -1 = LEFT, +1 = RIGHT,
-## 0 = CENTER (only on odd-bucket-count boards). A CENTER detonation takes
+## Return values of `bomb_cut_side` — named so callers branching on the
+## result aren't reading raw -1 / 0 / +1 ints.
+const CUT_LEFT := -1
+const CUT_CENTER := 0
+const CUT_RIGHT := 1
+
+## Pure: which side of the board bucket B sits on. Returns CUT_LEFT (-1),
+## CUT_RIGHT (+1), or CUT_CENTER (0) — see the named constants above. A
+## CUT_CENTER detonation (only possible on odd-bucket-count boards) takes
 ## down the entire board rather than cleaving one side.
 static func bomb_cut_side(bucket_index: int, num_buckets: int) -> int:
 	@warning_ignore("integer_division")
 	if num_buckets % 2 == 1 and bucket_index == (num_buckets - 1) / 2:
-		return 0
-	return -1 if bucket_index * 2 < num_buckets - 1 else 1
+		return CUT_CENTER
+	return CUT_LEFT if bucket_index * 2 < num_buckets - 1 else CUT_RIGHT
 
 
 ## Pure: bucket-index normalised position (x in `space` units) — independent of
@@ -1477,14 +1490,15 @@ static func _cell_x_norm(row: int, col: int) -> float:
 
 
 ## Pure: is cell (row, col) inside the cut from a bomb at `bucket_index` on
-## `side` (-1=LEFT, +1=RIGHT, 0=CENTER)? "Inside" is inclusive of the strict
-## column for the off-centre sides; CENTER engulfs the whole board.
+## `side` (CUT_LEFT/CUT_RIGHT/CUT_CENTER)? "Inside" is inclusive of the
+## strict column for the off-centre sides; CUT_CENTER engulfs the whole
+## board.
 static func cell_in_cut(row: int, col: int, bucket_index: int, num_rows_param: int, side: int) -> bool:
-	if side == 0:
+	if side == CUT_CENTER:
 		return true
 	var cell_x: float = _cell_x_norm(row, col)
 	var bucket_x: float = _bucket_x_norm(bucket_index, num_rows_param)
-	if side < 0:
+	if side == CUT_LEFT:
 		return cell_x <= bucket_x
 	return cell_x >= bucket_x
 
@@ -1523,10 +1537,10 @@ static func buckets_on_cut(bucket_index: int, num_rows_param: int) -> PackedInt3
 	var num_buckets: int = num_rows_param + 1
 	var side: int = bomb_cut_side(bucket_index, num_buckets)
 	var out: PackedInt32Array = PackedInt32Array()
-	if side == 0:
+	if side == CUT_CENTER:
 		for B in num_buckets:
 			out.append(B)
-	elif side < 0:
+	elif side == CUT_LEFT:
 		for B in bucket_index + 1:
 			out.append(B)
 	else:
@@ -1612,11 +1626,14 @@ func _animate_falling_pegs(indices: PackedInt32Array) -> void:
 		return
 	var t: VisualTheme = ThemeProvider.theme
 	# Spawn one MeshInstance3D per peg as a falling debris copy. The originals
-	# are scale-zeroed in the MM (next call) so we don't double-render.
+	# are scale-zeroed in the MM (next call) so we don't double-render. The
+	# shader material is shared across all debris this detonation — peg colour
+	# is uniform, no per-instance tinting needed; freed via RefCounted when
+	# the last MeshInstance3D drops it.
 	var peg_mesh: Mesh = t.make_peg_mesh()
 	var peg_mat: ShaderMaterial = t.make_peg_shader_material()
 	var fall_distance: float = vertical_spacing * (num_rows + 3) + space_between_pegs * 2.0
-	var fall_duration: float = 0.85
+	var fall_duration: float = t.bomb_debris_fall_duration
 	for flat_idx in indices:
 		if flat_idx < 0 or flat_idx >= _peg_positions.size():
 			continue
@@ -1643,8 +1660,9 @@ func _animate_falling_buckets(bucket_indices: PackedInt32Array) -> void:
 	# scene tree, so buckets_container is null and get_bucket would crash.
 	if not buckets_container:
 		return
+	var t: VisualTheme = ThemeProvider.theme
 	var fall_distance: float = vertical_spacing * (num_rows + 3) + space_between_pegs * 2.0
-	var fall_duration: float = 0.85
+	var fall_duration: float = t.bomb_debris_fall_duration
 	for B in bucket_indices:
 		var bucket := get_bucket(B)
 		if not bucket:

@@ -258,6 +258,7 @@ const coin_shape := CoinShape.CYLINDER
 # new edge buckets fade in. See `PlinkoBoard._play_row_upgrade_glissando`.
 @export_subgroup("Bomb Hazard VFX")
 @export var bomb_detonation_pulse_duration := 0.6                 # seconds — column-of-light tween from spawn to fadeout
+@export var bomb_debris_fall_duration := 0.85                     # seconds — pegs + buckets tween downward + rotate after a detonation
 @export var void_column_light_width := 0.45                       # world-units — width of the destroyed-column shaft mesh
 @export var void_column_light_duration := 0.0                     # seconds the bright "column of light" hold lingers before fading into the persistent void shaft (0 = no hold, just the detonation pulse)
 
