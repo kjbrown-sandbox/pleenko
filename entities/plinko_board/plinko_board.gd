@@ -2281,10 +2281,14 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 		return
 
 	var glow_color := t.get_coin_color(currency_type)
-	var is_sparkle: bool = AudioManager.should_sparkle(board_type)
 
+	# Sparkle is the rare, rewarding event (gated by should_sparkle's proximity
+	# window). When it doesn't fire, fall through to the throttled chime.
+	var is_sparkle: bool = AudioManager.should_sparkle(board_type)
 	if is_sparkle:
 		AudioManager.play_peg_sparkle(board_type)
+	else:
+		AudioManager.play_peg_chime()
 
 	if t.peg_flash_enabled:
 		_peg_multimesh_instance.multimesh.set_instance_color(closest_idx, glow_color)
@@ -2305,7 +2309,8 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 	if t.peg_glow_halo_enabled:
 		_spawn_peg_halo(_peg_positions[closest_idx], glow_color, t)
 	# Ring is the sparkle visual — coin-colored so it reads as a rewarding
-	# accent rather than a generic ripple.
+	# accent rather than a generic ripple. Chimes never get the ring; they're
+	# the high-frequency throttled layer and would look too busy.
 	if t.peg_ring_enabled and is_sparkle:
 		_spawn_peg_ring(_peg_positions[closest_idx], glow_color, t)
 

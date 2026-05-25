@@ -45,6 +45,14 @@ func _run_tests() -> void:
 	test_sparkle_wrong_board_returns_false()
 	test_autodropper_beat_sets_period()
 
+	# Peg chime
+	test_pick_peg_degree_returns_value_from_pool()
+	test_pick_peg_degree_empty_pool_falls_back_to_default()
+	test_pick_peg_degree_distribution_is_roughly_balanced()
+	test_pick_peg_degree_four_note_pool_distribution()
+	test_peg_chime_throttle_drops_rapid_second_call()
+	test_peg_chime_dropped_call_does_not_stamp_timestamp()
+
 	# Per-chord attenuation
 	test_per_chord_attenuation_resets()
 
@@ -62,6 +70,8 @@ func _run_tests() -> void:
 	test_set_master_volume_stores_value()
 	test_master_volume_clamped_to_range()
 	test_get_master_volume_default()
+	test_master_volume_applies_gain_boost()
+	test_master_volume_zero_is_silent()
 
 	# VFX overrides
 	test_set_vfx_override_updates_theme()
@@ -85,6 +95,7 @@ var _saved_unplayed_buckets: Array
 var _saved_pattern_slot_idx: int
 var _saved_pattern_slot_timer: float
 var _saved_sparkle_step: int
+var _saved_peg_chime_last_time_s: float
 var _saved_beat_period: float
 var _saved_beat_phase: float
 var _saved_motif_position: int
@@ -109,6 +120,7 @@ func _save_state() -> void:
 	_saved_pattern_slot_idx = AudioManager._pattern_slot_idx
 	_saved_pattern_slot_timer = AudioManager._pattern_slot_timer
 	_saved_sparkle_step = AudioManager._sparkle_step
+	_saved_peg_chime_last_time_s = AudioManager._peg_chime_last_time_s
 	_saved_beat_period = AudioManager._beat_period
 	_saved_beat_phase = AudioManager._beat_phase
 	_saved_motif_position = AudioManager._motif_position
@@ -133,6 +145,7 @@ func _restore_state() -> void:
 	AudioManager._pattern_slot_idx = _saved_pattern_slot_idx
 	AudioManager._pattern_slot_timer = _saved_pattern_slot_timer
 	AudioManager._sparkle_step = _saved_sparkle_step
+	AudioManager._peg_chime_last_time_s = _saved_peg_chime_last_time_s
 	AudioManager._beat_period = _saved_beat_period
 	AudioManager._beat_phase = _saved_beat_phase
 	AudioManager._motif_position = _saved_motif_position
@@ -413,6 +426,88 @@ func test_sparkle_wrong_board_returns_false() -> void:
 	_restore_state()
 
 
+func test_pick_peg_degree_returns_value_from_pool() -> void:
+	print("test_pick_peg_degree_returns_value_from_pool")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+	var pool: Array[int] = [0, 1, 2, 4]
+	for i in 200:
+		var d: int = AudioManager.pick_peg_degree(rng, pool)
+		assert_true(d in pool,
+			"pick_peg_degree returned %d; expected one of %s" % [d, pool])
+
+
+func test_pick_peg_degree_empty_pool_falls_back_to_default() -> void:
+	print("test_pick_peg_degree_empty_pool_falls_back_to_default")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11111
+	var empty: Array[int] = []
+	for i in 200:
+		var d: int = AudioManager.pick_peg_degree(rng, empty)
+		assert_true(d == 0 or d == 2,
+			"empty pool should fall back to [0, 2]; got %d" % d)
+
+
+func test_pick_peg_degree_distribution_is_roughly_balanced() -> void:
+	print("test_pick_peg_degree_distribution_is_roughly_balanced")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 98765
+	var pool: Array[int] = [0, 2]
+	var roots: int = 0
+	var fifths: int = 0
+	for i in 1000:
+		if AudioManager.pick_peg_degree(rng, pool) == 0:
+			roots += 1
+		else:
+			fifths += 1
+	# 1000 trials, expected 500 each, ±60 allowed (well outside 3σ for p=0.5).
+	assert_true(absi(roots - fifths) < 120,
+		"distribution skew too large: roots=%d fifths=%d" % [roots, fifths])
+
+
+func test_pick_peg_degree_four_note_pool_distribution() -> void:
+	print("test_pick_peg_degree_four_note_pool_distribution")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 22222
+	var pool: Array[int] = [0, 1, 2, 4]
+	var counts: Dictionary = {0: 0, 1: 0, 2: 0, 4: 0}
+	for i in 2000:
+		counts[AudioManager.pick_peg_degree(rng, pool)] += 1
+	# 2000 trials, expected 500 each. Allow ±150 (generous outside 3σ).
+	for k in pool:
+		assert_true(absi(counts[k] - 500) < 150,
+			"distribution skew on degree %d: got %d, expected ~500" % [k, counts[k]])
+
+
+func test_peg_chime_throttle_drops_rapid_second_call() -> void:
+	print("test_peg_chime_throttle_drops_rapid_second_call")
+	_save_state()
+	# Force throttle window open: pretend nothing has chimed recently.
+	AudioManager._peg_chime_last_time_s = -1000.0
+	AudioManager.play_peg_chime()
+	# If the first call actually played, the timestamp moved forward; a
+	# second call inside the throttle window must not move it again.
+	var stamp_after_first: float = AudioManager._peg_chime_last_time_s
+	if stamp_after_first > -500.0:
+		AudioManager.play_peg_chime()
+		assert_equal(AudioManager._peg_chime_last_time_s, stamp_after_first,
+			"second chime within throttle window must not advance the timestamp")
+	_restore_state()
+
+
+func test_peg_chime_dropped_call_does_not_stamp_timestamp() -> void:
+	print("test_peg_chime_dropped_call_does_not_stamp_timestamp")
+	_save_state()
+	# Silence audio so play_peg_chime drops at the silenced gate before
+	# touching the timestamp. The stamp must remain unchanged.
+	AudioManager._silenced = true
+	AudioManager._peg_chime_last_time_s = -1000.0
+	AudioManager.play_peg_chime()
+	assert_equal(AudioManager._peg_chime_last_time_s, -1000.0,
+		"dropped chime must not update last-play timestamp")
+	_restore_state()
+
+
 func test_autodropper_beat_sets_period() -> void:
 	print("test_autodropper_beat_sets_period")
 	_save_state()
@@ -514,6 +609,26 @@ func test_get_master_volume_default() -> void:
 	_save_state()
 	AudioManager._master_volume_percent = 50.0
 	assert_near(AudioManager.get_master_volume(), 50.0, 0.001, "default volume is 50")
+	_restore_state()
+
+
+func test_master_volume_applies_gain_boost() -> void:
+	print("test_master_volume_applies_gain_boost")
+	_save_state()
+	AudioManager.set_master_volume(100.0)
+	# At 100%, linear=1.0, so bus dB should equal the boost constant.
+	assert_near(AudioServer.get_bus_volume_db(0), AudioManager.MASTER_GAIN_BOOST_DB, 0.001, "100% applies MASTER_GAIN_BOOST_DB")
+	AudioManager.set_master_volume(50.0)
+	# At 50%, linear=0.5 → -6.02 dB, plus the boost.
+	assert_near(AudioServer.get_bus_volume_db(0), linear_to_db(0.5) + AudioManager.MASTER_GAIN_BOOST_DB, 0.001, "50% applies boost on top of slider")
+	_restore_state()
+
+
+func test_master_volume_zero_is_silent() -> void:
+	print("test_master_volume_zero_is_silent")
+	_save_state()
+	AudioManager.set_master_volume(0.0)
+	assert_near(AudioServer.get_bus_volume_db(0), -80.0, 0.001, "0% silences bus (boost not applied)")
 	_restore_state()
 
 

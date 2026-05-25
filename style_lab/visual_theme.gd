@@ -402,6 +402,23 @@ const coin_shape := CoinShape.CYLINDER
 ## melody pop over dense drum layers on arcade/challenge themes.
 @export var melody_volume_offset: float = 0.0
 
+## Sequencer melody slot duration in seconds. The sequencer steps through
+## `melody_sequence` and the drum patterns at this rate. Default 0.25 matches
+## the historical 16th-note grid; slower themes (e.g. glow_dark at 1.0) play
+## one note per second so the chord cycle and peg chimes feel like quarter
+## notes rather than sixteenths.
+@export var melody_slot_seconds: float = 0.25
+
+## Master switch for the peg-collision chime layer. False = no chime in this
+## theme. Useful for themes whose audio is dense enough (drum-layer melodies,
+## arcade backing) that additional bell-tone peg hits muddy the mix.
+@export var peg_chime_enabled: bool = true
+
+## Peg-chime timing: when > 0, peg hits within the same quantum collapse to a
+## single chime fired on the quantum boundary (sync with the drum sequencer).
+## When 0, peg hits use AudioManager's PEG_CHIME_MIN_INTERVAL_S throttle.
+@export var peg_chime_quantize_seconds: float = 0.0
+
 
 # ── Palette resolver ─────────────────────────────────────────────────
 

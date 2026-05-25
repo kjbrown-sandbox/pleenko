@@ -57,8 +57,19 @@ const BEATS_PER_BAR := 4
 const MELODY_POOL_SIZE := 12
 const CLICK_POOL_SIZE := 8
 const PEG_CLICK_VOLUME_DB := -18.0
-const PEG_SPARKLE_VOLUME_DB := -8.0
 const BUCKET_VOLUME_DB := -17.5
+
+# Peg-collision chime: brief bell-tone, 50/50 root or 5th of the current chord.
+# Throttled globally — heavy coin volume produces a steady ~10 Hz tick rather
+# than a burst-then-silence pattern that a per-second voice cap would give.
+const PEG_CHIME_MIN_INTERVAL_S := 0.25
+# 1/8 amplitude of BUCKET_VOLUME_DB (-17.5): 20*log10(0.125) ≈ -18 dB → -35.5.
+const PEG_CHIME_VOLUME_DB := -35.5
+const PEG_CHIME_SUSTAIN_S := 0.6
+# Default chord-tone pool for the chime. Chord arrays are stored as
+# root/3rd/5th/7th/octave/.../etc, so [0, 2] = root or 5th. Callers can
+# override per-call (MenuBoard passes a richer [0, 1, 2, 4] pool).
+const PEG_CHIME_DEGREES_DEFAULT: Array[int] = [0, 2]
 
 var _click_pool: Array[AudioStreamPlayer] = []
 var _click_idx: int = 0
@@ -77,16 +88,30 @@ var _motif_position: int = 0
 
 var _active_coin_count: int = 0
 
+# Global throttle for peg chimes — last play timestamp in seconds.
+var _peg_chime_last_time_s: float = -1000.0
+var _peg_chime_rng: RandomNumberGenerator = RandomNumberGenerator.new()
+# Quantize mode (theme.peg_chime_quantize_seconds > 0): peg hits within a
+# quantum collapse to one chime fired on the next quantum boundary. The most
+# recent call's `degrees` pool wins if multiple call sites stack up — they
+# don't in practice (only one screen owns input at a time).
+var _peg_chime_pending: bool = false
+var _peg_chime_pending_degrees: Array[int] = []
+var _peg_chime_pending_volume_db: float = PEG_CHIME_VOLUME_DB
+var _peg_chime_quantum_timer: float = 0.0
+
 # Sparkle state — pegs sparkle only within 100ms of a bucket drone firing.
 # Each sparkle walks up the chord from the root, climbing into higher octaves
-# across successive bucket fires. Resets on chord advance.
+# across successive bucket fires. Resets on chord advance. Sparkle is the
+# rare event; the chime is the common-case fallback when sparkle doesn't fire.
 var _last_bucket_fire_ms: float = -1000.0
 var _sparkles_this_fire: int = 0
 var _sparkle_step: int = 0
 
 # Drone lifecycle:
 #   SPARKLE — peg sparkle; timer-decayed by _update_bucket_drones.
-#   ACTIVE  — bucket or prestige note; timer-decayed, plays to natural end.
+#   ACTIVE  — bucket, prestige, or peg-chime note; timer-decayed, plays to
+#             natural end (or until pool slot is reclaimed by a newer play).
 # No voice caps — pool exhaustion is the only limit (graceful silent drop).
 enum DroneState { SPARKLE, ACTIVE }
 
@@ -95,9 +120,8 @@ const SPARKLE_PROXIMITY_MS := 100.0
 const MAX_SPARKLES_PER_FIRE := 2
 
 # Per-voice attenuation: voice N plays at VOICE_ATTENUATION_RATIO^(N-1) of
-# base amplitude (~2.5 dB drop per added voice at 0.75). Sparkle-only now —
+# base amplitude (~2.5 dB drop per added voice at 0.75). Sparkle-only —
 # bucket plays use per-bucket repeat softening instead (REPEAT_ATTENUATION_DB).
-# `_count_drones_of_type` is retained for sparkles + tests.
 const VOICE_ATTENUATION_RATIO := 0.75
 
 const SPARKLE_DRONE_SUSTAIN := 2.5
@@ -121,6 +145,8 @@ const PRESTIGE_ARPEGGIO_INTERVAL := 0.125  # seconds between arpeggio notes (rea
 const PRESTIGE_BASS_VOLUME_DB := -10.0
 const PRESTIGE_BELL_VOLUME_DB := -12.0
 const PRESTIGE_ARPEGGIO_VOLUME_DB := -14.0
+# Global gain boost applied on top of the user's master volume slider. 3x linear ≈ +9.54 dB.
+const MASTER_GAIN_BOOST_DB := 9.542425
 var _silenced: bool = false  # gates all new sounds (prestige, scene transitions)
 var _muted: bool = false  # user preference — mutes the Master bus
 var _master_volume_percent: float = 50.0
@@ -152,7 +178,8 @@ var _pattern_slot_idx: int = -1
 var _pattern_slot_timer: float = 0.0
 
 # Sequencer (drum-layer mode): drives both melody and drum-layer playback.
-# Starts on first challenge tick, ticks at SLOT_DURATION (0.25s = 4/sec).
+# Starts on first challenge tick. Tick rate is theme.melody_slot_seconds
+# (default SLOT_DURATION = 0.25s). Themes can slow it down (glow_dark = 1.0s).
 const SLOT_DURATION := 0.25
 var _sequencer_running: bool = false
 var _global_slot_idx: int = 0
@@ -164,7 +191,6 @@ const DRUM_POOL_SIZE := 6
 var _drum_seq_pool: Array[AudioStreamPlayer] = []
 var _drum_seq_idx: int = 0
 
-var _sparkle_counter: int = 0
 # Default streams assigned to drone pool slots at startup. Individual plays
 # may override via instrument.resolve().
 var _sine_drone_stream: AudioStreamWAV
@@ -305,6 +331,7 @@ func _process(delta: float) -> void:
 	_tick_sequencer(delta)
 	_update_bucket_drones(delta)
 	_tick_prestige_arpeggio()
+	_tick_peg_chime_quantize(delta)
 
 
 ## Advances the chord index through theme.progression while there's activity.
@@ -356,6 +383,14 @@ func _on_theme_swap() -> void:
 	_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
 	_hard_stop_all_drones()
 	_stop_sequencer()
+	# Reset every piece of chime state so a swap can't carry a stale throttle
+	# timestamp (suppressing the first chime in the new theme) or pending
+	# degrees/volume from a prior quantize-mode theme.
+	_peg_chime_pending = false
+	_peg_chime_pending_degrees = []
+	_peg_chime_pending_volume_db = PEG_CHIME_VOLUME_DB
+	_peg_chime_quantum_timer = 0.0
+	_peg_chime_last_time_s = -1000.0
 	var kick: Instrument = _instrument_for(_theme_kick_type())
 	if kick:
 		_kick_player.stream = kick.resolve(0.0).stream
@@ -559,7 +594,7 @@ func _on_challenge_tick(seconds_remaining: int) -> void:
 		_sequencer_running = true
 		_global_slot_idx = 0
 		_melody_idx = 0
-		_slot_timer = SLOT_DURATION
+		_slot_timer = _theme_melody_slot_seconds()
 		_play_slot()
 
 	_challenge_tick_received = true
@@ -711,14 +746,14 @@ func _play_pattern_slot() -> void:
 
 
 ## Sequencer: drives background melody + drum-layer dispatch. Ticks at
-## SLOT_DURATION (0.25s). Starts on first challenge tick, stops on theme swap.
+## theme.melody_slot_seconds. Starts on first challenge tick, stops on theme swap.
 func _tick_sequencer(delta: float) -> void:
 	if _silenced or not _sequencer_running:
 		return
 	_slot_timer -= delta
 	while _slot_timer <= 0.0:
 		_global_slot_idx += 1
-		_slot_timer += SLOT_DURATION
+		_slot_timer += _theme_melody_slot_seconds()
 		_play_slot()
 
 
@@ -834,7 +869,9 @@ func _play_bucket_now(bucket_idx: int, degree: int, is_advanced: bool) -> void:
 
 ## Plays a bell sparkle that walks up the chord from the root. Each sparkle
 ## within a chord advances one step, climbing into higher octaves as it wraps.
-## Resets to root on chord advance (see _handle_chord_advance).
+## Resets to root on chord advance (see _handle_chord_advance). Rare by design
+## (gated by should_sparkle's proximity window); the chime is the common-case
+## fallback when sparkle doesn't fire.
 func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	if _silenced:
 		return
@@ -880,6 +917,131 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	_sparkles_this_fire += 1
 	var key: String = "SP_" + str(Time.get_ticks_msec()) + "_" + str(idx)
 	_active_drones[key] = _make_drone_entry(idx, SPARKLE_DRONE_SUSTAIN, degree, sparkle_octave, DroneState.SPARKLE, false)
+
+
+## Records a peg-contact event for the chime layer. Two timing modes selected
+## by the active theme:
+##   Throttle (default): play immediately if PEG_CHIME_MIN_INTERVAL_S has
+##     elapsed since the last play, else drop.
+##   Quantize (theme.peg_chime_quantize_seconds > 0): mark "pending" and let
+##     _tick_peg_chime_quantize fire exactly one chime on the next quantum
+##     boundary, regardless of how many pegs were hit since.
+## `degrees`: chord-array indices the chime randomly picks from (chord arrays
+## are stored as root/3rd/5th/7th/octave/...). Empty = default [0, 2]
+## (root/5th). Per-call-site override exists so future themes/screens can
+## pass a richer pool without a theme-field round-trip.
+## `min_interval_seconds`: per-call-site throttle override in throttle mode.
+## Negative = use PEG_CHIME_MIN_INTERVAL_S.
+## `volume_db`: per-call-site loudness override. NAN = use PEG_CHIME_VOLUME_DB.
+## No board gate — call sites self-gate (PlinkoBoard via flash_nearest_peg's
+## is_active_board check).
+func play_peg_chime(degrees: Array[int] = [], min_interval_seconds: float = -1.0, volume_db: float = NAN) -> void:
+	if _silenced:
+		return
+	if not _theme_peg_chime_enabled():
+		return
+	if not _bell or _theme_progression().is_empty():
+		return
+
+	var pool: Array[int] = degrees if not degrees.is_empty() else PEG_CHIME_DEGREES_DEFAULT
+	var vol_db: float = volume_db if not is_nan(volume_db) else PEG_CHIME_VOLUME_DB
+
+	if _theme_peg_chime_quantize_s() > 0.0:
+		_peg_chime_pending_degrees = pool
+		_peg_chime_pending_volume_db = vol_db
+		_peg_chime_pending = true
+		return
+
+	var throttle: float = min_interval_seconds if min_interval_seconds >= 0.0 else PEG_CHIME_MIN_INTERVAL_S
+	var now_s: float = Time.get_ticks_msec() / 1000.0
+	if now_s - _peg_chime_last_time_s < throttle:
+		return
+
+	if not _do_play_peg_chime(pool, vol_db):
+		return
+	_peg_chime_last_time_s = now_s
+
+
+## Actual chime playback — picks a chord-tone index from `degrees`, allocates
+## a drone slot, plays the bell at `volume_db`. Returns false on missing chord
+## / empty pool so callers can decide whether to update throttle bookkeeping.
+func _do_play_peg_chime(degrees: Array[int], volume_db: float) -> bool:
+	var entry: Dictionary = _current_chord_entry()
+	var chord: Array = entry["chord"]
+	if chord.is_empty():
+		return false
+
+	if _drone_free.is_empty():
+		return false
+
+	# Count chimes as activity so the chord progression advances on screens
+	# with no bucket landings (main menu). Without this, _tick_harmonic_rhythm
+	# resets to root each chord_duration because _chord_had_landing stayed false.
+	_chord_had_landing = true
+
+	var degree: int = pick_peg_degree(_peg_chime_rng, degrees)
+	var pitch: float = _get_pitch_scale(degree)
+	var sp: Dictionary = _bell.resolve(pitch)
+
+	var idx: int = _drone_free.pop_back()
+	_kill_fade_tween(idx)
+	var player: AudioStreamPlayer = _drone_pool[idx]
+	player.stream = sp["stream"]
+	player.pitch_scale = sp["pitch_scale"]
+	player.volume_db = volume_db
+	player.play()
+
+	var key: String = "PC_" + str(Time.get_ticks_msec()) + "_" + str(idx)
+	_active_drones[key] = _make_drone_entry(idx, PEG_CHIME_SUSTAIN_S, degree, 1.0, DroneState.ACTIVE, false)
+	return true
+
+
+## Pure uniform-random picker over the supplied chord-tone index pool. Empty
+## pool falls back to PEG_CHIME_DEGREES_DEFAULT. Injected RNG for headless
+## distribution tests.
+static func pick_peg_degree(rng: RandomNumberGenerator, degrees: Array[int]) -> int:
+	var pool: Array[int] = degrees if not degrees.is_empty() else PEG_CHIME_DEGREES_DEFAULT
+	return pool[rng.randi() % pool.size()]
+
+
+## Quantize-mode driver: when the active theme sets a quantize interval, accumulates
+## delta and fires one chime per quantum if any peg hit registered. Multiple
+## peg hits within a quantum collapse to one chime.
+func _tick_peg_chime_quantize(delta: float) -> void:
+	var quantize: float = _theme_peg_chime_quantize_s()
+	if quantize <= 0.0:
+		_peg_chime_pending = false
+		_peg_chime_quantum_timer = 0.0
+		return
+	if _silenced:
+		_peg_chime_pending = false
+		return
+	_peg_chime_quantum_timer += delta
+	if _peg_chime_quantum_timer >= quantize:
+		# fmod handles the rare case of low FPS skipping multiple quanta.
+		# We deliberately fire at most one chime per tick (collapse).
+		_peg_chime_quantum_timer = fmod(_peg_chime_quantum_timer, quantize)
+		if _peg_chime_pending:
+			_peg_chime_pending = false
+			_do_play_peg_chime(_peg_chime_pending_degrees, _peg_chime_pending_volume_db)
+
+
+func _theme_peg_chime_enabled() -> bool:
+	if ThemeProvider and ThemeProvider.theme:
+		return ThemeProvider.theme.peg_chime_enabled
+	return true
+
+
+func _theme_peg_chime_quantize_s() -> float:
+	if ThemeProvider and ThemeProvider.theme:
+		return ThemeProvider.theme.peg_chime_quantize_seconds
+	return 0.0
+
+
+func _theme_melody_slot_seconds() -> float:
+	if ThemeProvider and ThemeProvider.theme:
+		return ThemeProvider.theme.melody_slot_seconds
+	return SLOT_DURATION
 
 
 func play_peg_click(board_type: Enums.BoardType) -> void:
@@ -969,7 +1131,7 @@ func is_muted() -> bool:
 func set_master_volume(percent: float) -> void:
 	_master_volume_percent = clampf(percent, 0.0, 100.0)
 	var linear: float = _master_volume_percent / 100.0
-	AudioServer.set_bus_volume_db(0, linear_to_db(linear) if linear > 0.0 else -80.0)
+	AudioServer.set_bus_volume_db(0, linear_to_db(linear) + MASTER_GAIN_BOOST_DB if linear > 0.0 else -80.0)
 
 
 func get_master_volume() -> float:
