@@ -484,13 +484,14 @@ func test_peg_chime_throttle_drops_rapid_second_call() -> void:
 	_save_state()
 	# Force throttle window open: pretend nothing has chimed recently.
 	AudioManager._peg_chime_last_time_s = -1000.0
-	var first: bool = AudioManager.play_peg_chime()
-	# Even if the first call returns false (e.g. silenced/empty pool in headless
-	# scene), the throttle timestamp must only have moved when first==true.
-	if first:
-		var second: bool = AudioManager.play_peg_chime()
-		assert_false(second,
-			"second chime within throttle window should be dropped")
+	AudioManager.play_peg_chime()
+	# If the first call actually played, the timestamp moved forward; a
+	# second call inside the throttle window must not move it again.
+	var stamp_after_first: float = AudioManager._peg_chime_last_time_s
+	if stamp_after_first > -500.0:
+		AudioManager.play_peg_chime()
+		assert_equal(AudioManager._peg_chime_last_time_s, stamp_after_first,
+			"second chime within throttle window must not advance the timestamp")
 	_restore_state()
 
 
@@ -501,8 +502,7 @@ func test_peg_chime_dropped_call_does_not_stamp_timestamp() -> void:
 	# touching the timestamp. The stamp must remain unchanged.
 	AudioManager._silenced = true
 	AudioManager._peg_chime_last_time_s = -1000.0
-	var played: bool = AudioManager.play_peg_chime()
-	assert_false(played, "silenced chime should return false")
+	AudioManager.play_peg_chime()
 	assert_equal(AudioManager._peg_chime_last_time_s, -1000.0,
 		"dropped chime must not update last-play timestamp")
 	_restore_state()

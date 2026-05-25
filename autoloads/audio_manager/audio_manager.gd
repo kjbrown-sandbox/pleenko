@@ -383,8 +383,14 @@ func _on_theme_swap() -> void:
 	_beat_period = _autodrop_interval / float(BEATS_PER_BAR)
 	_hard_stop_all_drones()
 	_stop_sequencer()
+	# Reset every piece of chime state so a swap can't carry a stale throttle
+	# timestamp (suppressing the first chime in the new theme) or pending
+	# degrees/volume from a prior quantize-mode theme.
 	_peg_chime_pending = false
+	_peg_chime_pending_degrees = []
+	_peg_chime_pending_volume_db = PEG_CHIME_VOLUME_DB
 	_peg_chime_quantum_timer = 0.0
+	_peg_chime_last_time_s = -1000.0
 	var kick: Instrument = _instrument_for(_theme_kick_type())
 	if kick:
 		_kick_player.stream = kick.resolve(0.0).stream
@@ -916,31 +922,26 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 ## Records a peg-contact event for the chime layer. Two timing modes selected
 ## by the active theme:
 ##   Throttle (default): play immediately if PEG_CHIME_MIN_INTERVAL_S has
-##     elapsed since the last play, else drop. Returns true on actual play.
+##     elapsed since the last play, else drop.
 ##   Quantize (theme.peg_chime_quantize_seconds > 0): mark "pending" and let
 ##     _tick_peg_chime_quantize fire exactly one chime on the next quantum
-##     boundary, regardless of how many pegs were hit since. Returns false in
-##     quantize mode — the play is deferred — so callers shouldn't couple
-##     visuals to the return value when quantize is active.
+##     boundary, regardless of how many pegs were hit since.
 ## `degrees`: chord-array indices the chime randomly picks from (chord arrays
 ## are stored as root/3rd/5th/7th/octave/...). Empty = default [0, 2]
-## (root/5th). MenuBoard passes [0, 1, 2, 4] for a richer four-note palette;
-## PlinkoBoard uses the default for the sparser gameplay feel.
+## (root/5th). Per-call-site override exists so future themes/screens can
+## pass a richer pool without a theme-field round-trip.
 ## `min_interval_seconds`: per-call-site throttle override in throttle mode.
-## Negative = use PEG_CHIME_MIN_INTERVAL_S. Menu passes 0.5 for a calmer
-## cadence than gameplay's 0.2s default.
-## `volume_db`: per-call-site loudness override. NAN = use PEG_CHIME_VOLUME_DB
-## (gameplay's quiet-under-buckets default). Menu passes BUCKET_VOLUME_DB
-## so the chime sits at the same loudness as in-game bucket plays.
+## Negative = use PEG_CHIME_MIN_INTERVAL_S.
+## `volume_db`: per-call-site loudness override. NAN = use PEG_CHIME_VOLUME_DB.
 ## No board gate — call sites self-gate (PlinkoBoard via flash_nearest_peg's
-## is_active_board check; MenuBoard has no board concept).
-func play_peg_chime(degrees: Array[int] = [], min_interval_seconds: float = -1.0, volume_db: float = NAN) -> bool:
+## is_active_board check).
+func play_peg_chime(degrees: Array[int] = [], min_interval_seconds: float = -1.0, volume_db: float = NAN) -> void:
 	if _silenced:
-		return false
+		return
 	if not _theme_peg_chime_enabled():
-		return false
+		return
 	if not _bell or _theme_progression().is_empty():
-		return false
+		return
 
 	var pool: Array[int] = degrees if not degrees.is_empty() else PEG_CHIME_DEGREES_DEFAULT
 	var vol_db: float = volume_db if not is_nan(volume_db) else PEG_CHIME_VOLUME_DB
@@ -949,17 +950,16 @@ func play_peg_chime(degrees: Array[int] = [], min_interval_seconds: float = -1.0
 		_peg_chime_pending_degrees = pool
 		_peg_chime_pending_volume_db = vol_db
 		_peg_chime_pending = true
-		return false
+		return
 
 	var throttle: float = min_interval_seconds if min_interval_seconds >= 0.0 else PEG_CHIME_MIN_INTERVAL_S
 	var now_s: float = Time.get_ticks_msec() / 1000.0
 	if now_s - _peg_chime_last_time_s < throttle:
-		return false
+		return
 
 	if not _do_play_peg_chime(pool, vol_db):
-		return false
+		return
 	_peg_chime_last_time_s = now_s
-	return true
 
 
 ## Actual chime playback — picks a chord-tone index from `degrees`, allocates
