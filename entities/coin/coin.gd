@@ -35,6 +35,11 @@ var _fall_speed_multiplier: float = 1.0
 var _row: int = 0
 var _col: int = 0
 
+## True once the coin enters a voided column (bomb fallout): it falls straight
+## down past the bucket plane and despawns off-screen. No bucket land, no
+## currency credit, no landing burst. Set by _begin_void_fall.
+var _in_void_fall: bool = false
+
 ## Each granted GOLD_COIN_SPEED_BOOST challenge reward adds this fraction to
 ## gold coins' fall-speed multiplier. 0.2 → first grant = 1.2x speed, third = 1.6x (additive).
 ## Only gold coins are sped up; other coin types fall at baseline speed.
@@ -149,6 +154,9 @@ func set_mesh_visible(vis: bool) -> void:
 
 
 func _bounce_or_despawn() -> void:
+	if _in_void_fall:
+		# Tween chain already drives the off-screen fall + queue_free.
+		return
 	if board.is_terminal_cell(_row, _col):
 		landed.emit(self)
 		return
@@ -165,6 +173,16 @@ func _bounce_or_despawn() -> void:
 	# just bounced off (they're reassigned below). Pure view, no gameplay effect.
 	board.notify_deflector_resolved(_row, _col, direction)
 	var next_cell: Vector2i = board.next_lattice_cell(_row, _col, direction)
+
+	# Voided column: the destination peg has been destroyed by a bomb
+	# detonation — drift in the chosen direction then fall off-screen. We
+	# pass `direction` so the coin keeps the momentum from the peg it just
+	# bounced off (rather than dropping straight down, which reads as a hard
+	# cut). See _begin_void_fall.
+	if board.is_lattice_cell_voided(next_cell.x, next_cell.y):
+		_begin_void_fall(direction)
+		return
+
 	var target: Vector3 = board.cell_to_world(next_cell.x, next_cell.y)
 	var next_x: float = target.x
 	var next_y: float = target.y
@@ -196,3 +214,35 @@ func _bounce_or_despawn() -> void:
 	y_tween.tween_property(self, "position:y", next_y, fall_time * 2 / 3) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	y_tween.tween_callback(_bounce_or_despawn)
+
+
+## Switches the coin into "fall through a voided column" mode. The coin keeps
+## the horizontal momentum it picked at the last peg (constant X drift in the
+## bounce direction) while Y accelerates downward — feels like it tipped past
+## the saw line rather than instantly cutting to a vertical drop. After it's
+## clear of the board it queue_frees. No bucket land, no currency, no burst.
+##
+## Caller passes the bounce direction we picked at the source peg so the X
+## drift matches the choice the coin "made" before reaching the void.
+func _begin_void_fall(direction: int) -> void:
+	_in_void_fall = true
+	kill_tweens()
+	var t: VisualTheme = ThemeProvider.theme
+	# Far enough below the bucket plane that any camera framing has the coin
+	# off-screen before queue_free.
+	var target_y: float = board.cell_to_world(board.num_rows + 3, _col).y
+	var fall_duration: float = t.coin_fall_time * 2.5 / _fall_speed_multiplier
+	# Horizontal momentum: continue in `direction` at a constant slow drift
+	# (about half a bucket width over the whole fall). Independent of the Y
+	# easing so the trajectory reads as "kept moving, then gravity took over".
+	var drift_x: float = board.space_between_pegs * 0.5 * float(direction)
+	var target_x: float = position.x + drift_x
+	var tween_y: Tween = create_tween()
+	_active_tweens.append(tween_y)
+	tween_y.tween_property(self, "position:y", target_y, fall_duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	var tween_x: Tween = create_tween()
+	_active_tweens.append(tween_x)
+	tween_x.tween_property(self, "position:x", target_x, fall_duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_LINEAR)
+	tween_y.tween_callback(queue_free)

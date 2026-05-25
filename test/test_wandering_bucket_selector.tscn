@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://test/test_wandering_bucket_selector.gd" id="1"]
+
+[node name="TestWanderingBucketSelector" type="Node"]
+script = ExtResource("1")

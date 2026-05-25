@@ -8,4 +8,5 @@ extends Resource
 @export var objectives: Array[ChallengeObjective] = []
 @export var constraints: Array[ChallengeConstraint] = []
 @export var starting_conditions: Array[ChallengeStartingCondition] = []
+@export var hazards: Array[ChallengeHazard] = []
 @export var rewards: Array[ChallengeRewardData] = []

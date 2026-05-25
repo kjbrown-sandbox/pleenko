@@ -43,6 +43,7 @@ func _run_tests() -> void:
 	test_silence_gates_bucket_play()
 	test_silence_no_fade_mode()
 	test_sparkle_wrong_board_returns_false()
+	test_request_bucket_play_wrong_board_returns_false()
 	test_autodropper_beat_sets_period()
 
 	# Peg chime
@@ -423,6 +424,26 @@ func test_sparkle_wrong_board_returns_false() -> void:
 	AudioManager._active_board = Enums.BoardType.GOLD
 	var result: bool = AudioManager.should_sparkle(Enums.BoardType.ORANGE)
 	assert_false(result, "wrong board rejects sparkle")
+	_restore_state()
+
+
+# Regression: AudioManager is an autoload that outlives a scene reload, so its
+# _active_board can be stale on the next scene's start (orange-board challenge
+# exit, prestige back to gold). If BoardManager.setup forgets to re-sync, every
+# drop on the actually-active board is silently rejected by the board guard in
+# request_bucket_play — no sound, no visual activation — until the player
+# manually switches boards. This test pins that guard so the BoardManager.setup
+# fix can't silently regress.
+func test_request_bucket_play_wrong_board_returns_false() -> void:
+	print("test_request_bucket_play_wrong_board_returns_false")
+	_save_state()
+	AudioManager._silenced = false
+	AudioManager._active_board = Enums.BoardType.ORANGE
+	var rejected: bool = AudioManager.request_bucket_play(Enums.BoardType.GOLD, 0, 0, false)
+	assert_false(rejected, "drop on non-active board is rejected")
+	AudioManager.set_active_board(Enums.BoardType.GOLD)
+	var accepted: bool = AudioManager.request_bucket_play(Enums.BoardType.GOLD, 0, 0, false)
+	assert_true(accepted, "drop on newly-synced active board is accepted")
 	_restore_state()
 
 

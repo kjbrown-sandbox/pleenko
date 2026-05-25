@@ -90,6 +90,7 @@ func setup(board_manager: BoardManager) -> void:
 	# Connect tracker to all boards (including any created by starting conditions)
 	_tracker.connect_to_boards()
 	_tracker.mark_initial_visuals()
+	_tracker.setup_hazards()
 
 	# Survive objectives now drive their own timing inside the tracker. The
 	# tracker calls activate_survive_autodroppers() when phase 1 begins, so
@@ -194,6 +195,8 @@ static func get_constraint_text(challenge: ChallengeData) -> String:
 	var parts: PackedStringArray = []
 	for constraint in challenge.constraints:
 		parts.append(constraint.get_text())
+	for hazard in challenge.hazards:
+		parts.append(hazard.get_text())
 	if parts.is_empty():
 		return "None"
 	return "\n".join(parts)

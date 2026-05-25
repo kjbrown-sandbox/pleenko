@@ -113,6 +113,9 @@ enum Palette {
 @export var prestige_flash_source: Palette = Palette.BG_6  # color coin/bucket lerp toward during prestige
 @export var deflector_hit_color_source: Palette = Palette.BG_3   # placed deflector tints to this on a followed bounce — one neutral shade darker than the default peg (BG_4)
 @export var deflector_miss_color_source: Palette = Palette.RED_MAIN  # placed deflector flashes to this when a coin escapes against it — RED_MAIN as a universal "miss" cue, deliberately NOT the board's tier colour (deflectors are board-agnostic)
+@export var bomb_color_source: Palette = Palette.RED_MAIN        # bucket tint while a bomb is armed and ticking
+@export var bomb_detonation_color_source: Palette = Palette.RED_MAIN  # column-of-light flash colour at detonation
+@export var void_column_light_source: Palette = Palette.BG_4     # color of the "void shaft" left behind after detonation (a single muted column running through the destroyed pegs)
 
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")
@@ -253,6 +256,12 @@ const coin_shape := CoinShape.CYLINDER
 # Row-upgrade glissando — the "juicy add-rows" cascade: buckets fall in
 # left→right with a piano-glissando feel, the camera tracks the wavefront,
 # new edge buckets fade in. See `PlinkoBoard._play_row_upgrade_glissando`.
+@export_subgroup("Bomb Hazard VFX")
+@export var bomb_detonation_pulse_duration := 0.6                 # seconds — column-of-light tween from spawn to fadeout
+@export var bomb_debris_fall_duration := 0.85                     # seconds — pegs + buckets tween downward + rotate after a detonation
+@export var void_column_light_width := 0.45                       # world-units — width of the destroyed-column shaft mesh
+@export var void_column_light_duration := 0.0                     # seconds the bright "column of light" hold lingers before fading into the persistent void shaft (0 = no hold, just the detonation pulse)
+
 @export_subgroup("Row Upgrade Glissando")
 @export var row_upgrade_fall_duration := 1.0                      # per-bucket total fall + swoop duration. Independent of glissando interval.
 @export var row_upgrade_glissando_interval := 0.125               # seconds between bucket drops. Independent of fall duration — sets how many buckets co-animate (fall_duration / this).
@@ -464,6 +473,12 @@ var deflector_hit_color: Color:
 	get: return resolve(deflector_hit_color_source)
 var deflector_miss_color: Color:
 	get: return resolve(deflector_miss_color_source)
+var bomb_color: Color:
+	get: return resolve(bomb_color_source)
+var bomb_detonation_color: Color:
+	get: return resolve(bomb_detonation_color_source)
+var void_column_light_color: Color:
+	get: return resolve(void_column_light_source)
 var high_multiplier_color: Color:
 	get: return resolve(high_multiplier_source)
 var hit_bucket_color: Color:

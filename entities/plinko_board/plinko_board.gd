@@ -115,6 +115,13 @@ var _active_peg_pulses: Dictionary = {}  # peg_index -> { elapsed: float, durati
 # Lives only in the BoardManager save blob — cleared on prestige reset.
 var _deflectors: Dictionary = {}  # peg_index: int -> dir: int (Enums.Direction)
 var _deflector_editor: DeflectorEditor
+
+## Bucket indices whose vertical column has been destroyed by a bomb detonation.
+## Cleared on build_board (matches the deflectors-survive-prestige-only pattern
+## but for a per-challenge runtime concept). Read by Coin via
+## is_lattice_cell_voided to drive fall-through; never persisted. PEGS REMAIN
+## "purely visual" — coin behavior couples to *columns*, not to peg instances.
+var _voided_columns: PackedInt32Array = PackedInt32Array()
 ## Set by BoardManager — returns total deflectors placed across ALL boards
 ## (the universal cap is global). Falls back to this board's own count when
 ## unset (bare unit tests).
@@ -147,6 +154,15 @@ signal cap_raise_coin_landed(coin: Coin, predicted_bucket: Bucket)
 ## suppression flag) → `_sweep_started` (commit, with payload).
 signal row_upgrade_starting
 signal row_upgrade_sweep_started(start_local_x: float, end_local_x: float, focus_local_y: float, sweep_duration: float)
+
+## Hazard signals. Signals up — listeners (AudioManager, ChallengeHUD, VFX
+## layers) react without PlinkoBoard knowing about them. column_voided is the
+## state transition (bucket becomes unreachable, pegs along the strict vertical
+## are destroyed); bomb_* signals carry the bomb hazard lifecycle.
+signal bomb_spawned(board_type: Enums.BoardType, bucket_index: int, seconds: float)
+signal bomb_defused(board_type: Enums.BoardType, bucket_index: int, multiplier: float)
+signal bomb_detonated(board_type: Enums.BoardType, bucket_index: int)
+signal column_voided(board_type: Enums.BoardType, bucket_index: int)
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
@@ -361,22 +377,16 @@ func _show_no_room() -> void:
 		return  # Already showing
 	var t: VisualTheme = ThemeProvider.theme
 	_no_room_label = Label3D.new()
-	_no_room_label.text = "!"
-	_no_room_label.font_size = 64
+	_no_room_label.text = "no\nauto\nroom"
+	_no_room_label.font_size = 32
 	if t.label_font:
 		_no_room_label.font = t.label_font
-	_no_room_label.modulate = t.red_main
+	_no_room_label.modulate = t.normal_text_color
 	_no_room_label.outline_size = 0
 	_no_room_label.no_depth_test = true
-	_no_room_label.position = coin_queue.get_overflow_position()
+	_no_room_label.line_spacing = -16
+	_no_room_label.position = coin_queue.get_overflow_position() + Vector3(-0.2, 0, 0)
 	add_child(_no_room_label)
-
-	# Bind tween to the label so it's auto-killed when the label is freed
-	var pulse_tween := _no_room_label.create_tween().set_loops(0)
-	pulse_tween.tween_property(_no_room_label, "scale", Vector3(1.15, 1.15, 1.15), 0.5) \
-		.set_trans(Tween.TRANS_SINE)
-	pulse_tween.tween_property(_no_room_label, "scale", Vector3.ONE, 0.5) \
-		.set_trans(Tween.TRANS_SINE)
 
 
 func _hide_no_room() -> void:
@@ -1084,6 +1094,9 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	if _gameplay_target_enabled and bucket_idx == _gameplay_target_index:
 		target_multiplier = 2.0
 		_pick_new_gameplay_target()
+	# Bomb defuse: mirrors the gameplay-target multiplier path. Runtime listens
+	# for the subsequent coin_landed signal and clears the bomb visual.
+	target_multiplier *= get_active_bomb_multiplier(bucket_idx)
 	var amount: int = roundi(bucket.value * coin.multiplier * target_multiplier)
 	var was_already_singing := bucket.is_singing()
 	if not coin.is_prestige_coin:
@@ -1216,6 +1229,38 @@ func mark_bucket_forbidden(index: int) -> void:
 		bucket.mark_forbidden()
 
 
+## Multiplier applied to coin_landed.amount when a coin lands in an active bomb
+## bucket (defuse). Set by BombHazardRuntime via mark_bucket_bomb; cleared on
+## unmark. Mirrors the gameplay-target multiplier path in finalize_coin_landing.
+var _active_bomb_multipliers: Dictionary = {}  # bucket_index: int -> multiplier: float
+
+
+func mark_bucket_bomb(index: int, defuse_multiplier: float = 1.0) -> void:
+	_bucket_markings[index] = &"bomb"
+	_active_bomb_multipliers[index] = defuse_multiplier
+	var bucket := get_bucket(index)
+	if bucket:
+		bucket.mark_bomb()
+
+
+func set_bomb_countdown(index: int, seconds_remaining: int) -> void:
+	var bucket := get_bucket(index)
+	if bucket:
+		bucket.set_bomb_countdown(seconds_remaining)
+
+
+func unmark_bucket_bomb(index: int) -> void:
+	_bucket_markings.erase(index)
+	_active_bomb_multipliers.erase(index)
+	var bucket := get_bucket(index)
+	if bucket:
+		bucket.unmark_bomb()
+
+
+func get_active_bomb_multiplier(bucket_index: int) -> float:
+	return _active_bomb_multipliers.get(bucket_index, 1.0)
+
+
 func unmark_bucket(index: int) -> void:
 	_bucket_markings.erase(index)
 	var bucket := get_bucket(index)
@@ -1229,9 +1274,15 @@ func clear_all_markings() -> void:
 		if bucket:
 			bucket.mark_unhit()
 	_bucket_markings.clear()
+	# Bomb-hazard runtime state — wipe on challenge end so the next challenge
+	# starts on a fresh, undamaged board.
+	_voided_columns.clear()
+	_active_bomb_multipliers.clear()
 
 
 ## Gameplay target: picks a new random bucket, avoiding the current one.
+## Picker delegates to WanderingBucketSelector — shared with BombHazardRuntime
+## so the "pick a wandering target, never the current one" rule has one home.
 func _pick_new_gameplay_target() -> void:
 	var num_buckets := buckets_container.get_child_count()
 	if num_buckets <= 0:
@@ -1241,14 +1292,11 @@ func _pick_new_gameplay_target() -> void:
 		var old_bucket := get_bucket(_gameplay_target_index)
 		if old_bucket:
 			old_bucket.stop_gameplay_target()
-	# Pick new index, avoiding the current one
-	var new_index: int = _gameplay_target_index
-	if num_buckets > 1:
-		while new_index == _gameplay_target_index:
-			new_index = randi_range(0, num_buckets - 1)
-	else:
-		new_index = 0
-	_gameplay_target_index = new_index
+	var allowed: PackedInt32Array = PackedInt32Array()
+	for i in num_buckets:
+		allowed.append(i)
+	var rng_fn: Callable = func(n: int) -> int: return randi() % maxi(1, n)
+	_gameplay_target_index = WanderingBucketSelector.pick(allowed, _gameplay_target_index, rng_fn)
 	_gameplay_target_timer = GAMEPLAY_TARGET_DURATION
 	_gameplay_target_fading = false
 	var bucket := get_bucket(_gameplay_target_index)
@@ -1393,6 +1441,355 @@ func cell_to_world(row: int, col: int) -> Vector3:
 ## Pure integer lattice transition. direction is an Enums.Direction (+1 right).
 func next_lattice_cell(row: int, col: int, direction: int) -> Vector2i:
 	return Lattice.next_cell(row, col, direction)
+
+
+# ── Voided columns (bomb-hazard "saw-off-the-limb" fallout) ───────
+# Vocabulary used throughout this section:
+#   • detonate — the event (BombHazardRuntime calls void_column)
+#   • void     — the state (`_voided_columns`, `is_column_voided`, `column_voided`)
+#   • cut      — the geometry (`cell_in_cut`, `peg_indices_on_cut`, `bomb_cut_side`)
+#
+# When a bomb detonates at bucket B, the cut runs from the bomb through the
+# nearer board edge: every bucket and peg with world-x on that side of B
+# (including B's own column) falls away. CENTER bombs (only on odd-bucket-
+# count boards) take the whole board down. The surviving buckets are always
+# a contiguous range bounded by the cuts from previous detonations.
+#
+# State lives in `_voided_columns` (PackedInt32Array of voided bucket indices).
+# Voids persist across build_board() rebuilds (e.g. add_two_rows mid-challenge)
+# — only `clear_all_markings` resets them, which the tracker calls on challenge
+# end.
+
+## Return values of `bomb_cut_side` — named so callers branching on the
+## result aren't reading raw -1 / 0 / +1 ints.
+const CUT_LEFT := -1
+const CUT_CENTER := 0
+const CUT_RIGHT := 1
+
+## Pure: which side of the board bucket B sits on. Returns CUT_LEFT (-1),
+## CUT_RIGHT (+1), or CUT_CENTER (0) — see the named constants above. A
+## CUT_CENTER detonation (only possible on odd-bucket-count boards) takes
+## down the entire board rather than cleaving one side.
+static func bomb_cut_side(bucket_index: int, num_buckets: int) -> int:
+	@warning_ignore("integer_division")
+	if num_buckets % 2 == 1 and bucket_index == (num_buckets - 1) / 2:
+		return CUT_CENTER
+	return CUT_LEFT if bucket_index * 2 < num_buckets - 1 else CUT_RIGHT
+
+
+## Pure: bucket-index normalised position (x in `space` units) — independent of
+## space_between_pegs so the saw-side math stays integer-exact.
+static func _bucket_x_norm(bucket_index: int, num_rows_param: int) -> float:
+	return float(bucket_index) - num_rows_param * 0.5
+
+
+## Pure: cell-index normalised position. Cells share the same normalisation as
+## buckets so cell-vs-cut comparisons are exact integer/half-integer math.
+static func _cell_x_norm(row: int, col: int) -> float:
+	return float(col) - row * 0.5
+
+
+## Pure: is cell (row, col) inside the cut from a bomb at `bucket_index` on
+## `side` (CUT_LEFT/CUT_RIGHT/CUT_CENTER)? "Inside" is inclusive of the
+## strict column for the off-centre sides; CUT_CENTER engulfs the whole
+## board.
+static func cell_in_cut(row: int, col: int, bucket_index: int, num_rows_param: int, side: int) -> bool:
+	if side == CUT_CENTER:
+		return true
+	var cell_x: float = _cell_x_norm(row, col)
+	var bucket_x: float = _bucket_x_norm(bucket_index, num_rows_param)
+	if side == CUT_LEFT:
+		return cell_x <= bucket_x
+	return cell_x >= bucket_x
+
+
+## Pure: is cell (row, col) destroyed by ANY of `voided_columns`? Each voided
+## bucket implies a cut to its nearer edge — the cell is destroyed if it lies
+## inside any of those cuts.
+static func should_fall_through(row: int, col: int, voided_columns: PackedInt32Array, num_rows_param: int) -> bool:
+	var num_buckets: int = num_rows_param + 1
+	for B in voided_columns:
+		var side: int = bomb_cut_side(B, num_buckets)
+		if cell_in_cut(row, col, B, num_rows_param, side):
+			return true
+	return false
+
+
+## Pure: flat peg indices in row-major order that get destroyed when bucket
+## `bucket_index` is detonated. With saw-off semantics, that's every peg whose
+## world-x is on the cut side of (or equal to) bucket_index's x.
+static func peg_indices_on_cut(bucket_index: int, num_rows_param: int) -> PackedInt32Array:
+	var num_buckets: int = num_rows_param + 1
+	var side: int = bomb_cut_side(bucket_index, num_buckets)
+	var out: PackedInt32Array = PackedInt32Array()
+	for row in num_rows_param:
+		for col in row + 1:
+			if cell_in_cut(row, col, bucket_index, num_rows_param, side):
+				@warning_ignore("integer_division")
+				out.append(row * (row + 1) / 2 + col)
+	return out
+
+
+## Pure: bucket indices voided by detonating `bucket_index`. With saw-off
+## semantics: B itself plus every bucket on the cut side (out to the edge).
+## Centre detonations take down every bucket on the board.
+static func buckets_on_cut(bucket_index: int, num_rows_param: int) -> PackedInt32Array:
+	var num_buckets: int = num_rows_param + 1
+	var side: int = bomb_cut_side(bucket_index, num_buckets)
+	var out: PackedInt32Array = PackedInt32Array()
+	if side == CUT_CENTER:
+		for B in num_buckets:
+			out.append(B)
+	elif side == CUT_LEFT:
+		for B in bucket_index + 1:
+			out.append(B)
+	else:
+		for B in range(bucket_index, num_buckets):
+			out.append(B)
+	return out
+
+
+func is_column_voided(bucket_index: int) -> bool:
+	return _voided_columns.has(bucket_index)
+
+
+## True at any lattice cell that the bomb cuts destroyed. Called by Coin at
+## every bounce step.
+func is_lattice_cell_voided(row: int, col: int) -> bool:
+	return should_fall_through(row, col, _voided_columns, num_rows)
+
+
+## All bucket indices not voided. Survives geometric ordering — for a saw-off
+## board this is the contiguous unsawn middle. Bomb hazards target a tighter
+## subset (see get_targetable_bucket_indices).
+func get_reachable_bucket_indices() -> PackedInt32Array:
+	var num_buckets: int = num_rows + 1
+	var out: PackedInt32Array = PackedInt32Array()
+	for i in num_buckets:
+		if not is_column_voided(i):
+			out.append(i)
+	return out
+
+
+## Buckets that are valid bomb targets: in the surviving range AND interior
+## (skip the leftmost + rightmost — they're board edges with no pegs above,
+## detonating them would do nothing). Mirrors the "never spawn a bomb where it
+## can't do damage" rule.
+func get_targetable_bucket_indices() -> PackedInt32Array:
+	var reachable: PackedInt32Array = get_reachable_bucket_indices()
+	if reachable.size() <= 2:
+		# Only edges (or fewer) survive — nothing for a bomb to chew on.
+		return PackedInt32Array()
+	var out: PackedInt32Array = PackedInt32Array()
+	for i in range(1, reachable.size() - 1):
+		out.append(reachable[i])
+	return out
+
+
+## Detonate bucket `bucket_index`: saw off everything on the cut side. Voids
+## buckets, destroys pegs, animates the falling limb, vaporises in-flight coins
+## inside the blast, plays the dragon explosion sound. Idempotent — if the
+## bucket was already voided we no-op (avoids double-cuts if multiple bombs
+## end up resolving at the same target across one frame).
+func void_column(bucket_index: int) -> void:
+	if is_column_voided(bucket_index):
+		return
+	var num_buckets: int = num_rows + 1
+	var side: int = bomb_cut_side(bucket_index, num_buckets)
+	var newly_voided_buckets: PackedInt32Array = buckets_on_cut(bucket_index, num_rows)
+	# Filter out any that were already voided (re-detonating into a more-inside
+	# bucket re-cuts a wider area but doesn't re-process the already-fallen
+	# half).
+	var truly_new: PackedInt32Array = PackedInt32Array()
+	for B in newly_voided_buckets:
+		if not is_column_voided(B):
+			_voided_columns.append(B)
+			truly_new.append(B)
+	if truly_new.is_empty():
+		return
+
+	# Visuals + audio + coin clearing happen on the saw-line geometry, not just
+	# on the bomb bucket — the limb falls as a single piece.
+	var peg_indices: PackedInt32Array = peg_indices_on_cut(bucket_index, num_rows)
+	_animate_falling_pegs(peg_indices)
+	_hide_pegs(peg_indices)
+	_animate_falling_buckets(truly_new)
+	_vaporise_coins_in_cut(bucket_index, side)
+	_play_column_detonation_vfx(bucket_index)
+	AudioManager.play_bomb_detonation(board_type)
+
+	column_voided.emit(board_type, bucket_index)
+
+
+func _animate_falling_pegs(indices: PackedInt32Array) -> void:
+	if not _peg_multimesh_instance or indices.is_empty():
+		return
+	var t: VisualTheme = ThemeProvider.theme
+	# Spawn one MeshInstance3D per peg as a falling debris copy. The originals
+	# are scale-zeroed in the MM (next call) so we don't double-render. The
+	# shader material is shared across all debris this detonation — peg colour
+	# is uniform, no per-instance tinting needed; freed via RefCounted when
+	# the last MeshInstance3D drops it.
+	var peg_mesh: Mesh = t.make_peg_mesh()
+	var peg_mat: ShaderMaterial = t.make_peg_shader_material()
+	var fall_distance: float = vertical_spacing * (num_rows + 3) + space_between_pegs * 2.0
+	var fall_duration: float = t.bomb_debris_fall_duration
+	for flat_idx in indices:
+		if flat_idx < 0 or flat_idx >= _peg_positions.size():
+			continue
+		var debris := MeshInstance3D.new()
+		debris.mesh = peg_mesh
+		debris.material_override = peg_mat
+		debris.transform = Transform3D(_peg_basis, _peg_positions[flat_idx])
+		add_child(debris)
+		var spin: float = randf_range(-PI * 1.5, PI * 1.5)
+		var drift_x: float = randf_range(-0.35, 0.35)
+		var target_pos: Vector3 = debris.position + Vector3(drift_x, -fall_distance, 0)
+		var tween := create_tween()
+		tween.set_parallel(true)
+		tween.bind_node(debris)
+		tween.tween_property(debris, "position", target_pos, fall_duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(debris, "rotation:z", debris.rotation.z + spin, fall_duration)
+		tween.chain().tween_callback(debris.queue_free)
+	_spawn_destruction_particles(indices)
+
+
+func _animate_falling_buckets(bucket_indices: PackedInt32Array) -> void:
+	# Bare-instance safety: tests instantiate PlinkoBoard.new() without the
+	# scene tree, so buckets_container is null and get_bucket would crash.
+	if not buckets_container:
+		return
+	var t: VisualTheme = ThemeProvider.theme
+	var fall_distance: float = vertical_spacing * (num_rows + 3) + space_between_pegs * 2.0
+	var fall_duration: float = t.bomb_debris_fall_duration
+	for B in bucket_indices:
+		var bucket := get_bucket(B)
+		if not bucket:
+			continue
+		var start_pos: Vector3 = bucket.position
+		var spin: float = randf_range(-PI * 1.0, PI * 1.0)
+		var drift_x: float = randf_range(-0.25, 0.25)
+		var tween := create_tween()
+		tween.set_parallel(true)
+		tween.bind_node(bucket)
+		tween.tween_property(bucket, "position",
+			start_pos + Vector3(drift_x, -fall_distance, 0), fall_duration) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(bucket, "rotation:z",
+			bucket.rotation.z + spin, fall_duration)
+		# After the fall, set invisible — bucket stays in the tree so
+		# get_bucket(idx) keeps its index valid; child count doesn't shift.
+		tween.chain().tween_callback(func() -> void:
+			if is_instance_valid(bucket):
+				bucket.visible = false
+		)
+
+
+## Spawn a radial particle burst at each destroyed peg. Reuses CoinBurstField's
+## spawn API — fire-and-forget pooled particles already battle-tested for the
+## landing burst.
+func _spawn_destruction_particles(indices: PackedInt32Array) -> void:
+	if not _coin_burst_field:
+		return
+	var t: VisualTheme = ThemeProvider.theme
+	for flat_idx in indices:
+		if flat_idx < 0 or flat_idx >= _peg_positions.size():
+			continue
+		# Several bursts per peg so the explosion reads as big.
+		var world_pos: Vector3 = to_global(_peg_positions[flat_idx])
+		for _i in 3:
+			_coin_burst_field.spawn(world_pos, t.bomb_detonation_color)
+
+
+## Bright column-of-light flash at the bomb's strict column (centred on the
+## bomb bucket's x). Cheap, expressive, fades over `bomb_detonation_pulse_duration`.
+func _play_column_detonation_vfx(bucket_index: int) -> void:
+	if not is_node_ready():
+		return
+	var t: VisualTheme = ThemeProvider.theme
+	var bucket_x: float = position_x_for(num_rows, bucket_index)
+	var column_height: float = vertical_spacing * num_rows + COIN_ROW_Y_OFFSET + space_between_pegs
+	var box := BoxMesh.new()
+	box.size = Vector3(t.void_column_light_width, column_height, 0.05)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = t.bomb_detonation_color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var mi := MeshInstance3D.new()
+	mi.mesh = box
+	mi.material_override = mat
+	mi.position = Vector3(bucket_x, -vertical_spacing * num_rows * 0.5, -0.1)
+	add_child(mi)
+	var tween := create_tween()
+	tween.bind_node(mi)
+	tween.tween_property(mat, "albedo_color:a", 0.0, t.bomb_detonation_pulse_duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_callback(mi.queue_free)
+
+
+## Any in-flight coin whose current lattice cell sits inside the cut from a
+## detonation at `bomb_index` (cut side `side`) gets queue_freed. Fires a small
+## particle puff at the coin's position so the vaporisation reads visually.
+func _vaporise_coins_in_cut(bomb_index: int, side: int) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var to_free: Array[Coin] = []
+	for coin: Coin in _active_coin_indices.keys():
+		if not is_instance_valid(coin):
+			continue
+		if cell_in_cut(coin._row, coin._col, bomb_index, num_rows, side):
+			to_free.append(coin)
+	for coin in to_free:
+		if _coin_burst_field:
+			_coin_burst_field.spawn(coin.global_position, t.bomb_detonation_color)
+		coin.kill_tweens()
+		coin.queue_free()
+
+
+func _hide_pegs(indices: PackedInt32Array) -> void:
+	if not _peg_multimesh_instance:
+		return
+	var mm: MultiMesh = _peg_multimesh_instance.multimesh
+	var hidden_basis: Basis = _peg_basis.scaled(Vector3.ZERO)
+	for flat_idx in indices:
+		if flat_idx < 0 or flat_idx >= _peg_positions.size():
+			continue
+		# Clear any flash / pulse claims on this index so per-frame loops don't
+		# write the transform back to a non-zero scale. Without this, a peg
+		# being detonated mid-bounce-flash visually stays around for the pulse
+		# duration.
+		_active_flashes.erase(flat_idx)
+		_active_peg_pulses.erase(flat_idx)
+		mm.set_instance_transform(flat_idx,
+			Transform3D(hidden_basis, _peg_positions[flat_idx]))
+
+
+## Re-applies peg hiding for every voided column after a board rebuild. Called
+## from build_board at the end so voids persist across add_two_rows (and any
+## other mid-challenge rebuild like the advanced-bucket reward).
+##
+## Uses the same `should_fall_through` predicate that Coin queries at bounce
+## time, so the visual hide-set is guaranteed to match the gameplay cut-set —
+## no chance of pegs visible in cells that would fall a coin through, or vice
+## versa. Handles LEFT / RIGHT / CENTER cuts uniformly.
+func _reapply_voided_pegs() -> void:
+	if _voided_columns.is_empty():
+		return
+	if not buckets_container:
+		return  # bare-instance test path: no buckets to hide, no MM to update
+	var hide: PackedInt32Array = PackedInt32Array()
+	for row in num_rows:
+		for col in row + 1:
+			if should_fall_through(row, col, _voided_columns, num_rows):
+				@warning_ignore("integer_division")
+				hide.append(row * (row + 1) / 2 + col)
+	_hide_pegs(hide)
+	# Hide any buckets that should be voided — for the post-rebuild state, just
+	# set visible=false. (Animation only fires on the live detonation path.)
+	for B in _voided_columns:
+		var bucket := get_bucket(B)
+		if bucket:
+			bucket.visible = false
 
 
 ## True once the coin has fallen past the last peg row into the bucket row.
@@ -1676,6 +2073,11 @@ func build_board() -> void:
 		_peg_multimesh_instance.queue_free()
 		_peg_multimesh_instance = null
 	_active_flashes.clear()
+	# Voided columns are per-challenge runtime state and PERSIST across rebuilds
+	# (add_two_rows mid-challenge would otherwise resurrect destroyed pegs).
+	# `clear_all_markings` (called by the tracker on challenge end) wipes them.
+	# Re-applying the cuts happens at the bottom of this function, after the new
+	# peg MultiMesh is populated.
 	for child in pegs_container.get_children():
 		child.queue_free()
 
@@ -1836,6 +2238,10 @@ func build_board() -> void:
 	if _deflector_editor:
 		_deflector_editor.refresh()
 
+	# Voids survive rebuilds — re-paint the destroyed pegs + hide the voided
+	# buckets in the freshly-built MultiMesh / bucket nodes.
+	_reapply_voided_pegs()
+
 	board_rebuilt.emit()
 
 
@@ -1855,6 +2261,10 @@ func get_bounds() -> Rect2:
 ## row_upgrade_starting/sweep, suppressing BoardManager's normal fit-tween and
 ## playing audio cues during scene init.
 func add_two_rows(animated: bool = true) -> void:
+	# Voided columns are bucket-indexed; adding two rows adds one bucket on
+	# each side, shifting every existing bucket's index by +1. Shift before
+	# build_board so _reapply_voided_pegs sees the new numbering.
+	_shift_voided_columns(1)
 	if not animated:
 		num_rows += 2
 		build_board()
@@ -1873,6 +2283,18 @@ func add_two_rows(animated: bool = true) -> void:
 	num_rows += 2
 	build_board()                       # rebuilds geometry at NEW positions; emits board_rebuilt
 	_play_row_upgrade_glissando(old_num_rows, old_container_y)
+
+
+## Shifts every voided bucket index by `delta`. Called from add_two_rows so
+## the existing voids stay anchored to the same geometric positions when the
+## bucket-numbering shifts (new edge buckets added on each side).
+func _shift_voided_columns(delta: int) -> void:
+	if _voided_columns.is_empty() or delta == 0:
+		return
+	var shifted: PackedInt32Array = PackedInt32Array()
+	for B in _voided_columns:
+		shifted.append(B + delta)
+	_voided_columns = shifted
 
 ## Whether a bucket at this distance-from-center is an "advanced" bucket
 ## (alternate currency). Single predicate so build_board, _bucket_value_for_distance,

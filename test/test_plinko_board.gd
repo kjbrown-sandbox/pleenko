@@ -37,6 +37,22 @@ func _run_tests() -> void:
 	test_needs_tooltip_hide_when_affordable()
 	test_needs_tooltip_keep_when_hovered_unaffordable()
 	test_needs_tooltip_keep_when_hovered_affordable()
+	test_bomb_cut_side_left_for_below_center()
+	test_bomb_cut_side_center_returns_zero()
+	test_bomb_cut_side_right_for_above_center()
+	test_cell_in_cut_left_side()
+	test_cell_in_cut_right_side()
+	test_peg_indices_on_cut_includes_strict_column()
+	test_buckets_on_cut_left_takes_everything_below()
+	test_buckets_on_cut_right_takes_everything_above()
+	test_buckets_on_cut_center_takes_whole_board()
+	test_should_fall_through_static_helper()
+	test_void_column_saws_off_one_side()
+	test_get_reachable_bucket_indices_no_voids_is_all()
+	test_get_reachable_bucket_indices_after_left_cut()
+	test_get_targetable_bucket_indices_excludes_edges()
+	test_void_column_idempotent()
+	test_shift_voided_columns_handles_add_rows()
 
 
 # --- Helper ---
@@ -407,4 +423,190 @@ func test_needs_tooltip_keep_when_hovered_affordable() -> void:
 	var board := _make_board()
 	assert_equal(board._needs_tooltip_action(true, true), PlinkoBoard.NeedsTooltipAction.KEEP,
 		"KEEP when hovered regardless of affordability")
+	board.free()
+
+
+# --- Bomb hazard saw-off semantics ---
+# A bomb at bucket B "saws off the limb" — every bucket and peg on the cut
+# side of B (the side nearest the board edge) falls away. Each test below
+# exercises one piece of that math on a 5-bucket board (num_rows=4).
+
+func test_bomb_cut_side_left_for_below_center() -> void:
+	print("test_bomb_cut_side_left_for_below_center")
+	# 5 buckets, indices 0..4. Off-centre returns -1=LEFT or +1=RIGHT.
+	# Exact centre (odd bucket count) returns 0 — whole board falls.
+	assert_equal(PlinkoBoard.bomb_cut_side(0, 5), -1, "B=0 → cuts LEFT")
+	assert_equal(PlinkoBoard.bomb_cut_side(1, 5), -1, "B=1 → cuts LEFT")
+
+
+func test_bomb_cut_side_center_returns_zero() -> void:
+	print("test_bomb_cut_side_center_returns_zero")
+	# Odd bucket count has a real centre. Bomb there takes the whole board.
+	assert_equal(PlinkoBoard.bomb_cut_side(2, 5), 0, "B=2 of 5 is centre → CENTER")
+	# Even bucket count has no exact centre — every bucket is one side or
+	# the other, no 0 returned.
+	assert_true(PlinkoBoard.bomb_cut_side(1, 4) != 0, "no centre on 4-bucket board, B=1")
+	assert_true(PlinkoBoard.bomb_cut_side(2, 4) != 0, "no centre on 4-bucket board, B=2")
+
+
+func test_bomb_cut_side_right_for_above_center() -> void:
+	print("test_bomb_cut_side_right_for_above_center")
+	assert_equal(PlinkoBoard.bomb_cut_side(3, 5), 1, "B=3 → cuts RIGHT")
+	assert_equal(PlinkoBoard.bomb_cut_side(4, 5), 1, "B=4 → cuts RIGHT")
+
+
+func test_buckets_on_cut_center_takes_whole_board() -> void:
+	print("test_buckets_on_cut_center_takes_whole_board")
+	# Bomb at the exact-centre bucket detonates the whole board rather than
+	# half. num_rows=4 → 5 buckets, centre B=2.
+	var sawed: PackedInt32Array = PlinkoBoard.buckets_on_cut(2, 4)
+	assert_equal(sawed.size(), 5, "centre detonation voids every bucket")
+	for b in [0, 1, 2, 3, 4]:
+		assert_true(sawed.has(b), "bucket %d included" % b)
+
+
+func test_cell_in_cut_left_side() -> void:
+	print("test_cell_in_cut_left_side")
+	# Bomb at bucket 2 (cuts LEFT). Cells with x ≤ bucket_2.x are in the cut.
+	# Bucket 2 has normalised x = 2 - 4/2 = 0; cell (0,0).x = 0 - 0 = 0 → on
+	# the boundary → IN the cut.
+	assert_true(PlinkoBoard.cell_in_cut(0, 0, 2, 4, -1), "(0,0) at boundary, LEFT")
+	assert_true(PlinkoBoard.cell_in_cut(1, 0, 2, 4, -1), "(1,0) strictly LEFT of bucket 2")
+	assert_false(PlinkoBoard.cell_in_cut(1, 1, 2, 4, -1), "(1,1) strictly RIGHT of bucket 2")
+
+
+func test_cell_in_cut_right_side() -> void:
+	print("test_cell_in_cut_right_side")
+	# Bomb at bucket 3 (cuts RIGHT). bucket_3.x_norm = 1.
+	assert_true(PlinkoBoard.cell_in_cut(3, 3, 3, 4, 1), "(3,3) x=1.5 ≥ 1")
+	assert_true(PlinkoBoard.cell_in_cut(0, 0, 3, 4, 1) == false, "(0,0) x=0 < 1")
+	assert_false(PlinkoBoard.cell_in_cut(2, 1, 3, 4, 1), "(2,1) x=0 < 1")
+
+
+func test_peg_indices_on_cut_includes_strict_column() -> void:
+	print("test_peg_indices_on_cut_includes_strict_column")
+	# Bomb at bucket 2 (LEFT cut on 5-bucket board). The destroyed peg set is
+	# everything with x ≤ 0. By inspection (row, col, x_norm):
+	#   (0, 0)  x=0     ✓
+	#   (1, 0)  x=-0.5  ✓
+	#   (1, 1)  x=0.5   ✗
+	#   (2, 0)  x=-1    ✓
+	#   (2, 1)  x=0     ✓
+	#   (2, 2)  x=1     ✗
+	#   (3, 0)  x=-1.5  ✓
+	#   (3, 1)  x=-0.5  ✓
+	#   (3, 2)  x=0.5   ✗
+	#   (3, 3)  x=1.5   ✗
+	# → 6 destroyed pegs.
+	var indices: PackedInt32Array = PlinkoBoard.peg_indices_on_cut(2, 4)
+	assert_equal(indices.size(), 6, "6 pegs destroyed in a LEFT cut at bucket 2")
+	# (2,1) flat idx = 2*3/2 + 1 = 4 — the centre-column survivor under the
+	# old strict-only model, now also destroyed (saw-off semantics).
+	assert_true(indices.has(4), "the strict-column (2,1) peg is included")
+
+
+func test_buckets_on_cut_left_takes_everything_below() -> void:
+	print("test_buckets_on_cut_left_takes_everything_below")
+	# Bomb at bucket 2 (LEFT) saws off 0, 1, 2.
+	var sawed: PackedInt32Array = PlinkoBoard.buckets_on_cut(2, 4)
+	assert_equal(sawed.size(), 3, "3 buckets sawn off")
+	for b in [0, 1, 2]:
+		assert_true(sawed.has(b), "bucket %d sawn" % b)
+
+
+func test_buckets_on_cut_right_takes_everything_above() -> void:
+	print("test_buckets_on_cut_right_takes_everything_above")
+	# Bomb at bucket 3 (RIGHT) saws off 3, 4.
+	var sawed: PackedInt32Array = PlinkoBoard.buckets_on_cut(3, 4)
+	assert_equal(sawed.size(), 2, "2 buckets sawn off")
+	for b in [3, 4]:
+		assert_true(sawed.has(b), "bucket %d sawn" % b)
+
+
+func test_should_fall_through_static_helper() -> void:
+	print("test_should_fall_through_static_helper")
+	# Bomb at bucket 2 (LEFT cut). Cells at x ≤ 0 fall through.
+	var voided: PackedInt32Array = PackedInt32Array([2])
+	assert_true(PlinkoBoard.should_fall_through(0, 0, voided, 4), "(0,0) x=0 LEFT-cut")
+	assert_true(PlinkoBoard.should_fall_through(2, 1, voided, 4), "(2,1) x=0 LEFT-cut")
+	assert_true(PlinkoBoard.should_fall_through(1, 0, voided, 4), "(1,0) x=-0.5 LEFT-cut")
+	assert_false(PlinkoBoard.should_fall_through(1, 1, voided, 4), "(1,1) x=0.5 survives")
+	# No voided columns → never fall through.
+	assert_false(PlinkoBoard.should_fall_through(0, 0, PackedInt32Array(), 4), "empty voided → never")
+
+
+func test_void_column_saws_off_one_side() -> void:
+	print("test_void_column_saws_off_one_side")
+	# Bomb at bucket 1 (LEFT) voids buckets 0 AND 1 in one call.
+	var board := _make_board({"num_rows": 4})
+	board.void_column(1)
+	assert_true(board.is_column_voided(0), "bucket 0 voided by saw")
+	assert_true(board.is_column_voided(1), "bucket 1 (the bomb itself) voided")
+	assert_false(board.is_column_voided(2), "bucket 2 (inside surviving range) still alive")
+	board.free()
+
+
+func test_get_reachable_bucket_indices_no_voids_is_all() -> void:
+	print("test_get_reachable_bucket_indices_no_voids_is_all")
+	# num_rows=4 → 5 buckets. With no voids, reachable is [0..4].
+	var board := _make_board({"num_rows": 4})
+	var reachable: PackedInt32Array = board.get_reachable_bucket_indices()
+	assert_equal(reachable.size(), 5, "5 buckets reachable on a fresh num_rows=4 board")
+	for i in 5:
+		assert_true(reachable.has(i), "bucket %d reachable" % i)
+	board.free()
+
+
+func test_get_reachable_bucket_indices_after_left_cut() -> void:
+	print("test_get_reachable_bucket_indices_after_left_cut")
+	# Bomb at bucket 1 saws off 0 and 1; reachable = [2, 3, 4].
+	var board := _make_board({"num_rows": 4})
+	board.void_column(1)
+	var reachable: PackedInt32Array = board.get_reachable_bucket_indices()
+	assert_equal(reachable.size(), 3, "3 buckets reachable after a saw at 1")
+	for b in [2, 3, 4]:
+		assert_true(reachable.has(b), "bucket %d still reachable" % b)
+	board.free()
+
+
+func test_get_targetable_bucket_indices_excludes_edges() -> void:
+	print("test_get_targetable_bucket_indices_excludes_edges")
+	# num_rows=4 → reachable [0..4]; targetable trims the edges → [1, 2, 3].
+	var board := _make_board({"num_rows": 4})
+	var targetable: PackedInt32Array = board.get_targetable_bucket_indices()
+	assert_equal(targetable.size(), 3, "edges excluded — only interior buckets")
+	for b in [1, 2, 3]:
+		assert_true(targetable.has(b), "bucket %d targetable" % b)
+	assert_false(targetable.has(0), "edge bucket 0 excluded")
+	assert_false(targetable.has(4), "edge bucket 4 excluded")
+	board.free()
+
+
+func test_void_column_idempotent() -> void:
+	print("test_void_column_idempotent")
+	# Re-detonating into an already-voided bucket re-enters and no-ops, so
+	# state stays clean.
+	var board := _make_board({"num_rows": 4})
+	board.void_column(1)
+	var first_size: int = board.get_reachable_bucket_indices().size()
+	board.void_column(1)
+	assert_equal(board.get_reachable_bucket_indices().size(), first_size,
+		"second call to void_column(1) is a no-op")
+	board.free()
+
+
+func test_shift_voided_columns_handles_add_rows() -> void:
+	print("test_shift_voided_columns_handles_add_rows")
+	# add_two_rows shifts each voided bucket index by +1 (new edge bucket
+	# inserted on the left bumps every existing bucket up one). Without the
+	# shift, destroyed columns would re-anchor to a different geometric x.
+	var board := _make_board({"num_rows": 4})
+	board.void_column(1)  # voids 0 and 1
+	# Apply the shift the way add_two_rows does, without invoking the full
+	# build_board (which would touch @onready nodes a bare instance can't
+	# satisfy).
+	board._shift_voided_columns(1)
+	assert_true(board.is_column_voided(1), "old bucket 0 → new bucket 1 still voided")
+	assert_true(board.is_column_voided(2), "old bucket 1 → new bucket 2 still voided")
+	assert_false(board.is_column_voided(0), "new bucket 0 (added edge) not voided")
 	board.free()

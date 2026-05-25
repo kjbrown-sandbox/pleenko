@@ -35,6 +35,11 @@ var _sounds: Dictionary = {
 	&"prestige": preload("res://assets/sounds/lucadialessandro-prestige.wav"),
 }
 
+# Bomb-detonation sample lives on its own dedicated player (see
+# _bomb_detonation_player below), NOT in the legacy `_sounds` pool — pinning
+# its volume_db through that path proved brittle.
+const _BOMB_DETONATION_STREAM := preload("res://assets/sounds/sfx/dragon-studio-loud-explosion-425457.mp3")
+
 # ── Musical system ───────────────────────────────────────────────────
 
 # Chord voicings (semitone offsets above root) — reference for .tres authors.
@@ -145,6 +150,16 @@ const PRESTIGE_ARPEGGIO_INTERVAL := 0.125  # seconds between arpeggio notes (rea
 const PRESTIGE_BASS_VOLUME_DB := -10.0
 const PRESTIGE_BELL_VOLUME_DB := -12.0
 const PRESTIGE_ARPEGGIO_VOLUME_DB := -14.0
+
+# Bomb hazard volumes. Detonation sample ships hot; -24 dB lands it in the
+# same perceived band as the other SFX. Hum is the sustained pad behind the
+# melody — quiet bed, well below the melody's BUCKET_VOLUME_DB.
+const BOMB_DETONATION_VOLUME_DB := -24.0
+const BOMB_HUM_VOLUME_DB := -10.0
+# Native pitch of the synthesized Triangle instrument — every theme-tuned
+# pitch (melody notes, bomb hum, bomb defuse) is computed as a multiplier
+# above/below this. Same value Triangle.gd uses internally.
+const C4_FREQ_HZ := 261.63
 # Global gain boost applied on top of the user's master volume slider. 3x linear ≈ +9.54 dB.
 const MASTER_GAIN_BOOST_DB := 9.542425
 var _silenced: bool = false  # gates all new sounds (prestige, scene transitions)
@@ -191,6 +206,19 @@ const DRUM_POOL_SIZE := 6
 var _drum_seq_pool: Array[AudioStreamPlayer] = []
 var _drum_seq_idx: int = 0
 
+# Bomb hazard one-shot + hum players. The defuse fires the current chord
+# root two octaves up (Triangle, same timbre as the melody); the hum is a
+# sustained low pad that joins after the melody has played through once and
+# changes pitch on every chord boundary. _bomb_detonation_player is its own
+# dedicated player rather than going through the legacy `_sounds` pool —
+# previous attempts to set the pool's volume_db kept getting overridden or
+# ignored somewhere along the way.
+var _bomb_defuse_player: AudioStreamPlayer
+var _bomb_detonation_player: AudioStreamPlayer
+var _bomb_hum_player: AudioStreamPlayer
+var _bomb_hum_active: bool = false
+var _bomb_hum_last_root_midi: int = -999
+
 # Default streams assigned to drone pool slots at startup. Individual plays
 # may override via instrument.resolve().
 var _sine_drone_stream: AudioStreamWAV
@@ -203,6 +231,7 @@ var _harp: Harp
 var _harp_long: HarpLong
 var _triangle: Triangle
 var _bell: Bell
+var _soft_chime: SoftChime
 var _arcade_kick: ArcadeKick
 var _click: Click
 var _drum_kick_deep: DrumKick
@@ -255,6 +284,7 @@ func _ready() -> void:
 	_harp_long = HarpLong.new()
 	_triangle = Triangle.new()
 	_bell = Bell.new()
+	_soft_chime = SoftChime.new()
 	_arcade_kick = ArcadeKick.new()
 	_click = Click.new()
 	_drum_kick_deep = DrumKick.new(60.0, 0.22)
@@ -301,6 +331,34 @@ func _ready() -> void:
 	_melody_player.bus = &"Melody"
 	_melody_player.volume_db = BUCKET_VOLUME_DB
 	add_child(_melody_player)
+
+	# Bomb defuse one-shot — Triangle on the Melody bus so it lives in the
+	# same timbral space as the melody it borrows its pitch from.
+	_bomb_defuse_player = AudioStreamPlayer.new()
+	_bomb_defuse_player.bus = &"Melody"
+	_bomb_defuse_player.volume_db = BUCKET_VOLUME_DB + 6.0
+	add_child(_bomb_defuse_player)
+
+	# Bomb detonation — dedicated player so we can pin its volume_db without
+	# any pool round-robin / key-comparison quirks getting in the way. The
+	# dragon-studio sample ships extremely hot; -24 dB lands it in the same
+	# perceived band as the rest of the SFX.
+	_bomb_detonation_player = AudioStreamPlayer.new()
+	_bomb_detonation_player.bus = &"Master"
+	_bomb_detonation_player.stream = _BOMB_DETONATION_STREAM
+	_bomb_detonation_player.volume_db = BOMB_DETONATION_VOLUME_DB
+	add_child(_bomb_detonation_player)
+
+	# Bomb root hum — same triangle timbre as the melody but stripped of the
+	# per-note attack/release envelope so it sustains. C4 (261.63 Hz) is the
+	# native pitch; _update_bomb_hum pitch_scales it to the current chord
+	# root one octave down. Routed through Drones so it sits "behind" the
+	# Melody bus the triangle melody owns — same colour, different layer.
+	_bomb_hum_player = AudioStreamPlayer.new()
+	_bomb_hum_player.bus = &"Drones"
+	_bomb_hum_player.volume_db = BOMB_HUM_VOLUME_DB
+	_bomb_hum_player.stream = _generate_sustained_triangle(1.0, C4_FREQ_HZ)
+	add_child(_bomb_hum_player)
 
 	for i in DRUM_POOL_SIZE:
 		var p := AudioStreamPlayer.new()
@@ -402,6 +460,7 @@ func _instrument_for(type: int) -> Instrument:
 		Instrument.Type.HARP: return _harp
 		Instrument.Type.TRIANGLE: return _triangle
 		Instrument.Type.BELL: return _bell
+		Instrument.Type.SOFT_CHIME: return _soft_chime
 		Instrument.Type.HARP_LONG: return _harp_long
 		Instrument.Type.ARCADE_KICK: return _arcade_kick
 		Instrument.Type.DRUM_KICK_DEEP: return _drum_kick_deep
@@ -774,6 +833,10 @@ func _play_slot() -> void:
 			_melody_player.pitch_scale = sp["pitch_scale"]
 			_melody_player.volume_db = BUCKET_VOLUME_DB + theme.melody_volume_offset
 			_melody_player.play()
+		# Bomb root hum: starts after the first full melody pass and updates
+		# at every chord boundary. Run unconditionally per slot (even on rests
+		# — _melody_idx still advanced) so the activation timing is exact.
+		_update_bomb_hum(seq)
 
 	# Drum layers — prune expired tiers, play active ones on "x" slots.
 	var now: float = Time.get_ticks_msec() / 1000.0
@@ -818,6 +881,10 @@ func _stop_sequencer() -> void:
 	_melody_idx = 0
 	_active_drum_tiers.clear()
 	_melody_player.stop()
+	# The hum was tied to the just-stopped melody — kill it so a fresh
+	# sequencer start (new theme / new challenge) doesn't leave it sustained
+	# at the previous root.
+	_stop_bomb_hum()
 
 
 func _theme_drum_instruments() -> PackedInt32Array:
@@ -940,7 +1007,7 @@ func play_peg_chime(degrees: Array[int] = [], min_interval_seconds: float = -1.0
 		return
 	if not _theme_peg_chime_enabled():
 		return
-	if not _bell or _theme_progression().is_empty():
+	if not _soft_chime or _theme_progression().is_empty():
 		return
 
 	var pool: Array[int] = degrees if not degrees.is_empty() else PEG_CHIME_DEGREES_DEFAULT
@@ -981,7 +1048,7 @@ func _do_play_peg_chime(degrees: Array[int], volume_db: float) -> bool:
 
 	var degree: int = pick_peg_degree(_peg_chime_rng, degrees)
 	var pitch: float = _get_pitch_scale(degree)
-	var sp: Dictionary = _bell.resolve(pitch)
+	var sp: Dictionary = _soft_chime.resolve(pitch)
 
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
@@ -1173,6 +1240,134 @@ func _apply_vfx_override(key: String, enabled: bool, t: VisualTheme) -> void:
 		"bg_particles":       t.bg_particles_enabled = enabled
 
 
+## Bomb hazard audio. Light stubs for the v1 cut — bomb-tick is a soft peg
+## click (synced to ChallengeManager.tick), detonation reuses the peg sparkle
+## as a dramatic bell, and defuse uses the peg sparkle one register up.
+## Replace with bespoke sounds once the hazard plays nice gameplay-wise.
+func play_bomb_tick(_seconds_remaining: int, board_type: Enums.BoardType = Enums.BoardType.GOLD) -> void:
+	if _silenced:
+		return
+	play_peg_click(board_type)
+
+
+func play_bomb_detonation(_board_type: Enums.BoardType = Enums.BoardType.GOLD) -> void:
+	if _silenced:
+		return
+	# Dedicated player (NOT the legacy pool) — see _ready for setup. Setting
+	# volume_db every play as belt-and-braces in case something later in the
+	# session resets it; pitch_scale pinned to 1.0 (every detonation should
+	# sound identical, not randomised the way melody / coin plays are).
+	_bomb_detonation_player.volume_db = BOMB_DETONATION_VOLUME_DB
+	_bomb_detonation_player.pitch_scale = 1.0
+	if _bomb_detonation_player.playing:
+		_bomb_detonation_player.stop()
+	_bomb_detonation_player.play()
+
+
+func play_bomb_defuse(_board_type: Enums.BoardType = Enums.BoardType.GOLD) -> void:
+	if _silenced:
+		return
+	var root_midi: int = get_current_chord_root_midi()
+	if root_midi < 0:
+		return
+	# Two octaves above the current chord's root: a high flourish that sits
+	# clearly above the melody's register without changing voice.
+	var target_midi: int = root_midi + BOMB_DEFUSE_SEMITONE_OFFSET
+	var pitch_mult: float = pow(2.0, float(target_midi - 60) / 12.0)
+	var sp: Dictionary = _triangle.resolve(pitch_mult)
+	_bomb_defuse_player.stream = sp["stream"]
+	_bomb_defuse_player.pitch_scale = sp["pitch_scale"]
+	_bomb_defuse_player.play()
+
+
+## Roots of the 4 chords in the GLOW_DARK challenge progression: C3, Ab3,
+## Bb3, G3 (midi 48, 56, 58, 55). Pinned by hand. Hum (root - 12) sits at
+## C2, Ab2, Bb2, G2 — i-VI-VII-V minor walk. Defuse adds 24 → C5 Ab5 Bb5 G5.
+##
+## ⚠️ This table is glow_dark-specific. When a second challenge theme with
+## a different progression introduces bombs, move these values onto
+## VisualTheme (or AudioStyle) so each theme owns its own chord roots.
+## Until then, get_current_chord_root_midi push_warnings if it's queried on
+## a theme without a melody_sequence we recognise — keeps the silent-
+## misbehaviour from sneaking up on someone.
+const _CHORD_ROOT_MIDI_CYCLE: Array = [48, 56, 58, 55]
+## Semitone offsets from the chord root used by the bomb audio cues. -12 is
+## the hum's "one octave below" rule from the design; +24 is the defuse
+## "two octaves above". Single source of truth — both _update_bomb_hum and
+## play_bomb_defuse reference these.
+const BOMB_HUM_SEMITONE_OFFSET := -12
+const BOMB_DEFUSE_SEMITONE_OFFSET := 24
+
+
+## The midi value of the "root" of the chord currently playing. The chord
+## changes every 16 slots; we cycle through `_CHORD_ROOT_MIDI_CYCLE` indexed
+## by (slot / 16) mod 4. Returns the most-recently-played chord's root.
+## Reused by the bomb defuse cue and the sustained root-hum updater.
+##
+## NOTE: the lookup table is hand-pinned to glow_dark's progression. Other
+## themes with their own progressions will get wrong-key bomb cues until
+## the table is moved onto the theme/AudioStyle resource.
+func get_current_chord_root_midi() -> int:
+	if not ThemeProvider or not ThemeProvider.theme:
+		return -1
+	var seq: PackedInt32Array = ThemeProvider.theme.melody_sequence
+	if seq.is_empty():
+		return -1
+	# After playing the note at index N, _melody_idx == N + 1. The chord
+	# index of the most-recently-played note is (_melody_idx - 1) / 16.
+	var last_played: int = maxi(_melody_idx - 1, 0)
+	@warning_ignore("integer_division")
+	var chord_idx: int = (last_played / 16) % _CHORD_ROOT_MIDI_CYCLE.size()
+	return _CHORD_ROOT_MIDI_CYCLE[chord_idx]
+
+
+## Drives the root-hum. After the melody has played a full pass, a low
+## sustained pad joins it — pitched to (current chord root - 12 semitones)
+## and rewritten on every chord boundary. Called from _play_slot after the
+## melody / drum work has settled the new _melody_idx.
+func _update_bomb_hum(seq: PackedInt32Array) -> void:
+	if _silenced or seq.is_empty():
+		_stop_bomb_hum()
+		return
+	if _melody_idx < seq.size():
+		# First pass not yet complete — hum hasn't joined.
+		return
+	var root_midi: int = get_current_chord_root_midi()
+	if root_midi < 0:
+		return
+	var root_changed: bool = root_midi != _bomb_hum_last_root_midi
+	if root_changed:
+		# Generate a fresh sustained-triangle WAV at the exact target pitch
+		# rather than pitch_scaling a C4-native stream. In Godot 4, pitch_scale
+		# on a LOOP_FORWARD AudioStreamWAV is sampled at the loop boundary,
+		# NOT continuously — so the prior implementation only retook the new
+		# rate on the FIRST chord and then kept resampling at the original C4
+		# rate on subsequent boundaries. Regenerating sidesteps the issue
+		# entirely (88 KB per chord change, ~once every 4 seconds — cheap;
+		# the previous stream is RefCounted and freed when reassigned).
+		var target_midi: int = root_midi + BOMB_HUM_SEMITONE_OFFSET
+		var target_freq: float = C4_FREQ_HZ * pow(2.0, float(target_midi - 60) / 12.0)
+		_bomb_hum_player.stop()
+		_bomb_hum_player.stream = _generate_sustained_triangle(1.0, target_freq)
+		_bomb_hum_player.pitch_scale = 1.0
+		_bomb_hum_player.play()
+		_bomb_hum_last_root_midi = root_midi
+		_bomb_hum_active = true
+		return
+	# Belt + braces: if the loop ever stops (asset reload, sequencer hiccup),
+	# kick it back to life rather than silently going AWOL.
+	if not _bomb_hum_player.playing:
+		_bomb_hum_player.play()
+		_bomb_hum_active = true
+
+
+func _stop_bomb_hum() -> void:
+	if _bomb_hum_active:
+		_bomb_hum_player.stop()
+		_bomb_hum_active = false
+	_bomb_hum_last_root_midi = -999
+
+
 func play_prestige(_play_duration: float = 3.0, _fade_duration: float = 2.0) -> void:
 	# Always use the first chord (I) so prestige is a I maj7, not whatever chord
 	# the progression happened to be on.
@@ -1339,6 +1534,33 @@ func _on_theme_changed() -> void:
 	_on_theme_swap()
 
 # ── Tone generation ─────────────────────────────────────────────────
+
+## Sustained triangle-wave loop for the bomb root hum. Same waveform family
+## as the Triangle melody instrument (so the hum reads as the same voice)
+## but stripped of the 0.25s attack/release envelope so it loops cleanly
+## without re-attacking. Native pitch is C4; caller pitch-scales to the
+## current chord root.
+func _generate_sustained_triangle(duration: float, freq: float, mix_rate: int = 44100) -> AudioStreamWAV:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = mix_rate
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_end = int(duration * mix_rate)
+	var num_samples := int(duration * mix_rate)
+	var data := PackedByteArray()
+	data.resize(num_samples * 2)
+	for i in num_samples:
+		var t: float = float(i) / mix_rate
+		# Gentle 0.25 Hz amplitude wobble keeps the hum breathing without
+		# ever fading to silence.
+		var breath: float = 0.85 + 0.15 * sin(TAU * 0.25 * t)
+		var phase: float = fmod(freq * t, 1.0)
+		var tri: float = 4.0 * absf(phase - 0.5) - 1.0
+		var value: float = tri * breath * 0.3
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767))
+	wav.data = data
+	return wav
+
 
 func _generate_ambient_pad(duration: float, mix_rate: int = 44100, frequencies: Array = [131.0, 196.0]) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
