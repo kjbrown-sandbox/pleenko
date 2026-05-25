@@ -76,3 +76,4 @@ drum_instruments = PackedInt32Array(5, 5, 5, 8, 9, 8)
 drum_patterns = PackedStringArray("x---x---x---x---", "--x---x---x---x-", "xx-xx---xx-xx---", "----x-------x---", "x-x-x-x-x-x-x-x", "--x-----x---x---")
 drum_volumes = PackedFloat32Array(-6, -12, -18, -14, -14, -12)
 melody_volume_offset = 6.0
+peg_chime_enabled = false
