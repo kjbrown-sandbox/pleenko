@@ -203,6 +203,7 @@ var _harp: Harp
 var _harp_long: HarpLong
 var _triangle: Triangle
 var _bell: Bell
+var _soft_chime: SoftChime
 var _arcade_kick: ArcadeKick
 var _click: Click
 var _drum_kick_deep: DrumKick
@@ -255,6 +256,7 @@ func _ready() -> void:
 	_harp_long = HarpLong.new()
 	_triangle = Triangle.new()
 	_bell = Bell.new()
+	_soft_chime = SoftChime.new()
 	_arcade_kick = ArcadeKick.new()
 	_click = Click.new()
 	_drum_kick_deep = DrumKick.new(60.0, 0.22)
@@ -402,6 +404,7 @@ func _instrument_for(type: int) -> Instrument:
 		Instrument.Type.HARP: return _harp
 		Instrument.Type.TRIANGLE: return _triangle
 		Instrument.Type.BELL: return _bell
+		Instrument.Type.SOFT_CHIME: return _soft_chime
 		Instrument.Type.HARP_LONG: return _harp_long
 		Instrument.Type.ARCADE_KICK: return _arcade_kick
 		Instrument.Type.DRUM_KICK_DEEP: return _drum_kick_deep
@@ -940,7 +943,7 @@ func play_peg_chime(degrees: Array[int] = [], min_interval_seconds: float = -1.0
 		return
 	if not _theme_peg_chime_enabled():
 		return
-	if not _bell or _theme_progression().is_empty():
+	if not _soft_chime or _theme_progression().is_empty():
 		return
 
 	var pool: Array[int] = degrees if not degrees.is_empty() else PEG_CHIME_DEGREES_DEFAULT
@@ -981,7 +984,7 @@ func _do_play_peg_chime(degrees: Array[int], volume_db: float) -> bool:
 
 	var degree: int = pick_peg_degree(_peg_chime_rng, degrees)
 	var pitch: float = _get_pitch_scale(degree)
-	var sp: Dictionary = _bell.resolve(pitch)
+	var sp: Dictionary = _soft_chime.resolve(pitch)
 
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)

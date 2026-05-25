@@ -21,6 +21,7 @@ enum Type {
 	DRUM_KICK_BASS,
 	BELL,
 	HARP_LONG,
+	SOFT_CHIME,
 }
 
 
