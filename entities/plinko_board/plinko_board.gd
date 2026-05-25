@@ -361,22 +361,16 @@ func _show_no_room() -> void:
 		return  # Already showing
 	var t: VisualTheme = ThemeProvider.theme
 	_no_room_label = Label3D.new()
-	_no_room_label.text = "!"
-	_no_room_label.font_size = 64
+	_no_room_label.text = "no\nauto\nroom"
+	_no_room_label.font_size = 32
 	if t.label_font:
 		_no_room_label.font = t.label_font
-	_no_room_label.modulate = t.red_main
+	_no_room_label.modulate = t.normal_text_color
 	_no_room_label.outline_size = 0
 	_no_room_label.no_depth_test = true
-	_no_room_label.position = coin_queue.get_overflow_position()
+	_no_room_label.line_spacing = -16
+	_no_room_label.position = coin_queue.get_overflow_position() + Vector3(-0.2, 0, 0)
 	add_child(_no_room_label)
-
-	# Bind tween to the label so it's auto-killed when the label is freed
-	var pulse_tween := _no_room_label.create_tween().set_loops(0)
-	pulse_tween.tween_property(_no_room_label, "scale", Vector3(1.15, 1.15, 1.15), 0.5) \
-		.set_trans(Tween.TRANS_SINE)
-	pulse_tween.tween_property(_no_room_label, "scale", Vector3.ONE, 0.5) \
-		.set_trans(Tween.TRANS_SINE)
 
 
 func _hide_no_room() -> void:
