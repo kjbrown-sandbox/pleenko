@@ -31,6 +31,32 @@ func resolve(pitch_mult: float) -> Dictionary:
 	}
 
 
+## Parse a note name like "F3", "F#3", "Bb4", "C-1" into a pitch_mult relative
+## to BASE_FREQ (C4 = 1.0, C5 = 2.0, C3 = 0.5). MIDI semitone math via
+## equal temperament so callers can author melodies in human-readable strings
+## (e.g. MenuBoard's progression). Returns 1.0 on empty input.
+static func note_name_to_pitch_mult(note: String) -> float:
+	if note.is_empty():
+		return 1.0
+	const LETTER_SEMI := {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+	var letter: String = note.substr(0, 1).to_upper()
+	var idx: int = 1
+	var accidental: int = 0
+	if note.length() > 1:
+		var c: String = note.substr(1, 1)
+		if c == "#":
+			accidental = 1
+			idx = 2
+		elif c == "b":
+			accidental = -1
+			idx = 2
+	var octave: int = note.substr(idx).to_int()
+	var semi: int = int(LETTER_SEMI.get(letter, 0)) + accidental
+	# MIDI: C4 = 60. pitch_mult relative to C4 = 2^((midi - 60)/12).
+	var midi: int = (octave + 1) * 12 + semi
+	return pow(2.0, float(midi - 60) / 12.0)
+
+
 ## Additive synthesis: strong fundamental, gentle sub-octave for body, faint
 ## octave above for a hint of shimmer. Pure harmonics (no inharmonicity).
 ## Short attack ramp smooths the onset; long tail fade prevents click.

@@ -19,6 +19,7 @@ func _run_tests() -> void:
 	test_menu_board_mirrors_plinko_board()
 	test_menu_board_walk_terminates_in_bounds()
 	test_pure_method_signatures_unchanged()
+	test_chime_progression_is_well_formed()
 
 
 # --- Lattice module: pure formula ---
@@ -113,6 +114,24 @@ func test_menu_board_walk_terminates_in_bounds() -> void:
 		assert_true(steps <= mb.num_rows + 1, "walk terminates within num_rows steps")
 	assert_equal(row, mb.num_rows, "walk ends exactly at the terminal row")
 	mb.free()
+
+
+# --- Authored chime sequence: data shape ---
+
+func test_chime_progression_is_well_formed() -> void:
+	print("test_chime_progression_is_well_formed")
+	# Every chord has a name and a non-empty notes array; every note parses to a
+	# positive pitch_mult (the sequencer expects parallel pitch arrays in _ready).
+	assert_true(MenuBoard.PEG_CHIME_PROGRESSION.size() > 0, "progression is non-empty")
+	for chord_entry: Dictionary in MenuBoard.PEG_CHIME_PROGRESSION:
+		assert_true(chord_entry.has("name") and chord_entry["name"] != "",
+			"chord entry has a name")
+		var notes: Array = chord_entry["notes"]
+		assert_true(notes.size() > 0, "chord %s has notes" % chord_entry["name"])
+		for note: String in notes:
+			var pitch: float = SoftChime.note_name_to_pitch_mult(note)
+			assert_true(pitch > 0.0,
+				"note %s in %s parses to a positive pitch_mult" % [note, chord_entry["name"]])
 
 
 ## Tripwire: the wobble/`direction` rework must not break the bare-instance

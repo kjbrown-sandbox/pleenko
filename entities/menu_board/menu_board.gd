@@ -18,8 +18,10 @@ extends Node3D
 ## Why decorative-only: these coins are visual sugar. No currency, no save, no
 ## upgrades, no `Coin` entity, no buckets, no rewards, no landing signal. A coin
 ## bounces row-by-row (random left/right) then despawns at the bottom row. This
-## node emits nothing (calls down only) and reads ONLY `ThemeProvider.theme`
-## for meshes / materials / spacing.
+## node emits nothing (calls down only). Reads `ThemeProvider.theme` for visual
+## config and calls `AudioManager.play_pitched_chime` for two independent
+## audio layers — peg-contact ticks + a background chord progression bed. See
+## the CLAUDE.md `MenuBoard` entry for the audio-layer system map.
 
 ## Peg rows in the decorative lattice — taller than any early-game board so the
 ## field reads as receding into the distance under the perspective camera.
@@ -80,6 +82,77 @@ const MENU_BOUNCE_HEIGHT_MULT := 1.5
 const PEG_WOBBLE_SCALE_PEAK := 1.5
 const PEG_WOBBLE_DURATION := 2.7
 
+## Authored chord progression. Each chord is FOUR notes authored in ascending
+## order (root → up). The index parity selects the playback DIRECTION: even
+## chords arpeggiate ascending (low→high), odd arpeggiate descending (high→low).
+## `intro` plays on beat 0 alongside the regular note — an octave above one of
+## the chord tones, picked per-chord to "announce" the new harmony. Held back
+## until the second loop of the progression so the first time through is bare
+## arpeggios (gradual reveal). `mid` is a higher-octave grace note that plays
+## on the middle beat starting at loop 2 (third play-through), giving an
+## x-x- pattern across the chord (intro on 0, grace on 2).
+## Drop either key (or set "") to skip that note on a chord.
+## To swap chords, edit the `notes` arrays. To flip a chord's direction, just
+## reorder its position in the array.
+const PEG_CHIME_PROGRESSION: Array[Dictionary] = [
+	{"name": "Cmaj7", "notes": ["C3", "E3", "G3", "B3"],   "intro": "C5",  "mid": "E5"},
+	{"name": "C7",    "notes": ["Db3", "E3", "G3", "Bb3"], "intro": "Bb4", "mid": "D5"},
+	{"name": "Fmaj7", "notes": ["F3", "A3", "C4", "E4"],   "intro": "A4",  "mid": "C5"},
+	{"name": "Fm6",   "notes": ["F3", "Ab3", "C4", "D4"],  "intro": "Ab4", "mid": "C5"},
+]
+
+## Beat grid for the background chord progression — fully decoupled from coin
+## bounces (a `Timer` ticks the beat; bounces are visual-only now).
+const PEG_CHIME_BEAT_SECONDS := 0.5
+## Each chord plays one note per beat over this many beats. Steady 2-second
+## phrase per chord; 8-second loop across the 4-chord progression.
+const PEG_CHIME_BEATS_PER_CHORD := 4
+
+## Mid-beat slot for `mid` grace notes — pre-computed const so the timeout
+## handler doesn't divide on every tick. Integer division → middle of an
+## even beats-per-chord (4 → 2), or first-past-middle for odd.
+@warning_ignore("integer_division")
+const PEG_CHIME_MID_BEAT: int = PEG_CHIME_BEATS_PER_CHORD / 2
+
+## Loop-counter gates for layered ornaments. Intro accents enter on the
+## SECOND play-through (loop_index == 1), mid grace notes on the THIRD.
+## The first loop is intentionally bare so the chime arrives in stages.
+const PEG_CHIME_INTRO_START_LOOP := 1
+const PEG_CHIME_MID_START_LOOP := 2
+
+## dB swing between the lowest and highest note of any chord. Higher pitch =
+## louder, applied symmetrically to both directions: ascending arpeggios
+## crescendo (quiet→loud), descending arpeggios decrescendo (loud→quiet).
+const PEG_CHIME_DYNAMIC_RANGE_DB := 9.0
+
+## Base chime loudness above bucket volume — `BUCKET_VOLUME_DB + this` is the
+## peak of each arpeggio. ~+6 dB ≈ doubled amplitude; menu chime IS the
+## soundscape (no busy gameplay layers underneath).
+const PEG_CHIME_VOLUME_OFFSET_DB := 6.0
+
+## Master toggle for the background chord progression. False = the beat timer
+## ticks but plays nothing, so all chord state (loop index, indices, ornament
+## gates) is preserved for an easy re-enable.
+const PEG_CHIME_ENABLED := true
+
+## Tone-less percussion blip on coin/peg contact (glass-marble clink). Rate-
+## limited with a per-hit RANDOM interval so dense bounces don't strobe and
+## the texture feels organic rather than metronomic. Pitch and volume are
+## also randomised per hit so it sounds like varied physical material (size /
+## striking force) rather than a sampled note.
+const PEG_TICK_INTERVAL_MIN_S := 0.1
+const PEG_TICK_INTERVAL_MAX_S := 0.4
+const PEG_TICK_PITCH_MIN := 0.7
+const PEG_TICK_PITCH_MAX := 1.6
+## dB offset from BUCKET_VOLUME_DB — peg tick is a soft texture, well below
+## the chime/buckets.
+const PEG_TICK_VOLUME_OFFSET_DB := -10.0
+## Per-hit amplitude randomisation: ±6 dB ≈ 0.5x to 2x amplitude.
+## Wider swing makes some hits feel close-by and others distant.
+const PEG_TICK_VOLUME_VARIATION_DB := 6.0
+
+## Every Nth coin sparkles — visual peg-ring effect only, NO audio coupling.
+## Audio plays in the background on its own beat timer.
 const SPARKLE_EVERY_NTH_COIN := 4
 
 ## Per-bounce chance a coin bursts into particles instead of continuing.
@@ -136,6 +209,7 @@ var num_rows := MENU_BOARD_ROWS
 @onready var _pegs: Node3D = $Pegs
 @onready var _coins: Node3D = $Coins
 @onready var _spawn_timer: Timer = $SpawnTimer
+@onready var _chime_beat_timer: Timer = $ChimeBeatTimer
 @onready var _light: DirectionalLight3D = $DirectionalLight3D
 
 var _vertical_spacing := 0.0
@@ -152,9 +226,36 @@ var _peg_basis := Basis.IDENTITY
 # peg index -> its active wobble Tween, so repeated hits don't fight.
 var _peg_wobbles: Dictionary = {}
 var _live_coin_count := 0
-# Running spawn tally; every SPARKLE_EVERY_NTH_COIN-th coin sparkles.
-var _spawn_count := 0
 var _coin_tweens: Array[Tween] = []
+# Running spawn tally; every SPARKLE_EVERY_NTH_COIN-th coin sparkles (visual only).
+var _spawn_count: int = 0
+# Beat-grid state. `_chord_index` walks PEG_CHIME_PROGRESSION; `_beat_index`
+# walks 0..PEG_CHIME_BEATS_PER_CHORD-1 within the current chord. Driven by
+# the ChimeBeatTimer (timeout → _on_chime_beat_timeout); coin bounces never
+# touch these.
+var _chord_index: int = 0
+var _beat_index: int = 0
+# Completed full progressions. Gates layered ornaments — intro accents start
+# at loop 1 (second play-through), mid-beat grace notes start at loop 2 (third).
+# First loop is bare arpeggios so the chime arrives in stages.
+var _loop_index: int = 0
+# Cached pitch multipliers per chord (parsed once in _ready from
+# PEG_CHIME_PROGRESSION) — parallel structure: _chime_pitches[chord][note].
+var _chime_pitches: Array[PackedFloat32Array] = []
+# Parallel to _chime_pitches: per-chord intro-accent pitch played on beat 0.
+# 0.0 = no intro for that chord (data didn't include / set blank `intro`).
+var _chime_intro_pitches: PackedFloat32Array = PackedFloat32Array()
+# Parallel: per-chord mid-beat grace pitch played on the middle beat of each
+# chord starting at loop 2. 0.0 = no mid note for that chord.
+var _chime_mid_pitches: PackedFloat32Array = PackedFloat32Array()
+# Earliest time (seconds, monotonic) at which the next peg-tick may fire.
+# 0.0 so the first hit always plays. A fresh random interval is rolled each
+# time a tick fires (see _try_play_peg_tick) — keeps the texture organic.
+var _peg_tick_next_time: float = 0.0
+# Timbre for the chord bed. Hardcoded (NOT theme-driven) — the menu chime is
+# its own audio role, not a copy of the gameplay bucket sound. Swap in
+# `Instrument.Type.{SOFT_CHIME,BELL,HARP,...}` here to A/B variants.
+const CHIME_INSTRUMENT_TYPE: Instrument.Type = Instrument.Type.MUSIC_BOX
 # Impact squash, copied from the gameplay Coin so bounces read naturally.
 var _squash_enabled := false
 var _squash_scale := Vector3.ONE
@@ -188,9 +289,34 @@ func _ready() -> void:
 	_squash_scale = t.coin_impact_squash_scale
 	_squash_duration = t.coin_impact_squash_duration
 
+	_chime_pitches = []
+	_chime_intro_pitches = PackedFloat32Array()
+	_chime_mid_pitches = PackedFloat32Array()
+	for chord_entry in PEG_CHIME_PROGRESSION:
+		var notes: Array = chord_entry["notes"]
+		var arr := PackedFloat32Array()
+		for note in notes:
+			arr.append(SoftChime.note_name_to_pitch_mult(note))
+		_chime_pitches.append(arr)
+		# 0.0 sentinel = no extra note for this chord at this slot.
+		var intro_pitch: float = 0.0
+		if chord_entry.has("intro") and String(chord_entry["intro"]) != "":
+			intro_pitch = SoftChime.note_name_to_pitch_mult(chord_entry["intro"])
+		_chime_intro_pitches.append(intro_pitch)
+		var mid_pitch: float = 0.0
+		if chord_entry.has("mid") and String(chord_entry["mid"]) != "":
+			mid_pitch = SoftChime.note_name_to_pitch_mult(chord_entry["mid"])
+		_chime_mid_pitches.append(mid_pitch)
+
 	_spawn_timer.wait_time = COIN_SPAWN_INTERVAL_SEC
 	_spawn_timer.timeout.connect(_on_spawn_timer_timeout)
 	_spawn_timer.start()
+
+	# Background chord beat — independent of coin bounces. Fires on a fixed
+	# 0.5s grid regardless of how many coins are alive.
+	_chime_beat_timer.wait_time = PEG_CHIME_BEAT_SECONDS
+	_chime_beat_timer.timeout.connect(_on_chime_beat_timeout)
+	_chime_beat_timer.start()
 
 	# Camera transform/fov are authored on $Camera3D in the .tscn (editor-tunable).
 	_light.rotation_degrees = MENU_LIGHT_ROTATION_DEG
@@ -200,7 +326,10 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	# SceneManager.set_new_scene() frees the whole MainMenu mid-fade while coins
 	# may still be tweening — kill every live tween so no callback fires against
-	# a freeing coin.
+	# a freeing coin. Same rationale for the ChimeBeatTimer: stop it explicitly
+	# so a final timeout can't fire `_on_chime_beat_timeout` mid-free.
+	if _chime_beat_timer != null:
+		_chime_beat_timer.stop()
 	for tween in _coin_tweens:
 		if tween != null and tween.is_valid():
 			tween.kill()
@@ -321,7 +450,7 @@ func _spawn_coin() -> void:
 	coin.basis = _coin_basis
 
 	_spawn_count += 1
-	var sparkle := _spawn_count % SPARKLE_EVERY_NTH_COIN == 0
+	var sparkle: bool = _spawn_count % SPARKLE_EVERY_NTH_COIN == 0
 	var coin_color: Color = _coin_colors[currency]
 
 	var entry := _cell_position(0, 0) + Vector3(0.0, 0.0, COIN_Z_OFFSET)
@@ -339,7 +468,8 @@ func _spawn_coin() -> void:
 ## Recursive row-by-row bounce, like the gameplay Coin (CLAUDE.md "row by row").
 ## `row`/`col` are explicit (not a hidden default counter) and the base case is
 ## checked first so a cold reader sees termination immediately. Sparkle coins
-## emit a peg ring at every peg they strike.
+## emit a peg ring at every peg they strike — purely visual, no audio coupling
+## (audio runs on the ChimeBeatTimer in the background).
 func _advance_coin_bounce(coin: MeshInstance3D, row: int, col: int,
 		coin_color: Color, sparkle: bool) -> void:
 	if not is_instance_valid(coin):
@@ -355,6 +485,7 @@ func _advance_coin_bounce(coin: MeshInstance3D, row: int, col: int,
 	_wobble_peg(row, col)
 	if sparkle:
 		_spawn_peg_ring(_peg_position(row, col), coin_color, t)
+	_try_play_peg_tick()
 
 	if randf() < COIN_EXPLODE_CHANCE:
 		_explode_coin(coin, t)
@@ -467,6 +598,84 @@ func _wobble_peg(row: int, col: int) -> void:
 		if _peg_wobbles.get(idx) == tw:
 			_peg_wobbles.erase(idx))
 	_peg_wobbles[idx] = tw
+
+
+## Rate-limited tone-less peg-contact blip — glass-marble clink. Called on
+## every peg strike of every coin (not just the sparkle coin). A random
+## interval is rolled after each fire so the texture isn't metronomic, and
+## pitch + volume are also randomised per hit so successive clinks read as
+## different physical objects (size + striking force) rather than a
+## repeating sample.
+func _try_play_peg_tick() -> void:
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if now < _peg_tick_next_time:
+		return
+	_peg_tick_next_time = now + randf_range(PEG_TICK_INTERVAL_MIN_S,
+		PEG_TICK_INTERVAL_MAX_S)
+	var pitch: float = randf_range(PEG_TICK_PITCH_MIN, PEG_TICK_PITCH_MAX)
+	var volume_jitter: float = randf_range(-PEG_TICK_VOLUME_VARIATION_DB,
+		PEG_TICK_VOLUME_VARIATION_DB)
+	var volume_db: float = AudioManager.BUCKET_VOLUME_DB \
+		+ PEG_TICK_VOLUME_OFFSET_DB + volume_jitter
+	AudioManager.play_pitched_chime(pitch, volume_db, NAN, Instrument.Type.PEG_TICK)
+
+
+## Beat-grid driver — fires every PEG_CHIME_BEAT_SECONDS (0.5s) regardless of
+## coin activity. One note per beat across PEG_CHIME_BEATS_PER_CHORD beats per
+## chord. Even-indexed chords play their notes in authored (ascending) order;
+## odd-indexed chords play them in reverse (descending arpeggio). After all
+## beats fire, advance to the next chord (wrapping at end of progression).
+func _on_chime_beat_timeout() -> void:
+	if not PEG_CHIME_ENABLED:
+		return
+	if _chime_pitches.is_empty():
+		return
+	var pitches: PackedFloat32Array = _chime_pitches[_chord_index]
+	if pitches.size() > 0 and _beat_index < pitches.size():
+		# Notes in each chord are ALWAYS authored ascending. Direction is
+		# implicit from chord-index parity — even chords iterate the array
+		# forward, odd chords iterate it backward. This single rule produces
+		# the ascend/descend pattern in PEG_CHIME_PROGRESSION's docstring.
+		var ascending: bool = _chord_index % 2 == 0
+		var note_idx: int = _beat_index if ascending else pitches.size() - 1 - _beat_index
+		# Per-note offset scales with pitch (`note_idx` in the ascending
+		# array): lowest note sits at base - PEG_CHIME_DYNAMIC_RANGE_DB,
+		# highest at base. The same rule for ascending AND descending —
+		# direction emerges from how note_idx is iterated above.
+		var base_db: float = AudioManager.BUCKET_VOLUME_DB + PEG_CHIME_VOLUME_OFFSET_DB
+		var t_pitch: float = 0.0 if pitches.size() <= 1 \
+			else float(note_idx) / float(pitches.size() - 1)
+		var volume_db: float = base_db - PEG_CHIME_DYNAMIC_RANGE_DB * (1.0 - t_pitch)
+		AudioManager.play_pitched_chime(pitches[note_idx], volume_db,
+			NAN, CHIME_INSTRUMENT_TYPE)
+		# Beat 0 fires the chord's intro accent (an octave above one of its
+		# chord tones) — "announces" the new harmony. Held back until the
+		# second play-through (loop 1) so loop 0 stays bare. Plays at base
+		# volume so it sits clearly above the arpeggio dynamic.
+		if _beat_index == 0 and _loop_index >= PEG_CHIME_INTRO_START_LOOP \
+				and _chord_index < _chime_intro_pitches.size():
+			var intro_pitch: float = _chime_intro_pitches[_chord_index]
+			if intro_pitch > 0.0:
+				AudioManager.play_pitched_chime(intro_pitch, base_db,
+					NAN, CHIME_INSTRUMENT_TYPE)
+		# Mid-beat slot adds a higher-octave grace note starting at the third
+		# play-through (loop 2) — produces the x-x- pattern across the chord
+		# (intro on beat 0, grace on PEG_CHIME_MID_BEAT).
+		if _beat_index == PEG_CHIME_MID_BEAT \
+				and _loop_index >= PEG_CHIME_MID_START_LOOP \
+				and _chord_index < _chime_mid_pitches.size():
+			var mid_pitch: float = _chime_mid_pitches[_chord_index]
+			if mid_pitch > 0.0:
+				AudioManager.play_pitched_chime(mid_pitch, base_db,
+					NAN, CHIME_INSTRUMENT_TYPE)
+
+	_beat_index += 1
+	if _beat_index >= PEG_CHIME_BEATS_PER_CHORD:
+		_beat_index = 0
+		_chord_index += 1
+		if _chord_index >= _chime_pitches.size():
+			_chord_index = 0
+			_loop_index += 1
 
 
 ## Expanding sparkle ring at a struck peg — same shader/animation as the

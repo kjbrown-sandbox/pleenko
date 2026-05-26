@@ -232,6 +232,8 @@ var _harp_long: HarpLong
 var _triangle: Triangle
 var _bell: Bell
 var _soft_chime: SoftChime
+var _music_box: MusicBox
+var _peg_tick: PegTick
 var _arcade_kick: ArcadeKick
 var _click: Click
 var _drum_kick_deep: DrumKick
@@ -285,6 +287,8 @@ func _ready() -> void:
 	_triangle = Triangle.new()
 	_bell = Bell.new()
 	_soft_chime = SoftChime.new()
+	_music_box = MusicBox.new()
+	_peg_tick = PegTick.new()
 	_arcade_kick = ArcadeKick.new()
 	_click = Click.new()
 	_drum_kick_deep = DrumKick.new(60.0, 0.22)
@@ -461,6 +465,8 @@ func _instrument_for(type: int) -> Instrument:
 		Instrument.Type.TRIANGLE: return _triangle
 		Instrument.Type.BELL: return _bell
 		Instrument.Type.SOFT_CHIME: return _soft_chime
+		Instrument.Type.MUSIC_BOX: return _music_box
+		Instrument.Type.PEG_TICK: return _peg_tick
 		Instrument.Type.HARP_LONG: return _harp_long
 		Instrument.Type.ARCADE_KICK: return _arcade_kick
 		Instrument.Type.DRUM_KICK_DEEP: return _drum_kick_deep
@@ -1048,8 +1054,38 @@ func _do_play_peg_chime(degrees: Array[int], volume_db: float) -> bool:
 
 	var degree: int = pick_peg_degree(_peg_chime_rng, degrees)
 	var pitch: float = _get_pitch_scale(degree)
-	var sp: Dictionary = _soft_chime.resolve(pitch)
+	return _play_chime_voice(_soft_chime, pitch, volume_db, PEG_CHIME_SUSTAIN_S, degree)
 
+
+## Plays a chime-style voice at a caller-specified pitch_mult — bypasses random
+## degree picking, throttling, AudioStyle chord lookup, and `_chord_had_landing`
+## side effects. Used by MenuBoard for both its chord-bed melody (MUSIC_BOX)
+## and its peg-contact ticks (PEG_TICK); independent of any theme's progression.
+## `instrument_type` selects the timbre (defaults to SOFT_CHIME for callers
+## that don't care). `volume_db` / `sustain_s` default to the gameplay
+## peg-chime values when NAN.
+func play_pitched_chime(pitch_mult: float, volume_db: float = NAN,
+		sustain_s: float = NAN,
+		instrument_type: Instrument.Type = Instrument.Type.SOFT_CHIME) -> void:
+	if _silenced:
+		return
+	var instrument: Instrument = _instrument_for(instrument_type)
+	if instrument == null:
+		return
+	var vol_db: float = volume_db if not is_nan(volume_db) else PEG_CHIME_VOLUME_DB
+	var sustain: float = sustain_s if not is_nan(sustain_s) else PEG_CHIME_SUSTAIN_S
+	_play_chime_voice(instrument, pitch_mult, vol_db, sustain, 0)
+
+
+## Shared voice allocation — pops a free drone, configures stream / pitch /
+## volume, marks the slot active. Returns false when no slot is free so callers
+## can skip throttle bookkeeping. Used by both the random-degree peg chime path
+## (always SoftChime) and `play_pitched_chime` (caller-selectable instrument).
+func _play_chime_voice(instrument: Instrument, pitch_mult: float, volume_db: float,
+		sustain_s: float, degree: int) -> bool:
+	if _drone_free.is_empty():
+		return false
+	var sp: Dictionary = instrument.resolve(pitch_mult)
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
 	var player: AudioStreamPlayer = _drone_pool[idx]
@@ -1057,9 +1093,8 @@ func _do_play_peg_chime(degrees: Array[int], volume_db: float) -> bool:
 	player.pitch_scale = sp["pitch_scale"]
 	player.volume_db = volume_db
 	player.play()
-
 	var key: String = "PC_" + str(Time.get_ticks_msec()) + "_" + str(idx)
-	_active_drones[key] = _make_drone_entry(idx, PEG_CHIME_SUSTAIN_S, degree, 1.0, DroneState.ACTIVE, false)
+	_active_drones[key] = _make_drone_entry(idx, sustain_s, degree, 1.0, DroneState.ACTIVE, false)
 	return true
 
 

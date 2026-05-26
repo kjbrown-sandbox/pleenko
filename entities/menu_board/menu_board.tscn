@@ -16,6 +16,8 @@ triangle_dark_source = 23
 
 [node name="SpawnTimer" type="Timer" parent="." unique_id=918830882]
 
+[node name="ChimeBeatTimer" type="Timer" parent="." unique_id=918830883]
+
 [node name="Camera3D" type="Camera3D" parent="." unique_id=160519594]
 ; transform = Transform3D(0.97081, 0.13557, -0.19782, 0, 0.82486, 0.56529, 0.23982, -0.5488, 0.80078, -1.492, 0.906, 14.194)
 transform = Transform3D(0.9555, 0.1902, -0.2256, 0, 0.7646, 0.6446, 0.2951, -0.6159, 0.7305, -1.117, -0.167, 12.674) 
