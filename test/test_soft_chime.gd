@@ -14,6 +14,8 @@ func _run_tests() -> void:
 	test_resolve_pitch_scale_is_proportional()
 	test_streams_are_nonempty()
 	test_audio_manager_instrument_for_soft_chime()
+	test_note_name_to_pitch_mult()
+	test_note_name_to_pitch_mult_accidentals()
 
 
 func test_resolve_below_crossover_uses_low_stream() -> void:
@@ -84,3 +86,25 @@ func test_audio_manager_instrument_for_soft_chime() -> void:
 	var instr: Instrument = AudioManager._instrument_for(Instrument.Type.SOFT_CHIME)
 	assert_true(instr != null, "SOFT_CHIME enum resolves to a non-null instrument")
 	assert_true(instr is SoftChime, "instrument is a SoftChime")
+
+
+func test_note_name_to_pitch_mult() -> void:
+	print("test_note_name_to_pitch_mult")
+	# C4 is the BASE_FREQ anchor → 1.0; octaves up/down halve/double.
+	assert_near(SoftChime.note_name_to_pitch_mult("C4"), 1.0, 0.0001, "C4 == 1.0")
+	assert_near(SoftChime.note_name_to_pitch_mult("C5"), 2.0, 0.0001, "C5 == 2.0")
+	assert_near(SoftChime.note_name_to_pitch_mult("C3"), 0.5, 0.0001, "C3 == 0.5")
+	# A4 = 440 Hz; pitch_mult = 440 / 261.63.
+	assert_near(SoftChime.note_name_to_pitch_mult("A4"), 440.0 / SoftChime.BASE_FREQ,
+		0.001, "A4 == 440/BASE")
+
+
+func test_note_name_to_pitch_mult_accidentals() -> void:
+	print("test_note_name_to_pitch_mult_accidentals")
+	var f3: float = SoftChime.note_name_to_pitch_mult("F3")
+	var fsharp3: float = SoftChime.note_name_to_pitch_mult("F#3")
+	var g3: float = SoftChime.note_name_to_pitch_mult("G3")
+	assert_true(f3 < fsharp3 and fsharp3 < g3, "F#3 lies strictly between F3 and G3")
+	# Enharmonic: Bb4 == A#4.
+	assert_near(SoftChime.note_name_to_pitch_mult("Bb4"),
+		SoftChime.note_name_to_pitch_mult("A#4"), 0.0001, "Bb4 == A#4 (enharmonic)")

@@ -11,8 +11,7 @@
 - When I propose a feature or approach, validate it against Godot best practices and game industry conventions before implementing. If my suggestion conflicts with established patterns, flag it and explain the recommended alternative.
 - Prefer idiomatic Godot solutions (e.g., using signals over polling, scene composition over deep inheritance, built-in nodes over custom reimplementations).
 - When making modifications, make as many edits to the .tscn file as possible before relying on .gd for functionality.
-- **Always write tests for bug fixes.** The project has test infrastructure in `test/` using a custom `test_base.gd` runner (headless Godot scenes). Before marking any bug fix done, check if the fix is testable and write a test. Pure-logic functions and autoload methods can be tested in headless scenes. This applies to all work, not just plan-mode features.
-- **When committing, always add tests for your changes.** Before creating a commit, ensure tests exist for the files you modified. Only test your own changes — other untested code in the diff is out of scope.
+- **Tests are a commit-time concern, not a mid-iteration concern.** The project has test infrastructure in `test/` using a custom `test_base.gd` runner (headless Godot scenes). Pure-logic functions and autoload methods can be tested in headless scenes. **Do not write tests during iteration** — they pollute the diff the user is trying to evaluate by ear/eye, and often have to be redone as the design shifts. Tests get added ONLY when the user signals the work is ready to ship (typically `/ship`, or an explicit "let's commit / let's add tests"). At that point, ensure tests exist for the files you modified — bug fixes and feature work alike. Other untested code in the diff is out of scope.
 
 ## Game Description
 
@@ -48,6 +47,13 @@ Coins should calculate their path **row by row**, not all at once. This way if t
 > the source of truth for *what* it does; this section exists for *why* and
 > *how it connects*. Method-level prose goes stale fast and is re-read from
 > source anyway — keep entries to ownership/signals + invariants, terse.
+>
+> **When to edit this section: only at post-implementation review (step 7 of
+> the Branch Workflow below), NEVER mid-iteration.** Designs shift while the
+> user is testing by ear/eye; updating the map before the design has settled
+> means the doc has to be redone, and the churn pollutes the diff the user is
+> evaluating. Wait until the user has confirmed the implementation is ready
+> for review, then update in a separate commit.
 
 #### Project layout
 
@@ -238,9 +244,11 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 **MenuBoard** — `entities/menu_board/menu_board.{gd,tscn}` (`class_name MenuBoard`)
 
-- Decorative, visual-only Plinko board behind the main menu; instanced by `main_menu.tscn`. Self-contained: reads ONLY `ThemeProvider.theme` (+ shared `Lattice`), emits nothing, no Currency/Save/Upgrade/BoardManager/`Coin` coupling, no buckets/rewards.
+- Decorative, visual-only Plinko board behind the main menu; instanced by `main_menu.tscn`. Self-contained: reads `ThemeProvider.theme` + shared `Lattice` + calls `AudioManager.play_pitched_chime` for the chime-coin melody; emits nothing, no Currency/Save/Upgrade/BoardManager/`Coin` coupling, no buckets/rewards.
 - Perspective `Camera3D` + `fov` are **authored in `menu_board.tscn`** (editor-tunable); code never writes the camera transform (only the menu-only `DirectionalLight3D` rotation/energy, since the gameplay theme is `unshaded`). Theme is read once in `_ready` — static for the node's lifetime by design (no `theme_changed` subscription).
-- MultiMesh near-flat disc pegs with per-row alpha fade (vertex-colour albedo) + an elastic "jello" scale wobble on coin contact (`_peg_wobbles` per-peg dedupe). Lightweight `MeshInstance3D` coins spawned on a `Timer`, bounce row-by-row via `Lattice`, ride `COIN_ROW_Y_OFFSET` above the pegs (same Z plane → no parallax). Sparkle ring every Nth coin; rare per-bounce particle burst reusing a prebuilt shared mesh + the coin's shared material. All tweens tracked + killed in `_exit_tree` (SceneManager frees the menu mid-fade); `_track_tween` prune is amortized. All tuning is local `MENU_*`/`PEG_*` consts (never the shared `VisualTheme` schema).
+- MultiMesh near-flat disc pegs with per-row alpha fade (vertex-colour albedo) + an elastic "jello" scale wobble on coin contact (`_peg_wobbles` per-peg dedupe). Lightweight `MeshInstance3D` coins spawned on a `Timer`, bounce row-by-row via `Lattice`, ride `COIN_ROW_Y_OFFSET` above the pegs (same Z plane → no parallax). Rare per-bounce particle burst reusing a prebuilt shared mesh + the coin's shared material. All tweens tracked + killed in `_exit_tree` (SceneManager frees the menu mid-fade); `_track_tween` prune is amortized. All tuning is local `MENU_*`/`PEG_*` consts (never the shared `VisualTheme` schema).
+- **Single chime coin invariant.** At most one live coin (`_chime_coin`) is the sparkle + chime source; all other coins are silent and emit no peg ring. `_despawn_coin` clears the ref (covers both natural termination and `_explode_coin` → despawn) so the next spawn takes over. Sparkle ring and chime fire together on the same peg strike — *one source*.
+- **Authored melodic sequence.** `PEG_CHIME_PROGRESSION` is an Array of `{name, notes}` dicts; `notes` are readable note names (`"F3"`, `"Bb4"`) parsed once in `_ready` via `SoftChime.note_name_to_pitch_mult` into `_chime_pitches`. Each peg strike of the chime coin plays the current pitch then advances `(_chord_index, _note_index)` via the pure static `advance_chime_indices`. Indices persist across chime-coin swaps so the melody is continuous despite the brief silent gap between coins. To try a new progression, edit one array — no code change.
 
 **MenuTriangleField** — `entities/menu_triangle_field/menu_triangle_field.{gd,tscn}` (`class_name MenuTriangleField`)
 

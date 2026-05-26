@@ -22,6 +22,9 @@ enum Type {
 	BELL,
 	HARP_LONG,
 	SOFT_CHIME,
+	PIANO,
+	MUSIC_BOX,
+	PEG_TICK,
 }
 
 
