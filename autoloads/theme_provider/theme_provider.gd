@@ -4,7 +4,7 @@ signal theme_changed
 
 enum Kind { NORMAL, CHALLENGE }
 
-@export var normal_theme: VisualTheme = preload("res://style_lab/presets/nier_zen.tres")
+@export var normal_theme: VisualTheme = preload("res://style_lab/presets/nier_lofi.tres")
 @export var challenge_theme: VisualTheme = preload("res://style_lab/presets/glow_dark.tres")
 
 var theme: VisualTheme
