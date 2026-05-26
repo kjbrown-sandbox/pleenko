@@ -1608,7 +1608,7 @@ func is_lattice_cell_voided(row: int, col: int) -> bool:
 	# Peg rows: use the lattice cell position — pegs are lattice-aligned, so
 	# the radius check is exact.
 	var cell_pos: Vector3 = cell_to_world(row, col)
-	for entry in _voided_radii:
+	for entry: Dictionary in _voided_radii:
 		var dx: float = cell_pos.x - entry["cx"]
 		var dy: float = cell_pos.y - entry["cy"]
 		var r: float = entry["radius"]
@@ -1938,7 +1938,7 @@ func _reapply_voided_radii() -> void:
 		return
 	var hide: PackedInt32Array = PackedInt32Array()
 	var r2_list: Array[float] = []
-	for entry in _voided_radii:
+	for entry: Dictionary in _voided_radii:
 		var r: float = entry["radius"]
 		r2_list.append(r * r)
 	for i in _peg_positions.size():
