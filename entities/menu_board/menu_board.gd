@@ -144,14 +144,15 @@ const PEG_CHIME_ENABLED := true
 const PEG_TICK_INTERVAL_MIN_S := 0.1
 const PEG_TICK_INTERVAL_MAX_S := 0.4
 ## Pitch multiplier applied to the chord note before hand-off to PegTick.
-## PegTick is a noise burst with a fixed 2800 Hz resonance; passing the chord
-## notes at their authored C3-B3 octave (pitch_mult ≈ 0.5) stretches the
-## sample back at half speed and the marble loses its clink. Shifting up two
-## octaves (x4) plays the marble at a bright, in-character speed AND moves
-## the resonance peak closer to the actual chord pitches.
-const PEG_TICK_OCTAVE_MULT := 4.0
+## 4.0 = two octaves up. PegTick is a noise burst with a fixed 2800 Hz
+## resonance; passing the chord notes at their authored C3-B3 octave
+## (pitch_mult ≈ 0.5) stretches the sample back at half speed and the marble
+## loses its clink. Shifting up two octaves plays the marble at a bright,
+## in-character speed AND moves the resonance peak closer to the actual
+## chord pitches.
+const PEG_TICK_PITCH_MULT := 4.0
 ## dB offset from BUCKET_VOLUME_DB — peg tick is texture under the chord bed.
-## -10 dB ≈ half the prior -4 dB amplitude (20*log10(0.5) ≈ -6 dB).
+## Roughly 6 dB quieter than an earlier tuning pass, ≈ half the prior amplitude.
 const PEG_TICK_VOLUME_OFFSET_DB := -10.0
 
 ## Every Nth coin sparkles — visual peg-ring effect only, NO audio coupling.
@@ -619,7 +620,7 @@ func _try_play_peg_tick() -> void:
 	var pitches: PackedFloat32Array = _chime_pitches[_chord_index]
 	if pitches.is_empty():
 		return
-	var pitch: float = pitches[randi() % pitches.size()] * PEG_TICK_OCTAVE_MULT
+	var pitch: float = pitches[randi() % pitches.size()] * PEG_TICK_PITCH_MULT
 	var volume_db: float = AudioManager.BUCKET_VOLUME_DB + PEG_TICK_VOLUME_OFFSET_DB
 	AudioManager.play_pitched_chime(pitch, volume_db, NAN, Instrument.Type.PEG_TICK)
 

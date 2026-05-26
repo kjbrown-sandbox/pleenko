@@ -136,24 +136,24 @@ func test_chime_progression_is_well_formed() -> void:
 
 
 ## Peg-tick contract: `_try_play_peg_tick` picks a random note from the
-## currently-active chord and shifts it by PEG_TICK_OCTAVE_MULT before handing
+## currently-active chord and shifts it by PEG_TICK_PITCH_MULT before handing
 ## off to the PegTick noise instrument (whose pre-rendered sample sounds
 ## sluggish/muddy at sub-1.0 pitch_scales). This regression-guards the
 ## "shifted chord note → positive pitch_mult" contract: any future progression
-## edit that authored a 0 or negative pitch, or any flip of PEG_TICK_OCTAVE_MULT
+## edit that authored a 0 or negative pitch, or any flip of PEG_TICK_PITCH_MULT
 ## to a non-positive value, fails here before it can produce a silent or
 ## reversed playback.
 func test_peg_tick_pitches_are_valid() -> void:
 	print("test_peg_tick_pitches_are_valid")
-	assert_true(MenuBoard.PEG_TICK_OCTAVE_MULT > 0.0,
-		"PEG_TICK_OCTAVE_MULT is a positive multiplier")
+	assert_true(MenuBoard.PEG_TICK_PITCH_MULT > 0.0,
+		"PEG_TICK_PITCH_MULT is a positive multiplier")
 	assert_true(MenuBoard.PEG_TICK_VOLUME_OFFSET_DB < 0.0,
 		"PEG_TICK_VOLUME_OFFSET_DB is negative (tick sits under the chord bed)")
 	for chord_entry: Dictionary in MenuBoard.PEG_CHIME_PROGRESSION:
 		var notes: Array = chord_entry["notes"]
 		for note: String in notes:
 			var pitch: float = SoftChime.note_name_to_pitch_mult(note) \
-				* MenuBoard.PEG_TICK_OCTAVE_MULT
+				* MenuBoard.PEG_TICK_PITCH_MULT
 			assert_true(pitch > 0.0,
 				"shifted pitch for %s in %s is positive" % [note, chord_entry["name"]])
 
