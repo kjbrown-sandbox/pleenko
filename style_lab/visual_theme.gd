@@ -369,6 +369,15 @@ const coin_shape := CoinShape.CYLINDER
 @export var cap_raise_swoop_duration := 0.55              ## Seconds particles swoop from one cap location to the next
 @export var cap_raise_currency_appear_duration := 0.35    ## Seconds the new raw-currency bar fades in mid-reveal
 
+@export_group("Forbidden Bucket Zoom VFX")
+## Pre-landing zoom played by ForbiddenBucketRevealAnimator when a coin is
+## about to land in a forbidden bucket. Lighter than prestige/cap-raise so the
+## ensuing radial detonation reads as the climax, not the zoom itself.
+@export var forbidden_zoom_slow_mo_scale := 0.55          ## Engine.time_scale during the coin's descent
+@export var forbidden_zoom_size := 5.5                    ## Orthographic camera size when zoomed on the coin
+@export var forbidden_camera_follow_rate := 4.0           ## Camera lerp rate toward the coin (1/sec, real time)
+@export var forbidden_hold_duration := 0.4                ## Real-time seconds to hold the zoom after the coin lands
+
 # ── Audio ────────────────────────────────────────────────────────────
 @export_group("Audio")
 

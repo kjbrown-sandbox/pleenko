@@ -81,6 +81,14 @@ var _click_idx: int = 0
 
 var _active_board: Enums.BoardType = Enums.BoardType.GOLD
 
+## When true, `_process` divides its incoming delta by Engine.time_scale so the
+## beat grid + chord progression + chime quantizer keep ticking at wall-clock
+## rate during a brief cinematic slow-mo (the forbidden-bucket zoom). Default
+## off: prestige + cap-raise keep their existing scaled-delta behavior. Set via
+## `set_real_time_delta(enabled)` — animators turn it on at start, off at
+## teardown.
+var _real_time_delta_enabled: bool = false
+
 var _chord_timer: float = 6.0  # overwritten from theme.chord_duration on _ready
 var _chord_idle_timer: float = 0.0
 var _chord_had_landing: bool = false
@@ -385,6 +393,14 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	var has_activity: bool = _active_coin_count > 0
+	# During the forbidden-bucket zoom (and any future opt-in cinematic),
+	# Engine.time_scale is slowed but we want the beat grid + chord progression
+	# to keep marching at wall-clock rate so the chord-bed doesn't stretch and
+	# active buckets stay visually in sync with their audio chord. Bucket
+	# chimes from coin landings are unaffected — those fire on tween callbacks
+	# (already scaled) which is correct (slower coin = fewer chimes).
+	if _real_time_delta_enabled:
+		delta = delta / maxf(Engine.time_scale, 0.0001)
 
 	_tick_harmonic_rhythm(delta, has_activity)
 	_tick_beat_grid(delta)
@@ -394,6 +410,14 @@ func _process(delta: float) -> void:
 	_update_bucket_drones(delta)
 	_tick_prestige_arpeggio()
 	_tick_peg_chime_quantize(delta)
+
+
+## Toggle wall-clock delta for the beat grid + chord progression. The
+## ForbiddenBucketRevealAnimator turns it on while it owns the slow-mo and
+## off on teardown — keeps the chord-bed steady and active buckets in sync
+## with their chord even while game time is at 0.35x.
+func set_real_time_delta(enabled: bool) -> void:
+	_real_time_delta_enabled = enabled
 
 
 ## Advances the chord index through theme.progression while there's activity.

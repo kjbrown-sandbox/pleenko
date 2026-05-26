@@ -53,6 +53,11 @@ func _run_tests() -> void:
 	test_get_targetable_bucket_indices_excludes_edges()
 	test_void_column_idempotent()
 	test_shift_voided_columns_handles_add_rows()
+	test_is_lattice_cell_voided_radius_inside()
+	test_is_lattice_cell_voided_radius_outside()
+	test_is_lattice_cell_voided_bucket_row_uses_destroyed_set()
+	test_is_lattice_cell_voided_unions_column_and_radius()
+	test_voided_radii_cleared_with_markings()
 
 
 # --- Helper ---
@@ -609,4 +614,75 @@ func test_shift_voided_columns_handles_add_rows() -> void:
 	assert_true(board.is_column_voided(1), "old bucket 0 → new bucket 1 still voided")
 	assert_true(board.is_column_voided(2), "old bucket 1 → new bucket 2 still voided")
 	assert_false(board.is_column_voided(0), "new bucket 0 (added edge) not voided")
+	board.free()
+
+
+# --- Radial void tests (ForbiddenBucketHazard detonation) ---
+
+func test_is_lattice_cell_voided_radius_inside() -> void:
+	print("test_is_lattice_cell_voided_radius_inside")
+	# A radius centered on peg (row=2, col=2) at world position (1, -2) with
+	# radius 0.5 should include the cell itself (distance 0).
+	var board := _make_board({"num_rows": 4, "space_between_pegs": 1.0,
+		"vertical_spacing": 1.0})
+	# cell_to_world(2, 2) -> (-2*1/2 + 2*1, 0.2 - 1*2, 0) = (1, -1.8, 0)
+	board._voided_radii = [{"cx": 1.0, "cy": -1.8, "radius": 0.5}]
+	assert_true(board.is_lattice_cell_voided(2, 2), "cell at radius centre is voided")
+	board.free()
+
+
+func test_is_lattice_cell_voided_radius_outside() -> void:
+	print("test_is_lattice_cell_voided_radius_outside")
+	# A small radius shouldn't engulf cells two rows away.
+	var board := _make_board({"num_rows": 4, "space_between_pegs": 1.0,
+		"vertical_spacing": 1.0})
+	board._voided_radii = [{"cx": 1.0, "cy": -1.8, "radius": 0.5}]
+	# cell_to_world(0, 0) -> (0, 0.2, 0); distance > 0.5 → not voided.
+	assert_false(board.is_lattice_cell_voided(0, 0), "cell well outside radius survives")
+	board.free()
+
+
+func test_is_lattice_cell_voided_bucket_row_uses_destroyed_set() -> void:
+	print("test_is_lattice_cell_voided_bucket_row_uses_destroyed_set")
+	# At the bucket row, the authoritative answer is the explicit
+	# `_destroyed_bucket_indices` set (synchronously populated by
+	# detonate_radius). This decouples scoring from the multi-second fall
+	# animation — a coin targeting a falling-but-still-visible bucket must
+	# still see the cell as voided.
+	var board := _make_board({"num_rows": 4})
+	board._destroyed_bucket_indices[2] = true
+	# Bucket row is row = num_rows.
+	assert_true(board.is_lattice_cell_voided(4, 2), "destroyed bucket cell is voided")
+	assert_false(board.is_lattice_cell_voided(4, 3), "neighbour bucket cell is not voided")
+	board.free()
+
+
+func test_is_lattice_cell_voided_unions_column_and_radius() -> void:
+	print("test_is_lattice_cell_voided_unions_column_and_radius")
+	# Column-based bomb cut AND radial detonation both contribute to the void
+	# set — coins fall through cells inside EITHER. Regression guard for the
+	# is_lattice_cell_voided extension. Uses bucket 2 (centre on a 5-bucket
+	# board → CUT_CENTER → voids every cell), matching the pattern in
+	# test_should_fall_through_static_helper above.
+	var board := _make_board({"num_rows": 4, "space_between_pegs": 1.0,
+		"vertical_spacing": 1.0})
+	board._voided_columns = PackedInt32Array([2])
+	# Radius covers cell (2, 2).
+	board._voided_radii = [{"cx": 1.0, "cy": -1.8, "radius": 0.5}]
+	assert_true(board.is_lattice_cell_voided(0, 0), "column cut cell still voided")
+	assert_true(board.is_lattice_cell_voided(2, 2), "radius cell also voided")
+	board.free()
+
+
+func test_voided_radii_cleared_with_markings() -> void:
+	print("test_voided_radii_cleared_with_markings")
+	# clear_all_markings is the challenge-end teardown. Radial voids and the
+	# destroyed-bucket set MUST be cleared here so the next challenge starts on
+	# a pristine board (mirrors the existing _voided_columns lifecycle).
+	var board := _make_board({"num_rows": 4})
+	board._voided_radii = [{"cx": 0.0, "cy": 0.0, "radius": 1.0}]
+	board._destroyed_bucket_indices[2] = true
+	board.clear_all_markings()
+	assert_equal(board._voided_radii.size(), 0, "_voided_radii cleared")
+	assert_equal(board._destroyed_bucket_indices.size(), 0, "_destroyed_bucket_indices cleared")
 	board.free()
