@@ -30,6 +30,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 @onready var peek_animator: PeekAnimator = $PeekAnimator
 @onready var _autodropper_intro_animator: AutodropperIntroAnimator = $AutodropperIntroAnimator
 @onready var _cap_raise_reveal_animator: CapRaiseRevealAnimator = $CapRaiseRevealAnimator
+@onready var _forbidden_bucket_reveal_animator: ForbiddenBucketRevealAnimator = $ForbiddenBucketRevealAnimator
 @onready var _parallax_backdrop: ParallaxBackdrop = $ParallaxBackdrop
 
 var _deflector_intro_animator: DeflectorIntroAnimator
@@ -161,6 +162,14 @@ func _setup_challenge() -> void:
 	ChallengeManager.challenge_completed.connect(_on_challenge_completed)
 	ChallengeManager.challenge_failed.connect(_on_challenge_failed)
 	challenge_hud.start(ChallengeManager.get_challenge())
+	_setup_forbidden_bucket_reveal_animator()
+
+
+func _setup_forbidden_bucket_reveal_animator() -> void:
+	_forbidden_bucket_reveal_animator.apply_input_lock_fn = apply_input_lock
+	_forbidden_bucket_reveal_animator.setup(camera, board_manager)
+	for board in board_manager.get_boards():
+		_forbidden_bucket_reveal_animator.connect_board(board)
 
 
 func _on_challenge_completed() -> void:
@@ -435,11 +444,14 @@ func _is_peek_active() -> bool:
 
 
 func _on_board_unlocked(board_type: Enums.BoardType) -> void:
-	# Connect the newly unlocked board to the prestige + cap-raise animators
+	# Connect the newly unlocked board to the prestige + cap-raise + forbidden
+	# animators. cap-raise is normal-mode only; forbidden is challenge-mode only.
 	for board in board_manager.get_boards():
 		if board.board_type == board_type:
 			prestige_animator.connect_board(board)
-			if not ChallengeManager.is_active_challenge:
+			if ChallengeManager.is_active_challenge:
+				_forbidden_bucket_reveal_animator.connect_board(board)
+			else:
 				_cap_raise_reveal_animator.connect_board(board)
 			break
 	if not _loading_from_save:

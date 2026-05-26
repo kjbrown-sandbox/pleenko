@@ -122,6 +122,19 @@ var _deflector_editor: DeflectorEditor
 ## is_lattice_cell_voided to drive fall-through; never persisted. PEGS REMAIN
 ## "purely visual" — coin behavior couples to *columns*, not to peg instances.
 var _voided_columns: PackedInt32Array = PackedInt32Array()
+## Radial voids carved by ForbiddenBucketHazard detonations. Each entry is
+## `{cx, cy, radius}` in PlinkoBoard-local space. Independent of `_voided_columns`
+## (different geometry — circle vs strict-vertical-strip); `is_lattice_cell_voided`
+## unions both. Cleared in `clear_all_markings` and re-applied across rebuilds
+## by `_reapply_voided_radii`, same lifecycle as `_voided_columns`.
+var _voided_radii: Array[Dictionary] = []
+## Bucket indices destroyed by ANY radial detonation. Populated synchronously
+## in `detonate_radius` BEFORE the fall animation starts, so any coin still in
+## flight during the (multi-second) fall sees the cell as voided and refuses
+## to land. Survives rebuilds; cleared with `_voided_radii` in
+## `clear_all_markings`. (Bomb-cut buckets are tracked separately via
+## `_voided_columns` — their column-cut semantics already handle this.)
+var _destroyed_bucket_indices: Dictionary = {}  # bucket_index: int -> true
 ## Set by BoardManager — returns total deflectors placed across ALL boards
 ## (the universal cap is global). Falls back to this board's own count when
 ## unset (bare unit tests).
@@ -144,6 +157,10 @@ signal prestige_coin_landed(coin: Coin, bucket: Bucket)
 ## Like prestige_coin_landed this fires at final-bounce *start* (not landing),
 ## so CapRaiseRevealAnimator can borrow the camera before the coin touches down.
 signal cap_raise_coin_landed(coin: Coin, predicted_bucket: Bucket)
+## Final-bounce signal mirroring cap_raise_coin_landed, fired when the predicted
+## bucket is marked forbidden. ForbiddenBucketRevealAnimator listens and softly
+## zooms + slow-mos the camera before the doomed coin touches down.
+signal forbidden_bucket_coin_landed(coin: Coin, predicted_bucket: Bucket)
 
 ## Add-rows juice. `row_upgrade_starting` fires at the top of add_two_rows
 ## (before build_board) so BoardManager can suppress the default fit-tween
@@ -163,6 +180,7 @@ signal bomb_spawned(board_type: Enums.BoardType, bucket_index: int, seconds: flo
 signal bomb_defused(board_type: Enums.BoardType, bucket_index: int, multiplier: float)
 signal bomb_detonated(board_type: Enums.BoardType, bucket_index: int)
 signal column_voided(board_type: Enums.BoardType, bucket_index: int)
+signal forbidden_bucket_detonated(board_type: Enums.BoardType, bucket_index: int)
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
@@ -1140,13 +1158,16 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 ## Called when a coin starts its final bounce and we can predict which bucket it will land in.
 ## If this landing would trigger a prestige, emit prestige_coin_landed so the animator can take over.
 func _on_final_bounce_started(coin: Coin, predicted_bucket: Bucket) -> void:
-	# The two branches are mutually exclusive: _will_trigger_prestige requires
-	# can_prestige true, _will_reveal_cap_raise requires it false.
+	# Mutually exclusive: _will_trigger_prestige requires can_prestige true,
+	# _will_reveal_cap_raise requires it false, _will_reveal_forbidden_landing
+	# requires the bucket be marked forbidden (orthogonal to currency).
 	if _will_trigger_prestige(predicted_bucket.currency_type):
 		prestige_coin_landed.emit(coin, predicted_bucket)
 	elif _will_reveal_cap_raise(predicted_bucket.currency_type):
 		_cap_raise_intro_coin = coin
 		cap_raise_coin_landed.emit(coin, predicted_bucket)
+	elif _will_reveal_forbidden_landing(predicted_bucket):
+		forbidden_bucket_coin_landed.emit(coin, predicted_bucket)
 
 
 ## Checks if earning this currency type would trigger a prestige for a new board.
@@ -1187,6 +1208,18 @@ func _will_reveal_cap_raise(currency_type: Enums.CurrencyType) -> bool:
 				return false
 			return not UpgradeManager.is_cap_raise_available(prev.board_type)
 	return false
+
+
+## True when this final bounce will land in a still-living forbidden bucket —
+## the trigger for the ForbiddenBucketRevealAnimator zoom. The visible check
+## makes the zoom one-shot per bucket-instance for free: once a forbidden bucket
+## is detonated, the bucket is invisible (fell off), so a later coin routed
+## toward its now-voided column won't re-trigger the zoom.
+func _will_reveal_forbidden_landing(predicted_bucket: Bucket) -> bool:
+	if not is_instance_valid(predicted_bucket) or not predicted_bucket.visible:
+		return false
+	var idx: int = _get_bucket_index(predicted_bucket)
+	return _bucket_markings.get(idx, &"") == &"forbidden"
 
 
 func _get_bucket_index(bucket: Bucket) -> int:
@@ -1277,6 +1310,8 @@ func clear_all_markings() -> void:
 	# Bomb-hazard runtime state — wipe on challenge end so the next challenge
 	# starts on a fresh, undamaged board.
 	_voided_columns.clear()
+	_voided_radii.clear()
+	_destroyed_bucket_indices.clear()
 	_active_bomb_multipliers.clear()
 
 
@@ -1553,10 +1588,33 @@ func is_column_voided(bucket_index: int) -> bool:
 	return _voided_columns.has(bucket_index)
 
 
-## True at any lattice cell that the bomb cuts destroyed. Called by Coin at
-## every bounce step.
+## True at any lattice cell destroyed by a bomb cut OR a forbidden-bucket radial
+## detonation. Called by Coin at every bounce step — coins in voided cells
+## switch to the straight-fall + despawn path (see `_begin_void_fall`).
 func is_lattice_cell_voided(row: int, col: int) -> bool:
-	return should_fall_through(row, col, _voided_columns, num_rows)
+	if should_fall_through(row, col, _voided_columns, num_rows):
+		return true
+	# Bucket row: an explicit "this bucket was destroyed" set is the
+	# authoritative answer. Synchronously populated by `detonate_radius`
+	# BEFORE the fall animation starts, so coins in flight during the
+	# multi-second fall see the cell as voided immediately rather than landing
+	# in a falling-but-still-scoring bucket. Avoids both the y-offset
+	# boundary case AND the mid-fall position confusion.
+	if row >= num_rows:
+		if _destroyed_bucket_indices.has(col):
+			return true
+	if _voided_radii.is_empty():
+		return false
+	# Peg rows: use the lattice cell position — pegs are lattice-aligned, so
+	# the radius check is exact.
+	var cell_pos: Vector3 = cell_to_world(row, col)
+	for entry: Dictionary in _voided_radii:
+		var dx: float = cell_pos.x - entry["cx"]
+		var dy: float = cell_pos.y - entry["cy"]
+		var r: float = entry["radius"]
+		if dx * dx + dy * dy <= r * r:
+			return true
+	return false
 
 
 ## All bucket indices not voided. Survives geometric ordering — for a saw-off
@@ -1790,6 +1848,125 @@ func _reapply_voided_pegs() -> void:
 		var bucket := get_bucket(B)
 		if bucket:
 			bucket.visible = false
+
+
+## Detonate a circular blast centered on bucket `bucket_index`. Destroys every
+## peg + bucket inside `radius`, vaporises in-flight coins inside the blast,
+## adds the circle to `_voided_radii` so future coin paths fall through it, and
+## plays the bomb detonation SFX. Idempotent on the bucket: if the bucket is
+## already gone (re-call), no new peg/bucket animations fire because the
+## already-hidden filter rejects them, and the new radius entry is harmless.
+##
+## Pure VFX + voided-cell carve-out — does NOT end the challenge (that's the
+## hazard runtime's old behavior; we deliberately keep playing).
+func detonate_radius(bucket_index: int, radius: float) -> void:
+	if radius <= 0.0 or not buckets_container:
+		return
+	var center_bucket := get_bucket(bucket_index)
+	if not center_bucket:
+		return
+	var b_offset: Vector3 = buckets_container.position
+	var center: Vector2 = Vector2(
+		b_offset.x + center_bucket.position.x,
+		b_offset.y + center_bucket.position.y)
+	var r2: float = radius * radius
+	var peg_indices: PackedInt32Array = PackedInt32Array()
+	for i in _peg_positions.size():
+		var p: Vector3 = _peg_positions[i]
+		var dx: float = p.x - center.x
+		var dy: float = p.y - center.y
+		if dx * dx + dy * dy <= r2:
+			peg_indices.append(i)
+	var bucket_indices: PackedInt32Array = PackedInt32Array()
+	var num_buckets: int = buckets_container.get_child_count()
+	for i in num_buckets:
+		var b := get_bucket(i)
+		if not b or not b.visible:
+			continue
+		var bx: float = b_offset.x + b.position.x - center.x
+		var by: float = b_offset.y + b.position.y - center.y
+		if bx * bx + by * by <= r2:
+			bucket_indices.append(i)
+	# Register voids BEFORE animating so any same-frame coin step sees them.
+	# _destroyed_bucket_indices is the authoritative "this bucket no longer
+	# scores" set — synchronously true the instant the fall starts, even though
+	# the bucket's `visible` flag doesn't flip until ~1.5s later when the fall
+	# tween completes. `is_lattice_cell_voided` checks this for the bucket row
+	# so in-flight coins targeting a falling bucket switch to void_fall.
+	_voided_radii.append({"cx": center.x, "cy": center.y, "radius": radius})
+	for i in bucket_indices:
+		_destroyed_bucket_indices[i] = true
+	if not peg_indices.is_empty():
+		_animate_falling_pegs(peg_indices)
+		_hide_pegs(peg_indices)
+	if not bucket_indices.is_empty():
+		_animate_falling_buckets(bucket_indices)
+	_vaporise_coins_in_radius(center, radius)
+	AudioManager.play_bomb_detonation(board_type)
+	forbidden_bucket_detonated.emit(board_type, bucket_index)
+
+
+## Any in-flight coin whose lattice cell sits inside the radial blast is
+## queue_freed. Mirrors `_vaporise_coins_in_cut` but uses Euclidean distance
+## from `center` against the coin's lattice cell position.
+func _vaporise_coins_in_radius(center: Vector2, radius: float) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var r2: float = radius * radius
+	var to_free: Array[Coin] = []
+	for coin: Coin in _active_coin_indices.keys():
+		if not is_instance_valid(coin):
+			continue
+		var cp: Vector3 = cell_to_world(coin._row, coin._col)
+		var dx: float = cp.x - center.x
+		var dy: float = cp.y - center.y
+		if dx * dx + dy * dy <= r2:
+			to_free.append(coin)
+	for coin in to_free:
+		if _coin_burst_field:
+			_coin_burst_field.spawn(coin.global_position, t.bomb_detonation_color)
+		coin.kill_tweens()
+		coin.queue_free()
+
+
+## Re-apply radial voids after a board rebuild. Mirrors `_reapply_voided_pegs`
+## but unions against the same lattice predicate `is_lattice_cell_voided`
+## already does — so the visible peg set matches what Coin sees at runtime.
+func _reapply_voided_radii() -> void:
+	if _voided_radii.is_empty():
+		return
+	if not buckets_container:
+		return
+	var hide: PackedInt32Array = PackedInt32Array()
+	var r2_list: Array[float] = []
+	for entry: Dictionary in _voided_radii:
+		var r: float = entry["radius"]
+		r2_list.append(r * r)
+	for i in _peg_positions.size():
+		var p: Vector3 = _peg_positions[i]
+		for j in _voided_radii.size():
+			var entry: Dictionary = _voided_radii[j]
+			var dx: float = p.x - entry["cx"]
+			var dy: float = p.y - entry["cy"]
+			if dx * dx + dy * dy <= r2_list[j]:
+				hide.append(i)
+				break
+	_hide_pegs(hide)
+	# Hide buckets whose centres fall in any radius — post-rebuild snap, no fall.
+	var b_offset: Vector3 = buckets_container.position
+	var num_buckets: int = buckets_container.get_child_count()
+	for i in num_buckets:
+		var b := get_bucket(i)
+		if not b:
+			continue
+		var bx: float = b_offset.x + b.position.x
+		var by: float = b_offset.y + b.position.y
+		for j in _voided_radii.size():
+			var entry: Dictionary = _voided_radii[j]
+			var dx2: float = bx - entry["cx"]
+			var dy2: float = by - entry["cy"]
+			if dx2 * dx2 + dy2 * dy2 <= r2_list[j]:
+				b.visible = false
+				break
 
 
 ## True once the coin has fallen past the last peg row into the bucket row.
@@ -2239,8 +2416,11 @@ func build_board() -> void:
 		_deflector_editor.refresh()
 
 	# Voids survive rebuilds — re-paint the destroyed pegs + hide the voided
-	# buckets in the freshly-built MultiMesh / bucket nodes.
+	# buckets in the freshly-built MultiMesh / bucket nodes. Both column-based
+	# (bomb hazard) and radial (forbidden bucket) voids share the same
+	# survives-rebuild lifecycle.
 	_reapply_voided_pegs()
+	_reapply_voided_radii()
 
 	board_rebuilt.emit()
 

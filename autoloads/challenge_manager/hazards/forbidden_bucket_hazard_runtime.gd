@@ -1,10 +1,10 @@
 class_name ForbiddenBucketHazardRuntime
 extends ChallengeHazardRuntime
 
-## Runtime for a ForbiddenBucketHazard. Marks the bucket as forbidden on
-## setup; fails the challenge if any coin lands in it. (Degenerate runtime by
-## design — no _process work — but follows the uniformity contract so all
-## hazards have the same lifecycle.)
+## Runtime for a ForbiddenBucketHazard. Marks the bucket as forbidden on setup;
+## on contact, detonates a circular blast around it (pegs + buckets fall, blast
+## radius added to PlinkoBoard's voided-radii set so future coins fall through).
+## The challenge KEEPS RUNNING — destruction is permanent damage, not a fail.
 
 var hazard: ForbiddenBucketHazard
 
@@ -17,6 +17,11 @@ func setup(board_manager: BoardManager) -> void:
 
 
 func on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_type: Enums.CurrencyType, _amount: int, _multiplier: float) -> void:
-	if board_type == hazard.board_type and bucket_index == hazard.bucket_index:
-		# Failure string preserved verbatim — tests + existing UX depend on it.
-		fail_challenge_fn.call("Landed in forbidden bucket!")
+	if board_type != hazard.board_type or bucket_index != hazard.bucket_index:
+		return
+	# Defer one frame: this listener fires from inside PlinkoBoard.coin_landed.emit,
+	# mid-`finalize_coin_landing`. Detonating here would vaporise the just-landed
+	# coin while the rest of finalize_coin_landing still references it. A
+	# call_deferred runs after the landing event finishes — boom on the very next
+	# frame, indistinguishable visually.
+	detonate_radius_fn.call_deferred(hazard.board_type, hazard.bucket_index, hazard.detonation_radius)

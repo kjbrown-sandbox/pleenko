@@ -12,6 +12,7 @@ var rng_fn: Callable  ## (max_exclusive: int) -> int
 var get_reachable_buckets_fn: Callable  ## (board_type: Enums.BoardType) -> PackedInt32Array
 var fail_challenge_fn: Callable  ## (reason: String) -> void
 var void_column_fn: Callable  ## (board_type: Enums.BoardType, bucket_index: int) -> void
+var detonate_radius_fn: Callable  ## (board_type: Enums.BoardType, bucket_index: int, radius: float) -> void
 
 var _board_manager: BoardManager
 
@@ -41,6 +42,8 @@ func setup(board_manager: BoardManager) -> void:
 		fail_challenge_fn = _default_fail_challenge
 	if not void_column_fn.is_valid():
 		void_column_fn = _default_void_column
+	if not detonate_radius_fn.is_valid():
+		detonate_radius_fn = _default_detonate_radius
 
 
 ## Forwarded from ChallengeTracker._on_coin_landed. Override to react.
@@ -78,6 +81,12 @@ func _default_void_column(board_type: Enums.BoardType, bucket_index: int) -> voi
 	var board := _get_board(board_type)
 	if board:
 		board.void_column(bucket_index)
+
+
+func _default_detonate_radius(board_type: Enums.BoardType, bucket_index: int, radius: float) -> void:
+	var board := _get_board(board_type)
+	if board:
+		board.detonate_radius(bucket_index, radius)
 
 
 func _get_board(board_type: Enums.BoardType) -> PlinkoBoard:

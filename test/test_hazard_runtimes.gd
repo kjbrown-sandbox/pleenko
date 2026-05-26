@@ -10,10 +10,10 @@ func _run_tests() -> void:
 	print("\n=== Hazard Runtime Tests ===\n")
 
 	# Forbidden bucket
-	test_forbidden_landing_at_matching_bucket_fails()
-	test_forbidden_landing_elsewhere_does_not_fail()
-	test_forbidden_wrong_board_does_not_fail()
-	test_forbidden_failure_string_preserved()
+	await test_forbidden_landing_at_matching_bucket_detonates()
+	await test_forbidden_landing_elsewhere_does_not_detonate()
+	await test_forbidden_wrong_board_does_not_detonate()
+	test_forbidden_landing_does_not_fail_challenge()
 
 	# Bomb
 	test_bomb_spawns_in_reachable_only()
@@ -39,6 +39,13 @@ class VoidRecorder:
 		calls.append({"board_type": board_type, "bucket_index": bucket_index})
 
 
+# Tracks every (board_type, bucket_index, radius) detonate_radius_fn call.
+class DetonateRecorder:
+	var calls: Array[Dictionary] = []
+	func record(board_type: int, bucket_index: int, radius: float) -> void:
+		calls.append({"board_type": board_type, "bucket_index": bucket_index, "radius": radius})
+
+
 # Tracks every fail_challenge_fn call.
 class FailRecorder:
 	var reasons: PackedStringArray = PackedStringArray()
@@ -54,13 +61,24 @@ func _const_reachable(indices: Array) -> Callable:
 
 # Builds a ForbiddenBucketHazardRuntime wired with injected seams. board_manager
 # is left null so the runtime's optional visual-marking calls early-return.
-func _forbidden_runtime(board_type: int, bucket_index: int, fail_rec: FailRecorder) -> ForbiddenBucketHazardRuntime:
+# `parent` is required because the runtime uses call_deferred — it must be in
+# the scene tree for the deferred call to fire on the next process frame.
+func _forbidden_runtime(
+		board_type: int,
+		bucket_index: int,
+		detonate_rec: DetonateRecorder,
+		fail_rec: FailRecorder,
+		parent: Node,
+		radius: float = 3.0) -> ForbiddenBucketHazardRuntime:
 	var hazard := ForbiddenBucketHazard.new()
 	hazard.board_type = board_type
 	hazard.bucket_index = bucket_index
+	hazard.detonation_radius = radius
 	var rt := ForbiddenBucketHazardRuntime.new()
 	rt.hazard = hazard
+	rt.detonate_radius_fn = Callable(detonate_rec, "record")
 	rt.fail_challenge_fn = Callable(fail_rec, "record")
+	parent.add_child(rt)
 	rt.setup(null)
 	return rt
 
@@ -83,42 +101,54 @@ func _bomb_runtime(reachable: Array, void_rec: VoidRecorder, count: int = 1, tim
 
 # ── Forbidden bucket ────────────────────────────────────────────────
 
-func test_forbidden_landing_at_matching_bucket_fails() -> void:
-	print("test_forbidden_landing_at_matching_bucket_fails")
-	var rec := FailRecorder.new()
-	var rt := _forbidden_runtime(Enums.BoardType.GOLD, 3, rec)
+func test_forbidden_landing_at_matching_bucket_detonates() -> void:
+	print("test_forbidden_landing_at_matching_bucket_detonates")
+	var det := DetonateRecorder.new()
+	var fail := FailRecorder.new()
+	var rt := _forbidden_runtime(Enums.BoardType.GOLD, 3, det, fail, self, 2.5)
 	rt.on_coin_landed(Enums.BoardType.GOLD, 3, Enums.CurrencyType.GOLD_COIN, 5, 1.0)
-	assert_equal(rec.reasons.size(), 1, "exactly one fail")
-	rt.free()
+	# detonate_radius_fn is invoked via call_deferred — wait one process frame.
+	await get_tree().process_frame
+	assert_equal(det.calls.size(), 1, "exactly one detonate")
+	assert_equal(det.calls[0]["board_type"], Enums.BoardType.GOLD, "board_type forwarded")
+	assert_equal(det.calls[0]["bucket_index"], 3, "bucket_index forwarded")
+	assert_near(det.calls[0]["radius"], 2.5, 0.0001, "radius forwarded from hazard")
+	rt.queue_free()
 
 
-func test_forbidden_landing_elsewhere_does_not_fail() -> void:
-	print("test_forbidden_landing_elsewhere_does_not_fail")
-	var rec := FailRecorder.new()
-	var rt := _forbidden_runtime(Enums.BoardType.GOLD, 3, rec)
+func test_forbidden_landing_elsewhere_does_not_detonate() -> void:
+	print("test_forbidden_landing_elsewhere_does_not_detonate")
+	var det := DetonateRecorder.new()
+	var fail := FailRecorder.new()
+	var rt := _forbidden_runtime(Enums.BoardType.GOLD, 3, det, fail, self)
 	rt.on_coin_landed(Enums.BoardType.GOLD, 4, Enums.CurrencyType.GOLD_COIN, 5, 1.0)
-	assert_equal(rec.reasons.size(), 0, "no fail when bucket index differs")
-	rt.free()
+	await get_tree().process_frame
+	assert_equal(det.calls.size(), 0, "no detonate when bucket index differs")
+	rt.queue_free()
 
 
-func test_forbidden_wrong_board_does_not_fail() -> void:
-	print("test_forbidden_wrong_board_does_not_fail")
-	var rec := FailRecorder.new()
-	var rt := _forbidden_runtime(Enums.BoardType.GOLD, 3, rec)
+func test_forbidden_wrong_board_does_not_detonate() -> void:
+	print("test_forbidden_wrong_board_does_not_detonate")
+	var det := DetonateRecorder.new()
+	var fail := FailRecorder.new()
+	var rt := _forbidden_runtime(Enums.BoardType.GOLD, 3, det, fail, self)
 	rt.on_coin_landed(Enums.BoardType.ORANGE, 3, Enums.CurrencyType.ORANGE_COIN, 5, 1.0)
-	assert_equal(rec.reasons.size(), 0, "no fail when board type differs")
-	rt.free()
+	await get_tree().process_frame
+	assert_equal(det.calls.size(), 0, "no detonate when board type differs")
+	rt.queue_free()
 
 
-func test_forbidden_failure_string_preserved() -> void:
-	print("test_forbidden_failure_string_preserved")
-	# UX (and presumably saved replays / analytics) depend on the literal string
-	# from the legacy NeverTouchBucket constraint. Don't let it drift.
-	var rec := FailRecorder.new()
-	var rt := _forbidden_runtime(Enums.BoardType.GOLD, 0, rec)
+func test_forbidden_landing_does_not_fail_challenge() -> void:
+	print("test_forbidden_landing_does_not_fail_challenge")
+	# The challenge no longer fails on contact — destruction is the consequence,
+	# the player keeps playing. fail_challenge_fn must NEVER be called by this
+	# runtime now. Regression guard for the no-fail design decision.
+	var det := DetonateRecorder.new()
+	var fail := FailRecorder.new()
+	var rt := _forbidden_runtime(Enums.BoardType.GOLD, 0, det, fail, self)
 	rt.on_coin_landed(Enums.BoardType.GOLD, 0, Enums.CurrencyType.GOLD_COIN, 5, 1.0)
-	assert_equal(rec.reasons[0], "Landed in forbidden bucket!", "literal legacy string")
-	rt.free()
+	assert_equal(fail.reasons.size(), 0, "fail_challenge_fn must not be called")
+	rt.queue_free()
 
 
 # ── Bomb hazard ─────────────────────────────────────────────────────
