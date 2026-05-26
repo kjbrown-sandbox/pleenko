@@ -1,9 +1,9 @@
 extends "res://test/test_base.gd"
 
-## Smoke tests for the three menu-audio instruments (Piano, MusicBox, PegTick)
-## introduced alongside the menu peg-contact + chord-bed feature. Each verifies
-## the instrument constructs, returns a non-null stream from resolve(), and
-## is reachable via AudioManager's enum dispatch.
+## Smoke tests for the two menu-audio instruments (MusicBox, PegTick) introduced
+## alongside the menu peg-contact + chord-bed feature. Each verifies the
+## instrument constructs, returns a non-null stream from resolve(), and is
+## reachable via AudioManager's enum dispatch.
 ##
 ## Run with:
 ##   godot --headless --scene res://test/test_menu_instruments.tscn
@@ -11,23 +11,13 @@ extends "res://test/test_base.gd"
 
 func _run_tests() -> void:
 	print("\n=== Menu Instruments Tests ===\n")
-	test_piano_resolve()
 	test_music_box_resolve()
 	test_peg_tick_resolve()
-	test_audio_manager_dispatch_piano()
 	test_audio_manager_dispatch_music_box()
 	test_audio_manager_dispatch_peg_tick()
 
 
 # --- Resolve smoke tests ---
-
-func test_piano_resolve() -> void:
-	print("test_piano_resolve")
-	var p := Piano.new()
-	var sp: Dictionary = p.resolve(1.0)
-	assert_true(sp["stream"] != null, "Piano returns non-null stream at C4")
-	assert_true(sp["pitch_scale"] > 0.0, "Piano returns positive pitch_scale")
-
 
 func test_music_box_resolve() -> void:
 	print("test_music_box_resolve")
@@ -50,13 +40,6 @@ func test_peg_tick_resolve() -> void:
 
 
 # --- AudioManager dispatch — guards the enum → instance wiring ---
-
-func test_audio_manager_dispatch_piano() -> void:
-	print("test_audio_manager_dispatch_piano")
-	var instr: Instrument = AudioManager._instrument_for(Instrument.Type.PIANO)
-	assert_true(instr != null, "PIANO enum resolves to a non-null instrument")
-	assert_true(instr is Piano, "PIANO dispatches to a Piano")
-
 
 func test_audio_manager_dispatch_music_box() -> void:
 	print("test_audio_manager_dispatch_music_box")

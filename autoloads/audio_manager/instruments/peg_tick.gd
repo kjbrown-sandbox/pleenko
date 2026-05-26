@@ -11,13 +11,15 @@ class_name PegTick extends Instrument
 ## the "ting" of glass resonance + very fast exponential decay (~25-40ms
 ## perceptual length). No drum-body half-sine thump; that read as too
 ## percussive / wooden.
-const DURATION := 0.15
+## Named `DECAY_SECONDS` to match the convention used by other instruments
+## (Bell, SoftChime, MusicBox); the whole sample IS the decay tail here.
+const DECAY_SECONDS := 0.15
 
 var _stream: AudioStreamWAV
 
 
 func _init() -> void:
-	_stream = _generate(DURATION)
+	_stream = _generate(DECAY_SECONDS)
 
 
 ## Honors pitch_mult by setting pitch_scale directly — varying it per hit

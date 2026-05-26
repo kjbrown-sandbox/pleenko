@@ -232,7 +232,6 @@ var _harp_long: HarpLong
 var _triangle: Triangle
 var _bell: Bell
 var _soft_chime: SoftChime
-var _piano: Piano
 var _music_box: MusicBox
 var _peg_tick: PegTick
 var _arcade_kick: ArcadeKick
@@ -288,7 +287,6 @@ func _ready() -> void:
 	_triangle = Triangle.new()
 	_bell = Bell.new()
 	_soft_chime = SoftChime.new()
-	_piano = Piano.new()
 	_music_box = MusicBox.new()
 	_peg_tick = PegTick.new()
 	_arcade_kick = ArcadeKick.new()
@@ -467,7 +465,6 @@ func _instrument_for(type: int) -> Instrument:
 		Instrument.Type.TRIANGLE: return _triangle
 		Instrument.Type.BELL: return _bell
 		Instrument.Type.SOFT_CHIME: return _soft_chime
-		Instrument.Type.PIANO: return _piano
 		Instrument.Type.MUSIC_BOX: return _music_box
 		Instrument.Type.PEG_TICK: return _peg_tick
 		Instrument.Type.HARP_LONG: return _harp_long
@@ -1062,14 +1059,14 @@ func _do_play_peg_chime(degrees: Array[int], volume_db: float) -> bool:
 
 ## Plays a chime-style voice at a caller-specified pitch_mult — bypasses random
 ## degree picking, throttling, AudioStyle chord lookup, and `_chord_had_landing`
-## side effects. Used by MenuBoard for its own authored melodic sequence so the
-## menu audio is independent of the gameplay progression.
-## `instrument_type` selects the timbre (defaults to SOFT_CHIME for the soft
-## texture used in gameplay; the menu passes HARP / theme.bucket_instrument
-## for a brighter, crisper tone matching the buckets).
-## `volume_db` / `sustain_s` default to the gameplay peg-chime values when NAN.
+## side effects. Used by MenuBoard for both its chord-bed melody (MUSIC_BOX)
+## and its peg-contact ticks (PEG_TICK); independent of any theme's progression.
+## `instrument_type` selects the timbre (defaults to SOFT_CHIME for callers
+## that don't care). `volume_db` / `sustain_s` default to the gameplay
+## peg-chime values when NAN.
 func play_pitched_chime(pitch_mult: float, volume_db: float = NAN,
-		sustain_s: float = NAN, instrument_type: int = Instrument.Type.SOFT_CHIME) -> void:
+		sustain_s: float = NAN,
+		instrument_type: Instrument.Type = Instrument.Type.SOFT_CHIME) -> void:
 	if _silenced:
 		return
 	var instrument: Instrument = _instrument_for(instrument_type)

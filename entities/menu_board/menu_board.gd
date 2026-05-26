@@ -18,8 +18,10 @@ extends Node3D
 ## Why decorative-only: these coins are visual sugar. No currency, no save, no
 ## upgrades, no `Coin` entity, no buckets, no rewards, no landing signal. A coin
 ## bounces row-by-row (random left/right) then despawns at the bottom row. This
-## node emits nothing (calls down only) and reads ONLY `ThemeProvider.theme`
-## for meshes / materials / spacing.
+## node emits nothing (calls down only). Reads `ThemeProvider.theme` for visual
+## config and calls `AudioManager.play_pitched_chime` for two independent
+## audio layers — peg-contact ticks + a background chord progression bed. See
+## the CLAUDE.md `MenuBoard` entry for the audio-layer system map.
 
 ## Peg rows in the decorative lattice — taller than any early-game board so the
 ## field reads as receding into the distance under the perspective camera.
@@ -92,7 +94,7 @@ const PEG_WOBBLE_DURATION := 2.7
 ## Drop either key (or set "") to skip that note on a chord.
 ## To swap chords, edit the `notes` arrays. To flip a chord's direction, just
 ## reorder its position in the array.
-const PEG_CHIME_PROGRESSION: Array = [
+const PEG_CHIME_PROGRESSION: Array[Dictionary] = [
 	{"name": "Cmaj7", "notes": ["C3", "E3", "G3", "B3"],   "intro": "C5",  "mid": "E5"},
 	{"name": "C7",    "notes": ["Db3", "E3", "G3", "Bb3"], "intro": "Bb4", "mid": "D5"},
 	{"name": "Fmaj7", "notes": ["F3", "A3", "C4", "E4"],   "intro": "A4",  "mid": "C5"},
@@ -106,10 +108,27 @@ const PEG_CHIME_BEAT_SECONDS := 0.5
 ## phrase per chord; 8-second loop across the 4-chord progression.
 const PEG_CHIME_BEATS_PER_CHORD := 4
 
+## Mid-beat slot for `mid` grace notes — pre-computed const so the timeout
+## handler doesn't divide on every tick. Integer division → middle of an
+## even beats-per-chord (4 → 2), or first-past-middle for odd.
+@warning_ignore("integer_division")
+const PEG_CHIME_MID_BEAT: int = PEG_CHIME_BEATS_PER_CHORD / 2
+
+## Loop-counter gates for layered ornaments. Intro accents enter on the
+## SECOND play-through (loop_index == 1), mid grace notes on the THIRD.
+## The first loop is intentionally bare so the chime arrives in stages.
+const PEG_CHIME_INTRO_START_LOOP := 1
+const PEG_CHIME_MID_START_LOOP := 2
+
 ## dB swing between the lowest and highest note of any chord. Higher pitch =
 ## louder, applied symmetrically to both directions: ascending arpeggios
 ## crescendo (quiet→loud), descending arpeggios decrescendo (loud→quiet).
 const PEG_CHIME_DYNAMIC_RANGE_DB := 9.0
+
+## Base chime loudness above bucket volume — `BUCKET_VOLUME_DB + this` is the
+## peak of each arpeggio. ~+6 dB ≈ doubled amplitude; menu chime IS the
+## soundscape (no busy gameplay layers underneath).
+const PEG_CHIME_VOLUME_OFFSET_DB := 6.0
 
 ## Master toggle for the background chord progression. False = the beat timer
 ## ticks but plays nothing, so all chord state (loop index, indices, ornament
@@ -233,10 +252,10 @@ var _chime_mid_pitches: PackedFloat32Array = PackedFloat32Array()
 # 0.0 so the first hit always plays. A fresh random interval is rolled each
 # time a tick fires (see _try_play_peg_tick) — keeps the texture organic.
 var _peg_tick_next_time: float = 0.0
-# Cached from theme.bucket_instrument in _ready so the menu chime matches the
-# gameplay bucket timbre (bright/crisp Harp by default). Read once; theme is
-# fixed for MenuBoard's lifetime (no theme_changed subscription).
-var _chime_instrument_type: int = Instrument.Type.SOFT_CHIME
+# Timbre for the chord bed. Hardcoded (NOT theme-driven) — the menu chime is
+# its own audio role, not a copy of the gameplay bucket sound. Swap in
+# `Instrument.Type.{SOFT_CHIME,BELL,HARP,...}` here to A/B variants.
+const CHIME_INSTRUMENT_TYPE: Instrument.Type = Instrument.Type.MUSIC_BOX
 # Impact squash, copied from the gameplay Coin so bounces read naturally.
 var _squash_enabled := false
 var _squash_scale := Vector3.ONE
@@ -288,10 +307,6 @@ func _ready() -> void:
 		if chord_entry.has("mid") and String(chord_entry["mid"]) != "":
 			mid_pitch = SoftChime.note_name_to_pitch_mult(chord_entry["mid"])
 		_chime_mid_pitches.append(mid_pitch)
-	# MusicBox — sine-dominant like SoftChime but with a sharper drop-off so
-	# notes clear before the next beat (SoftChime/Bell were muddying the chord
-	# on the 0.5s grid).
-	_chime_instrument_type = Instrument.Type.MUSIC_BOX
 
 	_spawn_timer.wait_time = COIN_SPAWN_INTERVAL_SEC
 	_spawn_timer.timeout.connect(_on_spawn_timer_timeout)
@@ -311,7 +326,10 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	# SceneManager.set_new_scene() frees the whole MainMenu mid-fade while coins
 	# may still be tweening — kill every live tween so no callback fires against
-	# a freeing coin.
+	# a freeing coin. Same rationale for the ChimeBeatTimer: stop it explicitly
+	# so a final timeout can't fire `_on_chime_beat_timeout` mid-free.
+	if _chime_beat_timer != null:
+		_chime_beat_timer.stop()
 	for tween in _coin_tweens:
 		if tween != null and tween.is_valid():
 			tween.kill()
@@ -614,41 +632,42 @@ func _on_chime_beat_timeout() -> void:
 		return
 	var pitches: PackedFloat32Array = _chime_pitches[_chord_index]
 	if pitches.size() > 0 and _beat_index < pitches.size():
+		# Notes in each chord are ALWAYS authored ascending. Direction is
+		# implicit from chord-index parity — even chords iterate the array
+		# forward, odd chords iterate it backward. This single rule produces
+		# the ascend/descend pattern in PEG_CHIME_PROGRESSION's docstring.
 		var ascending: bool = _chord_index % 2 == 0
 		var note_idx: int = _beat_index if ascending else pitches.size() - 1 - _beat_index
-		# Base is +6 dB above bucket volume (menu chime IS the soundscape).
-		# Then add a per-note offset that scales with pitch: note_idx = 0
-		# (lowest) sits at base - PEG_CHIME_DYNAMIC_RANGE_DB, note_idx = N-1
-		# (highest) sits at base. Same rule for ascending and descending —
-		# direction emerges from how note_idx is iterated.
-		var base_db: float = AudioManager.BUCKET_VOLUME_DB + 6.0
+		# Per-note offset scales with pitch (`note_idx` in the ascending
+		# array): lowest note sits at base - PEG_CHIME_DYNAMIC_RANGE_DB,
+		# highest at base. The same rule for ascending AND descending —
+		# direction emerges from how note_idx is iterated above.
+		var base_db: float = AudioManager.BUCKET_VOLUME_DB + PEG_CHIME_VOLUME_OFFSET_DB
 		var t_pitch: float = 0.0 if pitches.size() <= 1 \
 			else float(note_idx) / float(pitches.size() - 1)
 		var volume_db: float = base_db - PEG_CHIME_DYNAMIC_RANGE_DB * (1.0 - t_pitch)
 		AudioManager.play_pitched_chime(pitches[note_idx], volume_db,
-			NAN, _chime_instrument_type)
+			NAN, CHIME_INSTRUMENT_TYPE)
 		# Beat 0 fires the chord's intro accent (an octave above one of its
 		# chord tones) — "announces" the new harmony. Held back until the
-		# second loop so the first play-through stays bare. Plays at base
+		# second play-through (loop 1) so loop 0 stays bare. Plays at base
 		# volume so it sits clearly above the arpeggio dynamic.
-		if _beat_index == 0 and _loop_index >= 1 \
+		if _beat_index == 0 and _loop_index >= PEG_CHIME_INTRO_START_LOOP \
 				and _chord_index < _chime_intro_pitches.size():
 			var intro_pitch: float = _chime_intro_pitches[_chord_index]
 			if intro_pitch > 0.0:
 				AudioManager.play_pitched_chime(intro_pitch, base_db,
-					NAN, _chime_instrument_type)
-		# Middle beat (beat 2 of 4) adds a higher-octave grace note starting at
-		# loop 2 — produces the x-x- pattern across the chord (intro on 0,
-		# grace on 2). Integer division so the constant scales gracefully if
-		# PEG_CHIME_BEATS_PER_CHORD ever changes.
-		@warning_ignore("integer_division")
-		var mid_beat: int = PEG_CHIME_BEATS_PER_CHORD / 2
-		if _beat_index == mid_beat and _loop_index >= 2 \
+					NAN, CHIME_INSTRUMENT_TYPE)
+		# Mid-beat slot adds a higher-octave grace note starting at the third
+		# play-through (loop 2) — produces the x-x- pattern across the chord
+		# (intro on beat 0, grace on PEG_CHIME_MID_BEAT).
+		if _beat_index == PEG_CHIME_MID_BEAT \
+				and _loop_index >= PEG_CHIME_MID_START_LOOP \
 				and _chord_index < _chime_mid_pitches.size():
 			var mid_pitch: float = _chime_mid_pitches[_chord_index]
 			if mid_pitch > 0.0:
 				AudioManager.play_pitched_chime(mid_pitch, base_db,
-					NAN, _chime_instrument_type)
+					NAN, CHIME_INSTRUMENT_TYPE)
 
 	_beat_index += 1
 	if _beat_index >= PEG_CHIME_BEATS_PER_CHORD:
