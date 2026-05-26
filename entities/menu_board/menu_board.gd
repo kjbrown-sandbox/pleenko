@@ -135,21 +135,24 @@ const PEG_CHIME_VOLUME_OFFSET_DB := 6.0
 ## gates) is preserved for an easy re-enable.
 const PEG_CHIME_ENABLED := true
 
-## Tone-less percussion blip on coin/peg contact (glass-marble clink). Rate-
+## Tonal blip on coin/peg contact — picks a random note from the currently-
+## active chord and plays it through the PEG_TICK glass-marble timbre
+## (deliberately NOT the chord bed's MUSIC_BOX; the percussive clink reads as
+## "physical hit" while still landing on a chord-appropriate pitch). Rate-
 ## limited with a per-hit RANDOM interval so dense bounces don't strobe and
-## the texture feels organic rather than metronomic. Pitch and volume are
-## also randomised per hit so it sounds like varied physical material (size /
-## striking force) rather than a sampled note.
+## the texture feels organic rather than metronomic.
 const PEG_TICK_INTERVAL_MIN_S := 0.1
 const PEG_TICK_INTERVAL_MAX_S := 0.4
-const PEG_TICK_PITCH_MIN := 0.7
-const PEG_TICK_PITCH_MAX := 1.6
-## dB offset from BUCKET_VOLUME_DB — peg tick is a soft texture, well below
-## the chime/buckets.
+## Pitch multiplier applied to the chord note before hand-off to PegTick.
+## PegTick is a noise burst with a fixed 2800 Hz resonance; passing the chord
+## notes at their authored C3-B3 octave (pitch_mult ≈ 0.5) stretches the
+## sample back at half speed and the marble loses its clink. Shifting up two
+## octaves (x4) plays the marble at a bright, in-character speed AND moves
+## the resonance peak closer to the actual chord pitches.
+const PEG_TICK_OCTAVE_MULT := 4.0
+## dB offset from BUCKET_VOLUME_DB — peg tick is texture under the chord bed.
+## -10 dB ≈ half the prior -4 dB amplitude (20*log10(0.5) ≈ -6 dB).
 const PEG_TICK_VOLUME_OFFSET_DB := -10.0
-## Per-hit amplitude randomisation: ±6 dB ≈ 0.5x to 2x amplitude.
-## Wider swing makes some hits feel close-by and others distant.
-const PEG_TICK_VOLUME_VARIATION_DB := 6.0
 
 ## Every Nth coin sparkles — visual peg-ring effect only, NO audio coupling.
 ## Audio plays in the background on its own beat timer.
@@ -600,23 +603,24 @@ func _wobble_peg(row: int, col: int) -> void:
 	_peg_wobbles[idx] = tw
 
 
-## Rate-limited tone-less peg-contact blip — glass-marble clink. Called on
-## every peg strike of every coin (not just the sparkle coin). A random
-## interval is rolled after each fire so the texture isn't metronomic, and
-## pitch + volume are also randomised per hit so successive clinks read as
-## different physical objects (size + striking force) rather than a
-## repeating sample.
+## Rate-limited peg-contact blip — picks a random note from the currently-
+## active chord (`_chime_pitches[_chord_index]`) and plays it through the
+## PEG_TICK glass-marble timbre. Called on every peg strike of every coin (not
+## just the sparkle coin). A random interval is rolled after each fire so the
+## texture isn't metronomic.
 func _try_play_peg_tick() -> void:
 	var now: float = Time.get_ticks_msec() / 1000.0
 	if now < _peg_tick_next_time:
 		return
 	_peg_tick_next_time = now + randf_range(PEG_TICK_INTERVAL_MIN_S,
 		PEG_TICK_INTERVAL_MAX_S)
-	var pitch: float = randf_range(PEG_TICK_PITCH_MIN, PEG_TICK_PITCH_MAX)
-	var volume_jitter: float = randf_range(-PEG_TICK_VOLUME_VARIATION_DB,
-		PEG_TICK_VOLUME_VARIATION_DB)
-	var volume_db: float = AudioManager.BUCKET_VOLUME_DB \
-		+ PEG_TICK_VOLUME_OFFSET_DB + volume_jitter
+	if _chord_index >= _chime_pitches.size():
+		return
+	var pitches: PackedFloat32Array = _chime_pitches[_chord_index]
+	if pitches.is_empty():
+		return
+	var pitch: float = pitches[randi() % pitches.size()] * PEG_TICK_OCTAVE_MULT
+	var volume_db: float = AudioManager.BUCKET_VOLUME_DB + PEG_TICK_VOLUME_OFFSET_DB
 	AudioManager.play_pitched_chime(pitch, volume_db, NAN, Instrument.Type.PEG_TICK)
 
 
