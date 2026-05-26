@@ -17,7 +17,7 @@
 [ext_resource type="Script" path="res://entities/main/autodropper_intro_animator.gd" id="23_aianim"]
 [ext_resource type="PackedScene" path="res://entities/parallax_backdrop/parallax_backdrop.tscn" id="24_parallax"]
 [ext_resource type="Script" path="res://entities/main/cap_raise_reveal_animator.gd" id="25_crranim"]
-[ext_resource type="Script" uid="uid://0jvdh2e5hko0" path="res://entities/main/forbidden_bucket_reveal_animator.gd" id="26_fbranim"]
+[ext_resource type="Script" uid="uid://dwbxgw4eg8drg" path="res://entities/main/forbidden_bucket_reveal_animator.gd" id="26_fbranim"]
 
 [node name="Main" type="Node3D" unique_id=441209692]
 script = ExtResource("1_j5li3")
