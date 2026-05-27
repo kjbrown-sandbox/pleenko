@@ -58,6 +58,10 @@ movie_writer/movie_file="/Users/kjbrown/src/pleenko/movies/trailer_2.png"
 
 enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/GameAnalytics/plugin.cfg")
 
+[gui]
+
+theme/custom="res://default_theme.tres"
+
 [input]
 
 drop_coin={

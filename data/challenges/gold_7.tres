@@ -9,7 +9,7 @@
 [ext_resource type="Script" uid="uid://dusuom0lv25os" path="res://autoloads/challenge_manager/hazards/forbidden_bucket_hazard.gd" id="7_fbh"]
 [ext_resource type="Script" uid="uid://d2im52kpqsq1i" path="res://autoloads/challenge_manager/constraints/upgrades_limited.gd" id="8_ul"]
 [ext_resource type="Script" uid="uid://ck6ikghmwasmr" path="res://autoloads/challenge_manager/starting_conditions/starting_boards.gd" id="9_sb"]
-[ext_resource type="Script" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="10_hzd"]
+[ext_resource type="Script" uid="uid://bd6xgc6vor27l" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="10_hzd"]
 
 [sub_resource type="Resource" id="constraint_3"]
 script = ExtResource("8_ul")

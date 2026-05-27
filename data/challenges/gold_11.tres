@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cprkqdv24lv2s" path="res://autoloads/challenge_manager/challenge_constraint.gd" id="1_alfob"]
 [ext_resource type="Script" uid="uid://co7w0klc1bfgq" path="res://autoloads/challenge_manager/challenge_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://bd6xgc6vor27l" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="2_5vjkd"]
 [ext_resource type="Script" uid="uid://u0aimm0ql1ts" path="res://autoloads/challenge_manager/objectives/coin_goal.gd" id="2_obj"]
 [ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_uonk8"]
 [ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]

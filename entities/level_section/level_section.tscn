@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://dlbx71vkkmqf7" path="res://entities/level_section/level_section.gd" id="1_6pg8t"]
 [ext_resource type="PackedScene" uid="uid://b6gbfhxvkrhth" path="res://entities/fill_bar/fill_bar.tscn" id="1_fe074"]
-[ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_nl6kw"]
 
 [node name="LevelSection" type="Control" unique_id=261552603]
 layout_mode = 3
@@ -30,7 +29,6 @@ grow_vertical = 2
 [node name="LevelLabel" type="Label" parent="HBoxContainer" unique_id=298306794]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
-theme_override_fonts/font = ExtResource("1_nl6kw")
 text = "LVL 3/30"
 
 [node name="ProgressBar" parent="HBoxContainer" unique_id=1268010706 instance=ExtResource("1_fe074")]

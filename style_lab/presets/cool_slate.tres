@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="VisualTheme" format=3 uid="uid://dr6w84q5k5rfs"]
 
-[ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_fbp74"]
+[ext_resource type="FontFile" uid="uid://cujosi7nj7srm" path="res://assets/fonts/Vend_Sans/static/VendSans-Medium.ttf" id="1_fbp74"]
 [ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
 
 [resource]
