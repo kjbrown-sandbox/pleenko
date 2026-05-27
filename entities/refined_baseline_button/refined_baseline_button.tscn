@@ -1,0 +1,122 @@
+[gd_scene format=3 uid="uid://cbbeofkeqqvdm"]
+
+[ext_resource type="FontFile" uid="uid://cujosi7nj7srm" path="res://assets/fonts/Vend_Sans/static/VendSans-Medium.ttf" id="1_fontb"]
+[ext_resource type="Script" uid="uid://jmaqrq81ybpi" path="res://style_lab/refined_baseline_button.gd" id="2_script"]
+
+[node name="RefinedBaselineButton" type="HBoxContainer" unique_id=1792706077]
+size_flags_horizontal = 3
+theme_override_constants/separation = 0
+script = ExtResource("2_script")
+
+[node name="Minus" type="Button" parent="." unique_id=903783724]
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 24
+text = "−"
+
+[node name="Main" type="Button" parent="." unique_id=1982873008]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+
+[node name="FillBounds" type="Control" parent="Main" unique_id=760324304]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TitleLbl" type="Label" parent="Main/FillBounds" unique_id=447447430]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 4.0
+offset_right = -6.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 20
+text = "Add rows"
+vertical_alignment = 1
+
+[node name="NumLbl" type="Label" parent="Main/FillBounds" unique_id=255560018]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 4.0
+offset_right = -12.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 20
+text = "3/5"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="FillClip" type="Control" parent="Main/FillBounds" unique_id=1660221942]
+clip_contents = true
+layout_mode = 1
+anchor_right = 0.36
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Fill" type="Panel" parent="Main/FillBounds/FillClip" unique_id=933657532]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="FillTitleLbl" type="Label" parent="Main/FillBounds/FillClip" unique_id=1709985103]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 2.7777
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 4.0
+offset_right = -6.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 20
+text = "Add rows"
+vertical_alignment = 1
+
+[node name="FillNumLbl" type="Label" parent="Main/FillBounds/FillClip" unique_id=1285790809]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 2.7777
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 4.0
+offset_right = -12.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 20
+text = "3/5"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Plus" type="Button" parent="." unique_id=900510867]
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 24
+text = "+"

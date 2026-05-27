@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 type = 1
-display_name = "Bucket Value"
+display_name = "Bucket value"
 base_cost = 10
 max_level = 7
 cost_type = 1

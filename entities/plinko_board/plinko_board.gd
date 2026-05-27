@@ -3051,7 +3051,7 @@ func get_drop_button(btn_id: StringName):
 
 
 func get_drop_button_screen_center(btn_id: StringName) -> Vector2:
-	var bar: FillBar = _drop_buttons.get(btn_id)
+	var bar: HBoxContainer = _drop_buttons.get(btn_id)
 	if not is_instance_valid(bar):
 		return Vector2.ZERO
 	return bar.get_global_rect().get_center()
@@ -3062,7 +3062,7 @@ func get_drop_button_ids() -> Array:
 
 
 func set_drop_subtext(button_id: StringName, text: String) -> void:
-	var bar: FillBar = _drop_buttons.get(button_id)
+	var bar: HBoxContainer = _drop_buttons.get(button_id)
 	if not bar:
 		return
 	var label: Label

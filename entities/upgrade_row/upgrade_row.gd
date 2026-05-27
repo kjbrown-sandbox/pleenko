@@ -124,13 +124,14 @@ func _update_button() -> void:
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
 	var at_max: bool = state.current_cap > 0 and state.level >= state.current_cap
 
-	var display_text: String
-	if at_max:
-		display_text = "%s (MAX)" % data.display_name
+	fill_bar.update_text(data.display_name)
+	# Right-side text: "level/cap". When the upgrade has no cap (e.g. unlimited
+	# / unreachable here), num is empty and title centers across the whole bar.
+	# A full bar reads as MAX visually, no "(MAX)" suffix needed.
+	if state.current_cap > 0:
+		fill_bar.num_text = "%d/%d" % [state.level, state.current_cap]
 	else:
-		display_text = "%s" % [data.display_name]
-
-	fill_bar.update_text(display_text)
+		fill_bar.num_text = ""
 
 	# Update fill percent
 	if at_max:

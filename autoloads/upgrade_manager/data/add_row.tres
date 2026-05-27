@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1")
-display_name = "Add Rows"
+display_name = "Add rows"
 base_cost = 6
 max_level = 6
 cost_type = 2

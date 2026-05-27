@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 type = 6
-display_name = "Peg Deflector"
+display_name = "Peg deflector"
 base_cost = 50
 max_level = 5
 cost_type = 1

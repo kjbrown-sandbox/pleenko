@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 type = 2
-display_name = "Drop Rate"
+display_name = "Drop rate"
 base_cost = 10
 max_level = 7
 cost_type = 1
