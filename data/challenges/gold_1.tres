@@ -6,7 +6,7 @@
 [ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_uonk8"]
 [ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
 [ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_pr4w6"]
-[ext_resource type="Script" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="10_hzd"]
+[ext_resource type="Script" uid="uid://bd6xgc6vor27l" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="10_hzd"]
 
 [sub_resource type="Resource" id="objective_1"]
 script = ExtResource("2_obj")

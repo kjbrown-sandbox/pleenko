@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://co7w0klc1bfgq" path="res://autoloads/challenge_manager/challenge_data.gd" id="1_data"]
 [ext_resource type="Script" uid="uid://dkvm8ypb1v37o" path="res://autoloads/challenge_manager/objectives/survive.gd" id="2_obj"]
 [ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_obj_base"]
+[ext_resource type="Script" uid="uid://bd6xgc6vor27l" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="2_wh8wi"]
 [ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
 [ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_start_base"]
 [ext_resource type="Script" uid="uid://ck6ikghmwasmr" path="res://autoloads/challenge_manager/starting_conditions/starting_boards.gd" id="7_start_board"]

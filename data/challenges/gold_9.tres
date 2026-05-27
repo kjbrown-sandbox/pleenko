@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://cprkqdv24lv2s" path="res://autoloads/challenge_manager/challenge_constraint.gd" id="1_htccn"]
 [ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_m6c1v"]
 [ext_resource type="Script" uid="uid://yx435vkk7ost" path="res://autoloads/challenge_manager/objectives/hit_x_bucket_y_times.gd" id="2_obj"]
+[ext_resource type="Script" uid="uid://bd6xgc6vor27l" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="3_4qn0d"]
 [ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
 [ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_rs48w"]
 [ext_resource type="Script" uid="uid://d2im52kpqsq1i" path="res://autoloads/challenge_manager/constraints/upgrades_limited.gd" id="7_con"]

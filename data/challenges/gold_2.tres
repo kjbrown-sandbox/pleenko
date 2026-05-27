@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://u0aimm0ql1ts" path="res://autoloads/challenge_manager/objectives/coin_goal.gd" id="2_obj"]
 [ext_resource type="Script" uid="uid://d2im52kpqsq1i" path="res://autoloads/challenge_manager/constraints/upgrades_limited.gd" id="3_con"]
 [ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="3_geyrc"]
+[ext_resource type="Script" uid="uid://bd6xgc6vor27l" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="3_nr1yh"]
 [ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="4_reward"]
 [ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="7_nr1yh"]
 
