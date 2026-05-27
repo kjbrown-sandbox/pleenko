@@ -43,11 +43,13 @@ var _beat_counter: int = 0
 var _hover_count: int = 0
 const HOVER_PLUCK_RESUME_DELAY_MS := 500
 var _last_hover_end_ms: int = -HOVER_PLUCK_RESUME_DELAY_MS - 1  # don't gate first ticks
-# Hover notes are quantized to a fixed 0.25s grid so they land on rhythm with
-# the chord bed. Each hover commits a pitch to the queue; the timer pops one
-# per tick. Queue capacity 3 — additional rapid hovers are dropped (and don't
-# advance the arpeggiator either, so the arpeggio progression stays in sync
-# with what's actually audible).
+# Hover notes are quantized to an eighth-note (0.125s) grid so they read as
+# rhythmic instead of jittery. The timer free-runs from _ready — NOT phase-
+# locked to MenuBoard's chord bed, so a hover note can land up to 0.125s off
+# the bed's beat (musically close enough for this UX). Each hover commits a
+# pitch to the queue; the timer pops one per tick. Queue capacity 3 —
+# additional rapid hovers are dropped (and don't advance the arpeggiator
+# either, so the arpeggio progression stays in sync with what's audible).
 const HOVER_QUANTIZE_SECONDS := 0.125
 const HOVER_QUEUE_CAPACITY := 3
 const HOVER_NOTE_SUSTAIN_S := 3.0
@@ -210,7 +212,7 @@ func _on_menu_button_hover() -> void:
 	_hover_pitch_queue.append(MenuHoverArpeggiator.pitch_mult_for(note.x, note.y, pitches))
 
 
-# Pops one queued hover pitch per 0.25s tick — quantizes hovers to the grid.
+# Pops one queued hover pitch per 0.125s tick — quantizes hovers to the grid.
 func _on_hover_quantize_tick() -> void:
 	if _hover_pitch_queue.is_empty(): return
 	var pitch_mult: float = _hover_pitch_queue.pop_front()

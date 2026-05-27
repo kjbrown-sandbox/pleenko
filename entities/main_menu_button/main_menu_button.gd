@@ -87,6 +87,10 @@ func _exit_tree() -> void:
 			t.kill()
 
 
+# Custom styling instead of theme.apply_button_theme — the menu button is
+# intentionally bolder than the shared button look (thicker border, wider
+# horizontal padding, hover/pressed shade variants). A schema change to
+# VisualTheme button defaults won't propagate here; that's by design.
 func _apply_theme() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var bar := t.button_border_color
