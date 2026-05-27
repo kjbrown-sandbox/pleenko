@@ -1,0 +1,1658 @@
+[gd_scene format=3 uid="uid://c06eegvkvkd73"]
+
+[ext_resource type="FontFile" uid="uid://bb1mgbrvllm28" path="res://assets/fonts/Nunito/static/Nunito-Bold.ttf" id="1_fontb"]
+[ext_resource type="FontFile" uid="uid://dlxed5gsyu3u3" path="res://assets/fonts/Nunito/static/Nunito-Regular.ttf" id="2_fontr"]
+[ext_resource type="Shader" path="res://style_lab/neumorphic_panel.gdshader" id="3_neum"]
+[ext_resource type="Script" path="res://style_lab/neumorphic_panel.gd" id="4_neumsc"]
+
+[sub_resource type="StyleBoxFlat" id="s2_card"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.22, 0.19, 0.16, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.39, 0.33, 0.27, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="s2_titlebar"]
+content_margin_left = 18.0
+content_margin_top = 10.0
+content_margin_right = 18.0
+content_margin_bottom = 10.0
+bg_color = Color(0.18, 0.15, 0.12, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+
+[sub_resource type="StyleBoxFlat" id="s3_floating"]
+content_margin_left = 22.0
+content_margin_top = 18.0
+content_margin_right = 22.0
+content_margin_bottom = 18.0
+bg_color = Color(0.25, 0.21, 0.17, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 16
+shadow_offset = Vector2(0, 6)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hbv4q"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.2, 0.17, 0.14, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.3)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.7)
+shader_parameter/corner_radius = 16.0
+shader_parameter/padding = 24.0
+shader_parameter/softness = 22.0
+shader_parameter/light_offset = 7.0
+shader_parameter/mode = 0
+shader_parameter/rect_size = Vector2(904, 240)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cqoi3"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.13, 0.11, 0.09, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.32)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.75)
+shader_parameter/corner_radius = 16.0
+shader_parameter/padding = 24.0
+shader_parameter/softness = 22.0
+shader_parameter/light_offset = 7.0
+shader_parameter/mode = 1
+shader_parameter/rect_size = Vector2(904, 240)
+
+[sub_resource type="StyleBoxFlat" id="s6_corner_tl"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 2
+border_width_top = 2
+border_color = Color(0.51, 0.44, 0.38, 1)
+
+[sub_resource type="StyleBoxFlat" id="s6_corner_tr"]
+bg_color = Color(0, 0, 0, 0)
+border_width_top = 2
+border_width_right = 2
+border_color = Color(0.51, 0.44, 0.38, 1)
+
+[sub_resource type="StyleBoxFlat" id="s6_corner_bl"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 2
+border_width_bottom = 2
+border_color = Color(0.51, 0.44, 0.38, 1)
+
+[sub_resource type="StyleBoxFlat" id="s6_corner_br"]
+bg_color = Color(0, 0, 0, 0)
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.51, 0.44, 0.38, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_5rdop"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.1, 0.08, 0.07, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.36)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.8)
+shader_parameter/corner_radius = 18.0
+shader_parameter/padding = 26.0
+shader_parameter/softness = 24.0
+shader_parameter/light_offset = 8.0
+shader_parameter/mode = 1
+shader_parameter/rect_size = Vector2(904, 280)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wt32o"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.22, 0.19, 0.16, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.3)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.7)
+shader_parameter/corner_radius = 10.0
+shader_parameter/padding = 12.0
+shader_parameter/softness = 10.0
+shader_parameter/light_offset = 4.0
+shader_parameter/mode = 0
+shader_parameter/rect_size = Vector2(816, 48)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_kq3fn"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.22, 0.19, 0.16, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.3)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.7)
+shader_parameter/corner_radius = 10.0
+shader_parameter/padding = 12.0
+shader_parameter/softness = 10.0
+shader_parameter/light_offset = 4.0
+shader_parameter/mode = 0
+shader_parameter/rect_size = Vector2(816, 48)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_isxbr"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.22, 0.19, 0.16, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.3)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.7)
+shader_parameter/corner_radius = 10.0
+shader_parameter/padding = 12.0
+shader_parameter/softness = 10.0
+shader_parameter/light_offset = 4.0
+shader_parameter/mode = 0
+shader_parameter/rect_size = Vector2(816, 48)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_w4xka"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.22, 0.19, 0.16, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.32)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.72)
+shader_parameter/corner_radius = 16.0
+shader_parameter/padding = 22.0
+shader_parameter/softness = 20.0
+shader_parameter/light_offset = 7.0
+shader_parameter/mode = 0
+shader_parameter/rect_size = Vector2(904, 80)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_nkh6i"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.13, 0.11, 0.09, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.34)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.78)
+shader_parameter/corner_radius = 16.0
+shader_parameter/padding = 22.0
+shader_parameter/softness = 20.0
+shader_parameter/light_offset = 7.0
+shader_parameter/mode = 1
+shader_parameter/rect_size = Vector2(904, 220)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_70q4i"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.11, 0.09, 0.07, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.34)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.78)
+shader_parameter/corner_radius = 10.0
+shader_parameter/padding = 12.0
+shader_parameter/softness = 10.0
+shader_parameter/light_offset = 4.0
+shader_parameter/mode = 1
+shader_parameter/rect_size = Vector2(904, 56)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_76ktx"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.11, 0.09, 0.07, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.34)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.78)
+shader_parameter/corner_radius = 10.0
+shader_parameter/padding = 12.0
+shader_parameter/softness = 10.0
+shader_parameter/light_offset = 4.0
+shader_parameter/mode = 1
+shader_parameter/rect_size = Vector2(904, 56)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sclxt"]
+shader = ExtResource("3_neum")
+shader_parameter/face_color = Color(0.11, 0.09, 0.07, 1)
+shader_parameter/highlight_color = Color(1, 0.96, 0.88, 0.34)
+shader_parameter/shadow_color = Color(0, 0, 0, 0.78)
+shader_parameter/corner_radius = 10.0
+shader_parameter/padding = 12.0
+shader_parameter/softness = 10.0
+shader_parameter/light_offset = 4.0
+shader_parameter/mode = 1
+shader_parameter/rect_size = Vector2(904, 56)
+
+[node name="SectionPrototypes" type="Control" unique_id=32406037]
+custom_minimum_size = Vector2(1000, 4200)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 1000.0
+offset_bottom = 2400.0
+
+[node name="BG" type="ColorRect" parent="." unique_id=1559362390]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.15, 0.13, 0.11, 1)
+
+[node name="Margin" type="MarginContainer" parent="." unique_id=485706898]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 48
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 48
+theme_override_constants/margin_bottom = 32
+
+[node name="Body" type="VBoxContainer" parent="Margin" unique_id=649842864]
+layout_mode = 2
+theme_override_constants/separation = 36
+
+[node name="Title" type="Label" parent="Margin/Body" unique_id=1972577207]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 26
+text = "Section View Prototypes — nier_lofi"
+
+[node name="Sub" type="Label" parent="Margin/Body" unique_id=2141212030]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "Each section shows the same three placeholder rows. The container is what's being iterated."
+
+[node name="S1" type="VBoxContainer" parent="Margin/Body" unique_id=1186559067]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S1" unique_id=1920018791]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S1 — Bare (current implementation: no container chrome)"
+
+[node name="Box" type="VBoxContainer" parent="Margin/Body/S1" unique_id=644891833]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SectionTitle" type="Label" parent="Margin/Body/S1/Box" unique_id=1769290187]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "GOLD BOARD  ·  UPGRADES"
+
+[node name="R1" type="HBoxContainer" parent="Margin/Body/S1/Box" unique_id=222061145]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S1/Box/R1" unique_id=893170263]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 14
+text = "Bucket Value"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S1/Box/R1" unique_id=60675773]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  2 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S1/Box/R1" unique_id=509701877]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "18 / 50"
+horizontal_alignment = 2
+
+[node name="R2" type="HBoxContainer" parent="Margin/Body/S1/Box" unique_id=505231348]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S1/Box/R2" unique_id=1885607594]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 14
+text = "Cap Raise"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S1/Box/R2" unique_id=1496747482]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  1 / 3"
+
+[node name="Frac" type="Label" parent="Margin/Body/S1/Box/R2" unique_id=954286650]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "4 / 25"
+horizontal_alignment = 2
+
+[node name="R3" type="HBoxContainer" parent="Margin/Body/S1/Box" unique_id=1277778921]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S1/Box/R3" unique_id=1417727805]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 14
+text = "Drop Rate"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S1/Box/R3" unique_id=1560937350]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  3 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S1/Box/R3" unique_id=55073094]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "42 / 100"
+horizontal_alignment = 2
+
+[node name="S2" type="VBoxContainer" parent="Margin/Body" unique_id=505727473]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S2" unique_id=762274404]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S2 — Outline card + dedicated title bar"
+
+[node name="Card" type="PanelContainer" parent="Margin/Body/S2" unique_id=559077257]
+layout_mode = 2
+theme_override_styles/panel = SubResource("s2_card")
+
+[node name="Stack" type="VBoxContainer" parent="Margin/Body/S2/Card" unique_id=1870106717]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="TitleBar" type="PanelContainer" parent="Margin/Body/S2/Card/Stack" unique_id=724098410]
+layout_mode = 2
+theme_override_styles/panel = SubResource("s2_titlebar")
+
+[node name="Title" type="Label" parent="Margin/Body/S2/Card/Stack/TitleBar" unique_id=1465401335]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "GOLD BOARD  ·  UPGRADES"
+
+[node name="Rows" type="VBoxContainer" parent="Margin/Body/S2/Card/Stack" unique_id=536556214]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Pad" type="MarginContainer" parent="Margin/Body/S2/Card/Stack/Rows" unique_id=178825283]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 14
+
+[node name="Inner" type="VBoxContainer" parent="Margin/Body/S2/Card/Stack/Rows/Pad" unique_id=1296283042]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="R1" type="HBoxContainer" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner" unique_id=1928170978]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner/R1" unique_id=1230429691]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 14
+text = "Bucket Value"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner/R1" unique_id=2137361853]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  2 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner/R1" unique_id=1003676542]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "18 / 50"
+horizontal_alignment = 2
+
+[node name="R2" type="HBoxContainer" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner" unique_id=635428764]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner/R2" unique_id=404710453]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 14
+text = "Cap Raise"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner/R2" unique_id=2136328910]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  1 / 3"
+
+[node name="Frac" type="Label" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner/R2" unique_id=2099669940]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "4 / 25"
+horizontal_alignment = 2
+
+[node name="R3" type="HBoxContainer" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner" unique_id=412134441]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner/R3" unique_id=1749670125]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 14
+text = "Drop Rate"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner/R3" unique_id=1454537780]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  3 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S2/Card/Stack/Rows/Pad/Inner/R3" unique_id=354816313]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "42 / 100"
+horizontal_alignment = 2
+
+[node name="S3" type="VBoxContainer" parent="Margin/Body" unique_id=1913692494]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S3" unique_id=1605224759]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S3 — Floating shadow card (taupe, large radius, inline title)"
+
+[node name="Card" type="PanelContainer" parent="Margin/Body/S3" unique_id=460445783]
+layout_mode = 2
+theme_override_styles/panel = SubResource("s3_floating")
+
+[node name="Stack" type="VBoxContainer" parent="Margin/Body/S3/Card" unique_id=1079990132]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="Margin/Body/S3/Card/Stack" unique_id=1945981553]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "GOLD BOARD  ·  UPGRADES"
+
+[node name="R1" type="HBoxContainer" parent="Margin/Body/S3/Card/Stack" unique_id=1321816149]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S3/Card/Stack/R1" unique_id=1672492526]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Bucket Value"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S3/Card/Stack/R1" unique_id=369815173]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  2 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S3/Card/Stack/R1" unique_id=965849238]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "18 / 50"
+horizontal_alignment = 2
+
+[node name="R2" type="HBoxContainer" parent="Margin/Body/S3/Card/Stack" unique_id=1286698430]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S3/Card/Stack/R2" unique_id=963469804]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Cap Raise"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S3/Card/Stack/R2" unique_id=892011205]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  1 / 3"
+
+[node name="Frac" type="Label" parent="Margin/Body/S3/Card/Stack/R2" unique_id=1675485359]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "4 / 25"
+horizontal_alignment = 2
+
+[node name="R3" type="HBoxContainer" parent="Margin/Body/S3/Card/Stack" unique_id=1677701940]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S3/Card/Stack/R3" unique_id=852540333]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Drop Rate"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S3/Card/Stack/R3" unique_id=14292869]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  3 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S3/Card/Stack/R3" unique_id=1045212573]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "42 / 100"
+horizontal_alignment = 2
+
+[node name="S4" type="VBoxContainer" parent="Margin/Body" unique_id=475136090]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S4" unique_id=1066652111]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S4 — Neumorphic raised section (shader, mode 0)"
+
+[node name="Box" type="ColorRect" parent="Margin/Body/S4" unique_id=222106008]
+material = SubResource("ShaderMaterial_hbv4q")
+custom_minimum_size = Vector2(0, 240)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Pad" type="MarginContainer" parent="Margin/Body/S4/Box" unique_id=375001534]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 44
+theme_override_constants/margin_top = 38
+theme_override_constants/margin_right = 44
+theme_override_constants/margin_bottom = 38
+
+[node name="Stack" type="VBoxContainer" parent="Margin/Body/S4/Box/Pad" unique_id=750554463]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/Body/S4/Box/Pad/Stack" unique_id=1494286515]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "GOLD BOARD  ·  UPGRADES"
+
+[node name="R1" type="HBoxContainer" parent="Margin/Body/S4/Box/Pad/Stack" unique_id=1211831770]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S4/Box/Pad/Stack/R1" unique_id=1610744830]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Bucket Value"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S4/Box/Pad/Stack/R1" unique_id=767167551]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  2 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S4/Box/Pad/Stack/R1" unique_id=442757984]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "18 / 50"
+horizontal_alignment = 2
+
+[node name="R2" type="HBoxContainer" parent="Margin/Body/S4/Box/Pad/Stack" unique_id=800138825]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S4/Box/Pad/Stack/R2" unique_id=1890397617]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Cap Raise"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S4/Box/Pad/Stack/R2" unique_id=185896239]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  1 / 3"
+
+[node name="Frac" type="Label" parent="Margin/Body/S4/Box/Pad/Stack/R2" unique_id=99468442]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "4 / 25"
+horizontal_alignment = 2
+
+[node name="R3" type="HBoxContainer" parent="Margin/Body/S4/Box/Pad/Stack" unique_id=1473738044]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S4/Box/Pad/Stack/R3" unique_id=866787713]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Drop Rate"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S4/Box/Pad/Stack/R3" unique_id=214371267]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  3 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S4/Box/Pad/Stack/R3" unique_id=80144229]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "42 / 100"
+horizontal_alignment = 2
+
+[node name="S5" type="VBoxContainer" parent="Margin/Body" unique_id=196879972]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S5" unique_id=1617716189]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S5 — Neumorphic recessed well (shader, mode 1)"
+
+[node name="Box" type="ColorRect" parent="Margin/Body/S5" unique_id=34861319]
+material = SubResource("ShaderMaterial_cqoi3")
+custom_minimum_size = Vector2(0, 240)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Pad" type="MarginContainer" parent="Margin/Body/S5/Box" unique_id=1074477649]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 44
+theme_override_constants/margin_top = 38
+theme_override_constants/margin_right = 44
+theme_override_constants/margin_bottom = 38
+
+[node name="Stack" type="VBoxContainer" parent="Margin/Body/S5/Box/Pad" unique_id=1653852362]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/Body/S5/Box/Pad/Stack" unique_id=834532331]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.33, 0.27, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "GOLD BOARD  ·  UPGRADES"
+
+[node name="R1" type="HBoxContainer" parent="Margin/Body/S5/Box/Pad/Stack" unique_id=1853667166]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S5/Box/Pad/Stack/R1" unique_id=750315300]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Bucket Value"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S5/Box/Pad/Stack/R1" unique_id=968701404]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  2 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S5/Box/Pad/Stack/R1" unique_id=2133132972]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "18 / 50"
+horizontal_alignment = 2
+
+[node name="R2" type="HBoxContainer" parent="Margin/Body/S5/Box/Pad/Stack" unique_id=344109324]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S5/Box/Pad/Stack/R2" unique_id=1626659500]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Cap Raise"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S5/Box/Pad/Stack/R2" unique_id=1852181048]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  1 / 3"
+
+[node name="Frac" type="Label" parent="Margin/Body/S5/Box/Pad/Stack/R2" unique_id=952811646]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "4 / 25"
+horizontal_alignment = 2
+
+[node name="R3" type="HBoxContainer" parent="Margin/Body/S5/Box/Pad/Stack" unique_id=631587449]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S5/Box/Pad/Stack/R3" unique_id=338464255]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Drop Rate"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S5/Box/Pad/Stack/R3" unique_id=124678386]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  3 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S5/Box/Pad/Stack/R3" unique_id=1044156288]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "42 / 100"
+horizontal_alignment = 2
+
+[node name="S6" type="VBoxContainer" parent="Margin/Body" unique_id=1444753287]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S6" unique_id=1387848141]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S6 — Bracketed corners (terminal/minimal — implied enclosure)"
+
+[node name="Frame" type="Control" parent="Margin/Body/S6" unique_id=1436814234]
+custom_minimum_size = Vector2(0, 220)
+layout_mode = 2
+
+[node name="TL" type="Panel" parent="Margin/Body/S6/Frame" unique_id=259207546]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 1
+offset_right = 18.0
+offset_bottom = 18.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("s6_corner_tl")
+
+[node name="TR" type="Panel" parent="Margin/Body/S6/Frame" unique_id=611137693]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -18.0
+offset_bottom = 18.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("s6_corner_tr")
+
+[node name="BL" type="Panel" parent="Margin/Body/S6/Frame" unique_id=496222031]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -18.0
+offset_right = 18.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("s6_corner_bl")
+
+[node name="BR" type="Panel" parent="Margin/Body/S6/Frame" unique_id=1762771245]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -18.0
+offset_top = -18.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("s6_corner_br")
+
+[node name="Pad" type="MarginContainer" parent="Margin/Body/S6/Frame" unique_id=506106182]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="Stack" type="VBoxContainer" parent="Margin/Body/S6/Frame/Pad" unique_id=629045844]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack" unique_id=2077129135]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "—  GOLD BOARD · UPGRADES  —"
+horizontal_alignment = 1
+
+[node name="R1" type="HBoxContainer" parent="Margin/Body/S6/Frame/Pad/Stack" unique_id=1430470176]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack/R1" unique_id=95919198]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Bucket Value"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack/R1" unique_id=953846278]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  2 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack/R1" unique_id=1458050663]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "18 / 50"
+horizontal_alignment = 2
+
+[node name="R2" type="HBoxContainer" parent="Margin/Body/S6/Frame/Pad/Stack" unique_id=1889939302]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack/R2" unique_id=130792500]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Cap Raise"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack/R2" unique_id=480155106]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  1 / 3"
+
+[node name="Frac" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack/R2" unique_id=1921986987]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "4 / 25"
+horizontal_alignment = 2
+
+[node name="R3" type="HBoxContainer" parent="Margin/Body/S6/Frame/Pad/Stack" unique_id=265129843]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack/R3" unique_id=1461458936]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Drop Rate"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack/R3" unique_id=1424557291]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  3 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S6/Frame/Pad/Stack/R3" unique_id=1310434900]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "42 / 100"
+horizontal_alignment = 2
+
+[node name="S7" type="VBoxContainer" parent="Margin/Body" unique_id=437370388]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S7" unique_id=702969643]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S7 — Recessed tray holding raised row cards (rows lift out of the well)"
+
+[node name="Tray" type="ColorRect" parent="Margin/Body/S7" unique_id=805014691]
+material = SubResource("ShaderMaterial_5rdop")
+custom_minimum_size = Vector2(0, 280)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Pad" type="MarginContainer" parent="Margin/Body/S7/Tray" unique_id=763840987]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 44
+theme_override_constants/margin_top = 38
+theme_override_constants/margin_right = 44
+theme_override_constants/margin_bottom = 38
+
+[node name="Stack" type="VBoxContainer" parent="Margin/Body/S7/Tray/Pad" unique_id=1043681359]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack" unique_id=2099603218]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.33, 0.27, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "GOLD BOARD  ·  UPGRADES"
+
+[node name="R1" type="ColorRect" parent="Margin/Body/S7/Tray/Pad/Stack" unique_id=645619771]
+material = SubResource("ShaderMaterial_wt32o")
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Name" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack/R1" unique_id=1827565507]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 22.0
+offset_right = -160.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Bucket Value"
+vertical_alignment = 1
+
+[node name="Lvl" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack/R1" unique_id=2054367518]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_right = -90.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "LV 2/5"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Frac" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack/R1" unique_id=2012939034]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -86.0
+offset_right = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "18 / 50"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="R2" type="ColorRect" parent="Margin/Body/S7/Tray/Pad/Stack" unique_id=527384856]
+material = SubResource("ShaderMaterial_kq3fn")
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Name" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack/R2" unique_id=1072831219]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 22.0
+offset_right = -160.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Cap Raise"
+vertical_alignment = 1
+
+[node name="Lvl" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack/R2" unique_id=813483869]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_right = -90.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "LV 1/3"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Frac" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack/R2" unique_id=802730150]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -86.0
+offset_right = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "4 / 25"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="R3" type="ColorRect" parent="Margin/Body/S7/Tray/Pad/Stack" unique_id=1258873468]
+material = SubResource("ShaderMaterial_isxbr")
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Name" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack/R3" unique_id=1201072096]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 22.0
+offset_right = -160.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Drop Rate"
+vertical_alignment = 1
+
+[node name="Lvl" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack/R3" unique_id=1563726056]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_right = -90.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "LV 3/5"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Frac" type="Label" parent="Margin/Body/S7/Tray/Pad/Stack/R3" unique_id=1706260356]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -86.0
+offset_right = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 13
+text = "42 / 100"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="S8" type="VBoxContainer" parent="Margin/Body" unique_id=1122897260]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S8" unique_id=439321668]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S8 — Raised header bar sitting on top of recessed body well"
+
+[node name="Header" type="ColorRect" parent="Margin/Body/S8" unique_id=289301084]
+material = SubResource("ShaderMaterial_w4xka")
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Title" type="Label" parent="Margin/Body/S8/Header" unique_id=1151968768]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 16
+text = "GOLD BOARD  ·  UPGRADES"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Body" type="ColorRect" parent="Margin/Body/S8" unique_id=928502375]
+material = SubResource("ShaderMaterial_nkh6i")
+custom_minimum_size = Vector2(0, 220)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Pad" type="MarginContainer" parent="Margin/Body/S8/Body" unique_id=839563126]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 30
+
+[node name="Rows" type="VBoxContainer" parent="Margin/Body/S8/Body/Pad" unique_id=1588599623]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="R1" type="HBoxContainer" parent="Margin/Body/S8/Body/Pad/Rows" unique_id=498452997]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S8/Body/Pad/Rows/R1" unique_id=1977338194]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Bucket Value"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S8/Body/Pad/Rows/R1" unique_id=2069827221]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  2 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S8/Body/Pad/Rows/R1" unique_id=1726851754]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "18 / 50"
+horizontal_alignment = 2
+
+[node name="R2" type="HBoxContainer" parent="Margin/Body/S8/Body/Pad/Rows" unique_id=1660435950]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S8/Body/Pad/Rows/R2" unique_id=1646448069]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Cap Raise"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S8/Body/Pad/Rows/R2" unique_id=1020616317]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  1 / 3"
+
+[node name="Frac" type="Label" parent="Margin/Body/S8/Body/Pad/Rows/R2" unique_id=536991132]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "4 / 25"
+horizontal_alignment = 2
+
+[node name="R3" type="HBoxContainer" parent="Margin/Body/S8/Body/Pad/Rows" unique_id=2014705770]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S8/Body/Pad/Rows/R3" unique_id=179240417]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Drop Rate"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S8/Body/Pad/Rows/R3" unique_id=602236861]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 12
+text = "LV  3 / 5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S8/Body/Pad/Rows/R3" unique_id=541560520]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "42 / 100"
+horizontal_alignment = 2
+
+[node name="S9" type="VBoxContainer" parent="Margin/Body" unique_id=515758817]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S9" unique_id=72438534]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S9 — Each row is its own recessed slot (no outer container, rows are the surface)"
+
+[node name="Title" type="Label" parent="Margin/Body/S9" unique_id=1636400769]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "GOLD BOARD  ·  UPGRADES"
+
+[node name="Rows" type="VBoxContainer" parent="Margin/Body/S9" unique_id=4067285]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="R1" type="ColorRect" parent="Margin/Body/S9/Rows" unique_id=1239702381]
+material = SubResource("ShaderMaterial_70q4i")
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Name" type="Label" parent="Margin/Body/S9/Rows/R1" unique_id=786501760]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 22.0
+offset_right = -160.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Bucket Value"
+vertical_alignment = 1
+
+[node name="Lvl" type="Label" parent="Margin/Body/S9/Rows/R1" unique_id=1840863659]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_right = -90.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "LV 2/5"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Frac" type="Label" parent="Margin/Body/S9/Rows/R1" unique_id=491711598]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -86.0
+offset_right = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "18 / 50"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="R2" type="ColorRect" parent="Margin/Body/S9/Rows" unique_id=1001244599]
+material = SubResource("ShaderMaterial_76ktx")
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Name" type="Label" parent="Margin/Body/S9/Rows/R2" unique_id=132125147]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 22.0
+offset_right = -160.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Cap Raise"
+vertical_alignment = 1
+
+[node name="Lvl" type="Label" parent="Margin/Body/S9/Rows/R2" unique_id=254485044]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_right = -90.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "LV 1/3"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Frac" type="Label" parent="Margin/Body/S9/Rows/R2" unique_id=370172087]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -86.0
+offset_right = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "4 / 25"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="R3" type="ColorRect" parent="Margin/Body/S9/Rows" unique_id=704596410]
+material = SubResource("ShaderMaterial_sclxt")
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+script = ExtResource("4_neumsc")
+
+[node name="Name" type="Label" parent="Margin/Body/S9/Rows/R3" unique_id=203190437]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 22.0
+offset_right = -160.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Drop Rate"
+vertical_alignment = 1
+
+[node name="Lvl" type="Label" parent="Margin/Body/S9/Rows/R3" unique_id=649599898]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_right = -90.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "LV 3/5"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Frac" type="Label" parent="Margin/Body/S9/Rows/R3" unique_id=1419155077]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -86.0
+offset_right = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "42 / 100"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="S10" type="VBoxContainer" parent="Margin/Body" unique_id=409242797]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="H" type="Label" parent="Margin/Body/S10" unique_id=799260313]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.69, 0.62, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 13
+text = "S10 — Bare + thin gold accent rule under header (no card, no shadow)"
+
+[node name="Stack" type="VBoxContainer" parent="Margin/Body/S10" unique_id=1620627684]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleRow" type="HBoxContainer" parent="Margin/Body/S10/Stack" unique_id=1685692000]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Margin/Body/S10/Stack/TitleRow" unique_id=1475806465]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "GOLD BOARD  ·  UPGRADES"
+
+[node name="Accent" type="ColorRect" parent="Margin/Body/S10/Stack/TitleRow" unique_id=496115016]
+custom_minimum_size = Vector2(60, 2)
+layout_mode = 2
+size_flags_vertical = 5
+color = Color(0.65, 0.55, 0.24, 1)
+
+[node name="Rule" type="ColorRect" parent="Margin/Body/S10/Stack" unique_id=692617397]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(0.27, 0.22, 0.18, 1)
+
+[node name="Rows" type="VBoxContainer" parent="Margin/Body/S10/Stack" unique_id=643309784]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="R1" type="HBoxContainer" parent="Margin/Body/S10/Stack/Rows" unique_id=1708483277]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S10/Stack/Rows/R1" unique_id=2067212135]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Bucket Value"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S10/Stack/Rows/R1" unique_id=702474635]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "LV 2/5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S10/Stack/Rows/R1" unique_id=1548174913]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "18 / 50"
+horizontal_alignment = 2
+
+[node name="R2" type="HBoxContainer" parent="Margin/Body/S10/Stack/Rows" unique_id=1130830340]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S10/Stack/Rows/R2" unique_id=1808364262]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Cap Raise"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S10/Stack/Rows/R2" unique_id=133477785]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "LV 1/3"
+
+[node name="Frac" type="Label" parent="Margin/Body/S10/Stack/Rows/R2" unique_id=349089004]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "4 / 25"
+horizontal_alignment = 2
+
+[node name="R3" type="HBoxContainer" parent="Margin/Body/S10/Stack/Rows" unique_id=961078632]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="Margin/Body/S10/Stack/Rows/R3" unique_id=288187643]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.83, 0.77, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 15
+text = "Drop Rate"
+
+[node name="Lvl" type="Label" parent="Margin/Body/S10/Stack/Rows/R3" unique_id=1925857334]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.44, 0.38, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "LV 3/5"
+
+[node name="Frac" type="Label" parent="Margin/Body/S10/Stack/Rows/R3" unique_id=603783328]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.55, 0.24, 1)
+theme_override_fonts/font = ExtResource("1_fontb")
+theme_override_font_sizes/font_size = 14
+text = "42 / 100"
+horizontal_alignment = 2
+
+[node name="Tail" type="Label" parent="Margin/Body" unique_id=2100841109]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.33, 0.27, 1)
+theme_override_fonts/font = ExtResource("2_fontr")
+theme_override_font_sizes/font_size = 11
+text = "End of section variants. S4 + S5 use the neumorphic shader; try resizing each in editor to see the halos breathe."
