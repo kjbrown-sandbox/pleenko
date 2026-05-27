@@ -14,7 +14,7 @@ const FEEDBACK_URL := "https://docs.google.com/forms/d/e/1FAIpQLSdRHDVqaQzeNyE8e
 @onready var discord_button: MainMenuButton = $CanvasLayer/ButtonColumn/DiscordButton
 @onready var feedback_button: MainMenuButton = $CanvasLayer/ButtonColumn/FeedbackButton
 @onready var quit_button: MainMenuButton = $CanvasLayer/ButtonColumn/QuitButton
-@onready var title_label: Label = $CanvasLayer/TitleLabel
+@onready var menu_title: MenuTitle = $CanvasLayer/MenuTitle
 @onready var confirm_overlay: ColorRect = $ConfirmLayer/Overlay
 @onready var confirm_panel: PanelContainer = $ConfirmLayer/Overlay/Panel
 @onready var confirm_label: Label = $ConfirmLayer/Overlay/Panel/VBox/ConfirmLabel
@@ -64,13 +64,7 @@ func _ready() -> void:
 	for button in [cancel_button, confirm_reset_button]:
 		t.apply_button_theme(button)
 
-	# Title: themed font + palette color (never raw Color/Font) — same idiom as
-	# options_dialog.gd's title.
-	var font: Font = t.button_font if t.button_font else t.label_font
-	if font:
-		title_label.add_theme_font_override("font", font)
-	title_label.add_theme_font_size_override("font_size", 64)
-	title_label.add_theme_color_override("font_color", t.normal_text_color)
+	menu_title.setup(menu_board)
 
 	confirm_overlay.color = t.overlay_color
 	# The default PanelContainer stylebox is a dark engine grey, which kills the
