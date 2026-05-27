@@ -20,9 +20,6 @@ extends HBoxContainer
 ## section. The shim methods at the bottom are no-ops while iteration is
 ## still settling — Phase C wires them to real game state.
 
-const TAN := Color(0.51, 0.44, 0.38)
-const CAP_BG := TAN  # caps share the fill color → unified composite
-
 const BORDER_PX := 4
 # Outer corner radius — applied only on the OUTSIDE corners of the composite
 # (whichever node forms the perimeter). Fill mirrors these so its visible
@@ -34,13 +31,19 @@ const GAP_PX := 1
 
 
 func _bar_tint() -> Color:
-	# bar_color overrides TAN when alpha > 0 (e.g. currency bars).
-	return bar_color if bar_color.a > 0.0 else TAN
+	# bar_color overrides the theme's neutral border color when alpha > 0 —
+	# currencies tint per-coin; upgrade rows + drop buttons fall back to the
+	# palette (button_border_color) so theme swaps propagate.
+	return bar_color if bar_color.a > 0.0 else ThemeProvider.theme.button_border_color
 
 
 enum Mode { WITH_BOTH, WITH_PLUS, NEITHER }
 
-@export var mode: Mode = Mode.WITH_PLUS:
+## Default NEITHER — matches the original FillBar's "side buttons hidden"
+## default. setup_plus / setup_minus elevate to WITH_PLUS / WITH_BOTH.
+## Don't change this without auditing `*.plus_button.visible` reads in
+## coin_values.gd + upgrade_section.gd, which use it as a "wired?" signal.
+@export var mode: Mode = Mode.NEITHER:
 	set(value):
 		if mode == value: return
 		mode = value
@@ -65,14 +68,13 @@ enum Mode { WITH_BOTH, WITH_PLUS, NEITHER }
 		fill_amount = clamped
 		_queue_apply_fill()
 
-# Per-bar color override (e.g. currencies). Color(0,0,0,0) → use TAN.
+# Per-bar color override (e.g. currencies). Color(0,0,0,0) → falls back to
+# the theme's neutral palette color via `_bar_tint()`.
 @export var bar_color: Color = Color(0, 0, 0, 0):
 	set(value):
 		if bar_color == value: return
 		bar_color = value
 		_queue_apply()
-# Vestigial (used to gate random demo seeding); kept so existing callers compile.
-@export var skip_demo: bool = false
 
 # Disabled / filled state — driven by game via set_main_disabled / set_*_filled.
 @export var demo_main_disabled: bool = false:
@@ -102,9 +104,6 @@ signal minus_pressed
 signal minus_mouse_entered
 signal minus_mouse_exited
 signal side_button_hover(text: String)
-
-# FillBar-compat field — writes accepted, ignored
-var _disabled_text_override: Color = Color(-1, 0, 0)
 
 # Side-button callbacks supplied by setup_plus / setup_minus.
 var _plus_callback: Callable
@@ -175,10 +174,13 @@ func _ready() -> void:
 	main_button.focus_mode = Control.FOCUS_NONE
 	plus_button.focus_mode = Control.FOCUS_NONE
 	minus_button.focus_mode = Control.FOCUS_NONE
-	# Wire signals to mirror FillBar's public API.
-	main_button.pressed.connect(func(): main_pressed.emit())
-	main_button.mouse_entered.connect(func(): main_mouse_entered.emit())
-	main_button.mouse_exited.connect(func(): main_mouse_exited.emit())
+	# Wire signals to mirror FillBar's public API. Main forwards 1:1 via
+	# direct Signal.emit Callables (no lambdas); plus/minus go through
+	# named handlers because they also fire stored callbacks + tooltip
+	# hover refresh.
+	main_button.pressed.connect(main_pressed.emit)
+	main_button.mouse_entered.connect(main_mouse_entered.emit)
+	main_button.mouse_exited.connect(main_mouse_exited.emit)
 	plus_button.pressed.connect(_on_plus_pressed)
 	plus_button.mouse_entered.connect(_on_plus_mouse_entered)
 	plus_button.mouse_exited.connect(_on_plus_mouse_exited)

@@ -1,6 +1,6 @@
 extends VBoxContainer
 
-const FillBarScene := preload("res://style_lab/refined_baseline_button.tscn")
+const FillBarScene := preload("res://entities/refined_baseline_button/refined_baseline_button.tscn")
 const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 const TooltipScene := preload("res://entities/tooltip/tooltip.tscn")
 
@@ -117,15 +117,13 @@ func _update_currencies() -> void:
 
 	for currency_type in _visible_currencies:
 		var bar = FillBarScene.instantiate()
-		# Set BEFORE add_child so _ready skips the random demo seeding.
-		bar.skip_demo = true
+		# Tint set before add_child so _ready's apply uses it for the initial render.
 		bar.bar_color = t.get_coin_color(currency_type)
 		add_child(bar)
 
 		var fill_color: Color = t.get_coin_color(currency_type)
 		var disabled_color: Color = t.get_coin_color_faded(currency_type)
 		bar.setup(fill_color, disabled_color)
-		bar._disabled_text_override = t.button_fill_text_color
 
 		var amount := CurrencyManager.get_balance(currency_type)
 		var cap := CurrencyManager.get_cap(currency_type)
