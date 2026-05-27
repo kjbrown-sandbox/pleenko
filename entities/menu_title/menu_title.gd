@@ -109,11 +109,11 @@ func _match_eyebrow_to_letter_row_width() -> void:
 
 
 func _apply_theme(t: VisualTheme) -> void:
-	# Letters use the dedicated wordmark face (Passion One Black); eyebrow
-	# keeps the project's default font from the theme. Wordmark + eyebrow
-	# share `normal_text_color` so they read as a single unit.
+	# Letters use the dedicated wordmark face (Gasoek One); eyebrow keeps the
+	# project's default font from the theme. Wordmark + eyebrow share
+	# `normal_text_color` so they read as a single unit.
 	var plunk_color: Color = t.normal_text_color
-	for letter in [_letter_p, _letter_l, _letter_u, _letter_n, _letter_k]:
+	for letter: Label in [_letter_p, _letter_l, _letter_u, _letter_n, _letter_k]:
 		letter.add_theme_font_override("font", LETTER_FONT)
 		letter.add_theme_font_size_override("font_size", LETTER_FONT_SIZE)
 		letter.add_theme_color_override("font_color", plunk_color)
@@ -126,7 +126,7 @@ func _apply_theme(t: VisualTheme) -> void:
 
 func _build_eyebrow_chars(t: VisualTheme, color: Color) -> void:
 	var font: Font = t.button_font if t.button_font else t.label_font
-	for c in EYEBROW_TEXT:
+	for c: String in EYEBROW_TEXT:
 		var lbl := Label.new()
 		lbl.text = c
 		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -142,7 +142,7 @@ func _build_eyebrow_chars(t: VisualTheme, color: Color) -> void:
 func _start_eyebrow_fade_in() -> void:
 	for i in _eyebrow_chars.size():
 		var lbl: Label = _eyebrow_chars[i]
-		var tw := create_tween()
+		var tw: Tween = create_tween()
 		if i > 0:
 			tw.tween_interval(i * EYEBROW_FADE_STAGGER)
 		tw.tween_property(lbl, "modulate:a", 1.0, EYEBROW_FADE_DURATION)
@@ -178,7 +178,7 @@ func _detect_letter_hits() -> void:
 	for i in any_inside.size():
 		any_inside[i] = false
 
-	for wp in world_positions:
+	for wp: Vector3 in world_positions:
 		if is_behind_fn.call(wp):
 			continue
 		var screen: Vector2 = unproject_fn.call(wp)
@@ -207,23 +207,25 @@ func _wobble_letter(idx: int) -> void:
 	# settled after a resize).
 	letter.pivot_offset = letter.size * 0.5
 
-	var tw := create_tween()
+	var tw: Tween = create_tween()
 	tw.tween_property(letter, "scale",
 			Vector2.ONE, LETTER_WOBBLE_DURATION) \
 		.from(Vector2(LETTER_WOBBLE_SCALE_PEAK, LETTER_WOBBLE_SCALE_PEAK)) \
 		.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	# Only clear + snap-reset if WE'RE still the active wobble — a newer
+	# wobble that replaced us mid-flight is allowed to keep tweening.
 	tw.tween_callback(func() -> void:
 		if _letter_wobble_tweens[idx] == tw:
 			_letter_wobble_tweens[idx] = null
-		letter.scale = Vector2.ONE)
+			letter.scale = Vector2.ONE)
 	_letter_wobble_tweens[idx] = tw
 
 
 func _exit_tree() -> void:
-	for tw in _letter_wobble_tweens:
+	for tw: Tween in _letter_wobble_tweens:
 		if tw != null and tw.is_valid():
 			tw.kill()
-	for tw in _eyebrow_fade_tweens:
+	for tw: Tween in _eyebrow_fade_tweens:
 		if tw != null and tw.is_valid():
 			tw.kill()
 

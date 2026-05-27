@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://drm5plm7d4xte"]
 
-[ext_resource type="Script" uid="uid://cbm5plm7d4xte" path="res://entities/menu_title/menu_title.gd" id="1_mtitle"]
+[ext_resource type="Script" uid="uid://cwf4sajendshd" path="res://entities/menu_title/menu_title.gd" id="1_mtitle"]
 
 [node name="MenuTitle" type="Control"]
 anchor_right = 1.0
