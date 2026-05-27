@@ -17,11 +17,16 @@ extends Node3D
 ##
 ## Why decorative-only: these coins are visual sugar. No currency, no save, no
 ## upgrades, no `Coin` entity, no buckets, no rewards, no landing signal. A coin
-## bounces row-by-row (random left/right) then despawns at the bottom row. This
-## node emits nothing (calls down only). Reads `ThemeProvider.theme` for visual
-## config and calls `AudioManager.play_pitched_chime` for two independent
-## audio layers — peg-contact ticks + a background chord progression bed. See
-## the CLAUDE.md `MenuBoard` entry for the audio-layer system map.
+## bounces row-by-row (random left/right) then despawns at the bottom row.
+## Reads `ThemeProvider.theme` for visual config and calls
+## `AudioManager.play_pitched_chime` for two independent audio layers —
+## peg-contact ticks + a background chord progression bed. See the CLAUDE.md
+## `MenuBoard` entry for the audio-layer system map.
+##
+## Emits `chime_beat_fired` once per chord-bed tick so the main menu can
+## strum the menu buttons in time with the music (visual-only on the
+## listener side — this node still owns the audio).
+signal chime_beat_fired(chord_idx: int, beat_idx: int)
 
 ## Peg rows in the decorative lattice — taller than any early-game board so the
 ## field reads as receding into the distance under the perspective camera.
@@ -631,6 +636,9 @@ func _try_play_peg_tick() -> void:
 ## odd-indexed chords play them in reverse (descending arpeggio). After all
 ## beats fire, advance to the next chord (wrapping at end of progression).
 func _on_chime_beat_timeout() -> void:
+	# Emit BEFORE the audio early-returns so the menu-button strum cascade
+	# keeps the visual rhythm alive even when chime audio is gated off.
+	chime_beat_fired.emit(_chord_index, _beat_index)
 	if not PEG_CHIME_ENABLED:
 		return
 	if _chime_pitches.is_empty():
@@ -681,6 +689,19 @@ func _on_chime_beat_timeout() -> void:
 		if _chord_index >= _chime_pitches.size():
 			_chord_index = 0
 			_loop_index += 1
+
+
+## Index into PEG_CHIME_PROGRESSION currently being played by the chord bed.
+func get_current_chord_index() -> int:
+	return _chord_index
+
+
+## Pitch multipliers (ascending) for the chord at `chord_idx`. Empty array
+## if the chord bed hasn't initialized yet or the index is out of range.
+func get_chord_pitches(chord_idx: int) -> PackedFloat32Array:
+	if chord_idx < 0 or chord_idx >= _chime_pitches.size():
+		return PackedFloat32Array()
+	return _chime_pitches[chord_idx]
 
 
 ## Expanding sparkle ring at a struck peg — same shader/animation as the

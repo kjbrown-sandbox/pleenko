@@ -8,11 +8,12 @@ const VignetteScript := preload("res://entities/vignette/vignette.gd")
 const DISCORD_URL := "https://discord.gg/uadVU3K63y"
 const FEEDBACK_URL := "https://docs.google.com/forms/d/e/1FAIpQLSdRHDVqaQzeNyE8e4Wtf-kIO_pXKOPUvtnAt3X3wrnBU2Xk5g/viewform?usp=publish-editor"
 
-@onready var play_button: Button = $CanvasLayer/ButtonColumn/PlayButton
-@onready var settings_button: Button = $CanvasLayer/ButtonColumn/SettingsButton
-@onready var discord_button: Button = $CanvasLayer/ButtonColumn/DiscordButton
-@onready var feedback_button: Button = $CanvasLayer/ButtonColumn/FeedbackButton
-@onready var quit_button: Button = $CanvasLayer/ButtonColumn/QuitButton
+@onready var menu_board: MenuBoard = $MenuBoard
+@onready var play_button: MainMenuButton = $CanvasLayer/ButtonColumn/PlayButton
+@onready var settings_button: MainMenuButton = $CanvasLayer/ButtonColumn/SettingsButton
+@onready var discord_button: MainMenuButton = $CanvasLayer/ButtonColumn/DiscordButton
+@onready var feedback_button: MainMenuButton = $CanvasLayer/ButtonColumn/FeedbackButton
+@onready var quit_button: MainMenuButton = $CanvasLayer/ButtonColumn/QuitButton
 @onready var title_label: Label = $CanvasLayer/TitleLabel
 @onready var confirm_overlay: ColorRect = $ConfirmLayer/Overlay
 @onready var confirm_panel: PanelContainer = $ConfirmLayer/Overlay/Panel
@@ -28,11 +29,37 @@ var _full_reset_fn := func() -> void: SaveManager.full_reset()
 
 var _options_dialog: CanvasLayer
 
+# Round-robin pluck dispatcher: each chord-bed beat advances to the next
+# MainMenuButton in the column. Population order matches column order top→bottom
+# so the visible wave reads "starting at the top button" per the design.
+var _arpeggiator := MenuHoverArpeggiator.new()
+var _menu_buttons: Array[MainMenuButton] = []
+var _beat_counter: int = 0
+# Strumming pauses while any button is hovered — the cascading plucks compete
+# with the player's interaction. Counter (not bool) because hover_started on
+# one button can fire before hover_ended on the previous if they overlap.
+# After all hovers end, plucks stay suppressed for an additional grace window
+# so the cascade doesn't snap back the moment the cursor leaves a button.
+var _hover_count: int = 0
+const HOVER_PLUCK_RESUME_DELAY_MS := 500
+var _last_hover_end_ms: int = -HOVER_PLUCK_RESUME_DELAY_MS - 1  # don't gate first ticks
+# Hover notes are quantized to a fixed 0.25s grid so they land on rhythm with
+# the chord bed. Each hover commits a pitch to the queue; the timer pops one
+# per tick. Queue capacity 3 — additional rapid hovers are dropped (and don't
+# advance the arpeggiator either, so the arpeggio progression stays in sync
+# with what's actually audible).
+const HOVER_QUANTIZE_SECONDS := 0.125
+const HOVER_QUEUE_CAPACITY := 3
+const HOVER_NOTE_SUSTAIN_S := 3.0
+var _hover_pitch_queue: Array[float] = []
+var _hover_quantize_timer: Timer
+
 
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	for button in [play_button, settings_button, discord_button, feedback_button,
-			quit_button, cancel_button, confirm_reset_button]:
+	# MainMenuButtons own their own styling — only the confirm-dialog plain Buttons
+	# need the palette stylebox sweep.
+	for button in [cancel_button, confirm_reset_button]:
 		t.apply_button_theme(button)
 
 	# Title: themed font + palette color (never raw Color/Font) — same idiom as
@@ -68,6 +95,18 @@ func _ready() -> void:
 	quit_button.pressed.connect(_on_quit_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	confirm_reset_button.pressed.connect(_on_confirm_reset_pressed)
+
+	_menu_buttons = [play_button, settings_button, discord_button, feedback_button, quit_button]
+	for btn in _menu_buttons:
+		btn.hover_started.connect(_on_menu_button_hover)
+		btn.hover_ended.connect(_on_menu_button_hover_ended)
+	menu_board.chime_beat_fired.connect(_on_chime_beat_fired)
+
+	_hover_quantize_timer = Timer.new()
+	_hover_quantize_timer.wait_time = HOVER_QUANTIZE_SECONDS
+	_hover_quantize_timer.autostart = true
+	_hover_quantize_timer.timeout.connect(_on_hover_quantize_tick)
+	add_child(_hover_quantize_timer)
 
 	confirm_overlay.visible = false
 
@@ -133,3 +172,52 @@ func _on_confirm_reset_pressed() -> void:
 	# no scene reload is needed — the menu shows no save-derived state.
 	_full_reset_fn.call()
 	confirm_overlay.visible = false
+
+
+# MenuBoard's chord bed fires every 0.5s; the strum walks down the column then
+# bounces back up (ping-pong). For N buttons the period is 2*(N-1) beats =
+# 8 for 5 buttons; reading position = beat_counter % period then mirroring
+# above N gives 0,1,2,3,4,3,2,1, repeat. Pauses while the user is hovering —
+# beat_counter doesn't advance so the cascade resumes where it left off.
+func _on_chime_beat_fired(_chord_idx: int, _beat_idx: int) -> void:
+	if _menu_buttons.is_empty() or _hover_count > 0: return
+	if Time.get_ticks_msec() - _last_hover_end_ms < HOVER_PLUCK_RESUME_DELAY_MS: return
+	var n := _menu_buttons.size()
+	var period: int = maxi(1, 2 * (n - 1))
+	var pos := _beat_counter % period
+	var index: int = pos if pos < n else period - pos
+	_menu_buttons[index].pluck()
+	_beat_counter += 1
+
+
+func _on_menu_button_hover_ended() -> void:
+	_hover_count = maxi(0, _hover_count - 1)
+	if _hover_count == 0:
+		_last_hover_end_ms = Time.get_ticks_msec()
+
+
+# Hover arpeggio: each hover commits a quantized note to the playback queue.
+# Queue-full hovers are dropped without advancing the arpeggiator so its
+# progression stays aligned with what the player will actually hear.
+func _on_menu_button_hover() -> void:
+	_hover_count += 1
+	if _hover_pitch_queue.size() >= HOVER_QUEUE_CAPACITY:
+		return
+	var note := _arpeggiator.advance(Time.get_ticks_msec())
+	var chord_idx := menu_board.get_current_chord_index()
+	var pitches := menu_board.get_chord_pitches(chord_idx)
+	if pitches.is_empty(): return
+	_hover_pitch_queue.append(MenuHoverArpeggiator.pitch_mult_for(note.x, note.y, pitches))
+
+
+# Pops one queued hover pitch per 0.25s tick — quantizes hovers to the grid.
+func _on_hover_quantize_tick() -> void:
+	if _hover_pitch_queue.is_empty(): return
+	var pitch_mult: float = _hover_pitch_queue.pop_front()
+	# BUCKET_VOLUME_DB (-17.5) — sits inside the chord bed's dynamic range
+	# (bed plays roughly -23 to -11 dB across its arpeggio). Loud enough to
+	# read as an interaction cue, quiet enough not to swamp the music.
+	# Long sustain (3.0s vs the 0.6s default) so a single deliberate hover
+	# gives a satisfying ring instead of a staccato blip.
+	AudioManager.play_pitched_chime(pitch_mult, AudioManager.BUCKET_VOLUME_DB,
+		HOVER_NOTE_SUSTAIN_S, Instrument.Type.MUSIC_BOX)

@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bi7eoe88lya5s" path="res://entities/main_menu/main_menu.gd" id="1_6wyxo"]
 [ext_resource type="PackedScene" uid="uid://b8mnpq3vk2xra" path="res://entities/menu_board/menu_board.tscn" id="2_mboard"]
+[ext_resource type="PackedScene" uid="uid://dgmcj5xrytqkb" path="res://entities/main_menu_button/main_menu_button.tscn" id="3_mbtn"]
 
 [node name="MainMenu" type="Node3D" unique_id=1111347995]
 script = ExtResource("1_6wyxo")
@@ -22,38 +23,38 @@ grow_vertical = 2
 theme_override_constants/separation = 12
 alignment = 1
 
-[node name="PlayButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=1475028527]
-custom_minimum_size = Vector2(272, 0)
+[node name="PlayButton" parent="CanvasLayer/ButtonColumn" unique_id=1475028527 instance=ExtResource("3_mbtn")]
+custom_minimum_size = Vector2(272, 64)
 layout_mode = 2
-text = "Play"
+title_text = "Play"
 
 [node name="TopSpacer" type="Control" parent="CanvasLayer/ButtonColumn" unique_id=1415988380]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 
-[node name="SettingsButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=2106973345]
-custom_minimum_size = Vector2(272, 0)
+[node name="SettingsButton" parent="CanvasLayer/ButtonColumn" unique_id=2106973345 instance=ExtResource("3_mbtn")]
+custom_minimum_size = Vector2(272, 64)
 layout_mode = 2
-text = "Settings"
+title_text = "Settings"
 
-[node name="DiscordButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=1565460847]
-custom_minimum_size = Vector2(272, 0)
+[node name="DiscordButton" parent="CanvasLayer/ButtonColumn" unique_id=1565460847 instance=ExtResource("3_mbtn")]
+custom_minimum_size = Vector2(272, 64)
 layout_mode = 2
-text = "Join the Discord"
+title_text = "Join the Discord"
 
-[node name="FeedbackButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=2023400125]
-custom_minimum_size = Vector2(272, 0)
+[node name="FeedbackButton" parent="CanvasLayer/ButtonColumn" unique_id=2023400125 instance=ExtResource("3_mbtn")]
+custom_minimum_size = Vector2(272, 64)
 layout_mode = 2
-text = "Feedback & Bugs"
+title_text = "Feedback & bugs"
 
 [node name="BottomSpacer" type="Control" parent="CanvasLayer/ButtonColumn" unique_id=1884065678]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 
-[node name="QuitButton" type="Button" parent="CanvasLayer/ButtonColumn" unique_id=1515010506]
-custom_minimum_size = Vector2(272, 0)
+[node name="QuitButton" parent="CanvasLayer/ButtonColumn" unique_id=1515010506 instance=ExtResource("3_mbtn")]
+custom_minimum_size = Vector2(272, 64)
 layout_mode = 2
-text = "Quit"
+title_text = "Quit"
 
 [node name="TitleLabel" type="Label" parent="CanvasLayer" unique_id=867308398]
 anchors_preset = 2

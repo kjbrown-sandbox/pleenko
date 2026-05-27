@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://dgmcj5xrytqkb"]
+
+[ext_resource type="Script" path="res://entities/main_menu_button/main_menu_button.gd" id="1_mbtn"]
+
+[node name="MainMenuButton" type="Control"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 3
+anchors_preset = 0
+size_flags_horizontal = 3
+script = ExtResource("1_mbtn")
+
+[node name="Button" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+focus_mode = 0
+
+[node name="TextLabel" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = -28.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+text = "Button"
+horizontal_alignment = 2
+vertical_alignment = 1
