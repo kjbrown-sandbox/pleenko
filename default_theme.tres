@@ -1,0 +1,6 @@
+[gd_resource type="Theme" format=3 uid="uid://b3ddxqkrvend0"]
+
+[ext_resource type="FontFile" uid="uid://cujosi7nj7srm" path="res://assets/fonts/Vend_Sans/static/VendSans-Medium.ttf" id="1_font"]
+
+[resource]
+default_font = ExtResource("1_font")

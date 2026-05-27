@@ -1,6 +1,5 @@
 [gd_scene format=3 uid="uid://cbbeofkeqqvdm"]
 
-[ext_resource type="FontFile" uid="uid://cujosi7nj7srm" path="res://assets/fonts/Vend_Sans/static/VendSans-Medium.ttf" id="1_fontb"]
 [ext_resource type="Script" uid="uid://jmaqrq81ybpi" path="res://style_lab/refined_baseline_button.gd" id="2_script"]
 
 [node name="RefinedBaselineButton" type="HBoxContainer" unique_id=1792706077]
@@ -12,7 +11,6 @@ script = ExtResource("2_script")
 custom_minimum_size = Vector2(48, 48)
 layout_mode = 2
 focus_mode = 0
-theme_override_fonts/font = ExtResource("1_fontb")
 theme_override_font_sizes/font_size = 24
 text = "−"
 
@@ -46,7 +44,6 @@ offset_right = -6.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_fonts/font = ExtResource("1_fontb")
 theme_override_font_sizes/font_size = 20
 text = "Add rows"
 vertical_alignment = 1
@@ -62,7 +59,6 @@ offset_right = -12.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_fonts/font = ExtResource("1_fontb")
 theme_override_font_sizes/font_size = 20
 text = "3/5"
 horizontal_alignment = 2
@@ -93,7 +89,6 @@ offset_left = 12.0
 offset_top = 4.0
 offset_right = -6.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_fonts/font = ExtResource("1_fontb")
 theme_override_font_sizes/font_size = 20
 text = "Add rows"
 vertical_alignment = 1
@@ -107,7 +102,6 @@ offset_left = 6.0
 offset_top = 4.0
 offset_right = -12.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_fonts/font = ExtResource("1_fontb")
 theme_override_font_sizes/font_size = 20
 text = "3/5"
 horizontal_alignment = 2
@@ -117,6 +111,5 @@ vertical_alignment = 1
 custom_minimum_size = Vector2(48, 48)
 layout_mode = 2
 focus_mode = 0
-theme_override_fonts/font = ExtResource("1_fontb")
 theme_override_font_sizes/font_size = 24
 text = "+"

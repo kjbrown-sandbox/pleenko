@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="VisualTheme" format=3 uid="uid://bnrlofjaj7q00"]
 
-[ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_fbp74"]
+[ext_resource type="FontFile" uid="uid://cujosi7nj7srm" path="res://assets/fonts/Vend_Sans/static/VendSans-Medium.ttf" id="1_fbp74"]
 [ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
 
 [resource]
@@ -23,7 +23,6 @@ blue_faded = Color(0.46, 0.56, 0.7, 1)
 green_faded = Color(0.5, 0.64, 0.44, 1)
 bg_haze = Color(0.805, 0.76, 0.695, 1)
 bg_haze_subtle = Color(0.8325, 0.795, 0.7325, 1)
-bg_triangle_light = null
 background_source = 5
 ambient_light_source = 3
 directional_light_source = 4
@@ -33,9 +32,6 @@ normal_text_source = 0
 body_text_source = 2
 overlay_opacity = 0.5
 prestige_flash_source = 15
-bomb_color_source = null
-bomb_detonation_color_source = null
-void_column_light_source = null
 label_font = ExtResource("1_fbp74")
 button_enabled_source = 2
 button_disabled_source = 4
@@ -48,30 +44,9 @@ bucket_pulse_duration = 1.15
 board_glow_opacity = 0.03
 peg_flash_enabled = false
 peg_ring_enabled = true
-bomb_detonation_pulse_duration = null
-bomb_debris_fall_duration = null
-void_column_light_width = null
-void_column_light_duration = null
 vignette_enabled = true
 vignette_radius = 0.7
 vignette_softness = 0.5
-cap_raise_reveal_enabled = null
-cap_raise_slow_mo_scale = null
-cap_raise_zoom_size = null
-cap_raise_camera_follow_rate = null
-cap_raise_hold_duration = null
-cap_raise_peek_delay = null
-cap_raise_explosion_interval = null
-cap_raise_explosion_particle_count = null
-cap_raise_explosion_duration = null
-cap_raise_explosion_radius = null
-cap_raise_swoop_burst_duration = null
-cap_raise_swoop_duration = null
-cap_raise_currency_appear_duration = null
-forbidden_zoom_slow_mo_scale = null
-forbidden_zoom_size = null
-forbidden_camera_follow_rate = null
-forbidden_hold_duration = null
 bucket_instrument = 1
 progression = [{
 "chord": [0, 4, 7, 11, 12, 16, 19, 23],
@@ -94,6 +69,3 @@ melody_sequence = PackedInt32Array()
 drum_instruments = PackedInt32Array()
 drum_patterns = PackedStringArray()
 drum_volumes = PackedFloat32Array()
-melody_slot_seconds = null
-peg_chime_enabled = null
-peg_chime_quantize_seconds = null
