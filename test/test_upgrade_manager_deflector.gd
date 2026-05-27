@@ -37,7 +37,7 @@ func test_upgrade_data_registered() -> void:
 	assert_true(data != null, "peg_deflector.tres is registered in the upgrades array")
 	if data != null:
 		assert_equal(data.type, Enums.UpgradeType.PEG_DEFLECTOR, "type matches enum")
-		assert_equal(data.display_name, "Peg Deflector", "display name")
+		assert_equal(data.display_name, "Peg deflector", "display name")
 		assert_true(data.max_level > 0, "has a slot cap")
 
 

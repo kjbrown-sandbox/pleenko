@@ -622,11 +622,20 @@ func _find_board_for_button(button_id: StringName) -> PlinkoBoard:
 
 
 func _update_all_button_displays() -> void:
+	# Full +/- restyle across every drop bar — heavy (~656 stylebox mutations
+	# per call). Only invoke when assignments / autodropper pool actually
+	# change, NOT on queue-count tick. Subtext refresh is split out below.
 	var normal_free := get_free_autodroppers()
 	var advanced_free := get_free_advanced_autodroppers()
 	for board in _boards:
 		board.update_autodropper_buttons(_assignments, normal_free, advanced_free)
-		# Update drop rate subtext (reflects queue bonus)
+	_update_all_drop_subtext()
+
+
+func _update_all_drop_subtext() -> void:
+	# Cheap: just refreshes the "auto N · Xs" label under each drop button.
+	# Called on every queue enqueue/dequeue without restyling buttons.
+	for board in _boards:
 		var effective: float = board.get_effective_drop_delay()
 		var delay_str: String
 		if effective == int(effective):
@@ -644,7 +653,10 @@ func _update_all_button_displays() -> void:
 
 
 func _on_board_queue_count_changed(_new_count: int) -> void:
-	_update_all_button_displays()
+	# Queue-count change only affects the drop-rate subtext (queue bonus
+	# alters effective delay); the +/- styling is governed by assignments
+	# and pool counts, which haven't changed.
+	_update_all_drop_subtext()
 
 
 func serialize() -> Dictionary:

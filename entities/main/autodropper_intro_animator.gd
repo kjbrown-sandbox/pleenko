@@ -15,7 +15,7 @@ var _particle_overlay: Control
 var _is_animating: bool = false
 var _completed: bool = false
 var _plus_pulse_tween: Tween
-var _pulsing_drop_bar: FillBar
+var _pulsing_drop_bar: HBoxContainer
 
 
 func setup(board_manager: BoardManager, coin_values: Node, canvas_layer: CanvasLayer) -> void:
@@ -157,7 +157,7 @@ func _complete_intro() -> void:
 	if not is_instance_valid(gold_board):
 		return
 
-	var drop_bar: FillBar = gold_board.get_drop_button(&"GOLD_NORMAL")
+	var drop_bar: HBoxContainer = gold_board.get_drop_button(&"GOLD_NORMAL")
 	if not is_instance_valid(drop_bar):
 		return
 

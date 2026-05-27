@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 type = 3
-display_name = "Queue Size"
+display_name = "Queue size"
 base_cost = 15
 max_level = 10
 cost_type = 1

@@ -1,6 +1,6 @@
 extends VBoxContainer
 
-const FillBarScene := preload("res://entities/fill_bar/fill_bar.tscn")
+const FillBarScene := preload("res://style_lab/refined_baseline_button.tscn")
 const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 const TooltipScene := preload("res://entities/tooltip/tooltip.tscn")
 
@@ -117,6 +117,9 @@ func _update_currencies() -> void:
 
 	for currency_type in _visible_currencies:
 		var bar = FillBarScene.instantiate()
+		# Set BEFORE add_child so _ready skips the random demo seeding.
+		bar.skip_demo = true
+		bar.bar_color = t.get_coin_color(currency_type)
 		add_child(bar)
 
 		var fill_color: Color = t.get_coin_color(currency_type)
@@ -254,17 +257,15 @@ func _update_bar(bar, type: Enums.CurrencyType, balance: int, cap: int) -> void:
 
 	var fmt_balance := FormatUtils.format_number(balance)
 	var fmt_cap := FormatUtils.format_number(cap)
+	bar.update_text(coin_name)
+	bar.num_text = "%s/%s" % [fmt_balance, fmt_cap]
+	# Full bar reads as MAX visually — no "(MAX)" suffix needed.
 	if at_cap:
-		bar.update_text("%s %s/%s (MAX)" % [coin_name, fmt_balance, fmt_cap])
 		bar.set_fill(1.0)
-		bar.set_main_disabled(true)
-		bar.apply_fill_colors(true, true)
 	else:
-		bar.update_text("%s %s/%s" % [coin_name, fmt_balance, fmt_cap])
 		var fill_pct := clampf(float(balance) / float(cap), 0.0, 1.0) if cap > 0 else 0.0
 		bar.set_fill(fill_pct)
-		bar.set_main_disabled(false)
-		bar.apply_fill_colors(false)
+	# Currencies don't toggle disabled visual — color is the identity.
 
 
 func _get_currency_name(type: int) -> String:

@@ -1,16 +1,25 @@
 class_name FormatUtils
 
-## Human-readable name for a currency type (e.g. "gold", "raw orange").
+## Human-readable name for a currency type (e.g. "Gold", "Raw orange").
 ## Strips "_coin" suffix so GOLD_COIN → "gold", ORANGE_COIN → "orange".
+## Capital uses sentence case (first letter only), not Title Case.
 static func currency_name(type: Enums.CurrencyType, capital: bool = true) -> String:
 	var n: String = Enums.CurrencyType.keys()[type].to_lower().replace("_", " ").replace(" coin", "")
-	return n.capitalize() if capital else n
+	return _sentence_case(n) if capital else n
 
 
 ## Human-readable name for a board type (e.g. "Gold", "orange").
 static func board_name(type: Enums.BoardType, capital: bool = true) -> String:
 	var n: String = Enums.BoardType.keys()[type].to_lower()
-	return n.capitalize() if capital else n
+	return _sentence_case(n) if capital else n
+
+
+## Sentence case: cap the first character only, leave the rest as-is.
+## Distinct from String.capitalize() which Title-Cases every word.
+static func _sentence_case(s: String) -> String:
+	if s.is_empty():
+		return s
+	return s[0].to_upper() + s.substr(1)
 
 
 ## Human-readable name for an upgrade type (e.g. "add row", "drop rate").

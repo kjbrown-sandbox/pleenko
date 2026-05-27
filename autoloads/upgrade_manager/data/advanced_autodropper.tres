@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 type = 5
-display_name = "Advanced Autodropper"
+display_name = "Advanced autodropper"
 base_cost = 100
 max_level = 5
 cost_delta = 100
