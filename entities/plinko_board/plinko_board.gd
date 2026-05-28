@@ -336,7 +336,7 @@ func _setup_drop_bars() -> void:
 	var raw: int = TierRegistry.raw_currency(board_type)
 	var label_currency: Enums.CurrencyType = (raw as Enums.CurrencyType) if raw >= 0 else currency_type
 	_drop_main.setup(coin_color, coin_color_dark)
-	_drop_main.update_text("Drop %s" % FormatUtils.currency_name(label_currency))
+	_drop_main.update_text("Drop %s" % FormatUtils.currency_name(label_currency, false))
 	_drop_main.main_pressed.connect(func(): request_drop())
 	_drop_main.main_mouse_entered.connect(_on_drop_main_hover)
 	_drop_main.main_mouse_exited.connect(_on_drop_main_hover_exit)
@@ -1401,7 +1401,7 @@ func _show_advanced_drop_bar() -> void:
 	var adv_color: Color = t.get_coin_color(advanced_bucket_type)
 	var adv_color_dark: Color = t.get_coin_color_faded(advanced_bucket_type)
 	_drop_advanced.setup(adv_color, adv_color_dark)
-	_drop_advanced.update_text("Drop %s" % FormatUtils.currency_name(advanced_bucket_type))
+	_drop_advanced.update_text("Drop %s" % FormatUtils.currency_name(advanced_bucket_type, false))
 	_drop_advanced.main_pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
 	_drop_advanced.main_mouse_entered.connect(_on_drop_advanced_hover)
 	_drop_advanced.main_mouse_exited.connect(_on_drop_advanced_hover_exit)

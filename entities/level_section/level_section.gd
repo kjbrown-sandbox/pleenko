@@ -30,6 +30,20 @@ enum IntroPhase { NONE, SHRINK, CASCADE, DONE }
 var _in_intro: bool = false
 var _waiting_for_rewards: bool = false  # transition detected, holding for cascade end
 var _intro_phase: IntroPhase = IntroPhase.NONE
+# True between rebuild-for-new-tier (tier > 0, not yet revealed) and the
+# peek-driven fade-in completing. While true, segments are laid out at their
+# final widths but alpha 0 — the bar is invisible until `PeekAnimator`'s
+# linger hook runs `play_peek_reveal_animation`. Gold (tier 0) never enters
+# this mode; it uses the existing squish-cascade.
+var _peek_reveal_pending: bool = false
+# When `_update_display` would rebuild for a new tier because the player just
+# crossed an UNLOCK_ADVANCED_BUCKET final milestone, we DEFER the rebuild
+# until after `_spawn_bar_explosion`'s fade completes. Otherwise the rebuild
+# would replace the still-visible old-tier segments with the new tier's
+# pending (alpha 0) segments before the explosion has a chance to animate
+# them out — the visible explosion is the user-facing cue for tier
+# completion. -1 means no rebuild deferred.
+var _pending_tier_rebuild_for: int = -1
 var _intro_anim_tween: Tween
 var _intro_cascade_tween: Tween  # phase-2 tween — stored so _rebuild_bar can kill it
 var _intro_held_particles: Array[ColorRect] = []
@@ -41,6 +55,10 @@ var _intro_drift_tweens: Array[Tween] = []
 # very last instant — the squish looks slow→fast no matter the easing).
 const INTRO_BIG_RATIO: float = 200.0
 const INTRO_COLLAPSED_RATIO: float = 0.001
+# Peek-driven fade-in (orange/red tiers, replaces the squish-cascade): all
+# segments laid out at final widths but alpha 0, then fade in left-to-right.
+const PEEK_REVEAL_CASCADE_DURATION: float = 2.0
+const PEEK_REVEAL_CASCADE_STAGGER: float = 0.1
 # Once this many milestones are acquired, the merged group is wide enough to
 # host the X/Y label inside the bar (fill-bar-style text), so it stops floating
 # above the bar. Tuned so the label fits across all the gold thresholds without
@@ -109,11 +127,54 @@ func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _cap: in
 	_update_display()
 
 
+## True when the tier-crossing into `new_tier_start` was triggered by an
+## UNLOCK_ADVANCED_BUCKET final milestone — i.e., the explosion is about
+## to run on the previous tier's bar. Read straight off the levels table
+## (the crossed level is at index new_tier_start - 1).
+func _is_final_milestone_crossing(new_tier_start: int) -> bool:
+	if new_tier_start <= 0:
+		return false
+	var crossed_level_idx: int = new_tier_start - 1
+	if crossed_level_idx >= LevelManager.levels.size():
+		return false
+	var data: LevelData = LevelManager.levels[crossed_level_idx]
+	if data.rewards.is_empty():
+		return false
+	return data.rewards[0].type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET
+
+
+## Run the rebuild that `_update_display` deferred so the explosion could
+## animate on the old-tier segments. Called from `_spawn_bar_explosion`'s
+## burst-timer callback once the old segments have finished fading. Bypasses
+## `_update_display`'s tier-crossing gate (which would just re-defer on the
+## same condition) and runs the rebuild + visibility update directly.
+func _flush_pending_tier_rebuild() -> void:
+	if _pending_tier_rebuild_for < 0:
+		return
+	var new_tier_start: int = _pending_tier_rebuild_for
+	_pending_tier_rebuild_for = -1
+	_tier_start_level = new_tier_start
+	_rebuild_bar()
+	_update_bar()
+	if _peek_reveal_pending or _segment_panels.is_empty():
+		modulate.a = 0.0
+	else:
+		modulate.a = 1.0
+
+
 func _on_level_up_ready(_level: int, level_data: LevelData) -> void:
 	if not _board_manager:
 		LevelManager.claim_rewards()
 		return
 
+	# Defensive: if a milestone fires before the peek-driven fade-in has
+	# revealed this tier (e.g., a race where the player crosses the first
+	# milestone before the peek runs), snap the bar visible so the burst
+	# isn't coming from an invisible bar.
+	if _peek_reveal_pending:
+		_snap_peek_reveal_visible()
+
+	AudioManager.play_milestone_chord()
 	_spawn_shockwave_rings()
 
 	var targets: Array[Vector2] = _get_reward_targets(level_data.rewards)
@@ -148,7 +209,7 @@ func _start_intro_transition(targets: Array[Vector2]) -> void:
 	# Squish fires from the fade's own completion callback so there's no
 	# gap between fade-end and shrink-start. Milestone fades back in at
 	# phase 3 (cascade end).
-	var fade_dur: float = 1.5
+	var fade_dur: float = 0.75
 	milestone_label.create_tween().tween_property(milestone_label, "modulate:a", 0.0, fade_dur)
 	var fade_tween := progress_label.create_tween()
 	fade_tween.tween_property(progress_label, "modulate:a", 0.0, fade_dur)
@@ -220,8 +281,21 @@ func _update_display() -> void:
 		tier_start = ((total - 1) / LevelManager.LEVELS_PER_TIER) * LevelManager.LEVELS_PER_TIER
 
 	if tier_start != _tier_start_level:
-		_tier_start_level = tier_start
-		_rebuild_bar()
+		# Defer the rebuild when the player just crossed a final-milestone
+		# tier-completion (UNLOCK_ADVANCED_BUCKET) in gameplay. The explosion
+		# animation in `_on_level_up_ready` needs to play on the OLD tier's
+		# still-visible segments first; `_spawn_bar_explosion`'s burst timer
+		# flushes the deferred rebuild once the segments have faded.
+		# `has_pending_levels` distinguishes gameplay (level_up_ready is
+		# coming) from save-load (level_changed fires with no follow-up
+		# animation, so the rebuild must run immediately).
+		if _tier_start_level >= 0 \
+			and _is_final_milestone_crossing(tier_start) \
+			and LevelManager.has_pending_levels():
+			_pending_tier_rebuild_for = tier_start
+		else:
+			_tier_start_level = tier_start
+			_rebuild_bar()
 
 	_update_bar()
 
@@ -235,6 +309,16 @@ func _update_display() -> void:
 		var balance: int = CurrencyManager.get_balance(LevelManager.get_active_currency())
 		var currency_name: String = FormatUtils.currency_name(LevelManager.get_active_currency(), false)
 		_set_progress_text("%d / %d %s" % [mini(balance, threshold), threshold, currency_name])
+
+	# Visibility (via modulate.a) — bar is "gone" while a peek-reveal is
+	# pending OR when no segments exist for the current tier (e.g., the
+	# player has crossed the final milestone of the last available tier).
+	# Touching .visible is left to `Main` so it can hide the bar in
+	# challenge mode and during prestige without my logic fighting back.
+	if _peek_reveal_pending or _segment_panels.is_empty():
+		modulate.a = 0.0
+	else:
+		modulate.a = 1.0
 
 
 func _set_progress_text(s: String) -> void:
@@ -271,6 +355,13 @@ func _rebuild_bar() -> void:
 	_intro_held_targets.clear()
 	_intro_phase = IntroPhase.NONE
 	_waiting_for_rewards = false
+	_peek_reveal_pending = false
+	# Any tier crossing that was waiting for an explosion fade is now moot —
+	# `_rebuild_bar` IS the rebuild that the explosion would have flushed.
+	# Clearing here keeps the flag from going stale if the rebuild reaches
+	# us via a path other than `_flush_pending_tier_rebuild` (e.g., a
+	# subsequent currency-driven `_update_display`).
+	_pending_tier_rebuild_for = -1
 	_segment_panels.clear()
 	_segment_styleboxes.clear()
 	_segment_clips.clear()
@@ -300,18 +391,33 @@ func _rebuild_bar() -> void:
 		prev_threshold = thresholds[i]
 
 	var current: int = LevelManager.current_level
-	# Intro state: starts ONLY when the player has yet to acquire any
-	# milestone in this tier. Segment 0 takes the whole bar; segments 1..N-1
-	# are collapsed + alpha 0 until the first milestone triggers the cascade.
-	_in_intro = (current == _tier_start_level)
+	# Reveal mode decides initial segment layout + visibility. Three modes:
+	#   SQUISH-CASCADE intro (gold first-launch only): _in_intro = true,
+	#     segment 0 takes the whole bar, others collapsed + alpha 0. The
+	#     first milestone fires the existing squish-cascade animation.
+	#   PEEK-REVEAL pending (orange/red awaiting first peek): segments at
+	#     their final widths but ALL at alpha 0 — bar is invisible. The
+	#     peek's linger hook plays the cascade fade-in.
+	#   LIVE (already revealed, or save-load mid-tier): segments at final
+	#     widths, fully visible.
+	var revealed: bool = OnboardingProgress.has_revealed_milestone_tier(_tier_start_level)
+	# If the player is already past this tier's first milestone, no fresh
+	# reveal is needed — treat as already revealed regardless of the flag.
+	if not revealed and current > _tier_start_level:
+		revealed = true
+	_in_intro = (not revealed) and _tier_start_level == 0 and current == _tier_start_level
+	_peek_reveal_pending = (not revealed) and _tier_start_level > 0 and current == _tier_start_level
 
 	for i in thresholds.size():
 		# Spacer BEFORE this segment (between segment i-1 and segment i).
 		# Driven by current_level: hidden when its milestone is acquired,
 		# and its neighbouring segments collapse their facing borders.
+		# In peek-reveal-pending mode all spacers start hidden — the reveal
+		# animation makes them visible at alpha 0 then fades them in.
 		if i > 0:
 			var spacer_idx: int = i - 1
-			var visible_now: bool = (not _in_intro) and current <= _tier_start_level + spacer_idx
+			var should_show: bool = (not _in_intro) and current <= _tier_start_level + spacer_idx
+			var visible_now: bool = should_show and not _peek_reveal_pending
 			var spacer := Control.new()
 			spacer.custom_minimum_size = Vector2(spacer_width, 0)
 			spacer.visible = visible_now
@@ -330,6 +436,8 @@ func _rebuild_bar() -> void:
 				seg.modulate.a = 0.0
 		else:
 			seg.size_flags_stretch_ratio = maxf(_segment_weights[i], INTRO_COLLAPSED_RATIO)
+			if _peek_reveal_pending:
+				seg.modulate.a = 0.0
 		seg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 		var sb := StyleBoxFlat.new()
@@ -360,6 +468,17 @@ func _rebuild_bar() -> void:
 		_segment_fills.append(fill_rect)
 
 	_apply_segment_styles()
+	# In peek-reveal-pending mode the milestone label fades in alongside the
+	# cascade — start it invisible. The progress label hides via the new
+	# branch in `_position_progress_label`. Otherwise reset both labels so a
+	# prior explosion fade can't leave them stuck invisible. Visibility of
+	# the level_section root itself is owned by `_update_display` via
+	# `modulate.a`.
+	if _peek_reveal_pending:
+		milestone_label.modulate.a = 0.0
+	else:
+		milestone_label.modulate.a = 1.0
+		progress_label.modulate.a = 1.0
 	_position_progress_label.call_deferred()
 
 
@@ -440,8 +559,10 @@ func _update_bar() -> void:
 	# Spacer i sits between segment i and i+1; hides the instant its
 	# milestone is acquired. Burst on visible→hidden transition.
 	# Skip during phase 1 of the intro animation so the spacers don't
-	# snap-show ahead of the cascade.
-	if _intro_phase != IntroPhase.SHRINK:
+	# snap-show ahead of the cascade. Also skip while a peek reveal is
+	# pending — the bar is meant to be invisible until the peek runs the
+	# cascade fade-in.
+	if _intro_phase != IntroPhase.SHRINK and not _peek_reveal_pending:
 		for i in _spacers.size():
 			var should_be_visible: bool = current <= _tier_start_level + i
 			if _spacer_visible[i] and not should_be_visible:
@@ -500,6 +621,12 @@ func _play_intro_to_live_animation() -> void:
 		_intro_cascade_tween.tween_callback(func():
 			_intro_phase = IntroPhase.DONE
 			_position_progress_label()
+			# Squish-cascade reveal counts the same as a peek-driven reveal:
+			# this tier is now visible-and-revealed, and a future save-load
+			# should jump straight to LIVE mode (no replay).
+			if not OnboardingProgress.has_revealed_milestone_tier(_tier_start_level):
+				OnboardingProgress.mark_milestone_tier_revealed(_tier_start_level)
+				SaveManager.save_game()
 			# Milestone label fades back in now that the bar has settled.
 			milestone_label.create_tween().tween_property(milestone_label, "modulate:a", 1.0, 0.4)
 			if not _intro_held_particles.is_empty():
@@ -521,6 +648,112 @@ func _play_intro_to_live_animation() -> void:
 	)
 
 
+## Peek-driven reveal for tiers > 0 (orange/red). Called by PeekAnimator's
+## `peek_linger_hook` while the camera is parked on the newly-unlocked board.
+## Segments are already laid out at final widths but alpha 0 from `_rebuild_bar`;
+## this just fades them in with the same left-to-right stagger as the squish-
+## cascade's Phase 2. Awaitable — the peek's camera return waits on it. When
+## nothing needs revealing (gold tier, already-revealed tier, race where the
+## player crossed the first milestone before the peek), holds for the normal
+## linger duration so the camera doesn't snap straight back.
+func play_peek_reveal_animation() -> void:
+	if _tier_start_level <= 0 \
+		or OnboardingProgress.has_revealed_milestone_tier(_tier_start_level) \
+		or not _peek_reveal_pending \
+		or _segment_panels.is_empty():
+		await get_tree().create_timer(ThemeProvider.theme.peek_linger_duration).timeout
+		# SceneTreeTimer keeps ticking on scene reload but `self` may have
+		# been freed (e.g., challenge entry); the rest of this function is
+		# a no-op return so the early-exit guard isn't strictly needed here,
+		# but keeping the shape consistent with the cascade path below.
+		return
+
+	var tier_at_start: int = _tier_start_level
+	var duration: float = PEEK_REVEAL_CASCADE_DURATION
+	var stagger: float = PEEK_REVEAL_CASCADE_STAGGER
+
+	# Clear the pending flag and force the bar root visible BEFORE running the
+	# cascade — `_update_display` keys visibility on `_peek_reveal_pending`, so
+	# we have to flip it (and reset modulate.a) before the cascade tweens
+	# individual segment alphas, otherwise a `currency_changed` fired mid-
+	# cascade would set the root modulate back to 0 and hide the animation.
+	_peek_reveal_pending = false
+	modulate.a = 1.0
+
+	# Spacers stage at visible=true alpha=0 so they can fade in alongside the
+	# segments. Only spacers whose milestone isn't acquired yet — but in
+	# peek_reveal_pending mode current_level == _tier_start_level so all
+	# spacers should ultimately be visible.
+	for i in _spacers.size():
+		var should_be_visible: bool = LevelManager.current_level <= _tier_start_level + i
+		if should_be_visible:
+			_spacers[i].visible = true
+			_spacers[i].modulate.a = 0.0
+			_spacer_visible[i] = true
+
+	if _intro_cascade_tween:
+		_intro_cascade_tween.kill()
+	_intro_cascade_tween = create_tween().set_parallel()
+	for i in _segment_panels.size():
+		var delay: float = stagger * i
+		_intro_cascade_tween.tween_property(_segment_panels[i], "modulate:a", 1.0, duration) \
+			.set_delay(delay).set_ease(Tween.EASE_OUT)
+	for i in _spacers.size():
+		if not _spacers[i].visible:
+			continue
+		var delay: float = stagger * (i + 1)
+		_intro_cascade_tween.tween_property(_spacers[i], "modulate:a", 1.0, duration) \
+			.set_delay(delay).set_ease(Tween.EASE_OUT)
+	_intro_cascade_tween.tween_property(milestone_label, "modulate:a", 1.0, duration) \
+		.set_ease(Tween.EASE_OUT)
+
+	# Use a timer (not tween.finished) so a mid-animation `_rebuild_bar` —
+	# which kills the cascade tween — still resumes this coroutine cleanly
+	# and unlocks the peek camera return.
+	var total: float = stagger * max(_segment_panels.size() - 1, 0) + duration
+	await get_tree().create_timer(total).timeout
+
+	# `SceneTreeTimer` outlives `self` across a scene reload (challenge entry,
+	# prestige) — guard before touching any instance state.
+	if not is_inside_tree():
+		return
+	if _tier_start_level != tier_at_start:
+		# Tier rebuilt mid-reveal (e.g. interrupted by save-load) — don't
+		# mark a stale tier revealed or touch the new bar's state.
+		return
+	# Snap to final visible state — guarantees the bar is fully visible even
+	# if the cascade tween got killed mid-flight (e.g., by a `_rebuild_bar`
+	# during the animation).
+	_snap_peek_reveal_visible()
+
+
+## Snap the peek-reveal-pending bar to a fully visible state without
+## animation. Idempotent — safe to call both from the end of
+## `play_peek_reveal_animation` (which already cleared the pending flag)
+## and from the defensive call in `_on_level_up_ready` (when a milestone
+## fires while still pending).
+func _snap_peek_reveal_visible() -> void:
+	_peek_reveal_pending = false
+	modulate.a = 1.0
+	for seg in _segment_panels:
+		seg.modulate.a = 1.0
+	for i in _spacers.size():
+		var should_be_visible: bool = LevelManager.current_level <= _tier_start_level + i
+		_spacers[i].visible = should_be_visible
+		_spacers[i].modulate.a = 1.0 if should_be_visible else 0.0
+		_spacer_visible[i] = should_be_visible
+	milestone_label.modulate.a = 1.0
+	# The explosion faded `progress_label` to alpha 0 and the rebuild's
+	# peek_reveal_pending branch didn't restore it (it's hidden via the
+	# `_position_progress_label` visibility branch instead). Restore alpha
+	# here so the X/Y currency text reappears with the bar.
+	progress_label.modulate.a = 1.0
+	if not OnboardingProgress.has_revealed_milestone_tier(_tier_start_level):
+		OnboardingProgress.mark_milestone_tier_revealed(_tier_start_level)
+		SaveManager.save_game()
+	_position_progress_label()
+
+
 ## ProgressLabel rides above the bar (left-aligned with the bar's left edge)
 ## while the active segment is too narrow to host it. Once the active segment
 ## is wider than the label, the label moves INSIDE the segment, centered —
@@ -531,8 +764,10 @@ func _position_progress_label() -> void:
 	var current: int = LevelManager.current_level
 	var active_idx: int = current - _tier_start_level
 	# Hidden during the squish + cascade (the wait period uses an alpha
-	# fade instead, handled in _start_intro_transition).
-	var hide_progress: bool = _intro_phase == IntroPhase.SHRINK or _intro_phase == IntroPhase.CASCADE
+	# fade instead, handled in _start_intro_transition). Also hidden while
+	# the peek-reveal is pending so the invisible bar doesn't show its
+	# progress text.
+	var hide_progress: bool = _intro_phase == IntroPhase.SHRINK or _intro_phase == IntroPhase.CASCADE or _peek_reveal_pending
 	if hide_progress or active_idx < 0 or active_idx >= _segment_panels.size():
 		progress_label.visible = false
 		return
@@ -761,6 +996,23 @@ func _get_advanced_bucket_targets(target_board_type: int) -> Array[Vector2]:
 ## to invisible during the burst, then particles swoop to the targets
 ## (advanced-bucket positions) and call claim_rewards on arrival.
 func _spawn_bar_explosion(targets: Array[Vector2]) -> void:
+	# Clear the next tier's reveal flag so the upcoming peek replays the
+	# spawn-in cascade (instead of the rebuild seeing the next tier as
+	# already-revealed and showing it in LIVE mode immediately). The
+	# explosion IS the transition between tiers — every time it fires, the
+	# next tier should be considered fresh.
+	var next_tier_start: int = _tier_start_level + LevelManager.LEVELS_PER_TIER
+	OnboardingProgress.clear_milestone_tier_revealed(next_tier_start)
+	# Also clear the peek flag for the next-tier board so PeekAnimator will
+	# queue a fresh peek when that board unlocks for the player. Without
+	# this, post-prestige re-completion of gold would skip the peek
+	# (board was already peeked once) and the bar would stay invisible
+	# forever in the new cycle.
+	var tier_idx: int = next_tier_start / LevelManager.LEVELS_PER_TIER
+	if tier_idx < TierRegistry.get_tier_count():
+		var next_tier: TierData = TierRegistry.get_tier_by_index(tier_idx)
+		if next_tier:
+			OnboardingProgress.clear_peeked_board(next_tier.board_type)
 	var t: VisualTheme = ThemeProvider.theme
 	var color: Color = t.normal_text_color
 	var bar_global: Vector2 = segments_hbox.global_position
@@ -796,6 +1048,11 @@ func _spawn_bar_explosion(targets: Array[Vector2]) -> void:
 
 	var swoop_timer := get_tree().create_timer(burst_duration)
 	swoop_timer.timeout.connect(func():
+		# Burst is done — segments are alpha 0. Now we can swap in the new-
+		# tier segments (deferred rebuild) without the swap being visible.
+		# Subsequent `_update_display` calls will set modulate.a = 0 because
+		# the rebuild flips _peek_reveal_pending = true.
+		_flush_pending_tier_rebuild()
 		if targets.is_empty():
 			_fade_and_claim(particles)
 		else:

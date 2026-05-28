@@ -36,6 +36,11 @@ func _run_tests() -> void:
 	test_board_peek_no_op_when_already_on_target()
 	test_drain_deferred_holds_peek_then_releases()
 	test_drain_deferred_release_is_noop_when_queue_empty()
+	test_peek_linger_hook_replaces_default_wait()
+	test_tier_crossing_queues_peek_for_unlocked_board()
+	test_tier_crossing_skips_peek_for_already_peeked_board()
+	test_tier_crossing_skips_peek_when_board_not_unlocked()
+	test_queue_peeks_skips_board_when_current_level_below_tier()
 
 
 # --- Fixtures ---
@@ -51,6 +56,10 @@ func _reset_world() -> void:
 	ChallengeProgressManager.challenges_ever_visited = false
 	ChallengeManager.is_active_challenge = false
 	ModeManager.current_mode = ModeManager.Mode.MAIN
+	# Default `current_level` to the orange tier start so existing peek tests
+	# (which expect orange to be queued by `queue_peeks_for_existing_unlocks`)
+	# clear the new "player must have reached this board's tier" gate.
+	LevelManager.current_level = LevelManager.LEVELS_PER_TIER
 	# PrestigeManager phase should already be NONE; reset_time_scale is the public way.
 	PrestigeManager.reset_time_scale()
 
@@ -445,5 +454,102 @@ func test_drain_deferred_release_is_noop_when_queue_empty() -> void:
 	p.set_drain_deferred(true)
 	p.set_drain_deferred(false)  # nothing queued — must be a clean no-op
 	assert_equal(_count_calls("switch_board"), 0, "releasing an empty queue does nothing")
+	bm.queue_free()
+	p.queue_free()
+
+
+# --- peek_linger_hook (milestone-bar spawn-in during peek) ---
+
+func test_peek_linger_hook_replaces_default_wait() -> void:
+	print("test_peek_linger_hook_replaces_default_wait")
+	_reset_world()
+	var bm := _make_bm([Enums.BoardType.GOLD, Enums.BoardType.ORANGE])
+	bm._active_index = 0
+	var p := _make_peek_animator()
+	var hook_called := [false]
+	p.peek_linger_hook = func() -> void:
+		hook_called[0] = true
+		_calls.append(["hook"])
+	_setup_peek(p, bm)
+
+	bm.board_unlocked.emit(Enums.BoardType.ORANGE)
+
+	assert_true(hook_called[0], "peek_linger_hook fires in place of the linger wait")
+	# Hook should be invoked exactly once per peek (between camera-out and camera-back)
+	assert_equal(_count_calls("hook"), 1, "hook called exactly once per peek")
+	bm.queue_free()
+	p.queue_free()
+
+
+# --- _on_level_changed (post-prestige re-cross trigger) ---
+
+func test_tier_crossing_queues_peek_for_unlocked_board() -> void:
+	print("test_tier_crossing_queues_peek_for_unlocked_board")
+	_reset_world()
+	# Start with current_level in gold tier so the listener has a baseline.
+	LevelManager.current_level = 0
+	var bm := _make_bm([Enums.BoardType.GOLD, Enums.BoardType.ORANGE])
+	bm._active_index = 0
+	var p := _make_peek_animator()
+	_setup_peek(p, bm)
+	# Now simulate the gold-final crossing — current_level advances into orange tier.
+	LevelManager.current_level = LevelManager.LEVELS_PER_TIER
+	LevelManager.level_changed.emit(LevelManager.current_level)
+
+	assert_equal(_count_calls("switch_board"), 2, "tier crossing queues + drains orange peek")
+	assert_true(OnboardingProgress.has_peeked_board(Enums.BoardType.ORANGE), "orange marked peeked")
+	bm.queue_free()
+	p.queue_free()
+
+
+func test_tier_crossing_skips_peek_for_already_peeked_board() -> void:
+	print("test_tier_crossing_skips_peek_for_already_peeked_board")
+	_reset_world()
+	OnboardingProgress.mark_board_peeked(Enums.BoardType.ORANGE)
+	LevelManager.current_level = 0
+	var bm := _make_bm([Enums.BoardType.GOLD, Enums.BoardType.ORANGE])
+	bm._active_index = 0
+	var p := _make_peek_animator()
+	_setup_peek(p, bm)
+	LevelManager.current_level = LevelManager.LEVELS_PER_TIER
+	LevelManager.level_changed.emit(LevelManager.current_level)
+
+	assert_equal(_count_calls("switch_board"), 0, "already-peeked board skipped on tier crossing")
+	bm.queue_free()
+	p.queue_free()
+
+
+func test_tier_crossing_skips_peek_when_board_not_unlocked() -> void:
+	print("test_tier_crossing_skips_peek_when_board_not_unlocked")
+	_reset_world()
+	LevelManager.current_level = 0
+	# Gold only — orange is NOT in _boards yet (pre-prestige scenario).
+	var bm := _make_bm([Enums.BoardType.GOLD])
+	bm._active_index = 0
+	var p := _make_peek_animator()
+	_setup_peek(p, bm)
+	LevelManager.current_level = LevelManager.LEVELS_PER_TIER
+	LevelManager.level_changed.emit(LevelManager.current_level)
+
+	assert_equal(_count_calls("switch_board"), 0, "tier crossing waits for board_unlocked when board not in _boards yet")
+	bm.queue_free()
+	p.queue_free()
+
+
+func test_queue_peeks_skips_board_when_current_level_below_tier() -> void:
+	print("test_queue_peeks_skips_board_when_current_level_below_tier")
+	_reset_world()
+	# Player saved on gold tier (current_level = 0), orange already in _boards
+	# from a prior prestige cycle. queue_peeks should NOT pull the camera to
+	# orange until the player crosses into orange tier.
+	LevelManager.current_level = 0
+	var bm := _make_bm([Enums.BoardType.GOLD, Enums.BoardType.ORANGE])
+	bm._active_index = 0
+	var p := _make_peek_animator()
+	_setup_peek(p, bm)
+
+	p.queue_peeks_for_existing_unlocks()
+
+	assert_equal(_count_calls("switch_board"), 0, "current_level below orange tier-start: no session-start peek")
 	bm.queue_free()
 	p.queue_free()

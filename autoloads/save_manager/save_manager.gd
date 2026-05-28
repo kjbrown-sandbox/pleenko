@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 6
+const SAVE_VERSION := 7
 const AUTO_SAVE_INTERVAL := 30.0
 
 var _auto_save_timer: Timer
@@ -301,6 +301,21 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 			onboarding["autodropper_intro_seen"] = true
 			data["onboarding"] = onboarding
 		print("[SaveManager] Migrated save v%d -> v6 (autodropper intro seeded)" % version)
+	if version < 7:
+		# Existing players have already seen the milestone bar in whatever tier
+		# they're in; seed `revealed_milestone_tiers` so peek-driven and squish-
+		# cascade reveals don't replay on next launch.
+		var level_data: Dictionary = data.get("level", {})
+		var current_level: int = int(level_data.get("current_level", 0))
+		var revealed_tiers: Array[int] = []
+		var tier_start: int = 0
+		while tier_start <= current_level:
+			revealed_tiers.append(tier_start)
+			tier_start += LevelManager.LEVELS_PER_TIER
+		var onboarding: Dictionary = data.get("onboarding", {})
+		onboarding["revealed_milestone_tiers"] = revealed_tiers
+		data["onboarding"] = onboarding
+		print("[SaveManager] Migrated save v%d -> v7 (milestone tiers seeded)" % version)
 	data["version"] = SAVE_VERSION
 	return data
 

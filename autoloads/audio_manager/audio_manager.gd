@@ -1078,7 +1078,7 @@ func _do_play_peg_chime(degrees: Array[int], volume_db: float) -> bool:
 
 	var degree: int = pick_peg_degree(_peg_chime_rng, degrees)
 	var pitch: float = _get_pitch_scale(degree)
-	return _play_chime_voice(_soft_chime, pitch, volume_db, PEG_CHIME_SUSTAIN_S, degree)
+	return _play_chime_voice(_soft_chime, pitch, volume_db, PEG_CHIME_SUSTAIN_S, degree) >= 0
 
 
 ## Plays a chime-style voice at a caller-specified pitch_mult — bypasses random
@@ -1101,14 +1101,66 @@ func play_pitched_chime(pitch_mult: float, volume_db: float = NAN,
 	_play_chime_voice(instrument, pitch_mult, vol_db, sustain, 0)
 
 
+## −10 dB below the bucket hit so the 4-voice chord sums to roughly bucket-hit
+## loudness rather than 4x. Tweens from `quiet → peak → quiet` over the swell.
+const MILESTONE_PEAK_OFFSET_DB := -10.0
+## Depth of the swell tails — quiet floor sits this many dB below the peak.
+const MILESTONE_SWELL_DEPTH_DB := 24.0
+const MILESTONE_ATTACK_S := 0.5
+const MILESTONE_RELEASE_S := 1.0
+
+
+## One-shot 4-note block chord (root, 3rd, 5th, 7th-or-octave) drawn from the
+## CURRENT chord of the active progression, with a quiet→loud→quiet swell
+## envelope so the milestone celebration sits in the mix rather than stabbing.
+## Plays through the theme's bucket instrument so the timbre matches buckets.
+## Called by LevelSection on every milestone reached.
+func play_milestone_chord() -> void:
+	if _silenced:
+		return
+	var entry: Dictionary = _current_chord_entry()
+	if entry.is_empty():
+		return
+	var chord: Array = entry.get("chord", [])
+	var root: int = int(entry.get("root", 0))
+	if chord.size() < 4:
+		return
+	var peak_db: float = BUCKET_VOLUME_DB + MILESTONE_PEAK_OFFSET_DB
+	var quiet_db: float = peak_db - MILESTONE_SWELL_DEPTH_DB
+	var sustain_s: float = MILESTONE_ATTACK_S + MILESTONE_RELEASE_S
+	var instrument: Instrument = _instrument_for(_theme_bucket_type())
+	if instrument == null:
+		return
+	for d in [0, 1, 2, 3]:
+		var semitones: int = int(chord[d]) + root
+		var pitch_mult: float = pow(2.0, semitones / 12.0)
+		# Allocate the voice at the quiet floor so the tween starts from
+		# silence and the attack ramp is what the player hears first.
+		var idx: int = _play_chime_voice(instrument, pitch_mult, quiet_db, sustain_s, d)
+		if idx < 0:
+			continue
+		var player: AudioStreamPlayer = _drone_pool[idx]
+		var swell := player.create_tween()
+		swell.tween_property(player, "volume_db", peak_db, MILESTONE_ATTACK_S) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		swell.tween_property(player, "volume_db", quiet_db, MILESTONE_RELEASE_S) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		# Register the swell in `_drone_fade_tweens` so when the slot is
+		# popped from `_drone_free` for the next chime, `_play_chime_voice`'s
+		# `_kill_fade_tween(idx)` kills our tween — otherwise the swell
+		# would keep writing volume_db onto the now-reassigned voice.
+		_drone_fade_tweens[idx] = swell
+
+
 ## Shared voice allocation — pops a free drone, configures stream / pitch /
-## volume, marks the slot active. Returns false when no slot is free so callers
-## can skip throttle bookkeeping. Used by both the random-degree peg chime path
+## volume, marks the slot active. Returns the drone-pool index of the
+## allocated voice (so callers can tween its volume for envelopes), or -1
+## when no slot is free. Used by both the random-degree peg chime path
 ## (always SoftChime) and `play_pitched_chime` (caller-selectable instrument).
 func _play_chime_voice(instrument: Instrument, pitch_mult: float, volume_db: float,
-		sustain_s: float, degree: int) -> bool:
+		sustain_s: float, degree: int) -> int:
 	if _drone_free.is_empty():
-		return false
+		return -1
 	var sp: Dictionary = instrument.resolve(pitch_mult)
 	var idx: int = _drone_free.pop_back()
 	_kill_fade_tween(idx)
@@ -1119,7 +1171,7 @@ func _play_chime_voice(instrument: Instrument, pitch_mult: float, volume_db: flo
 	player.play()
 	var key: String = "PC_" + str(Time.get_ticks_msec()) + "_" + str(idx)
 	_active_drones[key] = _make_drone_entry(idx, sustain_s, degree, 1.0, DroneState.ACTIVE, false)
-	return true
+	return idx
 
 
 ## Pure uniform-random picker over the supplied chord-tone index pool. Empty

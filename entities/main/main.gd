@@ -65,7 +65,6 @@ func _ready() -> void:
 	level_section.setup(board_manager, camera, coin_values)
 	challenge_grouping_manager.setup(camera, challenge_info_panel)
 	coin_values.setup(board_manager)
-	_setup_autodropper_summary()
 	_setup_gear_button()
 	_setup_volume_icon()
 	_setup_options_dialog()
@@ -128,8 +127,20 @@ func _setup_normal() -> void:
 func _setup_peek_animator() -> void:
 	peek_animator.loading_query = is_loading_from_save
 	peek_animator.apply_input_lock_fn = apply_input_lock
+	# When the peek camera lands on a newly-unlocked board, the milestone bar
+	# spawns in via stagger fade-in. The hook replaces the normal linger wait
+	# so the camera returns only after the reveal finishes. No-ops on the
+	# gold tier and on already-revealed tiers — leaves the peek's behavior
+	# unchanged for the boring case. Bound method (not inline lambda) so
+	# `await callable.call()` propagates the inner await — mirrors the
+	# `wait_fn = _default_wait` pattern in `peek_animator.setup`.
+	peek_animator.peek_linger_hook = _on_peek_linger
 	peek_animator.setup(board_manager, challenge_grouping_manager)
 	peek_animator.queue_peeks_for_existing_unlocks()
+
+
+func _on_peek_linger() -> void:
+	await level_section.play_peek_reveal_animation()
 
 
 func is_loading_from_save() -> bool:
@@ -274,13 +285,6 @@ func _setup_vignette() -> void:
 	var vignette := CanvasLayer.new()
 	vignette.set_script(preload("res://entities/vignette/vignette.gd"))
 	add_child(vignette)
-
-
-func _setup_autodropper_summary() -> void:
-	var summary := AutodropperSummary.new()
-	summary.size_flags_horizontal = Control.SIZE_FILL
-	coin_values.add_child(summary)
-	summary.setup(board_manager)
 
 
 func _setup_gear_button() -> void:
