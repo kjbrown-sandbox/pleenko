@@ -93,7 +93,7 @@ func _setup_cap_raise_if_needed(row, upgrade_type: Enums.UpgradeType) -> void:
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, upgrade_type)
 	if state.base_cap <= 0 or not UpgradeManager.is_cap_raise_available(_board_type):
 		return
-	if row.fill_bar.plus_button.visible:
+	if row.bar.plus_button.visible:
 		return  # Already set up
 
 	var bt := _board_type
@@ -110,13 +110,13 @@ func _setup_cap_raise_if_needed(row, upgrade_type: Enums.UpgradeType) -> void:
 			return "Cost: %d %s" % [cap_cost, currency_name],
 		func(): # on_update
 			var can_raise: bool = UpgradeManager.can_buy_cap_raise(bt, ut)
-			r.fill_bar.set_plus_disabled(not can_raise)
-			r.fill_bar.set_plus_filled(can_raise),
+			r.bar.set_plus_disabled(not can_raise)
+			r.bar.set_plus_filled(can_raise),
 	)
 
 	if _cap_raise_reveal_active:
 		# Wired but hidden — CapRaiseRevealAnimator reveals it on its own clock.
-		row.fill_bar.show_plus_button(false)
+		row.bar.show_plus_button(false)
 
 
 # ── Cap-raise reveal handshake (called down by CapRaiseRevealAnimator) ───────
@@ -138,7 +138,7 @@ func get_pending_cap_raise_targets() -> Array[Dictionary]:
 		return targets
 	for upgrade_type in _rows:
 		var row: UpgradeRow = _rows[upgrade_type]
-		if row.fill_bar.plus_button.visible:
+		if row.bar.plus_button.visible:
 			continue
 		var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, upgrade_type)
 		if state.base_cap <= 0:
@@ -146,7 +146,7 @@ func get_pending_cap_raise_targets() -> Array[Dictionary]:
 		var captured_row := row
 		targets.append({
 			"node": row,
-			"plus_button": row.fill_bar.plus_button,
+			"plus_button": row.bar.plus_button,
 			"reveal": func() -> void: _reveal_row_cap_button(captured_row),
 		})
 	return targets
@@ -161,8 +161,8 @@ func end_cap_raise_reveal() -> void:
 func _reveal_row_cap_button(row: UpgradeRow) -> void:
 	if not is_instance_valid(row):
 		return
-	row.fill_bar.show_plus_button(true)
-	row.fill_bar.update_plus()
+	row.bar.show_plus_button(true)
+	row.bar.update_plus()
 
 
 func _on_hover_info_changed(text: String) -> void:

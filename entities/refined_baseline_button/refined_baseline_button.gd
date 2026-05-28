@@ -15,10 +15,6 @@ extends HBoxContainer
 ##   WITH_BOTH  — minus + main + plus
 ##   WITH_PLUS  — main + plus
 ##   NEITHER    — just main (fill becomes the rounded shape itself)
-##
-## Currently swapped in for FillBar in upgrade rows + currency bars + drop
-## section. The shim methods at the bottom are no-ops while iteration is
-## still settling — Phase C wires them to real game state.
 
 const BORDER_PX := 4
 # Outer corner radius — applied only on the OUTSIDE corners of the composite
@@ -40,10 +36,10 @@ func _bar_tint() -> Color:
 
 enum Mode { WITH_BOTH, WITH_PLUS, NEITHER }
 
-## Default NEITHER — matches the original FillBar's "side buttons hidden"
-## default. setup_plus / setup_minus elevate to WITH_PLUS / WITH_BOTH.
-## Don't change this without auditing `*.plus_button.visible` reads in
-## coin_values.gd + upgrade_section.gd, which use it as a "wired?" signal.
+## Default NEITHER — side buttons hidden until setup_plus / setup_minus
+## elevate to WITH_PLUS / WITH_BOTH. Don't change this without auditing
+## `*.plus_button.visible` reads in coin_values.gd + upgrade_section.gd,
+## which use it as a "wired?" signal.
 @export var mode: Mode = Mode.NEITHER:
 	set(value):
 		if mode == value: return
@@ -94,7 +90,7 @@ enum Mode { WITH_BOTH, WITH_PLUS, NEITHER }
 		demo_plus_filled = value
 		_queue_apply()
 
-# ── FillBar-compat signals (declared so existing connects don't error) ──
+# ── Signals ──
 signal main_pressed
 signal main_mouse_entered
 signal main_mouse_exited
@@ -175,10 +171,9 @@ func _ready() -> void:
 	main_button.focus_mode = Control.FOCUS_NONE
 	plus_button.focus_mode = Control.FOCUS_NONE
 	minus_button.focus_mode = Control.FOCUS_NONE
-	# Wire signals to mirror FillBar's public API. Main forwards 1:1 via
-	# direct Signal.emit Callables (no lambdas); plus/minus go through
-	# named handlers because they also fire stored callbacks + tooltip
-	# hover refresh.
+	# Main forwards 1:1 via direct Signal.emit Callables (no lambdas);
+	# plus/minus go through named handlers because they also fire stored
+	# callbacks + tooltip hover refresh.
 	main_button.pressed.connect(main_pressed.emit)
 	main_button.mouse_entered.connect(main_mouse_entered.emit)
 	main_button.mouse_exited.connect(main_mouse_exited.emit)
@@ -355,14 +350,13 @@ func _make_main_style(has_minus: bool, has_plus: bool, has_minus_active: bool, h
 	return s
 
 
-# ── Public API (mirrors FillBar surface so call sites stay untouched) ──
+# ── Public API ──
 
 func setup(_fill_color: Color, _disabled_color: Color) -> void:
 	# Bar tint is set explicitly via `bar_color` (currencies do it; upgrade
-	# rows + drop buttons leave it default = TAN). We deliberately ignore
-	# the caller's fill_color so upgrade-row bars don't take on
-	# button_enabled_color, which was FillBar's old per-state fill color but
-	# isn't a good whole-bar tint.
+	# rows + drop buttons leave it default = TAN). The caller's fill_color
+	# is deliberately ignored — button_enabled_color isn't a good whole-bar
+	# tint.
 	pass
 
 func is_held() -> bool:

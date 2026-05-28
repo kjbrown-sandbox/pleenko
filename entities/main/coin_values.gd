@@ -1,10 +1,10 @@
 extends VBoxContainer
 
-const FillBarScene := preload("res://entities/refined_baseline_button/refined_baseline_button.tscn")
+const BarScene := preload("res://entities/refined_baseline_button/refined_baseline_button.tscn")
 const UpgradeRowScene := preload("res://entities/upgrade_row/upgrade_row.tscn")
 const TooltipScene := preload("res://entities/tooltip/tooltip.tscn")
 
-var _bars: Dictionary = {}  # CurrencyType -> FillBar node
+var _bars: Dictionary = {}  # CurrencyType -> RefinedBaselineButton node
 var _visible_currencies: Array[Enums.CurrencyType] = [Enums.CurrencyType.GOLD_COIN]
 var _hover_tooltip: Tooltip
 
@@ -116,7 +116,7 @@ func _update_currencies() -> void:
 	add_child(_create_section_label("Currencies"))
 
 	for currency_type in _visible_currencies:
-		var bar = FillBarScene.instantiate()
+		var bar = BarScene.instantiate()
 		# Tint set before add_child so _ready's apply uses it for the initial render.
 		bar.bar_color = t.get_coin_color(currency_type)
 		add_child(bar)
@@ -188,7 +188,7 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(board_type, upgrade_type)
 	if state.base_cap <= 0 or not UpgradeManager.is_cap_raise_available(board_type):
 		return
-	if row.fill_bar.plus_button.visible:
+	if row.bar.plus_button.visible:
 		return
 
 	var bt := board_type
@@ -205,13 +205,13 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 			return "Cost: %d %s" % [cap_cost, currency_name],
 		func():
 			var can_raise: bool = UpgradeManager.can_buy_cap_raise(bt, ut)
-			r.fill_bar.set_plus_disabled(not can_raise)
-			r.fill_bar.set_plus_filled(can_raise),
+			r.bar.set_plus_disabled(not can_raise)
+			r.bar.set_plus_filled(can_raise),
 	)
 
 	if _is_cap_reveal_suppressed(board_type):
 		# Wired but hidden — CapRaiseRevealAnimator reveals it on its own clock.
-		row.fill_bar.show_plus_button(false)
+		row.bar.show_plus_button(false)
 
 
 func _buy_upgrade(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
@@ -364,7 +364,7 @@ func get_pending_universal_cap_targets() -> Array[Dictionary]:
 		var row: UpgradeRow = _upgrade_rows[upgrade_type]
 		if _get_board_for_upgrade(upgrade_type) != _cap_raise_reveal_board:
 			continue
-		if row.fill_bar.plus_button.visible:
+		if row.bar.plus_button.visible:
 			continue
 		var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_cap_raise_reveal_board, upgrade_type)
 		if state.base_cap <= 0 or not UpgradeManager.is_cap_raise_available(_cap_raise_reveal_board):
@@ -372,7 +372,7 @@ func get_pending_universal_cap_targets() -> Array[Dictionary]:
 		var captured_row := row
 		targets.append({
 			"node": row,
-			"plus_button": row.fill_bar.plus_button,
+			"plus_button": row.bar.plus_button,
 			"reveal": func() -> void: _reveal_row_cap_button(captured_row),
 		})
 	return targets
@@ -419,8 +419,8 @@ func _reveal_currency_cap_button(bar, currency_type: Enums.CurrencyType) -> void
 func _reveal_row_cap_button(row: UpgradeRow) -> void:
 	if not is_instance_valid(row):
 		return
-	row.fill_bar.show_plus_button(true)
-	row.fill_bar.update_plus()
+	row.bar.show_plus_button(true)
+	row.bar.update_plus()
 
 
 func _on_cap_raise_pressed(type: Enums.CurrencyType) -> void:

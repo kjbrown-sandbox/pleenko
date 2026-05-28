@@ -252,13 +252,13 @@ func test_upgrade_section_handshake() -> void:
 
 	var row: UpgradeRow = us.get_upgrade_row(Enums.UpgradeType.ADD_ROW)
 	assert_true(row != null, "precondition: ADD_ROW row spawned")
-	assert_false(row.fill_bar.plus_button.visible,
+	assert_false(row.bar.plus_button.visible,
 		"during a reveal the board upgrade's cap '+' stays hidden")
 	assert_true(us.get_pending_cap_raise_targets().size() >= 1,
 		"the hidden cap button is reported as a pending reveal target")
 
 	us.end_cap_raise_reveal()
-	assert_true(row.fill_bar.plus_button.visible,
+	assert_true(row.bar.plus_button.visible,
 		"end_cap_raise_reveal force-shows the board upgrade's '+' button")
 
 	us.queue_free()
@@ -293,7 +293,7 @@ func test_partial_reveal_still_force_shows_all() -> void:
 
 	var add_row: UpgradeRow = us.get_upgrade_row(Enums.UpgradeType.ADD_ROW)
 	var bucket_row: UpgradeRow = us.get_upgrade_row(Enums.UpgradeType.BUCKET_VALUE)
-	assert_true(add_row.fill_bar.plus_button.visible and bucket_row.fill_bar.plus_button.visible,
+	assert_true(add_row.bar.plus_button.visible and bucket_row.bar.plus_button.visible,
 		"end_cap_raise_reveal force-shows every cap button — revealed AND un-revealed")
 
 	us.queue_free()
