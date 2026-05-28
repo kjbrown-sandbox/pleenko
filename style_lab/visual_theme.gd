@@ -207,7 +207,7 @@ const coin_shape := CoinShape.CYLINDER
 @export_group("Peek Animation")
 @export var peek_linger_duration := 0.75                             # seconds the camera holds on a peek target
 @export var peek_camera_tween_duration := 1.0                       # seconds for each peek transition (slower than normal so the move feels gentle)
-@export var peek_pre_challenges_pause := 1.0                        # seconds the player sees main mode before the challenges peek begins
+@export var peek_pre_challenges_pause := 2.5                        # seconds the player sees main mode before the challenges peek begins
 
 # ── VFX ──────────────────────────────────────────────────────────────
 @export_group("VFX")
