@@ -662,6 +662,10 @@ func play_peek_reveal_animation() -> void:
 		or not _peek_reveal_pending \
 		or _segment_panels.is_empty():
 		await get_tree().create_timer(ThemeProvider.theme.peek_linger_duration).timeout
+		# SceneTreeTimer keeps ticking on scene reload but `self` may have
+		# been freed (e.g., challenge entry); the rest of this function is
+		# a no-op return so the early-exit guard isn't strictly needed here,
+		# but keeping the shape consistent with the cascade path below.
 		return
 
 	var tier_at_start: int = _tier_start_level
@@ -709,6 +713,10 @@ func play_peek_reveal_animation() -> void:
 	var total: float = stagger * max(_segment_panels.size() - 1, 0) + duration
 	await get_tree().create_timer(total).timeout
 
+	# `SceneTreeTimer` outlives `self` across a scene reload (challenge entry,
+	# prestige) — guard before touching any instance state.
+	if not is_inside_tree():
+		return
 	if _tier_start_level != tier_at_start:
 		# Tier rebuilt mid-reveal (e.g. interrupted by save-load) — don't
 		# mark a stale tier revealed or touch the new bar's state.

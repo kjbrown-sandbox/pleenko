@@ -57,7 +57,7 @@ func setup(board_manager: BoardManager, challenge_grouping_manager: ChallengeGro
 
 	board_manager.board_unlocked.connect(_on_board_unlocked)
 	PrestigeManager.prestige_phase_changed.connect(_on_prestige_phase_changed)
-	LevelManager.level_changed.connect(_on_level_changed_for_tier_peek)
+	LevelManager.level_changed.connect(_on_level_changed)
 	_last_tier_seen = LevelManager.current_level / LevelManager.LEVELS_PER_TIER
 
 
@@ -114,16 +114,25 @@ func _on_board_unlocked(board_type: Enums.BoardType) -> void:
 ## `unlock_board` fires `board_unlocked` and that path queues the peek; on
 ## later cycles the next-tier board is already in `_boards` (so unlock_board
 ## short-circuits) and the tier-crossing IS the only available trigger.
-func _on_level_changed_for_tier_peek(new_level: int) -> void:
+## `_last_tier_seen` advances only after the TRANSIENT guards (loading,
+## challenge) pass — otherwise a crossing that happened to fire during a
+## challenge would be silently lost forever, never re-attempting once the
+## guard clears.
+func _on_level_changed(new_level: int) -> void:
 	var new_tier: int = new_level / LevelManager.LEVELS_PER_TIER
 	if new_tier <= _last_tier_seen:
+		# Backward (prestige reset) or same tier — sync and bail.
 		_last_tier_seen = new_tier
 		return
-	_last_tier_seen = new_tier
+	# Transient guards: don't advance `_last_tier_seen`, so the next
+	# level_changed (after the guard clears) will re-detect the crossing.
 	if loading_query.call():
 		return
 	if ChallengeManager.is_active_challenge:
 		return
+	# Past the transient guards — claim this tier as seen so future fires
+	# don't re-attempt regardless of what happens below.
+	_last_tier_seen = new_tier
 	if not is_instance_valid(_board_manager):
 		return
 	if new_tier >= TierRegistry.get_tier_count():

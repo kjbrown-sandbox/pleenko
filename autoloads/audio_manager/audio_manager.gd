@@ -1101,6 +1101,15 @@ func play_pitched_chime(pitch_mult: float, volume_db: float = NAN,
 	_play_chime_voice(instrument, pitch_mult, vol_db, sustain, 0)
 
 
+## −10 dB below the bucket hit so the 4-voice chord sums to roughly bucket-hit
+## loudness rather than 4x. Tweens from `quiet → peak → quiet` over the swell.
+const MILESTONE_PEAK_OFFSET_DB := -10.0
+## Depth of the swell tails — quiet floor sits this many dB below the peak.
+const MILESTONE_SWELL_DEPTH_DB := 24.0
+const MILESTONE_ATTACK_S := 0.5
+const MILESTONE_RELEASE_S := 1.0
+
+
 ## One-shot 4-note block chord (root, 3rd, 5th, 7th-or-octave) drawn from the
 ## CURRENT chord of the active progression, with a quiet→loud→quiet swell
 ## envelope so the milestone celebration sits in the mix rather than stabbing.
@@ -1116,13 +1125,9 @@ func play_milestone_chord() -> void:
 	var root: int = int(entry.get("root", 0))
 	if chord.size() < 4:
 		return
-	# Peak volume is what each voice tweens UP to; start and end are this many
-	# dB quieter for the swell tail.
-	var peak_db: float = BUCKET_VOLUME_DB - 10.0
-	var quiet_db: float = peak_db - 24.0
-	var attack_s: float = 0.5
-	var release_s: float = 1.0
-	var sustain_s: float = attack_s + release_s
+	var peak_db: float = BUCKET_VOLUME_DB + MILESTONE_PEAK_OFFSET_DB
+	var quiet_db: float = peak_db - MILESTONE_SWELL_DEPTH_DB
+	var sustain_s: float = MILESTONE_ATTACK_S + MILESTONE_RELEASE_S
 	var instrument: Instrument = _instrument_for(_theme_bucket_type())
 	if instrument == null:
 		return
@@ -1136,10 +1141,15 @@ func play_milestone_chord() -> void:
 			continue
 		var player: AudioStreamPlayer = _drone_pool[idx]
 		var swell := player.create_tween()
-		swell.tween_property(player, "volume_db", peak_db, attack_s) \
+		swell.tween_property(player, "volume_db", peak_db, MILESTONE_ATTACK_S) \
 			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-		swell.tween_property(player, "volume_db", quiet_db, release_s) \
+		swell.tween_property(player, "volume_db", quiet_db, MILESTONE_RELEASE_S) \
 			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		# Register the swell in `_drone_fade_tweens` so when the slot is
+		# popped from `_drone_free` for the next chime, `_play_chime_voice`'s
+		# `_kill_fade_tween(idx)` kills our tween — otherwise the swell
+		# would keep writing volume_db onto the now-reassigned voice.
+		_drone_fade_tweens[idx] = swell
 
 
 ## Shared voice allocation — pops a free drone, configures stream / pitch /

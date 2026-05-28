@@ -481,7 +481,7 @@ func test_peek_linger_hook_replaces_default_wait() -> void:
 	p.queue_free()
 
 
-# --- _on_level_changed_for_tier_peek (post-prestige re-cross trigger) ---
+# --- _on_level_changed (post-prestige re-cross trigger) ---
 
 func test_tier_crossing_queues_peek_for_unlocked_board() -> void:
 	print("test_tier_crossing_queues_peek_for_unlocked_board")
