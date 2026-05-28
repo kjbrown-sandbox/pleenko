@@ -224,9 +224,10 @@ func _apply() -> void:
 	# theme polarity. The bar fill IS `normal_text_color`, so text on the
 	# filled portion uses `background_color` (the visual opposite), and text
 	# on the empty portion uses `normal_text_color` (visible on the page bg
-	# by definition). Disabled MAIN fades both alongside the lightened bg so
-	# the whole "at-max" state reads dim. Disabled CAP keeps a mid-tone so
-	# the floating glyph reads against the scene.
+	# by definition). At-max main fades both text + bg by 0.6 — but ONLY for
+	# untinted bars: a tinted (currency) bar's color is its identity, so it
+	# never gets the washed-out look. Disabled CAP keeps a mid-tone so the
+	# floating glyph still reads against the scene.
 	var t: VisualTheme = ThemeProvider.theme
 	var cap_disabled_text: Color = t.bg_shade_3
 	var is_tinted := bar_color.a > 0.0

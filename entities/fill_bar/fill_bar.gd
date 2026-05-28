@@ -280,7 +280,10 @@ func set_plus_filled(can_afford: bool) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var bg: Color = _fill_color if can_afford else t.button_bg_color
 	var border: Color = _fill_color if can_afford else t.button_bg_color
-	var text_col: Color = t.button_fill_text_color if can_afford else t.button_disabled_text_color
+	# Match `_fill_label` in `_build` — text on filled bg is `background_color`
+	# so dark themes flip correctly. `button_fill_text_color` was tuned for the
+	# old per-state fill scheme and reads as bleed-into-bar on dark themes.
+	var text_col: Color = t.background_color if can_afford else t.button_disabled_text_color
 	for style in _plus_styles:
 		style.bg_color = bg
 		style.border_color = border
@@ -314,7 +317,9 @@ func set_minus_filled(is_active: bool) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var bg: Color = _fill_color if is_active else t.button_bg_color
 	var border: Color = _fill_color if is_active else t.button_bg_color
-	var text_col: Color = t.button_fill_text_color if is_active else t.button_disabled_text_color
+	# See set_plus_filled — `background_color` keeps text on filled bg flipping
+	# correctly across dark / light themes.
+	var text_col: Color = t.background_color if is_active else t.button_disabled_text_color
 	for style in _minus_styles:
 		style.bg_color = bg
 		style.border_color = border
