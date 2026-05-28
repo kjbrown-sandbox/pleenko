@@ -198,6 +198,15 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 		level_up_ready.emit(entry["level"], entry["level_data"])
 
 
+## True when the player has crossed a milestone whose reward animation
+## hasn't claimed yet — i.e. a `level_up_ready` is in flight. Used by
+## `LevelSection` to distinguish gameplay tier-crossings (which need to wait
+## for the explosion to play before the rebuild) from save-load tier jumps
+## (which have no animation, so the rebuild can fire immediately).
+func has_pending_levels() -> bool:
+	return not _pending.is_empty()
+
+
 func claim_rewards() -> void:
 	if _pending.is_empty():
 		return

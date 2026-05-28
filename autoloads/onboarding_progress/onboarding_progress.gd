@@ -6,6 +6,7 @@ extends Node
 
 var _peeked_boards: Dictionary = {}  # BoardType -> bool
 var _peeked_challenges: bool = false
+var _revealed_milestone_tiers: Dictionary = {}  # tier_start_level (int) -> bool
 var _autodropper_intro_seen: bool = false
 var _deflector_intro_seen: bool = false
 var _deflector_placed: bool = false
@@ -26,6 +27,33 @@ func has_peeked_challenges() -> bool:
 
 func mark_challenges_peeked() -> void:
 	_peeked_challenges = true
+
+
+## True once the milestone level bar has been spawn-in-revealed for the given
+## tier (keyed by tier_start_level). Used by `LevelSection.play_peek_reveal_animation`
+## to no-op a second peek to the same tier so the cascade only plays once.
+func has_revealed_milestone_tier(tier_start_level: int) -> bool:
+	return _revealed_milestone_tiers.get(tier_start_level, false)
+
+
+func mark_milestone_tier_revealed(tier_start_level: int) -> void:
+	_revealed_milestone_tiers[tier_start_level] = true
+
+
+## Drop a tier's reveal flag so the next peek replays the spawn-in cascade.
+## Called by `LevelSection._spawn_bar_explosion` at every tier-completion
+## explosion, so each gold→orange (and orange→red) transition restarts
+## the reveal flow cleanly.
+func clear_milestone_tier_revealed(tier_start_level: int) -> void:
+	_revealed_milestone_tiers.erase(tier_start_level)
+
+
+## Drop the peeked flag for a board so `PeekAnimator` will queue a fresh
+## peek the next time that board unlocks. Paired with
+## `clear_milestone_tier_revealed` at tier-completion: both flags must be
+## cleared for the bar's spawn-in to replay on a subsequent run-through.
+func clear_peeked_board(type: Enums.BoardType) -> void:
+	_peeked_boards.erase(type)
 
 
 func has_seen_autodropper_intro() -> bool:
@@ -68,6 +96,7 @@ func mark_prestige_deflector_seeded() -> void:
 func reset() -> void:
 	_peeked_boards.clear()
 	_peeked_challenges = false
+	_revealed_milestone_tiers.clear()
 	# _autodropper_intro_seen / _deflector_intro_seen / _deflector_placed /
 	# _prestige_deflector_seeded are intentionally NOT cleared — they're
 	# permanent UX flags that survive prestige resets, like _peeked_challenges.
@@ -89,6 +118,10 @@ func serialize() -> Dictionary:
 	for board_type in _peeked_boards:
 		if _peeked_boards[board_type]:
 			boards_data.append(board_type)
+	var revealed_tiers: Array[int] = []
+	for tier_start in _revealed_milestone_tiers:
+		if _revealed_milestone_tiers[tier_start]:
+			revealed_tiers.append(tier_start)
 	return {
 		"peeked_boards": boards_data,
 		"peeked_challenges": _peeked_challenges,
@@ -96,6 +129,7 @@ func serialize() -> Dictionary:
 		"deflector_intro_seen": _deflector_intro_seen,
 		"deflector_placed": _deflector_placed,
 		"prestige_deflector_seeded": _prestige_deflector_seeded,
+		"revealed_milestone_tiers": revealed_tiers,
 	}
 
 
@@ -109,3 +143,7 @@ func deserialize(data: Dictionary) -> void:
 	_deflector_intro_seen = data.get("deflector_intro_seen", false)
 	_deflector_placed = data.get("deflector_placed", false)
 	_prestige_deflector_seeded = data.get("prestige_deflector_seeded", false)
+	_revealed_milestone_tiers.clear()
+	var revealed_tiers: Array = data.get("revealed_milestone_tiers", [])
+	for tier_start in revealed_tiers:
+		_revealed_milestone_tiers[int(tier_start)] = true

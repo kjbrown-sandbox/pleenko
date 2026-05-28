@@ -15,6 +15,10 @@ func _run_tests() -> void:
 	test_deserialize_missing_keys_defaults()
 	test_autodropper_intro_flag()
 	test_prestige_deflector_seeded_flag()
+	test_revealed_milestone_tier_round_trip()
+	test_clear_milestone_tier_revealed()
+	test_clear_peeked_board()
+	test_reset_clears_revealed_milestone_tiers()
 
 
 func _reset() -> void:
@@ -116,3 +120,51 @@ func test_prestige_deflector_seeded_flag() -> void:
 	assert_true(OnboardingProgress.has_seeded_prestige_deflector(), "survives round-trip")
 	OnboardingProgress.reset()
 	assert_true(OnboardingProgress.has_seeded_prestige_deflector(), "survives reset()")
+
+
+func test_revealed_milestone_tier_round_trip() -> void:
+	print("test_revealed_milestone_tier_round_trip")
+	_reset()
+	assert_false(OnboardingProgress.has_revealed_milestone_tier(10), "tier 10 not revealed initially")
+
+	OnboardingProgress.mark_milestone_tier_revealed(0)
+	OnboardingProgress.mark_milestone_tier_revealed(10)
+	var data := OnboardingProgress.serialize()
+	_reset()
+	OnboardingProgress.deserialize(data)
+	assert_true(OnboardingProgress.has_revealed_milestone_tier(0), "tier 0 round-trips")
+	assert_true(OnboardingProgress.has_revealed_milestone_tier(10), "tier 10 round-trips")
+	assert_false(OnboardingProgress.has_revealed_milestone_tier(20), "tier 20 still false")
+
+
+func test_clear_milestone_tier_revealed() -> void:
+	print("test_clear_milestone_tier_revealed")
+	_reset()
+	OnboardingProgress.mark_milestone_tier_revealed(10)
+	assert_true(OnboardingProgress.has_revealed_milestone_tier(10), "marked")
+	OnboardingProgress.clear_milestone_tier_revealed(10)
+	assert_false(OnboardingProgress.has_revealed_milestone_tier(10), "cleared")
+	# Clearing a tier that was never marked should be a no-op (no errors).
+	OnboardingProgress.clear_milestone_tier_revealed(20)
+	assert_false(OnboardingProgress.has_revealed_milestone_tier(20), "clearing unmarked tier is a no-op")
+
+
+func test_clear_peeked_board() -> void:
+	print("test_clear_peeked_board")
+	_reset()
+	OnboardingProgress.mark_board_peeked(Enums.BoardType.ORANGE)
+	assert_true(OnboardingProgress.has_peeked_board(Enums.BoardType.ORANGE), "marked")
+	OnboardingProgress.clear_peeked_board(Enums.BoardType.ORANGE)
+	assert_false(OnboardingProgress.has_peeked_board(Enums.BoardType.ORANGE), "cleared")
+	# Clearing an unmarked board should be a no-op.
+	OnboardingProgress.clear_peeked_board(Enums.BoardType.RED)
+	assert_false(OnboardingProgress.has_peeked_board(Enums.BoardType.RED), "clearing unmarked board is a no-op")
+
+
+func test_reset_clears_revealed_milestone_tiers() -> void:
+	print("test_reset_clears_revealed_milestone_tiers")
+	OnboardingProgress.mark_milestone_tier_revealed(0)
+	OnboardingProgress.mark_milestone_tier_revealed(10)
+	OnboardingProgress.reset()
+	assert_false(OnboardingProgress.has_revealed_milestone_tier(0), "reset clears tier 0")
+	assert_false(OnboardingProgress.has_revealed_milestone_tier(10), "reset clears tier 10")

@@ -14,6 +14,12 @@ var switch_to_challenges_fn: Callable
 var switch_to_main_fn: Callable
 var apply_input_lock_fn: Callable
 var wait_fn: Callable  # (seconds: float) -> void awaitable
+## Optional hook run in place of the linger wait during a board peek. When set,
+## `_run_board_peek` awaits this instead of `wait_fn(peek_linger_duration)`, so
+## the camera holds on the peeked board for as long as the hook takes. Used by
+## `Main` to play the milestone-bar spawn-in animation during the peek. Board-
+## only — challenges peek is unaffected.
+var peek_linger_hook: Callable
 
 var _queue: Array[PeekRequest] = []
 var _is_peeking: bool = false
@@ -22,6 +28,11 @@ var _is_peeking: bool = false
 var _drain_deferred: bool = false
 var _board_manager: BoardManager
 var _challenge_grouping_manager: ChallengeGroupingManager
+## Tracked so we can detect when `current_level` advances forward across a tier
+## boundary (e.g. crossing gold's final milestone into the orange tier). On
+## post-prestige replays the next-tier board is already spawned, so
+## `board_unlocked` never re-fires — the tier crossing IS the trigger.
+var _last_tier_seen: int = -1
 
 @onready var _linger_timer: Timer = $LingerTimer
 
@@ -46,6 +57,8 @@ func setup(board_manager: BoardManager, challenge_grouping_manager: ChallengeGro
 
 	board_manager.board_unlocked.connect(_on_board_unlocked)
 	PrestigeManager.prestige_phase_changed.connect(_on_prestige_phase_changed)
+	LevelManager.level_changed.connect(_on_level_changed_for_tier_peek)
+	_last_tier_seen = LevelManager.current_level / LevelManager.LEVELS_PER_TIER
 
 
 func is_peeking() -> bool:
@@ -58,6 +71,9 @@ func is_input_locked() -> bool:
 
 ## Called by Main once after SaveManager.load_game(). Detects any unlocked
 ## navigation targets the player hasn't been peeked at yet and enqueues them.
+## Only queues board peeks when the player has actually crossed into that
+## board's tier — otherwise the post-prestige reload would peek an empty
+## next-tier board before the player even started gold-tier progression.
 func queue_peeks_for_existing_unlocks() -> void:
 	if not is_instance_valid(_board_manager):
 		return
@@ -65,6 +81,10 @@ func queue_peeks_for_existing_unlocks() -> void:
 		if board.board_type == Enums.BoardType.GOLD:
 			continue
 		if OnboardingProgress.has_peeked_board(board.board_type):
+			continue
+		var board_tier_idx: int = TierRegistry.get_tier_index(board.board_type)
+		var board_tier_start: int = board_tier_idx * LevelManager.LEVELS_PER_TIER
+		if LevelManager.current_level < board_tier_start:
 			continue
 		_queue.append(PeekRequest.for_board(board.board_type))
 
@@ -86,6 +106,37 @@ func _on_board_unlocked(board_type: Enums.BoardType) -> void:
 	if ChallengeManager.is_active_challenge:
 		return
 	_queue.append(PeekRequest.for_board(board_type))
+	_try_drain()
+
+
+## Fires every `level_changed` and queues a peek if `current_level` just
+## advanced into a higher tier. On the first prestige cycle the board's
+## `unlock_board` fires `board_unlocked` and that path queues the peek; on
+## later cycles the next-tier board is already in `_boards` (so unlock_board
+## short-circuits) and the tier-crossing IS the only available trigger.
+func _on_level_changed_for_tier_peek(new_level: int) -> void:
+	var new_tier: int = new_level / LevelManager.LEVELS_PER_TIER
+	if new_tier <= _last_tier_seen:
+		_last_tier_seen = new_tier
+		return
+	_last_tier_seen = new_tier
+	if loading_query.call():
+		return
+	if ChallengeManager.is_active_challenge:
+		return
+	if not is_instance_valid(_board_manager):
+		return
+	if new_tier >= TierRegistry.get_tier_count():
+		return
+	var tier: TierData = TierRegistry.get_tier_by_index(new_tier)
+	if tier == null or not _board_manager.is_board_unlocked(tier.board_type):
+		return
+	if OnboardingProgress.has_peeked_board(tier.board_type):
+		return
+	for req in _queue:
+		if req.kind == Enums.PeekKind.BOARD and req.board_type == tier.board_type:
+			return
+	_queue.append(PeekRequest.for_board(tier.board_type))
 	_try_drain()
 
 
@@ -198,7 +249,10 @@ func _run_board_peek(target_type: Enums.BoardType) -> void:
 	if PrestigeManager.current_phase != PrestigeManager.PrestigePhase.NONE:
 		return
 
-	await wait_fn.call(theme.peek_linger_duration)  # hold
+	if peek_linger_hook.is_valid():
+		await peek_linger_hook.call()
+	else:
+		await wait_fn.call(theme.peek_linger_duration)  # hold
 	if not is_instance_valid(_board_manager):
 		return
 	if PrestigeManager.current_phase != PrestigeManager.PrestigePhase.NONE:
