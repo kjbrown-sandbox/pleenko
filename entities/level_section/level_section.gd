@@ -17,10 +17,21 @@ var _segment_weights: Array[float] = []
 var _spacers: Array[Control] = []
 var _spacer_visible: Array[bool] = []
 var _tier_start_level: int = -1
+## Lifecycle of the intro animation, in order:
+## _in_intro=true & phase=NONE                 → bar laid out in tier-start
+##                                               state (seg 0 full width).
+## _waiting_for_rewards=true                   → burst spawned, fade running,
+##                                               pre-shrink hold.
+## phase=SHRINK / CASCADE                      → squish + cascade tweens.
+## phase=DONE                                  → final state, post-cascade.
+## They are sequential, never simultaneous.
+enum IntroPhase { NONE, SHRINK, CASCADE, DONE }
+
 var _in_intro: bool = false
 var _waiting_for_rewards: bool = false  # transition detected, holding for cascade end
-var _intro_anim_phase: int = 0  # 0 = none, 1 = shrink, 2 = cascade, 3 = done
+var _intro_phase: IntroPhase = IntroPhase.NONE
 var _intro_anim_tween: Tween
+var _intro_cascade_tween: Tween  # phase-2 tween — stored so _rebuild_bar can kill it
 var _intro_held_particles: Array[ColorRect] = []
 var _intro_held_targets: Array[Vector2] = []
 var _intro_drift_tweens: Array[Tween] = []
@@ -29,6 +40,12 @@ var _intro_drift_tweens: Array[Tween] = []
 # tween (a huge ratio like 1e6 makes seg 0 stay near 100% width until the
 # very last instant — the squish looks slow→fast no matter the easing).
 const INTRO_BIG_RATIO: float = 200.0
+const INTRO_COLLAPSED_RATIO: float = 0.001
+# Once this many milestones are acquired, the merged group is wide enough to
+# host the X/Y label inside the bar (fill-bar-style text), so it stops floating
+# above the bar. Tuned so the label fits across all the gold thresholds without
+# clipping the milestone text on top.
+const FILL_BAR_TEXT_MIN_ACTIVE_IDX: int = 3
 
 var _particle_overlay: Control
 var _board_manager: Node
@@ -82,7 +99,7 @@ func _resolve_stale_intro() -> void:
 		return
 	if LevelManager.current_level <= _tier_start_level:
 		return
-	if _waiting_for_rewards or _intro_anim_phase != 0:
+	if _waiting_for_rewards or _intro_phase != IntroPhase.NONE:
 		return  # live intro animation took over — leave it alone
 	_rebuild_bar()
 	_update_bar()
@@ -229,22 +246,30 @@ func _set_progress_text(s: String) -> void:
 
 
 func _rebuild_bar() -> void:
-	for c in segments_hbox.get_children():
-		segments_hbox.remove_child(c)
-		c.queue_free()
+	# Kill every tween that targets the bar's child nodes BEFORE we free the
+	# children, otherwise tweens keep running against freed objects.
+	# Phase-1 shrink (outer) AND phase-2 cascade (inner) are tracked
+	# separately because the cascade is created in a tween_callback of the
+	# outer tween — killing the outer doesn't stop the inner.
 	if _intro_anim_tween:
 		_intro_anim_tween.kill()
 		_intro_anim_tween = null
+	if _intro_cascade_tween:
+		_intro_cascade_tween.kill()
+		_intro_cascade_tween = null
 	for dt in _intro_drift_tweens:
 		if dt:
 			dt.kill()
 	_intro_drift_tweens.clear()
+	for c in segments_hbox.get_children():
+		segments_hbox.remove_child(c)
+		c.queue_free()
 	for p in _intro_held_particles:
 		if is_instance_valid(p):
 			p.queue_free()
 	_intro_held_particles.clear()
 	_intro_held_targets.clear()
-	_intro_anim_phase = 0
+	_intro_phase = IntroPhase.NONE
 	_waiting_for_rewards = false
 	_segment_panels.clear()
 	_segment_styleboxes.clear()
@@ -255,8 +280,6 @@ func _rebuild_bar() -> void:
 	_spacer_visible.clear()
 
 	var t: VisualTheme = ThemeProvider.theme
-	var bw: int = t.button_border_width
-	var fill_inset: float = float(bw) - 0.5
 	var seg_color: Color = t.normal_text_color
 	var spacer_width: float = 3.0
 
@@ -302,11 +325,11 @@ func _rebuild_bar() -> void:
 		seg.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		if _in_intro:
 			# Segment 0 takes (almost) the whole bar; others collapse to 0.
-			seg.size_flags_stretch_ratio = INTRO_BIG_RATIO if i == 0 else 0.001
+			seg.size_flags_stretch_ratio = INTRO_BIG_RATIO if i == 0 else INTRO_COLLAPSED_RATIO
 			if i > 0:
 				seg.modulate.a = 0.0
 		else:
-			seg.size_flags_stretch_ratio = maxf(_segment_weights[i], 0.001)
+			seg.size_flags_stretch_ratio = maxf(_segment_weights[i], INTRO_COLLAPSED_RATIO)
 		seg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 		var sb := StyleBoxFlat.new()
@@ -354,7 +377,7 @@ func _apply_segment_styles() -> void:
 	# During intro / pre-anim hold / phase-1 shrink, seg 0 is the only
 	# visible segment and should render as a fully rounded standalone pill
 	# (the "original level bar" look) regardless of current_level.
-	var seg0_standalone: bool = _in_intro or _waiting_for_rewards or _intro_anim_phase == 1
+	var seg0_standalone: bool = _in_intro or _waiting_for_rewards or _intro_phase == IntroPhase.SHRINK
 
 	for i in _segment_styleboxes.size():
 		var in_group: bool = i <= group_end
@@ -418,7 +441,7 @@ func _update_bar() -> void:
 	# milestone is acquired. Burst on visible→hidden transition.
 	# Skip during phase 1 of the intro animation so the spacers don't
 	# snap-show ahead of the cascade.
-	if _intro_anim_phase != 1:
+	if _intro_phase != IntroPhase.SHRINK:
 		for i in _spacers.size():
 			var should_be_visible: bool = current <= _tier_start_level + i
 			if _spacer_visible[i] and not should_be_visible:
@@ -444,7 +467,7 @@ func _play_intro_to_live_animation() -> void:
 	var phase2_dur: float = 2.0
 	var stagger: float = 0.1
 
-	_intro_anim_phase = 1
+	_intro_phase = IntroPhase.SHRINK
 	_intro_anim_tween = create_tween().set_parallel()
 	for i in _segment_panels.size():
 		_intro_anim_tween.tween_property(_segment_panels[i], "size_flags_stretch_ratio", _segment_weights[i], phase1_dur) \
@@ -453,12 +476,14 @@ func _play_intro_to_live_animation() -> void:
 	# Repositions the label while seg 0 is shrinking so the inside/above
 	# decision tracks the active segment's actual width.
 	_intro_anim_tween.chain().tween_callback(func():
-		_intro_anim_phase = 2
+		_intro_phase = IntroPhase.CASCADE
 		_apply_segment_styles()
-		var cascade := create_tween().set_parallel()
+		# Stored on the instance so _rebuild_bar can kill it before the
+		# segment panels it targets get freed.
+		_intro_cascade_tween = create_tween().set_parallel()
 		for i in range(1, _segment_panels.size()):
 			var delay: float = stagger * (i - 1)
-			cascade.tween_property(_segment_panels[i], "modulate:a", 1.0, phase2_dur) \
+			_intro_cascade_tween.tween_property(_segment_panels[i], "modulate:a", 1.0, phase2_dur) \
 				.set_delay(delay).set_ease(Tween.EASE_OUT)
 		for i in _spacers.size():
 			var should_be_visible: bool = LevelManager.current_level <= _tier_start_level + i
@@ -467,13 +492,13 @@ func _play_intro_to_live_animation() -> void:
 				_spacers[i].modulate.a = 0.0
 				_spacer_visible[i] = true
 				var delay: float = stagger * (i + 1)
-				cascade.tween_property(_spacers[i], "modulate:a", 1.0, phase2_dur) \
+				_intro_cascade_tween.tween_property(_spacers[i], "modulate:a", 1.0, phase2_dur) \
 					.set_delay(delay).set_ease(Tween.EASE_OUT)
 		# Fire the swoop 0.5s after the final segment BEGINS spawning in.
 		var last_seg_start: float = stagger * (_segment_panels.size() - 2)
 		var swoop_delay: float = last_seg_start + 0.5
-		cascade.tween_callback(func():
-			_intro_anim_phase = 3
+		_intro_cascade_tween.tween_callback(func():
+			_intro_phase = IntroPhase.DONE
 			_position_progress_label()
 			# Milestone label fades back in now that the bar has settled.
 			milestone_label.create_tween().tween_property(milestone_label, "modulate:a", 1.0, 0.4)
@@ -507,7 +532,7 @@ func _position_progress_label() -> void:
 	var active_idx: int = current - _tier_start_level
 	# Hidden during the squish + cascade (the wait period uses an alpha
 	# fade instead, handled in _start_intro_transition).
-	var hide_progress: bool = _intro_anim_phase == 1 or _intro_anim_phase == 2
+	var hide_progress: bool = _intro_phase == IntroPhase.SHRINK or _intro_phase == IntroPhase.CASCADE
 	if hide_progress or active_idx < 0 or active_idx >= _segment_panels.size():
 		progress_label.visible = false
 		return
@@ -540,7 +565,7 @@ func _position_progress_label() -> void:
 	# Once the 3rd milestone is acquired, the merged group is treated as a
 	# normal fill bar — text centered on it, fill_label clipped by the
 	# global bar fill position.
-	var fill_bar_mode: bool = active_idx >= 3
+	var fill_bar_mode: bool = active_idx >= FILL_BAR_TEXT_MIN_ACTIVE_IDX
 	var fits_inside: bool = (not fill_bar_mode) and seg.size.x >= label_w + label_padding
 
 	if fill_bar_mode:
@@ -685,11 +710,12 @@ func _get_reward_targets(rewards: Array[RewardData]) -> Array[Vector2]:
 
 
 func _get_upgrade_section_target(upgrade_type: int = -1) -> Vector2:
-	var board = _board_manager.get_active_board()
-	var section = board.upgrade_section
-	if upgrade_type >= 0 and section._rows.has(upgrade_type):
-		var row: Control = section._rows[upgrade_type]
-		return row.global_position + row.size * 0.5
+	var board: PlinkoBoard = _board_manager.get_active_board()
+	var section: UpgradeSection = board.upgrade_section
+	if upgrade_type >= 0:
+		var row: Control = section.get_upgrade_row(upgrade_type)
+		if row:
+			return row.global_position + row.size * 0.5
 	var container: VBoxContainer = section.upgrades_container
 	return container.global_position + Vector2(container.size.x * 0.5, container.size.y)
 
