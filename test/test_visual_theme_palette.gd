@@ -9,12 +9,31 @@ extends "res://test/test_base.gd"
 ## cloud-soft triangles close to their own background.
 
 
+## Preset list kept hand-maintained — adding a new preset means adding a test
+## case here too. Cheap insurance against forgetting the peg=baseline invariant.
+const PRESET_PATHS := [
+	"res://style_lab/presets/cool_slate.tres",
+	"res://style_lab/presets/cosmic_burst.tres",
+	"res://style_lab/presets/glow_dark.tres",
+	"res://style_lab/presets/lavender_lofi.tres",
+	"res://style_lab/presets/lavender_lofi_dark.tres",
+	"res://style_lab/presets/nier_burnt_parchment.tres",
+	"res://style_lab/presets/nier_lofi.tres",
+	"res://style_lab/presets/nier_parchment.tres",
+	"res://style_lab/presets/nier_zen.tres",
+	"res://style_lab/presets/warm_dark_halo.tres",
+	"res://style_lab/presets/warm_minimal.tres",
+]
+
+
 func _run_tests() -> void:
 	print("\n=== VisualTheme Palette Tests ===\n")
 	test_bg_triangle_light_resolves_to_export()
 	test_bg_triangle_light_default_matches_nier_zen_tone()
 	test_glow_dark_overrides_bg_triangle_light_dark()
 	test_nier_zen_uses_default_bg_triangle_light()
+	test_peg_color_matches_normal_text_across_presets()
+	test_cosmic_burst_preset_loads()
 
 
 func test_bg_triangle_light_resolves_to_export() -> void:
@@ -54,3 +73,30 @@ func test_nier_zen_uses_default_bg_triangle_light() -> void:
 	var c: Color = t.resolve(VisualTheme.Palette.BG_TRIANGLE_LIGHT)
 	assert_equal(c, Color(0.86, 0.83, 0.77),
 		"nier_zen BG_TRIANGLE_LIGHT == its bg_shade_6 tone")
+
+
+## The "stark contrast" pattern: pegs share the baseline-button bar shade in
+## every preset. `RefinedBaselineButton._bar_tint()` resolves to
+## `normal_text_color`, and the convention is `peg_color_source ==
+## normal_text_source` so the two visuals can't drift apart on a theme swap.
+func test_peg_color_matches_normal_text_across_presets() -> void:
+	print("test_peg_color_matches_normal_text_across_presets")
+	for path in PRESET_PATHS:
+		var t: VisualTheme = load(path)
+		assert_equal(t.peg_color, t.normal_text_color,
+			"%s: peg_color must match normal_text_color (got peg=%s text=%s)" % [path, t.peg_color, t.normal_text_color])
+
+
+func test_cosmic_burst_preset_loads() -> void:
+	print("test_cosmic_burst_preset_loads")
+	# Cherry-picked from prototype/earrings — guard against UID/schema drift
+	# silently breaking the load.
+	var t: VisualTheme = load("res://style_lab/presets/cosmic_burst.tres")
+	assert_true(t != null, "cosmic_burst.tres loads")
+	# Dark theme: background is the darkest shade, text resolves to the
+	# lightest. Cosmic deliberately doesn't override either source, so this
+	# also guards the schema defaults.
+	assert_true(t.background_color.get_luminance() < 0.3,
+		"cosmic_burst background is dark (luminance < 0.3), got %.3f" % t.background_color.get_luminance())
+	assert_true(t.normal_text_color.get_luminance() > 0.5,
+		"cosmic_burst normal_text is light (luminance > 0.5), got %.3f" % t.normal_text_color.get_luminance())

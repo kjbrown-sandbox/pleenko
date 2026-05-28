@@ -114,7 +114,7 @@ func _build() -> void:
 	_fill_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_fill_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_fill_label.add_theme_font_size_override("font_size", t.button_font_size)
-	_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
+	_fill_label.add_theme_color_override("font_color", t.background_color)
 	_fill_label.add_theme_font_override("font", btn_font)
 	_fill_label.anchor_left = 0
 	_fill_label.anchor_top = 0
@@ -236,14 +236,14 @@ func apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 		# Can't afford but not maxed — keep fill visible to show progress
 		_fill_rect.color = _fill_color
 		_base_label.add_theme_color_override("font_color", t.normal_text_color)
-		_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
+		_fill_label.add_theme_color_override("font_color", t.background_color)
 		# Use the active border so the bar looks cohesive with the fill
 		for style in _main_styles:
 			style.border_color = _fill_color
 	else:
 		_fill_rect.color = _fill_color
 		_base_label.add_theme_color_override("font_color", t.normal_text_color)
-		_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
+		_fill_label.add_theme_color_override("font_color", t.background_color)
 		_main_styles[0].border_color = _fill_color
 
 
@@ -280,7 +280,10 @@ func set_plus_filled(can_afford: bool) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var bg: Color = _fill_color if can_afford else t.button_bg_color
 	var border: Color = _fill_color if can_afford else t.button_bg_color
-	var text_col: Color = t.button_fill_text_color if can_afford else t.button_disabled_text_color
+	# Match `_fill_label` in `_build` — text on filled bg is `background_color`
+	# so dark themes flip correctly. `button_fill_text_color` was tuned for the
+	# old per-state fill scheme and reads as bleed-into-bar on dark themes.
+	var text_col: Color = t.background_color if can_afford else t.button_disabled_text_color
 	for style in _plus_styles:
 		style.bg_color = bg
 		style.border_color = border
@@ -314,7 +317,9 @@ func set_minus_filled(is_active: bool) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var bg: Color = _fill_color if is_active else t.button_bg_color
 	var border: Color = _fill_color if is_active else t.button_bg_color
-	var text_col: Color = t.button_fill_text_color if is_active else t.button_disabled_text_color
+	# See set_plus_filled — `background_color` keeps text on filled bg flipping
+	# correctly across dark / light themes.
+	var text_col: Color = t.background_color if is_active else t.button_disabled_text_color
 	for style in _minus_styles:
 		style.bg_color = bg
 		style.border_color = border

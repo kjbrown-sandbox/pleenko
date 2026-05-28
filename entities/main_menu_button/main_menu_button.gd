@@ -93,11 +93,13 @@ func _exit_tree() -> void:
 # VisualTheme button defaults won't propagate here; that's by design.
 func _apply_theme() -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	# Bar/border come from `baseline_button_bar_color` — the shared "default
-	# button" shade used by RefinedBaselineButton too, so the menu button and
-	# the gameplay baseline button can't drift apart on a theme swap.
-	var bar := t.baseline_button_bar_color
-	var text_col := t.bg_shade_6
+	# Bar/border come from `normal_text_color` — the palette's "text on bg"
+	# shade, which RefinedBaselineButton's `_bar_tint` also falls back to, so
+	# the menu button and the gameplay baseline button can't drift apart on a
+	# theme swap. Text uses `background_color` (the visual opposite of the
+	# bar) so dark themes flip correctly instead of bleeding into the bar.
+	var bar := t.normal_text_color
+	var text_col := t.background_color
 	var hover_bar := bar.lightened(0.12)
 	var pressed_bar := bar.darkened(0.10)
 	_button.add_theme_stylebox_override("normal", _make_style(bar))
@@ -112,7 +114,7 @@ func _make_style(bg: Color) -> StyleBoxFlat:
 	var t: VisualTheme = ThemeProvider.theme
 	var s := StyleBoxFlat.new()
 	s.bg_color = bg
-	s.border_color = t.baseline_button_bar_color
+	s.border_color = t.normal_text_color
 	s.set_border_width_all(4)
 	s.set_corner_radius_all(t.button_border_radius)
 	s.set_content_margin_all(12.0)

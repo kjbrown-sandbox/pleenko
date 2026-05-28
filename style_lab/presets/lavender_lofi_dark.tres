@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="VisualTheme" format=3]
+[gd_resource type="Resource" script_class="VisualTheme" format=3 uid="uid://d21g4fqbugx18"]
 
 [ext_resource type="FontFile" uid="uid://cujosi7nj7srm" path="res://assets/fonts/Vend_Sans/static/VendSans-Medium.ttf" id="1_fbp74"]
 [ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
@@ -27,7 +27,6 @@ bg_haze_subtle = Color(0.194, 0.158, 0.238, 1)
 bg_triangle_light = Color(0.2, 0.16, 0.245, 1)
 ambient_light_source = 1
 directional_light_source = 0
-peg_color_source = 22
 body_text_source = 4
 overlay_opacity = 0.5
 label_font = ExtResource("1_fbp74")
@@ -41,7 +40,6 @@ board_glow_opacity = 0.03
 peg_flash_enabled = false
 peg_ring_enabled = true
 vignette_enabled = true
-vignette_radius = 0.7
 vignette_softness = 0.5
 bucket_instrument = 1
 progression = [{

@@ -6,7 +6,11 @@ var _rect: ColorRect
 
 
 func _ready() -> void:
-	layer = 99
+	# Negative layer sits above the 3D world (CanvasLayers always render on
+	# top of the viewport) but below every UI CanvasLayer (which all default
+	# to >= 0), so buttons stay at their authored colour while the board
+	# darkens at the edges.
+	layer = -1
 	var t: VisualTheme = ThemeProvider.theme
 	if not t.vignette_enabled:
 		queue_free()
