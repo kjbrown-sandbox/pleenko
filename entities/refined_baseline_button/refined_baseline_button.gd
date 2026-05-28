@@ -31,10 +31,12 @@ const GAP_PX := 1
 
 
 func _bar_tint() -> Color:
-	# bar_color overrides the theme's neutral border color when alpha > 0 —
-	# currencies tint per-coin; upgrade rows + drop buttons fall back to the
-	# palette (button_border_color) so theme swaps propagate.
-	return bar_color if bar_color.a > 0.0 else ThemeProvider.theme.button_border_color
+	# bar_color overrides the theme's bar tint when alpha > 0 — currencies
+	# tint per-coin; upgrade rows + drop buttons fall back to the palette so
+	# theme swaps propagate. Shared with MainMenuButton via
+	# `baseline_button_bar_color` — the menu and the gameplay baseline button
+	# use one "default button" shade.
+	return bar_color if bar_color.a > 0.0 else ThemeProvider.theme.baseline_button_bar_color
 
 
 enum Mode { WITH_BOTH, WITH_PLUS, NEITHER }
@@ -277,11 +279,12 @@ func _apply_fill() -> void:
 
 func _make_fill_style(has_minus: bool, has_plus: bool, disabled: bool = false) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	# Disabled bar bg is LIGHTER than enabled — washed-out look. But tinted
-	# bars (currencies) never gray out: their color is their identity.
+	# Disabled bar bg falls back to the theme's peg color so the washed-out
+	# look stays in palette across themes. Tinted bars (currencies) never gray
+	# out: their color is their identity.
 	var tint := _bar_tint()
 	var is_tinted := bar_color.a > 0.0
-	s.bg_color = tint.lightened(0.25) if disabled and not is_tinted else tint
+	s.bg_color = ThemeProvider.theme.peg_color if disabled and not is_tinted else tint
 	# Fill is flush with Main's outer edge on non-cap sides, so its corners
 	# match Main's outer curve exactly (covering the border with same color).
 	s.corner_radius_top_left = 0 if has_minus else RADIUS_PX

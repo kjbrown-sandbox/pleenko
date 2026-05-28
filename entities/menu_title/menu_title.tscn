@@ -1,0 +1,58 @@
+[gd_scene load_steps=2 format=3 uid="uid://drm5plm7d4xte"]
+
+[ext_resource type="Script" uid="uid://cwf4sajendshd" path="res://entities/menu_title/menu_title.gd" id="1_mtitle"]
+
+[node name="MenuTitle" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_mtitle")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = -56
+alignment = 2
+
+[node name="EyebrowRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+size_flags_horizontal = 0
+mouse_filter = 2
+alignment = 2
+theme_override_constants/separation = 0
+
+[node name="LetterRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+size_flags_horizontal = 0
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="LetterP" type="Label" parent="VBox/LetterRow"]
+layout_mode = 2
+mouse_filter = 2
+text = "P"
+
+[node name="LetterL" type="Label" parent="VBox/LetterRow"]
+layout_mode = 2
+mouse_filter = 2
+text = "L"
+
+[node name="LetterU" type="Label" parent="VBox/LetterRow"]
+layout_mode = 2
+mouse_filter = 2
+text = "U"
+
+[node name="LetterN" type="Label" parent="VBox/LetterRow"]
+layout_mode = 2
+mouse_filter = 2
+text = "N"
+
+[node name="LetterK" type="Label" parent="VBox/LetterRow"]
+layout_mode = 2
+mouse_filter = 2
+text = "K"

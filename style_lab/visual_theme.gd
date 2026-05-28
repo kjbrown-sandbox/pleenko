@@ -192,6 +192,10 @@ const coin_shape := CoinShape.CYLINDER
 @export var button_fill_text_source: Palette = Palette.BG_7
 @export var button_disabled_text_source: Palette = Palette.BG_3
 @export var button_border_source: Palette = Palette.BG_4
+# Bar tint shared by RefinedBaselineButton (drop buttons + upgrade rows when
+# untinted) and MainMenuButton — the "default button" shade. Defaults to BG_6
+# (same as normal_text_source) so existing presets carry the look forward.
+@export var baseline_button_bar_source: Palette = Palette.BG_6
 @export var button_pulse_scale := 1.03
 @export var button_pulse_duration := 0.11
 
@@ -518,6 +522,8 @@ var button_disabled_text_color: Color:
 	get: return resolve(button_disabled_text_source)
 var button_border_color: Color:
 	get: return resolve(button_border_source)
+var baseline_button_bar_color: Color:
+	get: return resolve(baseline_button_bar_source)
 
 
 # ── Button style helpers ─────────────────────────────────────────────

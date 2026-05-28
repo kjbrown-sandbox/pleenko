@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://bi7eoe88lya5s" path="res://entities/main_menu/main_menu.gd" id="1_6wyxo"]
 [ext_resource type="PackedScene" uid="uid://b8mnpq3vk2xra" path="res://entities/menu_board/menu_board.tscn" id="2_mboard"]
 [ext_resource type="PackedScene" uid="uid://dgmcj5xrytqkb" path="res://entities/main_menu_button/main_menu_button.tscn" id="3_mbtn"]
+[ext_resource type="PackedScene" uid="uid://drm5plm7d4xte" path="res://entities/menu_title/menu_title.tscn" id="4_mtitle"]
 
 [node name="MainMenu" type="Node3D" unique_id=1111347995]
 script = ExtResource("1_6wyxo")
@@ -56,16 +57,17 @@ custom_minimum_size = Vector2(272, 64)
 layout_mode = 2
 title_text = "Quit"
 
-[node name="TitleLabel" type="Label" parent="CanvasLayer" unique_id=867308398]
+[node name="MenuTitle" parent="CanvasLayer" unique_id=867308398 instance=ExtResource("4_mtitle")]
 anchors_preset = 2
 anchor_top = 1.0
+anchor_right = 0.0
 anchor_bottom = 1.0
 offset_left = 56.0
-offset_top = -220.0
-offset_right = 720.0
+offset_top = -420.0
+offset_right = 1080.0
 offset_bottom = -48.0
+grow_horizontal = 1
 grow_vertical = 0
-text = "PLUNK"
 
 [node name="ConfirmLayer" type="CanvasLayer" parent="." unique_id=1201945472]
 layer = 10

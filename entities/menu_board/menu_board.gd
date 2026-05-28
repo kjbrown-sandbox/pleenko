@@ -696,6 +696,19 @@ func get_current_chord_index() -> int:
 	return _chord_index
 
 
+## World positions of every live decorative coin. Used by `MenuTitle` to
+## project coin positions to screen and trigger letter wobbles. Returns an
+## empty array before `_ready` finishes (safe for early callers).
+func get_live_coin_positions() -> PackedVector3Array:
+	var positions := PackedVector3Array()
+	if _coins == null:
+		return positions
+	for child in _coins.get_children():
+		if child is Node3D:
+			positions.append((child as Node3D).global_position)
+	return positions
+
+
 ## Pitch multipliers (ascending) for the chord at `chord_idx`. Empty array
 ## if the chord bed hasn't initialized yet or the index is out of range.
 func get_chord_pitches(chord_idx: int) -> PackedFloat32Array:
