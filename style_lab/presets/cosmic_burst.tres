@@ -1,0 +1,71 @@
+[gd_resource type="Resource" script_class="VisualTheme" format=3 uid="uid://och1vgwtffcu"]
+
+[ext_resource type="FontFile" uid="uid://cl236vky1owx" path="res://style_lab/VendSans-Regular.ttf" id="1_fbp74"]
+[ext_resource type="Script" uid="uid://ddiqavf0qg8ee" path="res://style_lab/visual_theme.gd" id="1_vt"]
+
+[resource]
+script = ExtResource("1_vt")
+bg_shade_7 = Color(0.0275, 0.0627, 0.1176, 1)
+bg_shade_1 = Color(0.0745, 0.1176, 0.1882, 1)
+bg_shade_2 = Color(0.1137, 0.1647, 0.2471, 1)
+bg_shade_3 = Color(0.1569, 0.2039, 0.2902, 1)
+bg_shade_4 = Color(0.302, 0.3529, 0.4549, 1)
+bg_shade_5 = Color(0.5333, 0.5765, 0.6745, 1)
+bg_shade_6 = Color(0.7529, 0.7882, 0.8471, 1)
+gold_main = Color(0.9608, 0.702, 0.6588, 1)
+gold_faded = Color(0.4314, 0.302, 0.2863, 1)
+orange_main = Color(1, 0.7843, 0.6392, 1)
+orange_faded = Color(0.4784, 0.3647, 0.2745, 1)
+red_main = Color(0.9098, 0.4824, 0.502, 1)
+red_faded = Color(0.4275, 0.2275, 0.2392, 1)
+violet_main = Color(0.7216, 0.6078, 0.8314, 1)
+violet_faded = Color(0.3373, 0.2824, 0.3765, 1)
+blue_main = Color(0.5608, 0.7176, 0.8392, 1)
+blue_faded = Color(0.2588, 0.3373, 0.3882, 1)
+green_main = Color(0.6588, 0.7843, 0.6902, 1)
+green_faded = Color(0.3098, 0.3686, 0.3294, 1)
+peg_brown = Color(0.302, 0.3529, 0.4549, 1)
+bg_haze = Color(0.1137, 0.1647, 0.2471, 1)
+bg_haze_subtle = Color(0.0667, 0.098, 0.1647, 1)
+bg_triangle_light = Color(0.1294, 0.1804, 0.2706, 1)
+ambient_light_source = 0
+directional_light_source = 1
+hit_bucket_source = 1
+body_text_source = 4
+prestige_flash_source = 7
+label_font = ExtResource("1_fbp74")
+button_enabled_source = 2
+button_disabled_source = 4
+button_hovered_source = 15
+button_font = ExtResource("1_fbp74")
+button_bg_source = 15
+button_fill_text_source = 5
+button_border_source = 2
+bucket_pulse_duration = 1.15
+board_glow_opacity = 0.03
+peg_flash_enabled = false
+peg_ring_enabled = true
+vignette_enabled = true
+vignette_softness = 0.5
+bucket_instrument = 1
+progression = [{
+"chord": [0, 4, 7, 11, 12, 16, 19, 23],
+"motif": [0, -1, 2, -1, 4, -1, 5, -1],
+"root": 0
+}, {
+"chord": [0, 3, 7, 10, 12, 15, 19, 22],
+"motif": [3, -1, 2, -1, 0, -1, -1, -1],
+"root": 4
+}, {
+"chord": [0, 4, 7, 11, 12, 16, 19, 23],
+"motif": [2, -1, -1, 4, -1, 5, -1, -1],
+"root": 5
+}, {
+"chord": [0, 4, 7, 10, 12, 16, 19, 22],
+"motif": [0, 3, -1, 4, -1, 2, -1, -1],
+"root": 7
+}]
+melody_sequence = PackedInt32Array()
+drum_instruments = PackedInt32Array()
+drum_patterns = PackedStringArray()
+drum_volumes = PackedFloat32Array()

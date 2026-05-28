@@ -114,7 +114,7 @@ func _build() -> void:
 	_fill_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_fill_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_fill_label.add_theme_font_size_override("font_size", t.button_font_size)
-	_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
+	_fill_label.add_theme_color_override("font_color", t.background_color)
 	_fill_label.add_theme_font_override("font", btn_font)
 	_fill_label.anchor_left = 0
 	_fill_label.anchor_top = 0
@@ -236,14 +236,14 @@ func apply_fill_colors(is_disabled: bool, at_max: bool = false) -> void:
 		# Can't afford but not maxed — keep fill visible to show progress
 		_fill_rect.color = _fill_color
 		_base_label.add_theme_color_override("font_color", t.normal_text_color)
-		_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
+		_fill_label.add_theme_color_override("font_color", t.background_color)
 		# Use the active border so the bar looks cohesive with the fill
 		for style in _main_styles:
 			style.border_color = _fill_color
 	else:
 		_fill_rect.color = _fill_color
 		_base_label.add_theme_color_override("font_color", t.normal_text_color)
-		_fill_label.add_theme_color_override("font_color", t.button_fill_text_color)
+		_fill_label.add_theme_color_override("font_color", t.background_color)
 		_main_styles[0].border_color = _fill_color
 
 

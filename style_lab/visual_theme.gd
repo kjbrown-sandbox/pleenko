@@ -102,7 +102,7 @@ enum Palette {
 @export var background_source: Palette = Palette.BG_7
 @export var ambient_light_source: Palette = Palette.BG_5
 @export var directional_light_source: Palette = Palette.BG_6
-@export var peg_color_source: Palette = Palette.BG_4
+@export var peg_color_source: Palette = Palette.BG_6
 @export var high_multiplier_source: Palette = Palette.RED_MAIN
 @export var hit_bucket_source: Palette = Palette.BG_6            # color for hit/target/forbidden buckets
 @export var normal_text_source: Palette = Palette.BG_6
@@ -192,10 +192,6 @@ const coin_shape := CoinShape.CYLINDER
 @export var button_fill_text_source: Palette = Palette.BG_7
 @export var button_disabled_text_source: Palette = Palette.BG_3
 @export var button_border_source: Palette = Palette.BG_4
-# Bar tint shared by RefinedBaselineButton (drop buttons + upgrade rows when
-# untinted) and MainMenuButton — the "default button" shade. Defaults to BG_6
-# (same as normal_text_source) so existing presets carry the look forward.
-@export var baseline_button_bar_source: Palette = Palette.BG_6
 @export var button_pulse_scale := 1.03
 @export var button_pulse_duration := 0.11
 
@@ -281,9 +277,9 @@ const coin_shape := CoinShape.CYLINDER
 # ── Vignette ─────────────────────────────────────────────────────────
 @export_group("Vignette")
 @export var vignette_enabled := false
-@export var vignette_intensity := 0.15                             # overall opacity of the darkened edges
+@export var vignette_intensity := 0.2                              # overall opacity of the darkened edges
 @export var vignette_radius := 0.75                                # how far from center the effect starts
-@export var vignette_softness := 0.45                              # how gradually the edge fades in
+@export var vignette_softness := 0.55                              # how gradually the edge fades in
 @export var vignette_color_source: Palette = Palette.BG_7          # tint color for the vignette
 
 # ── Prestige Animation ──────────────────────────────────────────────
@@ -522,8 +518,6 @@ var button_disabled_text_color: Color:
 	get: return resolve(button_disabled_text_source)
 var button_border_color: Color:
 	get: return resolve(button_border_source)
-var baseline_button_bar_color: Color:
-	get: return resolve(baseline_button_bar_source)
 
 
 # ── Button style helpers ─────────────────────────────────────────────

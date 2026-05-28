@@ -24,19 +24,18 @@ const BORDER_PX := 4
 # Outer corner radius — applied only on the OUTSIDE corners of the composite
 # (whichever node forms the perimeter). Fill mirrors these so its visible
 # corners flow into the border curve.
-const RADIUS_PX := 2
+const RADIUS_PX := 3
 # Thin transparent gap inside the button between the fill and each cap, so
 # the cap reads as separate while the outer border stays continuous.
 const GAP_PX := 1
 
 
 func _bar_tint() -> Color:
-	# bar_color overrides the theme's bar tint when alpha > 0 — currencies
-	# tint per-coin; upgrade rows + drop buttons fall back to the palette so
-	# theme swaps propagate. Shared with MainMenuButton via
-	# `baseline_button_bar_color` — the menu and the gameplay baseline button
-	# use one "default button" shade.
-	return bar_color if bar_color.a > 0.0 else ThemeProvider.theme.baseline_button_bar_color
+	# bar_color overrides the theme's normal-text color when alpha > 0 —
+	# currencies tint per-coin; upgrade rows + drop buttons fall back to the
+	# palette's `normal_text_color` so theme swaps propagate. Shared with
+	# MainMenuButton so the menu and the gameplay baseline button can't drift.
+	return bar_color if bar_color.a > 0.0 else ThemeProvider.theme.normal_text_color
 
 
 enum Mode { WITH_BOTH, WITH_PLUS, NEITHER }
@@ -221,24 +220,33 @@ func _apply() -> void:
 	main_button.text = ""
 	main_button.add_theme_color_override("font_color", Color.TRANSPARENT)
 
-	# Text colors come from the theme palette. Disabled MAIN keeps its text
-	# color (only the bar bg lightens). Disabled CAP shifts text to a
-	# mid-tone so the floating glyph reads against the scene.
+	# Text colors are semantic, not raw BG_6/BG_7 — they have to flip with
+	# theme polarity. The bar fill IS `normal_text_color`, so text on the
+	# filled portion uses `background_color` (the visual opposite), and text
+	# on the empty portion uses `normal_text_color` (visible on the page bg
+	# by definition). Disabled MAIN fades both alongside the lightened bg so
+	# the whole "at-max" state reads dim. Disabled CAP keeps a mid-tone so
+	# the floating glyph reads against the scene.
 	var t: VisualTheme = ThemeProvider.theme
-	var palette_white: Color = t.bg_shade_6
-	var palette_black: Color = t.bg_shade_7
 	var cap_disabled_text: Color = t.bg_shade_3
-	var fill_text: Color = palette_white
-	var minus_text: Color = palette_white if demo_minus_filled else cap_disabled_text
-	var plus_text: Color = palette_white if demo_plus_filled else cap_disabled_text
+	var is_tinted := bar_color.a > 0.0
+	var main_faded := demo_main_disabled and not is_tinted
+	var fill_text: Color = t.background_color
+	var base_text: Color = t.normal_text_color
+	var cap_filled_text: Color = t.background_color
+	if main_faded:
+		fill_text = Color(fill_text.r, fill_text.g, fill_text.b, 0.6)
+		base_text = Color(base_text.r, base_text.g, base_text.b, 0.6)
+	var minus_text: Color = cap_filled_text if demo_minus_filled else cap_disabled_text
+	var plus_text: Color = cap_filled_text if demo_plus_filled else cap_disabled_text
 	minus_button.add_theme_color_override("font_color", minus_text)
 	minus_button.add_theme_color_override("font_hover_color", minus_text)
 	minus_button.add_theme_color_override("font_disabled_color", cap_disabled_text)
 	plus_button.add_theme_color_override("font_color", plus_text)
 	plus_button.add_theme_color_override("font_hover_color", plus_text)
 	plus_button.add_theme_color_override("font_disabled_color", cap_disabled_text)
-	_title_lbl.add_theme_color_override("font_color", palette_black)
-	_num_lbl.add_theme_color_override("font_color", palette_black)
+	_title_lbl.add_theme_color_override("font_color", base_text)
+	_num_lbl.add_theme_color_override("font_color", base_text)
 	_fill_title_lbl.add_theme_color_override("font_color", fill_text)
 	_fill_num_lbl.add_theme_color_override("font_color", fill_text)
 
@@ -279,12 +287,11 @@ func _apply_fill() -> void:
 
 func _make_fill_style(has_minus: bool, has_plus: bool, disabled: bool = false) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	# Disabled bar bg falls back to the theme's peg color so the washed-out
-	# look stays in palette across themes. Tinted bars (currencies) never gray
-	# out: their color is their identity.
+	# Disabled bar bg is LIGHTER than enabled — washed-out look. But tinted
+	# bars (currencies) never gray out: their color is their identity.
 	var tint := _bar_tint()
 	var is_tinted := bar_color.a > 0.0
-	s.bg_color = ThemeProvider.theme.peg_color if disabled and not is_tinted else tint
+	s.bg_color = tint.lightened(0.25) if disabled and not is_tinted else tint
 	# Fill is flush with Main's outer edge on non-cap sides, so its corners
 	# match Main's outer curve exactly (covering the border with same color).
 	s.corner_radius_top_left = 0 if has_minus else RADIUS_PX
