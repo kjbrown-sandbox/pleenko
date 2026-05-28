@@ -3,7 +3,6 @@ extends Node3D
 
 signal board_switched(board: PlinkoBoard)
 signal board_unlocked(board_type: Enums.BoardType)
-signal assignments_changed(assignments: Dictionary)
 signal first_autodropper_purchased
 ## Fired once, on the player's very first Deflector purchase (main mode only;
 ## suppressed in challenges). DeflectorIntroAnimator listens.
@@ -492,8 +491,6 @@ func _on_autodropper_adjust(button_id: StringName, delta: int, from_player: bool
 	elif total_assigned == 0 and not _autodrop_timer.is_stopped():
 		_autodrop_timer.stop()
 
-	assignments_changed.emit(_assignments)
-
 
 func _on_autodrop_tick() -> void:
 	_last_tick_msec = Time.get_ticks_msec()
@@ -766,7 +763,6 @@ func deserialize(data: Dictionary) -> void:
 	if total_assigned > 0:
 		_autodrop_timer.start()
 	_update_all_button_displays()
-	assignments_changed.emit(_assignments)
 
 	# Re-frame camera on active board
 	_snap_camera_to_active_board()

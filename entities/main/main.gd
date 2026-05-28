@@ -65,7 +65,6 @@ func _ready() -> void:
 	level_section.setup(board_manager, camera, coin_values)
 	challenge_grouping_manager.setup(camera, challenge_info_panel)
 	coin_values.setup(board_manager)
-	_setup_autodropper_summary()
 	_setup_gear_button()
 	_setup_volume_icon()
 	_setup_options_dialog()
@@ -274,13 +273,6 @@ func _setup_vignette() -> void:
 	var vignette := CanvasLayer.new()
 	vignette.set_script(preload("res://entities/vignette/vignette.gd"))
 	add_child(vignette)
-
-
-func _setup_autodropper_summary() -> void:
-	var summary := AutodropperSummary.new()
-	summary.size_flags_horizontal = Control.SIZE_FILL
-	coin_values.add_child(summary)
-	summary.setup(board_manager)
 
 
 func _setup_gear_button() -> void:
