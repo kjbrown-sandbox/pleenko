@@ -9,8 +9,11 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 
 ## Demo lockdown toggle. When true, the red board and orange/red challenge
 ## groups are blocked behind a "It's not done yet :D" overlay. Toggle from the
-## Inspector on the Main node to switch between demo and full play.
-@export var demo_mode: bool = false
+## Inspector on the Main node to switch between demo and full play during local
+## testing. NOTE: exported builds force this to `true` in _ready (see the
+## OS.has_feature("editor") guard), so a `false` value can only ever take effect
+## inside the editor — it can never ship to players.
+@export var demo_mode: bool = true
 
 @onready var board_manager: BoardManager = $BoardManager
 @onready var challenge_grouping_manager: ChallengeGroupingManager = $ChallengeGroupingManager
@@ -47,6 +50,14 @@ var _arrow_blink_tweens: Dictionary = {}  # Control -> Tween
 var _loading_from_save: bool = false
 
 func _ready() -> void:
+	# Ship safety: any exported build (e.g. the itch upload) MUST run demo-locked,
+	# regardless of an accidental Inspector toggle or a dirty working tree. The
+	# @export below stays editor-toggleable for local testing, but `false` can
+	# never reach players. (To intentionally ship a full, non-demo build later,
+	# remove this guard.)
+	if not OS.has_feature("editor"):
+		demo_mode = true
+
 	# Safety net: ensure time_scale is normal when main scene loads
 	# (in case prestige animation was interrupted)
 	PrestigeManager.reset_time_scale()
