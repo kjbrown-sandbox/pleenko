@@ -14,7 +14,5 @@ triangle_drift_speed = 0.12
 use_theme_triangle_shades = true
 triangle_light_source = 25
 triangle_dark_source = 24
-min_peak_alpha = 0.2
-max_peak_alpha = 0.5
 spawn_zone_center = Vector2(0, 0)
 spawn_zone_half_extent = Vector2(20, 16)
