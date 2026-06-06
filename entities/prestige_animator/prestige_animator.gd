@@ -71,12 +71,12 @@ func _on_prestige_coin_final_bounce(coin: Coin, predicted_bucket: Bucket) -> voi
 	_original_bucket_color = predicted_bucket._base_material.albedo_color
 	_original_bucket_label_color = predicted_bucket._label.modulate
 
-	# Determine which board type is being prestiged
-	for i in range(1, TierRegistry.get_tier_count()):
-		var tier := TierRegistry.get_tier_by_index(i)
-		if tier.raw_currency == predicted_bucket.currency_type:
-			PrestigeManager.pending_board_type = tier.board_type
-			break
+	# Determine which board type is being prestiged. Completing a board (reaching
+	# 500 of its primary currency) prestiges the NEXT tier — the completion coin
+	# carries a primary currency now, so derive the target from the next tier.
+	var next_tier := TierRegistry.get_next_tier(coin.board.board_type)
+	if next_tier != null:
+		PrestigeManager.pending_board_type = next_tier.board_type
 
 	# Spawn VFX handler
 	_vfx = PrestigeVFX.new()

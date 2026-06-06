@@ -21,8 +21,7 @@ bucket_groups = Array[PackedInt32Array]([PackedInt32Array(3), PackedInt32Array(2
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
 type = 1
-modifier_type = 3
-modifier_amount = 0.5
+modifier_type = 7
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("8_start")

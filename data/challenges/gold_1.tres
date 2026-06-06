@@ -15,8 +15,7 @@ amount = 45
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
 type = 1
-modifier_type = 3
-modifier_amount = 0.5
+modifier_type = 7
 
 [resource]
 script = ExtResource("1_data")

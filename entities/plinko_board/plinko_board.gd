@@ -161,6 +161,10 @@ signal cap_raise_coin_landed(coin: Coin, predicted_bucket: Bucket)
 ## bucket is marked forbidden. ForbiddenBucketRevealAnimator listens and softly
 ## zooms + slow-mos the camera before the doomed coin touches down.
 signal forbidden_bucket_coin_landed(coin: Coin, predicted_bucket: Bucket)
+## Requests that the next tier's board be unlocked. Fired on the SECOND board
+## completion (the cap-raise reveal beat), replacing the old raw-currency-earned
+## unlock path. BoardManager connects this to unlock_board.
+signal next_board_unlock_requested(board_type: Enums.BoardType)
 
 ## Add-rows juice. `row_upgrade_starting` fires at the top of add_two_rows
 ## (before build_board) so BoardManager can suppress the default fit-tween
@@ -285,7 +289,9 @@ func _on_drum_tier_expired(tier: int) -> void:
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
-	advanced_coin_multiplier = 2.0 + ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board_type)
+	# advanced_coin_multiplier is legacy (raw/advanced coins removed). Kept as a
+	# plain base for force-dropped bonus coins; no longer boosted by challenges.
+	advanced_coin_multiplier = 2.0
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
 	_queue_rate_bonus_per_coin = _queue_rate_bonus_for_board(board_type)
 
@@ -776,7 +782,15 @@ func _get_multi_drop_for_coin_type(coin_type: Enums.CurrencyType) -> int:
 
 ## Returns the costs to drop a normal coin on this board.
 func _get_drop_costs() -> Array:
-	return TierRegistry.get_drop_costs(board_type)
+	var costs: Array = TierRegistry.get_drop_costs(board_type)
+	# Apply any DROP_COST_REDUCTION challenge reward (flat per-drop discount on
+	# this board's fuel cost). Floored at 1 so gold (already 1) is unaffected and
+	# no drop is ever free. TierRegistry returns a fresh array, safe to mutate.
+	var reduction: int = ChallengeProgressManager.get_drop_cost_reduction(board_type)
+	if reduction > 0:
+		for cost in costs:
+			cost[1] = maxi(1, cost[1] - reduction)
+	return costs
 
 
 ## Returns the cost to drop an advanced coin (1 raw currency of the next tier).
@@ -832,6 +846,40 @@ func _spawn_multi_drop_bonus_coins(coin: Coin) -> void:
 		tween.tween_callback(force_drop_coin.bind(coin.coin_type, mult, true))
 
 	_show_multi_drop_label(coin_multi_drop)
+
+
+## "Coin frenzy" milestone reward: drops `count` coins one at a time (NOT all at
+## once) at twice the multi-drop stagger, each with a guaranteed particle burst
+## and a bell "pop" so the burst really lands. Used by DROP_COINS rewards.
+const FRENZY_STAGGER := 0.25
+## Frenzy never drops more than this many coins, even at high levels — keeps
+## challenge frenzies (which scale with the level reached) from overpowering.
+const FRENZY_MAX_COINS := 6
+
+func _coin_frenzy_drop(coin_type: Enums.CurrencyType, count: int) -> void:
+	for i in count:
+		var tween := create_tween()
+		tween.tween_interval(i * FRENZY_STAGGER)
+		tween.tween_callback(_frenzy_drop_one.bind(coin_type, i))
+
+
+func _frenzy_drop_one(coin_type: Enums.CurrencyType, step: int) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var frenzy_color: Color = t.frenzy_coin_color
+	# Frenzy coins are tinted (upgrade-button color by default) so they read as
+	# "from the milestone" — purely visual, no gameplay change.
+	var coin: Coin = CoinScene.instantiate()
+	coin.coin_type = coin_type
+	coin.color_override = frenzy_color
+	_launch_coin(coin)
+	# Guaranteed per-coin burst in the frenzy color — bypasses _try_emit_drop_burst's
+	# per-second rate limit so EVERY frenzy coin pops — plus a bell pop two octaves
+	# up at 2/3 the volume of a bucket hit (amplitude, ≈ -3.5 dB below it).
+	if t.drop_burst_enabled:
+		_spawn_drop_burst_3d(Vector3(0, vertical_spacing + 0.2, 0), frenzy_color)
+	# Theme-driven pop — `step` walks the chord progression so the frenzy
+	# arpeggiates through all the chord roots (bell themes ignore it).
+	AudioManager.play_frenzy_pop(step)
 
 
 ## Spawns a 3D drop burst at the drop point if the per-second rate limit hasn't
@@ -1058,9 +1106,7 @@ func _on_drop_timer_done() -> void:
 
 
 func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
-	if not _has_advanced_drop and TierRegistry.has_next_tier(board_type) \
-			and _type == advanced_bucket_type and _new_balance > 0:
-		_show_advanced_drop_bar()
+	# Advanced drop bar removed (single-currency model); the column stays hidden.
 	_update_drop_fill()
 
 
@@ -1101,7 +1147,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	# Safety net: if the board rebuilt between final_bounce_started and landing,
 	# the predicted bucket may have been normal but the actual bucket is advanced.
 	# Catch this and route through the prestige path (skips slow-mo, starts at freeze).
-	if not coin.is_prestige_coin and _will_trigger_prestige(bucket.currency_type):
+	if not coin.is_prestige_coin and _will_trigger_prestige_completion(coin, bucket):
 		prestige_coin_landed.emit(coin, bucket)
 		if coin.is_prestige_coin:
 			return
@@ -1110,7 +1156,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var bucket_idx := _get_bucket_index(bucket)
 	var target_multiplier: float = 1.0
 	if _gameplay_target_enabled and bucket_idx == _gameplay_target_index:
-		target_multiplier = 2.0
+		target_multiplier = _golden_bucket_multiplier()
 		_pick_new_gameplay_target()
 	# Bomb defuse: mirrors the gameplay-target multiplier path. Runtime listens
 	# for the subsequent coin_landed signal and clears the bomb visual.
@@ -1158,56 +1204,91 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 ## Called when a coin starts its final bounce and we can predict which bucket it will land in.
 ## If this landing would trigger a prestige, emit prestige_coin_landed so the animator can take over.
 func _on_final_bounce_started(coin: Coin, predicted_bucket: Bucket) -> void:
-	# Mutually exclusive: _will_trigger_prestige requires can_prestige true,
-	# _will_reveal_cap_raise requires it false, _will_reveal_forbidden_landing
-	# requires the bucket be marked forbidden (orthogonal to currency).
-	if _will_trigger_prestige(predicted_bucket.currency_type):
+	# Mutually exclusive beats, all keyed off "this coin completes the board"
+	# (reaches 500 of the board's primary currency):
+	#  - 1st completion (next board can still prestige) -> PRESTIGE.
+	#  - 2nd completion (already prestiged, caps not yet revealed) -> unlock the
+	#    next board + reveal cap "+" buttons.
+	#  - forbidden landing is orthogonal (challenge bucket marking).
+	if _will_trigger_prestige_completion(coin, predicted_bucket):
 		prestige_coin_landed.emit(coin, predicted_bucket)
-	elif _will_reveal_cap_raise(predicted_bucket.currency_type):
+	elif _will_reveal_cap_raise_completion(coin, predicted_bucket):
 		_cap_raise_intro_coin = coin
+		# Enable caps BEFORE the animator queries pending targets (it reads
+		# UpgradeManager.is_cap_raise_available). Then emit the reveal so the
+		# animator can defer the new-board peek, THEN request the unlock.
+		UpgradeManager.enable_cap_raise(board_type)
 		cap_raise_coin_landed.emit(coin, predicted_bucket)
+		var next := TierRegistry.get_next_tier(board_type)
+		if next != null:
+			next_board_unlock_requested.emit(next.board_type)
 	elif _will_reveal_forbidden_landing(predicted_bucket):
 		forbidden_bucket_coin_landed.emit(coin, predicted_bucket)
 
 
-## Checks if earning this currency type would trigger a prestige for a new board.
-func _will_trigger_prestige(currency_type: Enums.CurrencyType) -> bool:
-	for i in range(1, TierRegistry.get_tier_count()):
-		var tier := TierRegistry.get_tier_by_index(i)
-		if tier.raw_currency == currency_type:
-			return PrestigeManager.can_prestige(tier.board_type)
-	return false
+## Predicted currency gain for this coin landing in this bucket, mirroring the
+## multiplier math in finalize_coin_landing but WITHOUT mutating state (no
+## _pick_new_gameplay_target). Used to decide, at final-bounce start, whether the
+## landing will cross the board-completion threshold.
+func _predicted_bucket_gain(coin: Coin, bucket: Bucket) -> int:
+	var bucket_idx := _get_bucket_index(bucket)
+	var target_multiplier: float = 1.0
+	if _gameplay_target_enabled and bucket_idx == _gameplay_target_index:
+		target_multiplier = _golden_bucket_multiplier()
+	target_multiplier *= get_active_bomb_multiplier(bucket_idx)
+	return roundi(bucket.value * coin.multiplier * target_multiplier)
 
 
-## True when THIS coin's landing will be the one that first reveals the max-cap
-## "+" buttons for this board — the trigger for the cap-raise reveal cinematic
-## (CapRaiseRevealAnimator). Each clause guards a real failure mode:
-##  - the currency must be a RAW currency: cap raises unlock off the
-##    currency_changed → cap_raise_unlocked path in UpgradeManager.
-##  - NOT a prestige (can_prestige false): the FIRST raw-currency coin triggers
-##    prestige instead and never credits currency. The reveal coin is always a
-##    later, post-prestige coin — and prestige owns the camera, so the two
-##    cinematics must never fire on the same coin.
-##  - cap raises not yet available: this is a ONE-TIME-per-tier reveal. Once
-##    UpgradeManager.is_cap_raise_available(board) is true the buttons exist.
-##    Because _cap_raise_available is already serialized, this clause is what
-##    makes the reveal one-shot per tier with no extra persistent flag.
-##  - the cap-raise board is THIS board: keeps the revealed UI on the board the
-##    player is looking at (a raw-red coin can land on the gold board — skipping
-##    that deep edge case avoids exploding off-screen UI).
-func _will_reveal_cap_raise(currency_type: Enums.CurrencyType) -> bool:
+## The wandering golden-bucket payout multiplier: base 2.0 plus any
+## GOLDEN_BUCKET_MULTIPLIER challenge rewards for this board.
+func _golden_bucket_multiplier() -> float:
+	return 2.0 + ChallengeProgressManager.get_golden_bucket_multiplier_bonus(board_type)
+
+
+## True when THIS coin's landing will bring the board's primary currency from
+## below 500 to >= 500 — i.e. the coin that "completes" the board. The 500 is the
+## final level-bar threshold (LevelManager.TIER_THRESHOLDS[-1]). Balance is read
+## pre-add (currency is credited later in finalize_coin_landing).
+func _coin_completes_board(coin: Coin, predicted_bucket: Bucket) -> bool:
+	if not is_instance_valid(predicted_bucket):
+		return false
+	var primary: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
+	if predicted_bucket.currency_type != primary:
+		return false
+	var threshold: int = LevelManager.TIER_THRESHOLDS[-1]
+	var balance: int = CurrencyManager.get_balance(primary)
+	if balance >= threshold:
+		return false
+	return balance + _predicted_bucket_gain(coin, predicted_bucket) >= threshold
+
+
+## 1st board completion: fires the prestige sequence. Gated on the NEXT board
+## still being prestige-able (can_prestige true => never prestiged). After the
+## prestige claim this flips false, so the 2nd completion routes to the cap beat.
+func _will_trigger_prestige_completion(coin: Coin, predicted_bucket: Bucket) -> bool:
+	var next := TierRegistry.get_next_tier(board_type)
+	if next == null:
+		return false
+	if not _coin_completes_board(coin, predicted_bucket):
+		return false
+	return PrestigeManager.can_prestige(next.board_type)
+
+
+## 2nd board completion: unlocks the next board + reveals the cap "+" buttons.
+## Gated on the next board already being prestiged (can_prestige false) AND this
+## board's cap raises not yet available — making it one-shot per tier with no new
+## persistent flag (UpgradeManager._cap_raise_available is already serialized).
+func _will_reveal_cap_raise_completion(coin: Coin, predicted_bucket: Bucket) -> bool:
 	if not ThemeProvider.theme.cap_raise_reveal_enabled:
 		return false
-	for i in range(1, TierRegistry.get_tier_count()):
-		var tier := TierRegistry.get_tier_by_index(i)
-		if tier.raw_currency == currency_type:
-			var prev := TierRegistry.get_tier_by_index(i - 1)
-			if prev == null or prev.board_type != board_type:
-				return false
-			if PrestigeManager.can_prestige(tier.board_type):
-				return false
-			return not UpgradeManager.is_cap_raise_available(prev.board_type)
-	return false
+	var next := TierRegistry.get_next_tier(board_type)
+	if next == null:
+		return false
+	if not _coin_completes_board(coin, predicted_bucket):
+		return false
+	if PrestigeManager.can_prestige(next.board_type):
+		return false
+	return not UpgradeManager.is_cap_raise_available(board_type)
 
 
 ## True when this final bounce will land in a still-living forbidden bucket —
@@ -1367,19 +1448,18 @@ func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0, show_burst: bo
 		_try_emit_drop_burst(type)
 
 
-func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
+func _on_rewards_claimed(level: int, rewards: Array[RewardData]) -> void:
 	for reward in rewards:
 		if reward.type == RewardData.RewardType.DROP_COINS and reward.target_board == board_type:
-			var mult: float = advanced_coin_multiplier if reward.coin_type == advanced_bucket_type else 1.0
-			for i in reward.coin_count:
-				force_drop_coin(reward.coin_type, mult)
+			# Frenzy count scales with the level reached, capped so challenges
+			# (which reach this reward at low levels) can't be overpowered.
+			_coin_frenzy_drop(reward.coin_type, mini(level, FRENZY_MAX_COINS))
 		elif reward.type == RewardData.RewardType.UNLOCK_UPGRADE and reward.board_type == board_type:
 			if upgrade_allowed.is_valid() and not upgrade_allowed.call(reward.upgrade_type):
-				# Drop an advanced coin instead of unlocking a blocked upgrade
-				if advanced_bucket_type >= 0:
-					force_drop_coin(advanced_bucket_type, advanced_coin_multiplier)
-				else:
-					force_drop_coin(TierRegistry.primary_currency(board_type), advanced_coin_multiplier)
+				# Upgrade is gated (challenges) — give a coin frenzy instead, so the
+				# milestone still feels rewarding (scaling count + frenzy tint), the
+				# same as a DROP_COINS milestone.
+				_coin_frenzy_drop(TierRegistry.primary_currency(board_type), mini(level, FRENZY_MAX_COINS))
 		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET and reward.target_board == board_type:
 			should_show_advanced_buckets = true
 			build_board()
@@ -1394,6 +1474,10 @@ func _on_reconcile_reward(reward: RewardData) -> void:
 
 
 func _show_advanced_drop_bar() -> void:
+	# Single-currency model: advanced drops are removed. No-op so the column never
+	# appears (including for old saves that recorded has_advanced_drop = true).
+	return
+	@warning_ignore("unreachable_code")
 	if _has_advanced_drop:
 		return
 	_has_advanced_drop = true
@@ -2370,12 +2454,14 @@ func build_board() -> void:
 
 		var distance_from_center = (abs(i - floor(num_buckets / 2))) 
 
+		# Single-currency model: every bucket earns the board's primary currency.
+		# Advanced buckets (raw-currency edge buckets) are gone.
 		var bucket_currency: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
-		if _is_advanced_at_distance(distance_from_center):
-			bucket_currency = advanced_bucket_type
 
 		var value: int = _bucket_value_for_distance(distance_from_center)
-		bucket.is_prestige_bucket = _will_trigger_prestige(bucket_currency)
+		# No single "prestige bucket" anymore — prestige is triggered by reaching
+		# 500 of the currency, which any bucket can do (see _coin_completes_board).
+		bucket.is_prestige_bucket = false
 		buckets_container.add_child(bucket)
 		bucket.setup(bucket_currency, Vector3(i * space_between_pegs, 0, 0), value)
 		bucket.stopped_singing.connect(_on_bucket_stopped_singing.bind(bucket))
@@ -2480,17 +2566,21 @@ func _shift_voided_columns(delta: int) -> void:
 ## (alternate currency). Single predicate so build_board, _bucket_value_for_distance,
 ## the bucket-value ripple, and the add-rows glissando can't drift on the
 ## condition.
-func _is_advanced_at_distance(distance: int) -> bool:
-	return distance >= distance_for_advanced_buckets and should_show_advanced_buckets
+func _is_advanced_at_distance(_distance: int) -> bool:
+	# Single-currency model: advanced (raw-currency edge) buckets are removed.
+	# Kept as a stub so existing callers (bucket value, multimesh build) stay valid.
+	return false
 
 
 ## Computes the value for a bucket at a given distance from center.
 ## Used by both build_board() and the upgrade ripple to keep the formula in one place.
 func _bucket_value_for_distance(distance: int) -> int:
-	var effective_distance: int = distance
-	if _is_advanced_at_distance(distance):
-		effective_distance = distance - distance_for_advanced_buckets
-	var val: int = 1 + effective_distance * bucket_value_multiplier
+	var val: int = 1 + distance * bucket_value_multiplier
+	# Middle bucket (distance 0) is always value 1 and never scales via the
+	# bucket-value upgrade, so a CENTER_BUCKET_VALUE challenge reward is the only
+	# way to raise it.
+	if distance == 0:
+		val += ChallengeProgressManager.get_center_bucket_value_bonus(board_type)
 	var pct_bonus := ChallengeProgressManager.get_bucket_value_percent_bonus(board_type)
 	if pct_bonus > 0.0:
 		val = roundi(val * (1.0 + pct_bonus))
@@ -3092,9 +3182,7 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 	var perm_bv: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.BUCKET_VALUE)
 	bucket_value_multiplier = 1 + upgrade_state.get("BUCKET_VALUE", 0) + perm_bv
 
-	var base_acm: float = upgrade_state.get("advanced_coin_multiplier", 2.0)
-	var bonus_acm: float = ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board_type)
-	advanced_coin_multiplier = base_acm + bonus_acm
+	advanced_coin_multiplier = upgrade_state.get("advanced_coin_multiplier", 2.0)
 
 	var drop_rate_level: int = upgrade_state.get("DROP_RATE", 0)
 	var perm_dr: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.DROP_RATE)

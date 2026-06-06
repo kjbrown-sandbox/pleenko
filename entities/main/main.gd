@@ -276,23 +276,29 @@ func _input(event: InputEvent) -> void:
 
 func _debug_test_prestige() -> void:
 	var board := board_manager.get_active_board()
-	# Find an advanced bucket (one whose currency would trigger prestige)
-	for bucket in board.buckets_container.get_children():
-		if board._will_trigger_prestige(bucket.currency_type):
-			# Spawn a coin right above this bucket so it lands there on the next bounce
-			var coin: Coin = board.CoinScene.instantiate()
-			coin.coin_type = bucket.currency_type
-			coin.board = board
-			# Position one row above the bucket, aligned with it
-			var bucket_local_x: float = bucket.position.x + board.buckets_container.position.x
-			coin.position = Vector3(bucket_local_x, board.buckets_container.position.y + board.vertical_spacing + 0.3, 0)
-			board.add_child(coin)
-			coin.landed.connect(board.on_coin_landed)
-			coin.final_bounce_started.connect(board._on_final_bounce_started)
-			coin.start(Vector3(bucket_local_x, 0.2, 0))
-			print("[DEBUG] Spawned prestige test coin above bucket at x=", bucket_local_x)
-			return
-	print("[DEBUG] No prestige-triggering bucket found on active board")
+	if not board:
+		return
+	# New model: completion triggers at 500 of the board's primary currency. Top up
+	# to one short of the threshold, then drop a coin so its landing crosses it.
+	var primary: Enums.CurrencyType = TierRegistry.primary_currency(board.board_type)
+	var threshold: int = LevelManager.TIER_THRESHOLDS[-1]
+	var balance: int = CurrencyManager.get_balance(primary)
+	if balance < threshold - 1:
+		CurrencyManager.add(primary, threshold - 1 - balance)
+	var buckets := board.buckets_container.get_children()
+	if buckets.is_empty():
+		return
+	var bucket: Bucket = buckets[int(buckets.size() / 2.0)]
+	var coin: Coin = board.CoinScene.instantiate()
+	coin.coin_type = bucket.currency_type
+	coin.board = board
+	var bucket_local_x: float = bucket.position.x + board.buckets_container.position.x
+	coin.position = Vector3(bucket_local_x, board.buckets_container.position.y + board.vertical_spacing + 0.3, 0)
+	board.add_child(coin)
+	coin.landed.connect(board.on_coin_landed)
+	coin.final_bounce_started.connect(board._on_final_bounce_started)
+	coin.start(Vector3(bucket_local_x, 0.2, 0))
+	print("[DEBUG] Topped up to ", threshold - 1, " ", primary, " and spawned completion coin")
 
 
 ## Dev tool (KEY_7): temporarily run the add-rows glissando on the given board,

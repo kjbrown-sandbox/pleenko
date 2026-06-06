@@ -68,3 +68,4 @@ melody_sequence = PackedInt32Array()
 drum_instruments = PackedInt32Array()
 drum_patterns = PackedStringArray()
 drum_volumes = PackedFloat32Array()
+frenzy_pop_uses_chord_root = true

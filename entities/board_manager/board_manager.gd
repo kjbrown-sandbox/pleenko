@@ -165,6 +165,7 @@ func _spawn_board(type: Enums.BoardType) -> void:
 		board.set_coins_visible(false)
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
+	board.next_board_unlock_requested.connect(_on_next_board_unlock_requested)
 	board.row_upgrade_starting.connect(_on_row_upgrade_starting.bind(board))
 	board.row_upgrade_sweep_started.connect(_on_row_upgrade_sweep_started.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
@@ -205,15 +206,13 @@ func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap:
 		if type == Enums.CurrencyType.GOLD_COIN:
 			check_and_rescue_gold_soft_lock()
 		return
-	# When a raw currency is earned, unlock the board if already prestiged.
-	# First-time prestige is handled exclusively by the PrestigeAnimator
-	# (via PlinkoBoard.prestige_coin_landed) to ensure the animation plays.
-	for i in range(1, TierRegistry.get_tier_count()):
-		var tier := TierRegistry.get_tier_by_index(i)
-		if tier.raw_currency == type:
-			if PrestigeManager.is_board_unlocked_permanently(tier.board_type):
-				unlock_board(tier.board_type)
-			break
+	# Next-board unlock is no longer driven by earning a raw currency. It now
+	# fires from PlinkoBoard.next_board_unlock_requested on the 2nd board
+	# completion (the cap-raise reveal beat). See _on_next_board_unlock_requested.
+
+
+func _on_next_board_unlock_requested(board_type: Enums.BoardType) -> void:
+	unlock_board(board_type)
 
 
 func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
@@ -683,12 +682,11 @@ func serialize() -> Dictionary:
 	var board_state := {}
 	for board in _boards:
 		var key: String = Enums.BoardType.keys()[board.board_type]
-		var acm_bonus: float = ChallengeProgressManager.get_advanced_coin_multiplier_bonus(board.board_type)
 		board_state[key] = {
 			"num_rows": board.num_rows,
 			"drop_delay": board.drop_delay,
 			"bucket_value_multiplier": board.bucket_value_multiplier,
-			"advanced_coin_multiplier": board.advanced_coin_multiplier - acm_bonus,
+			"advanced_coin_multiplier": board.advanced_coin_multiplier,
 			"distance_for_advanced_buckets": board.distance_for_advanced_buckets,
 			"multi_drop_count": board.multi_drop_count,
 			"deflectors": board.serialize_deflectors(),

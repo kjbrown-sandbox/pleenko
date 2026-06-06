@@ -63,10 +63,32 @@ func get_bonus_multi_drop(board_type: Enums.BoardType) -> int:
 	return bonus
 
 
-func get_advanced_coin_multiplier_bonus(board_type: Enums.BoardType) -> float:
+## Flat +N to the board's middle (center) bucket value. Replaces the dormant
+## ADVANCED_COIN_MULTIPLIER reward — the center bucket is always value 1 and does
+## NOT scale with the bucket-value upgrade, so this is the only way to raise it.
+func get_center_bucket_value_bonus(board_type: Enums.BoardType) -> int:
+	var bonus := 0
+	for mod in _starting_modifiers:
+		if mod.modifier_type == ChallengeRewardData.ModifierType.CENTER_BUCKET_VALUE and mod.board_type == board_type:
+			bonus += int(mod.modifier_amount)
+	return bonus
+
+
+## Flat per-drop fuel-cost reduction for a board (e.g. orange drops cost less
+## gold). Applied in PlinkoBoard._get_drop_costs, floored at 1 (never free).
+func get_drop_cost_reduction(board_type: Enums.BoardType) -> int:
+	var reduction := 0
+	for mod in _starting_modifiers:
+		if mod.modifier_type == ChallengeRewardData.ModifierType.DROP_COST_REDUCTION and mod.board_type == board_type:
+			reduction += int(mod.modifier_amount)
+	return reduction
+
+
+## Additive bonus to the wandering golden-bucket payout multiplier (base 2.0).
+func get_golden_bucket_multiplier_bonus(board_type: Enums.BoardType) -> float:
 	var bonus := 0.0
 	for mod in _starting_modifiers:
-		if mod.modifier_type == ChallengeRewardData.ModifierType.ADVANCED_COIN_MULTIPLIER and mod.board_type == board_type:
+		if mod.modifier_type == ChallengeRewardData.ModifierType.GOLDEN_BUCKET_MULTIPLIER and mod.board_type == board_type:
 			bonus += mod.modifier_amount
 	return bonus
 

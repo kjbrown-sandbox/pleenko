@@ -24,6 +24,7 @@ const GREEN_COIN := 10
 # (e.g. `background_source = 5`). Never reorder or insert values — only
 # add new entries at the end with a fresh index.
 enum Palette {
+	NONE = -1,  # sentinel: "no explicit source — fall back to a default" (see frenzy_coin_color)
 	BG_1 = 0, BG_2 = 1, BG_3 = 2, BG_4 = 3, BG_5 = 4, BG_6 = 5,
 	GOLD_FADED = 6, GOLD_MAIN = 7,
 	ORANGE_FADED = 9, ORANGE_MAIN = 10,
@@ -518,6 +519,22 @@ var button_disabled_text_color: Color:
 	get: return resolve(button_disabled_text_source)
 var button_border_color: Color:
 	get: return resolve(button_border_source)
+
+## Frenzy (milestone) coins render in this palette color so they read as "from
+## the milestone" rather than as normal currency. NONE = fall back to the
+## upgrade-button color; set a Palette source per theme to override.
+@export var frenzy_coin_color_source: Palette = Palette.NONE
+var frenzy_coin_color: Color:
+	get: return resolve(frenzy_coin_color_source) if frenzy_coin_color_source != Palette.NONE else button_enabled_color
+
+## Frenzy "pop" sound mode (see AudioManager.play_frenzy_pop). All non-bell modes
+## play the chord's root note two octaves up through bucket_instrument so the pop
+## harmonizes with the tonal background. Default (both false): a fixed bell.
+##  - chord_root: derive the root from theme.progression (themes WITHOUT a melody).
+##  - melody_root: derive it from get_current_chord_root_midi() — the live chord
+##    read from melody_sequence (one chord per 16 notes), for themes WITH a melody.
+@export var frenzy_pop_uses_chord_root: bool = false
+@export var frenzy_pop_uses_melody_root: bool = false
 
 
 # ── Button style helpers ─────────────────────────────────────────────

@@ -76,3 +76,5 @@ drum_patterns = PackedStringArray("x---x---x---x---", "--x---x---x---x-", "xx-xx
 drum_volumes = PackedFloat32Array(-6, -12, -18, -14, -14, -12)
 melody_volume_offset = 6.0
 peg_chime_enabled = false
+frenzy_coin_color_source = 5
+frenzy_pop_uses_melody_root = true
