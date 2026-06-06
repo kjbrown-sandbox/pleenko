@@ -36,7 +36,7 @@ var _queue_rate_bonus_per_coin: float = QUEUE_RATE_BONUS_PER_COIN
 const QUEUE_BONUS_LABEL_OFFSET := Vector2(40.0, -16.0)
 
 ## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
-const MULTI_DROP_STAGGER := 0.15
+const MULTI_DROP_STAGGER := 0.05
 
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")

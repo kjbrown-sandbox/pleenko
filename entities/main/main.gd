@@ -49,6 +49,10 @@ var _arrow_blink_tweens: Dictionary = {}  # Control -> Tween
 # save load — otherwise every arrow would blink on every startup.
 var _loading_from_save: bool = false
 
+# Dev tool (KEY_7): how long the add-rows preview holds before auto-reverting.
+const _ADD_ROWS_PREVIEW_HOLD := 4.0
+var _add_rows_preview_active: bool = false
+
 func _ready() -> void:
 	# Ship safety: any exported build (e.g. the itch upload) MUST run demo-locked,
 	# regardless of an accidental Inspector toggle or a dirty working tree. The
@@ -257,6 +261,17 @@ func _input(event: InputEvent) -> void:
 		_debug_test_prestige()
 	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_O:
 		_debug_setup_prestigeable_state()
+	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_6:
+		# Dev cheat: max the gold cap + balance so progression is trivial to test.
+		const TEN_QUADRILLION := 10_000_000_000_000_000
+		CurrencyManager.caps[Enums.CurrencyType.GOLD_COIN] = TEN_QUADRILLION
+		CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, TEN_QUADRILLION)
+	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_7:
+		# Dev tool: preview the add-rows glissando on the active board, then auto-
+		# revert. Skipped during challenges (their row state is challenge-managed).
+		var active_b := board_manager.get_active_board()
+		if active_b and not ChallengeManager.is_active_challenge:
+			_preview_add_rows(active_b)
 
 
 func _debug_test_prestige() -> void:
@@ -278,6 +293,25 @@ func _debug_test_prestige() -> void:
 			print("[DEBUG] Spawned prestige test coin above bucket at x=", bucket_local_x)
 			return
 	print("[DEBUG] No prestige-triggering bucket found on active board")
+
+
+## Dev tool (KEY_7): temporarily run the add-rows glissando on the given board,
+## then revert num_rows after _ADD_ROWS_PREVIEW_HOLD seconds. Lets you review the
+## "Add rows" upgrade animation without committing to a permanent board grow.
+## Guarded so spamming KEY_7 doesn't stack reverts.
+func _preview_add_rows(board: PlinkoBoard) -> void:
+	if _add_rows_preview_active:
+		return
+	_add_rows_preview_active = true
+	var original_rows: int = board.num_rows
+	board.add_two_rows()  # animated=true by default, runs the full glissando
+
+	await get_tree().create_timer(_ADD_ROWS_PREVIEW_HOLD).timeout
+
+	if is_instance_valid(board):
+		board.num_rows = original_rows
+		board.build_board()  # silent rebuild — no glissando, no camera sweep
+	_add_rows_preview_active = false
 
 
 func _debug_setup_prestigeable_state() -> void:
