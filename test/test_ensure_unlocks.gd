@@ -18,8 +18,7 @@ func _run_tests() -> void:
 	test_all_gold_upgrades_unlocked_at_level_4()
 	test_idempotent_when_already_unlocked()
 	test_partial_unlocks_repaired()
-	test_advanced_bucket_reconcile_at_level_10()
-	test_no_advanced_bucket_reconcile_below_level_10()
+	test_advanced_buckets_never_reconciled()
 	test_drop_coins_not_replayed()
 	test_deflector_unlocks_on_orange_only()
 	test_advanced_autodropper_moved_to_red()
@@ -120,10 +119,14 @@ func test_idempotent_when_already_unlocked() -> void:
 		"BUCKET_VALUE still unlocked")
 
 
-func test_advanced_bucket_reconcile_at_level_10() -> void:
-	print("test_advanced_bucket_reconcile_at_level_10")
+## Single-currency redesign removed advanced (raw-currency edge) buckets from the
+## level table — slot 9 is now an empty "complete the board" milestone. This is
+## the regression guard that no UNLOCK_ADVANCED_BUCKET reward is ever reconciled,
+## at any level (it used to fire once at gold level 10).
+func test_advanced_buckets_never_reconciled() -> void:
+	print("test_advanced_buckets_never_reconciled")
 	_reset_state()
-	LevelManager.current_level = 10  # past gold slot 9 (UNLOCK_ADVANCED_BUCKET)
+	LevelManager.current_level = 10  # well past every gold milestone slot
 
 	var caught: Array[RewardData] = []
 	var probe := func(reward: RewardData):
@@ -135,28 +138,8 @@ func test_advanced_bucket_reconcile_at_level_10() -> void:
 
 	LevelManager.reconcile_reward.disconnect(probe)
 
-	assert_equal(caught.size(), 1, "exactly one UNLOCK_ADVANCED_BUCKET reconcile fired")
-	if caught.size() == 1:
-		assert_equal(caught[0].target_board, Enums.BoardType.GOLD,
-			"reconcile target_board is GOLD")
-
-
-func test_no_advanced_bucket_reconcile_below_level_10() -> void:
-	print("test_no_advanced_bucket_reconcile_below_level_10")
-	_reset_state()
-	LevelManager.current_level = 9  # one short of the unlock
-
-	var caught: Array[RewardData] = []
-	var probe := func(reward: RewardData):
-		if reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET:
-			caught.append(reward)
-	LevelManager.reconcile_reward.connect(probe)
-
-	LevelManager.ensure_state_for_level()
-
-	LevelManager.reconcile_reward.disconnect(probe)
-
-	assert_equal(caught.size(), 0, "no UNLOCK_ADVANCED_BUCKET reconcile below level 10")
+	assert_equal(caught.size(), 0,
+		"single-currency model: UNLOCK_ADVANCED_BUCKET is never reconciled")
 
 
 func test_drop_coins_not_replayed() -> void:

@@ -13,6 +13,9 @@ func _run_tests() -> void:
 	test_starting_coins()
 	test_multi_drop()
 	test_advanced_coin_multiplier()
+	test_center_bucket_value()
+	test_drop_cost_reduction()
+	test_golden_bucket_multiplier()
 	test_bucket_value_percent()
 	test_starting_autodroppers()
 	test_gold_coin_speed_boost_tracks_constant()
@@ -72,6 +75,33 @@ func test_advanced_coin_multiplier() -> void:
 	r.board_type = Enums.BoardType.GOLD
 	r.modifier_amount = 0.5
 	assert_equal(r.display_text(), "+0.5 raw orange multiplier", "ADVANCED_COIN_MULTIPLIER gold → raw orange")
+
+
+## New single-currency-redesign modifier rewards.
+
+func test_center_bucket_value() -> void:
+	print("test_center_bucket_value")
+	var r := _make_modifier(ChallengeRewardData.ModifierType.CENTER_BUCKET_VALUE)
+	r.board_type = Enums.BoardType.GOLD
+	r.modifier_amount = 3.0
+	assert_equal(r.display_text(), "+3 gold middle bucket value", "CENTER_BUCKET_VALUE gold")
+
+
+func test_drop_cost_reduction() -> void:
+	print("test_drop_cost_reduction")
+	# Orange's fuel is the previous tier's primary currency (gold).
+	var r := _make_modifier(ChallengeRewardData.ModifierType.DROP_COST_REDUCTION)
+	r.board_type = Enums.BoardType.ORANGE
+	r.modifier_amount = 10.0
+	assert_equal(r.display_text(), "Orange coins cost 10 less gold", "DROP_COST_REDUCTION orange → gold fuel")
+
+
+func test_golden_bucket_multiplier() -> void:
+	print("test_golden_bucket_multiplier")
+	var r := _make_modifier(ChallengeRewardData.ModifierType.GOLDEN_BUCKET_MULTIPLIER)
+	r.board_type = Enums.BoardType.GOLD
+	r.modifier_amount = 0.5
+	assert_equal(r.display_text(), "+0.5 gold golden bucket multiplier", "GOLDEN_BUCKET_MULTIPLIER gold")
 
 
 func test_bucket_value_percent() -> void:

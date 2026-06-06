@@ -22,7 +22,8 @@ var fill_progress: float = 1.0
 var is_prestige_coin: bool = false
 ## Optional per-coin color override (frenzy coins tint to the upgrade-button
 ## color so they read as "from the milestone"). Purely visual; set before the
-## coin enters the tree so _apply_visuals picks it up. -1 alpha sentinel = unset.
+## coin enters the tree so _apply_visuals picks it up. alpha 0 = unset (any
+## override sets alpha > 0).
 var color_override: Color = Color(0, 0, 0, 0)
 var _active_tweens: Array[Tween] = []
 ## Seconds remaining on the impact-squash recovery animation. 0 = no squash.

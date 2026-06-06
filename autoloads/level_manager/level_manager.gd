@@ -81,8 +81,8 @@ func _build_tier_levels(board_type: Enums.BoardType) -> void:
 				data.rewards = [_unlock_upgrade(Enums.UpgradeType.QUEUE, board_type)]
 			4:  # Special slot (autodroppers)
 				_set_special_slot(data, board_type, next_tier)
-			5, 6, 7, 8:  # (was: drop advanced coin — removed in single-currency model)
-				_set_advanced_drop(data, next_tier, board_type)
+			5, 6, 7, 8:  # Coin frenzy (was: drop advanced coin — single-currency model)
+				_set_coin_frenzy(data, board_type)
 			9:  # Board completion (reach 500) — triggers prestige / next-board unlock.
 				data.message = "Complete the board!"
 				data.rewards = []
@@ -94,13 +94,13 @@ func _build_tier_levels(board_type: Enums.BoardType) -> void:
 ## old "drop an advanced/raw coin" treat that the single-currency model removed).
 const BONUS_COIN_DROP_COUNT := 5
 
-func _set_advanced_drop(data: LevelData, _next_tier: TierData, board_type: Enums.BoardType) -> void:
+func _set_coin_frenzy(data: LevelData, board_type: Enums.BoardType) -> void:
 	var currency: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
 	data.message = "Coin frenzy drop"
 	data.rewards = [_drop_coins(BONUS_COIN_DROP_COUNT, currency, board_type)]
 
 
-func _set_special_slot(data: LevelData, board_type: Enums.BoardType, next_tier: TierData) -> void:
+func _set_special_slot(data: LevelData, board_type: Enums.BoardType, _next_tier: TierData) -> void:
 	if board_type == Enums.BoardType.GOLD:
 		data.message = "You have unlocked Autodropper."
 		data.rewards = [_unlock_autodropper(), _unlock_upgrade(Enums.UpgradeType.AUTODROPPER, board_type)]
@@ -114,8 +114,8 @@ func _set_special_slot(data: LevelData, board_type: Enums.BoardType, next_tier: 
 		data.message = "You have unlocked Advanced Autodropper."
 		data.rewards = [_unlock_advanced_autodropper(), _unlock_upgrade(Enums.UpgradeType.ADVANCED_AUTODROPPER, board_type)]
 	else:
-		# Beyond red: drop advanced coin (currently no next tier)
-		_set_advanced_drop(data, next_tier, board_type)
+		# Beyond red (no next tier): coin frenzy filler milestone.
+		_set_coin_frenzy(data, board_type)
 
 
 ## Helper to create a LevelData resource inline.
@@ -156,14 +156,6 @@ func _unlock_autodropper() -> RewardData:
 func _unlock_advanced_autodropper() -> RewardData:
 	var r := RewardData.new()
 	r.type = RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER
-	return r
-
-
-## Helper to create a UNLOCK_BUCKET reward.
-func _unlock_advanced_bucket(target: Enums.BoardType) -> RewardData:
-	var r := RewardData.new()
-	r.type = RewardData.RewardType.UNLOCK_ADVANCED_BUCKET
-	r.target_board = target
 	return r
 
 

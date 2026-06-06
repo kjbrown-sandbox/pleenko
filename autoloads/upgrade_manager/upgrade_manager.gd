@@ -212,7 +212,7 @@ func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap
 ## currency). Called on the 2nd board completion, BEFORE cap_raise_coin_landed is
 ## emitted so the reveal animator sees is_cap_raise_available() == true.
 func enable_cap_raise(board_type: Enums.BoardType) -> void:
-	if _cap_raise_available.get(board_type, false):
+	if _cap_raise_available[board_type]:
 		return
 	_cap_raise_available[board_type] = true
 	cap_raise_unlocked.emit(board_type)

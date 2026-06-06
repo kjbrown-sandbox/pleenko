@@ -1106,6 +1106,8 @@ func play_pitched_chime(pitch_mult: float, volume_db: float = NAN,
 ## octaves up through the bucket instrument (so it harmonizes with the tonal
 ## background — 3 octaves above the drone / 2 above the base note). Other themes
 ## play a fixed bell two octaves up. Volume = 2/3 of a bucket hit (amplitude).
+## `step` (the coin's index in the frenzy) is used ONLY by chord_root mode, to
+## arpeggiate through the progression; melody_root and bell modes ignore it.
 func play_frenzy_pop(step: int = 0) -> void:
 	if _silenced:
 		return
@@ -1457,27 +1459,23 @@ const BOMB_DEFUSE_SEMITONE_OFFSET := 24
 ## themes with their own progressions will get wrong-key bomb cues until
 ## the table is moved onto the theme/AudioStyle resource.
 func get_current_chord_root_midi() -> int:
-	if not ThemeProvider or not ThemeProvider.theme:
+	var chord_idx: int = get_current_chord_index()
+	if chord_idx < 0:
 		return -1
-	var seq: PackedInt32Array = ThemeProvider.theme.melody_sequence
-	if seq.is_empty():
-		return -1
-	# After playing the note at index N, _melody_idx == N + 1. The chord
-	# index of the most-recently-played note is (_melody_idx - 1) / 16.
-	var last_played: int = maxi(_melody_idx - 1, 0)
-	@warning_ignore("integer_division")
-	var chord_idx: int = (last_played / 16) % _CHORD_ROOT_MIDI_CYCLE.size()
 	return _CHORD_ROOT_MIDI_CYCLE[chord_idx]
 
 
 ## Index (0-based) of the chord currently playing in the melody, or -1 if the
-## theme has no melody. The last index is the "final" chord of the cycle.
+## theme has no melody. The chord changes every 16 melody slots; the last index
+## is the "final" chord of the cycle. Single source of the chord-index math.
 func get_current_chord_index() -> int:
 	if not ThemeProvider or not ThemeProvider.theme:
 		return -1
 	var seq: PackedInt32Array = ThemeProvider.theme.melody_sequence
 	if seq.is_empty():
 		return -1
+	# After playing the note at index N, _melody_idx == N + 1, so the most-recently
+	# played note is at _melody_idx - 1. 16 melody slots per chord.
 	var last_played: int = maxi(_melody_idx - 1, 0)
 	@warning_ignore("integer_division")
 	return (last_played / 16) % _CHORD_ROOT_MIDI_CYCLE.size()
