@@ -184,9 +184,9 @@ func test_orange_board_depletes_gold() -> void:
 	# 2 rows -> 3 buckets. Pascal: [0.25, 0.5, 0.25]
 	# Bucket layout: [2 ORANGE, 1 ORANGE, 2 ORANGE]
 	# Per-bucket earnings: 0.25*2=0.5, 0.5*1=0.5, 0.25*2=0.5. Total per drop = 1.5 ORANGE
-	# Cost per drop: 1 RAW_ORANGE + 100 GOLD
-	# Gold limits: floor(200/100) = 2, RAW_ORANGE limits: floor(20/1) = 20
-	# Actual = min(15, 2, 20) = 2
+	# Single-currency model: cost per drop is 100 GOLD only (no raw component).
+	# Gold limits: floor(200/100) = 2. Actual = min(15, 2) = 2.
+	# RAW_ORANGE is no longer spent, so it stays at 20.
 	var state := _make_state({
 		"currency": {
 			"GOLD_COIN": {"balance": 200, "cap": 500, "cap_raise_level": 0},
@@ -204,19 +204,22 @@ func test_orange_board_depletes_gold() -> void:
 	var result := OfflineCalculator.calculate(state, 60.0)
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 0, "gold depleted")
 	assert_equal(result["currency"]["ORANGE_COIN"]["balance"], 3, "orange earned")
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 18, "raw_orange remaining")
+	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 20, "raw_orange untouched (no raw cost)")
 
 
 func test_cross_board_processing_order() -> void:
 	print("test_cross_board_processing_order")
 	# Both boards interleaved in 10s batches. 2 rows, 3 buckets each.
 	# Gold: 5 drops/batch, earn 1.5 GOLD/drop, cost 1 GOLD/drop
-	# Orange: ~2.5 drops/batch, earn 1.5 ORANGE/drop, cost 1 RAW_ORANGE + 100 GOLD/drop
+	# Orange: ~2.5 drops/batch, earn 1.5 ORANGE/drop, cost 100 GOLD/drop (single-currency)
 	#
-	# Batch 1: Gold 5 drops (100→102). Orange 1 drop (102→2, RAW_ORANGE 20→19, ORANGE 0→1)
+	# The GOLD spend was always the binding limit on orange drops (RAW_ORANGE 20
+	# was never the bottleneck), so GOLD and ORANGE outcomes are unchanged. With
+	# the raw component removed, RAW_ORANGE is simply never spent (stays 20).
+	# Batch 1: Gold 5 drops (100→102). Orange 1 drop (102→2, ORANGE 0→1)
 	# Batch 2: Gold limited to 2 drops (2→3). Orange can't afford (3 < 100).
 	# Batches 3-6: Gold gradually recovers but never reaches 100 for another orange drop.
-	# Final: GOLD=12, ORANGE=1, RAW_ORANGE=19
+	# Final: GOLD=12, ORANGE=1, RAW_ORANGE=20
 	var state := _make_state({
 		"currency": {
 			"GOLD_COIN": {"balance": 100, "cap": 500, "cap_raise_level": 0},
@@ -234,7 +237,7 @@ func test_cross_board_processing_order() -> void:
 	var result := OfflineCalculator.calculate(state, 60.0)
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 12, "gold after both boards")
 	assert_equal(result["currency"]["ORANGE_COIN"]["balance"], 1, "orange earned")
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 19, "raw_orange remaining")
+	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 20, "raw_orange untouched (no raw cost)")
 
 
 func test_insufficient_currency_limits_drops() -> void:
@@ -242,10 +245,12 @@ func test_insufficient_currency_limits_drops() -> void:
 	# Orange board: 2 rows -> 3 buckets. Pascal: [0.25, 0.5, 0.25]
 	# Bucket layout: [2 ORANGE, 1 ORANGE, 2 ORANGE]
 	# Per-bucket earnings: 0.25*2=0.5, 0.5*1=0.5, 0.25*2=0.5. Total per drop = 1.5 ORANGE
-	# Cost per drop: 1 RAW_ORANGE + 100 GOLD. Only 3 RAW_ORANGE limits to 3 drops
+	# Single-currency model: the only fuel is GOLD (100/drop). GOLD=300 limits the
+	# board to 3 drops total even though 15 are otherwise available in 60s.
+	# 3 drops: GOLD 300→0, ORANGE 3*1.5 = 4.5 → 4. RAW_ORANGE is never spent.
 	var state := _make_state({
 		"currency": {
-			"GOLD_COIN": {"balance": 500, "cap": 500, "cap_raise_level": 0},
+			"GOLD_COIN": {"balance": 300, "cap": 500, "cap_raise_level": 0},
 			"RAW_ORANGE": {"balance": 3, "cap": 50, "cap_raise_level": 0},
 		},
 		"boards": {
@@ -258,9 +263,9 @@ func test_insufficient_currency_limits_drops() -> void:
 		},
 	})
 	var result := OfflineCalculator.calculate(state, 60.0)
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 0, "raw_orange exhausted")
-	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 200, "gold after 3 drops")
+	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 0, "gold exhausted after 3 drops")
 	assert_equal(result["currency"]["ORANGE_COIN"]["balance"], 4, "orange earned")
+	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 3, "raw_orange untouched (no raw cost)")
 
 
 func test_advanced_drops_earn_advanced_currency() -> void:
@@ -434,14 +439,14 @@ func test_red_board_basic() -> void:
 	# 1 RED_NORMAL autodropper, 2 rows, drop_delay=8.0, 60s
 	# drops = floor(1/8.0 * 60) = 7
 	# 3 buckets: [2 RED, 1 RED, 2 RED]. Per-drop = 1.5 RED_COIN
-	# Cost: 1 RAW_RED + 100 RAW_ORANGE per drop (RED tier's previous-tier raw cost)
-	# RAW_ORANGE seeded high so currency affordability isn't the limit.
-	# 7 drops: RAW_RED 10 - 7 = 3, RAW_ORANGE 1000 - 700 = 300
+	# Single-currency model: RED costs 100 ORANGE_COIN per drop (the previous
+	# tier's PRIMARY currency). No raw component.
+	# ORANGE_COIN seeded high so affordability isn't the limit.
+	# 7 drops: ORANGE_COIN 1000 - 700 = 300.
 	# RED_COIN per drop = 0.25*2 + 0.5*1 + 0.25*2 = 1.5; floor(7 * 1.5) = 10
 	var state := _make_state({
 		"currency": {
-			"RAW_RED": {"balance": 10, "cap": 50, "cap_raise_level": 0},
-			"RAW_ORANGE": {"balance": 1000, "cap": 1000, "cap_raise_level": 0},
+			"ORANGE_COIN": {"balance": 1000, "cap": 1000, "cap_raise_level": 0},
 		},
 		"boards": {
 			"board_types": [0, 1, 2],
@@ -454,8 +459,7 @@ func test_red_board_basic() -> void:
 		},
 	})
 	var result := OfflineCalculator.calculate(state, 60.0)
-	assert_equal(result["currency"]["RAW_RED"]["balance"], 3, "raw_red remaining")
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 300, "raw_orange after 7 drops")
+	assert_equal(result["currency"]["ORANGE_COIN"]["balance"], 300, "orange spent fueling red drops")
 	assert_equal(result["currency"]["RED_COIN"]["balance"], 10, "red earned")
 
 
@@ -480,16 +484,14 @@ func test_missing_board_state_uses_defaults() -> void:
 
 func test_all_three_boards_interleaved() -> void:
 	print("test_all_three_boards_interleaved")
-	# All three boards have an autodropper. Verifies each board contributes its
-	# primary currency to the result and that costs are deducted from the
-	# expected raw currencies (RED costs 1 RAW_RED + 100 RAW_ORANGE per drop,
-	# ORANGE costs 1 RAW_ORANGE + 100 GOLD per drop). Currencies seeded
+	# All three boards have an autodropper. Single-currency model: each later board
+	# is fueled purely by the previous tier's PRIMARY currency — ORANGE costs 100
+	# GOLD per drop, RED costs 100 ORANGE_COIN per drop. Currencies seeded
 	# generously so affordability isn't the constraint — drop-rate is.
 	var state := _make_state({
 		"currency": {
 			"GOLD_COIN": {"balance": 5000, "cap": 10000, "cap_raise_level": 0},
-			"RAW_ORANGE": {"balance": 5000, "cap": 10000, "cap_raise_level": 0},
-			"RAW_RED": {"balance": 100, "cap": 500, "cap_raise_level": 0},
+			"ORANGE_COIN": {"balance": 5000, "cap": 10000, "cap_raise_level": 0},
 		},
 		"boards": {
 			"board_types": [0, 1, 2],
@@ -503,11 +505,10 @@ func test_all_three_boards_interleaved() -> void:
 	})
 	var result := OfflineCalculator.calculate(state, 60.0)
 	assert_true(result["currency"]["GOLD_COIN"]["balance"] > 0, "gold accrues / persists")
-	assert_true(result["currency"]["ORANGE_COIN"]["balance"] > 0, "orange earned")
+	assert_true(result["currency"]["ORANGE_COIN"]["balance"] > 0, "orange accrues / persists")
 	assert_true(result["currency"]["RED_COIN"]["balance"] > 0, "red earned")
-	# Raw currencies got spent by higher-tier drops
-	assert_true(result["currency"]["RAW_ORANGE"]["balance"] < 5000, "raw_orange spent by red drops")
-	assert_true(result["currency"]["RAW_RED"]["balance"] < 100, "raw_red spent by red drops")
+	# Primary fuel currencies got spent by the higher-tier boards they fuel.
+	assert_true(result["currency"]["GOLD_COIN"]["balance"] < 5000, "gold spent by orange drops")
 
 
 func test_gold_accumulates_then_orange_fires() -> void:
@@ -533,7 +534,8 @@ func test_gold_accumulates_then_orange_fires() -> void:
 	})
 	var result := OfflineCalculator.calculate(state, 80.0)
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 20, "gold after orange spent 100")
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 9, "one raw_orange spent")
+	# Single-currency model: orange drops cost GOLD only, RAW_ORANGE is untouched.
+	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 10, "raw_orange untouched (no raw cost)")
 
 
 func test_no_raw_orange_credited_before_orange_prestige() -> void:

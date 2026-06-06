@@ -38,6 +38,11 @@ func setup(board_manager: BoardManager) -> void:
 	_visible_currencies.sort()
 	_update_currencies()
 
+	# A board unlock flips _currency_bars_revealed and adds the new board's
+	# currency bar. The cap-beat coin earns the PREVIOUS board's currency, so the
+	# currency-change path alone won't reveal the bars — rebuild on unlock.
+	_board_manager.board_unlocked.connect(_on_board_unlocked)
+
 	# Listen for autodropper unlocks to trigger layout rebuild
 	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked)
 	# Defer so save loading finishes first — unlocks from save skip animation
@@ -89,6 +94,14 @@ func _flush() -> void:
 	_update_cap_button_affordability()
 
 
+## Currency bars stay hidden until the next board (orange) is actually unlocked —
+## until then the level bar IS the currency display. After a prestige wipe the
+## boards respawn during the climb-back (the 2nd-500 cap beat), so this naturally
+## hides the bars again early in each climb and reveals them when orange returns.
+func _currency_bars_revealed() -> bool:
+	return is_instance_valid(_board_manager) and _board_manager.is_board_unlocked(Enums.BoardType.ORANGE)
+
+
 func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
 	var tier := TierRegistry.get_tier_for_currency(coin_type)
 	if not tier:
@@ -113,35 +126,40 @@ func _update_currencies() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var has_upgrades: bool = _has_any_universal_upgrade()
 
-	add_child(_create_section_label("Currencies"))
+	# Currency bars stay hidden until the player first completes the gold board
+	# (the first prestige). Early play is driven by the level bar alone so the
+	# objective reads clearly. The universal-upgrades section is independent
+	# (autodropper unlocks at gold L5, before any prestige).
+	if _currency_bars_revealed():
+		add_child(_create_section_label("Currencies"))
 
-	for currency_type in _visible_currencies:
-		var bar = BarScene.instantiate()
-		# Tint set before add_child so _ready's apply uses it for the initial render.
-		bar.bar_color = t.get_coin_color(currency_type)
-		add_child(bar)
+		for currency_type in _visible_currencies:
+			var bar = BarScene.instantiate()
+			# Tint set before add_child so _ready's apply uses it for the initial render.
+			bar.bar_color = t.get_coin_color(currency_type)
+			add_child(bar)
 
-		var fill_color: Color = t.get_coin_color(currency_type)
-		var disabled_color: Color = t.get_coin_color_faded(currency_type)
-		bar.setup(fill_color, disabled_color)
+			var fill_color: Color = t.get_coin_color(currency_type)
+			var disabled_color: Color = t.get_coin_color_faded(currency_type)
+			bar.setup(fill_color, disabled_color)
 
-		var amount := CurrencyManager.get_balance(currency_type)
-		var cap := CurrencyManager.get_cap(currency_type)
-		_update_bar(bar, currency_type, amount, cap)
+			var amount := CurrencyManager.get_balance(currency_type)
+			var cap := CurrencyManager.get_cap(currency_type)
+			_update_bar(bar, currency_type, amount, cap)
 
-		# Main bar is not clickable
-		bar.main_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			# Main bar is not clickable
+			bar.main_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-		bar.plus_pressed.connect(_on_cap_raise_pressed.bind(currency_type))
-		bar.plus_mouse_entered.connect(_on_cap_hover.bind(currency_type))
-		bar.plus_mouse_exited.connect(_on_cap_unhover)
+			bar.plus_pressed.connect(_on_cap_raise_pressed.bind(currency_type))
+			bar.plus_mouse_entered.connect(_on_cap_hover.bind(currency_type))
+			bar.plus_mouse_exited.connect(_on_cap_unhover)
 
-		_bars[currency_type] = bar
+			_bars[currency_type] = bar
 
-		# During a reveal, the freshly-earned raw-currency bar starts hidden —
-		# CapRaiseRevealAnimator fades it in mid-sequence (reveal_delayed_currency_bar).
-		if _cap_raise_reveal_active and currency_type == _cap_raise_delayed_currency:
-			bar.visible = false
+			# During a reveal, the freshly-earned currency bar starts hidden —
+			# CapRaiseRevealAnimator fades it in mid-sequence (reveal_delayed_currency_bar).
+			if _cap_raise_reveal_active and currency_type == _cap_raise_delayed_currency:
+				bar.visible = false
 
 	# Universal upgrades section
 	if has_upgrades:
@@ -284,6 +302,10 @@ func _on_cap_unhover() -> void:
 		_hover_tooltip.hide_tooltip()
 
 
+func _on_board_unlocked(_type: Enums.BoardType) -> void:
+	refresh_visible_currencies()
+
+
 func refresh_visible_currencies() -> void:
 	var changed := false
 	for currency_type in Enums.CurrencyType.values():
@@ -324,10 +346,11 @@ func _get_board_for_upgrade(upgrade_type: Enums.UpgradeType) -> Enums.BoardType:
 func begin_cap_raise_reveal(board_type: Enums.BoardType) -> void:
 	_cap_raise_reveal_active = true
 	_cap_raise_reveal_board = board_type
-	# The raw currency just earned (e.g. raw orange for the gold reveal) is the
-	# next tier's raw currency — its bar is delayed so it slots in mid-reveal.
+	# Single-currency model: the bar delayed for mid-reveal fade-in is the newly
+	# unlocked board's PRIMARY currency (e.g. orange). No-ops gracefully if that
+	# bar hasn't been built yet (no orange earned at reveal time).
 	var next_tier: TierData = TierRegistry.get_next_tier(board_type)
-	_cap_raise_delayed_currency = next_tier.raw_currency if next_tier else -1
+	_cap_raise_delayed_currency = next_tier.primary_currency if next_tier else -1
 
 
 ## Cap "+" buttons on the CURRENCY bars (top of the HUD) that are wired but

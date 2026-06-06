@@ -118,17 +118,11 @@ func get_drop_costs(board_type: Enums.BoardType) -> Array:
 	if idx == 0:
 		return [[tier.primary_currency, 1]]
 
+	# Single-currency model: every later board is fueled purely by the
+	# previous tier's PRIMARY currency (e.g. orange costs 100 gold). Raw
+	# currencies are dormant — no raw component in drop costs anymore.
 	var prev := tiers[idx - 1]
-	var costs: Array = [[tier.raw_currency, 1]]
-
-	# Tier 1: previous tier has no raw currency, use its primary
-	# Tier 2+: use previous tier's raw currency
-	if prev.raw_currency < 0:
-		costs.append([prev.primary_currency, tier.previous_currency_cost])
-	else:
-		costs.append([prev.raw_currency, tier.previous_currency_cost])
-
-	return costs
+	return [[prev.primary_currency, tier.previous_currency_cost]]
 
 
 # ── Timing ──────────────────────────────────────────────────────────

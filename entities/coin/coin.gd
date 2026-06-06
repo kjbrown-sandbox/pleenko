@@ -20,6 +20,11 @@ var fill_state: FillState = FillState.FULL
 var fill_progress: float = 1.0
 ## When true, the coin won't be freed on landing — the PrestigeAnimator handles its lifecycle.
 var is_prestige_coin: bool = false
+## Optional per-coin color override (frenzy coins tint to the upgrade-button
+## color so they read as "from the milestone"). Purely visual; set before the
+## coin enters the tree so _apply_visuals picks it up. alpha 0 = unset (any
+## override sets alpha > 0).
+var color_override: Color = Color(0, 0, 0, 0)
 var _active_tweens: Array[Tween] = []
 ## Seconds remaining on the impact-squash recovery animation. 0 = no squash.
 ## Read by PlinkoBoard._sync_coin_multimesh to derive the per-coin scale.
@@ -61,17 +66,24 @@ func _apply_visuals() -> void:
 	if not mesh_instance:
 		return
 	var t: VisualTheme = ThemeProvider.theme
+	var has_override: bool = color_override.a > 0.0
+	var coin_col: Color = color_override if has_override else t.get_coin_color(coin_type)
 	mesh_instance.mesh = t.make_coin_mesh()
 	if fill_state == FillState.FILLING:
 		var fill_shader: Shader = preload("res://entities/coin/coin_fill.gdshader")
 		var mat := ShaderMaterial.new()
 		mat.shader = fill_shader
-		mat.set_shader_parameter("albedo_color", t.get_coin_color(coin_type))
+		mat.set_shader_parameter("albedo_color", coin_col)
 		mat.set_shader_parameter("fill_progress", fill_progress)
 		mesh_instance.material_override = mat
 	else:
 		mesh_instance.material_override = t.make_coin_material(coin_type)
-	cached_color = t.coin_silhouette_color if t.coin_silhouette else t.get_coin_color(coin_type)
+	# Override wins over silhouette so frenzy coins read in their own color (the
+	# multimesh renders the visible coin from cached_color).
+	if has_override:
+		cached_color = coin_col
+	else:
+		cached_color = t.coin_silhouette_color if t.coin_silhouette else t.get_coin_color(coin_type)
 	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		mesh_instance.rotation = Vector3(PI / 2, 0, 0)
 	else:
@@ -95,7 +107,8 @@ func _apply_halo(t: VisualTheme) -> void:
 	quad.mesh = mesh
 	var mat := ShaderMaterial.new()
 	mat.shader = halo_shader
-	mat.set_shader_parameter("glow_color", t.get_coin_color(coin_type))
+	var halo_col: Color = color_override if color_override.a > 0.0 else t.get_coin_color(coin_type)
+	mat.set_shader_parameter("glow_color", halo_col)
 	mat.set_shader_parameter("opacity_mult", t.coin_halo_opacity)
 	quad.material_override = mat
 	quad.position = Vector3(0, 0, -0.02)

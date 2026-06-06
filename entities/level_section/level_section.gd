@@ -371,7 +371,12 @@ func _rebuild_bar() -> void:
 	_spacer_visible.clear()
 
 	var t: VisualTheme = ThemeProvider.theme
+	# Tint the bar to the currency it's filling (gold first, orange after the
+	# handoff, etc.) so the level bar reads as "the currency objective".
 	var seg_color: Color = t.normal_text_color
+	if _tier_start_level < LevelManager.levels.size():
+		var tier_currency: Enums.CurrencyType = LevelManager.levels[_tier_start_level].currency_type
+		seg_color = t.get_coin_color(tier_currency)
 	var spacer_width: float = 3.0
 
 	# Width-weighted segments: gap between consecutive thresholds. First
@@ -896,7 +901,16 @@ func _spawn_seam_burst(sep: Control) -> void:
 
 func _milestone_title(level_data: LevelData) -> String:
 	if level_data.rewards.is_empty():
-		return "Keep going!"
+		# Completion milestone (slot 9): the label reflects what reaching 500 does.
+		# 1st completion prestiges (next board still prestige-able); the 2nd unlocks
+		# the next board.
+		var tier: TierData = TierRegistry.get_tier_for_currency(level_data.currency_type)
+		var next_tier: TierData = TierRegistry.get_next_tier(tier.board_type) if tier else null
+		if next_tier == null:
+			return "Complete the board!"
+		if PrestigeManager.can_prestige(next_tier.board_type):
+			return "%s prestige" % FormatUtils.board_name(tier.board_type)
+		return "Unlock %s board" % FormatUtils.board_name(next_tier.board_type, false)
 	var r: RewardData = level_data.rewards[0]
 	match r.type:
 		RewardData.RewardType.UNLOCK_UPGRADE:
@@ -918,7 +932,7 @@ func _milestone_title(level_data: LevelData) -> String:
 				return "Prestige buckets"
 			return "%s buckets" % FormatUtils.board_name(next_tier.board_type)
 		RewardData.RewardType.DROP_COINS:
-			return "%s coin drop" % FormatUtils.currency_name(r.coin_type)
+			return "Frenzy drop"
 	return "Keep going!"
 
 

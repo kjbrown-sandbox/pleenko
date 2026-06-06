@@ -55,12 +55,14 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.052, 2.59, 0)
 challenge = ExtResource("3_ch1")
 challenge_ui_name = "orange_7"
 color_source = 10
+next_challenges = Array[String](["orange_boss"])
 
 [node name="orange_8" parent="." instance=ExtResource("2_btn")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.513, -2.731, 0)
 challenge = ExtResource("3_ch1")
 challenge_ui_name = "orange_8"
 color_source = 10
+next_challenges = Array[String](["orange_boss"])
 
 [node name="orange_9" parent="." instance=ExtResource("2_btn")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.056, 0.987, 0)
@@ -88,6 +90,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.84, 3.115, 0)
 challenge = ExtResource("3_ch1")
 challenge_ui_name = "orange_12"
 color_source = 10
+next_challenges = Array[String](["orange_boss"])
 
 [node name="orange_boss" parent="." instance=ExtResource("2_btn")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.953, 0.0, 0)

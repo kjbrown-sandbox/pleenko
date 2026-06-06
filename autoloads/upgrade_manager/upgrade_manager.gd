@@ -201,18 +201,21 @@ func buy_cap_raise(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType)
 	return true
 
 
-func _on_currency_changed(type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
-	if _new_balance <= 0:
+func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
+	# Cap raises are no longer unlocked by earning a raw currency. They are now
+	# enabled explicitly via enable_cap_raise() on the 2nd board-completion beat
+	# (see PlinkoBoard._on_final_bounce_started).
+	pass
+
+
+## Enables cap raises for a board (its caps can now be raised with the next tier's
+## currency). Called on the 2nd board completion, BEFORE cap_raise_coin_landed is
+## emitted so the reveal animator sees is_cap_raise_available() == true.
+func enable_cap_raise(board_type: Enums.BoardType) -> void:
+	if _cap_raise_available[board_type]:
 		return
-	# When a raw currency is earned, enable cap raises for the previous tier's board.
-	# e.g. earning RAW_ORANGE enables cap raises on GOLD board.
-	for i in range(1, TierRegistry.get_tier_count()):
-		var tier := TierRegistry.get_tier_by_index(i)
-		if tier.raw_currency == type:
-			var prev := TierRegistry.get_tier_by_index(i - 1)
-			if prev and not _cap_raise_available[prev.board_type]:
-				_cap_raise_available[prev.board_type] = true
-				cap_raise_unlocked.emit(prev.board_type)
+	_cap_raise_available[board_type] = true
+	cap_raise_unlocked.emit(board_type)
 
 
 func serialize() -> Dictionary:

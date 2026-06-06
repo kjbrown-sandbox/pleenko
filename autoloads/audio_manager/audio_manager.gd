@@ -1101,6 +1101,46 @@ func play_pitched_chime(pitch_mult: float, volume_db: float = NAN,
 	_play_chime_voice(instrument, pitch_mult, vol_db, sustain, 0)
 
 
+## Milestone "coin frenzy" pop — theme-driven so each world's frenzy sounds native.
+## Themes with frenzy_pop_uses_chord_root play the CURRENT chord's root note two
+## octaves up through the bucket instrument (so it harmonizes with the tonal
+## background — 3 octaves above the drone / 2 above the base note). Other themes
+## play a fixed bell two octaves up. Volume = 2/3 of a bucket hit (amplitude).
+## `step` (the coin's index in the frenzy) is used ONLY by chord_root mode, to
+## arpeggiate through the progression; melody_root and bell modes ignore it.
+func play_frenzy_pop(step: int = 0) -> void:
+	if _silenced:
+		return
+	var theme: VisualTheme = ThemeProvider.theme
+	var vol_db: float = BUCKET_VOLUME_DB + linear_to_db(2.0 / 3.0)
+	if theme.frenzy_pop_uses_melody_root:
+		# Live chord root from the melody (one chord per 16 notes). Read fresh on
+		# every pop so a chord change mid-frenzy is reflected; all pops within a
+		# chord share the same pitch. *4 = the base note two octaves up.
+		var root_midi: int = get_current_chord_root_midi()
+		if root_midi >= 0:
+			# Normal pops sit two octaves up (*4); the final chord of the cycle
+			# pops three octaves up (*8) for a brighter resolve.
+			var is_final_chord: bool = get_current_chord_index() == _CHORD_ROOT_MIDI_CYCLE.size() - 1
+			var octave_mult: float = 8.0 if is_final_chord else 4.0
+			var pitch: float = pow(2.0, float(root_midi - 60) / 12.0) * octave_mult
+			play_pitched_chime(pitch, vol_db, NAN, theme.bucket_instrument)
+			return
+	if theme.frenzy_pop_uses_chord_root:
+		var prog: Array = _theme_progression()
+		if not prog.is_empty():
+			# Walk the progression's chord roots so a frenzy arpeggiates through all
+			# chords (the 4 notes) instead of repeating one. `step` (the coin index)
+			# advances one chord per pop, starting from the live chord.
+			var entry: Dictionary = prog[(_chord_index + step) % prog.size()]
+			var chord: Array = entry["chord"]
+			var semitones: int = int(entry["root"]) + (int(chord[0]) if not chord.is_empty() else 0)
+			var pitch: float = pow(2.0, semitones / 12.0) * 4.0  # base note, two octaves up
+			play_pitched_chime(pitch, vol_db, NAN, theme.bucket_instrument)
+			return
+	play_pitched_chime(4.0, vol_db, NAN, Instrument.Type.BELL)
+
+
 ## −10 dB below the bucket hit so the 4-voice chord sums to roughly bucket-hit
 ## loudness rather than 4x. Tweens from `quiet → peak → quiet` over the swell.
 const MILESTONE_PEAK_OFFSET_DB := -10.0
@@ -1419,17 +1459,26 @@ const BOMB_DEFUSE_SEMITONE_OFFSET := 24
 ## themes with their own progressions will get wrong-key bomb cues until
 ## the table is moved onto the theme/AudioStyle resource.
 func get_current_chord_root_midi() -> int:
+	var chord_idx: int = get_current_chord_index()
+	if chord_idx < 0:
+		return -1
+	return _CHORD_ROOT_MIDI_CYCLE[chord_idx]
+
+
+## Index (0-based) of the chord currently playing in the melody, or -1 if the
+## theme has no melody. The chord changes every 16 melody slots; the last index
+## is the "final" chord of the cycle. Single source of the chord-index math.
+func get_current_chord_index() -> int:
 	if not ThemeProvider or not ThemeProvider.theme:
 		return -1
 	var seq: PackedInt32Array = ThemeProvider.theme.melody_sequence
 	if seq.is_empty():
 		return -1
-	# After playing the note at index N, _melody_idx == N + 1. The chord
-	# index of the most-recently-played note is (_melody_idx - 1) / 16.
+	# After playing the note at index N, _melody_idx == N + 1, so the most-recently
+	# played note is at _melody_idx - 1. 16 melody slots per chord.
 	var last_played: int = maxi(_melody_idx - 1, 0)
 	@warning_ignore("integer_division")
-	var chord_idx: int = (last_played / 16) % _CHORD_ROOT_MIDI_CYCLE.size()
-	return _CHORD_ROOT_MIDI_CYCLE[chord_idx]
+	return (last_played / 16) % _CHORD_ROOT_MIDI_CYCLE.size()
 
 
 ## Drives the root-hum. After the melody has played a full pass, a low

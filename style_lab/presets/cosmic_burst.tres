@@ -46,6 +46,7 @@ board_glow_opacity = 0.03
 peg_flash_enabled = false
 peg_ring_enabled = true
 vignette_enabled = true
+vignette_radius = 0.7
 vignette_softness = 0.5
 bucket_instrument = 1
 progression = [{

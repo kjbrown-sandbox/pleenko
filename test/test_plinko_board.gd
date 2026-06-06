@@ -12,8 +12,8 @@ func _run_tests() -> void:
 
 	test_bucket_value_basic()
 	test_bucket_value_with_multiplier()
-	test_bucket_value_advanced_offset()
-	test_bucket_value_below_advanced_threshold()
+	test_bucket_value_no_advanced_offset()
+	test_bucket_value_linear_at_all_distances()
 	test_bucket_position_key_positive()
 	test_bucket_position_key_negative()
 	test_bucket_position_key_zero()
@@ -42,7 +42,8 @@ func _run_tests() -> void:
 	test_bomb_cut_side_right_for_above_center()
 	test_cell_in_cut_left_side()
 	test_cell_in_cut_right_side()
-	test_peg_indices_on_cut_includes_strict_column()
+	test_peg_indices_on_cut_left_cut()
+	test_peg_indices_on_cut_center_takes_all()
 	test_buckets_on_cut_left_takes_everything_below()
 	test_buckets_on_cut_right_takes_everything_above()
 	test_buckets_on_cut_center_takes_whole_board()
@@ -96,28 +97,30 @@ func test_bucket_value_with_multiplier() -> void:
 	board.free()
 
 
-func test_bucket_value_advanced_offset() -> void:
-	print("test_bucket_value_advanced_offset")
-	# distance=4, advanced_distance=3, show_advanced=true, multiplier=1
-	# effective_distance = 4 - 3 = 1, val = 1 + 1*1 = 2
+## Single-currency model: advanced (raw-currency edge) buckets are removed, so
+## there is no distance offset anymore — every bucket scales linearly with its
+## distance from centre, regardless of should_show_advanced_buckets.
+func test_bucket_value_no_advanced_offset() -> void:
+	print("test_bucket_value_no_advanced_offset")
+	# distance=4, multiplier=1 → 1 + 4*1 = 5 (no offset even with the legacy flags set)
 	var board := _make_board({
 		"distance_for_advanced_buckets": 3,
 		"should_show_advanced_buckets": true,
 	})
-	assert_equal(board._bucket_value_for_distance(4), 2, "advanced offset: 1 + (4-3)*1 = 2")
+	assert_equal(board._bucket_value_for_distance(4), 5,
+		"no advanced offset: 1 + 4*1 = 5")
 	board.free()
 
 
-func test_bucket_value_below_advanced_threshold() -> void:
-	print("test_bucket_value_below_advanced_threshold")
-	# distance=2, advanced_distance=3, show_advanced=true
-	# distance < advanced_distance, so no offset
-	# val = 1 + 2 * 1 = 3
+func test_bucket_value_linear_at_all_distances() -> void:
+	print("test_bucket_value_linear_at_all_distances")
+	# Linear formula holds at every distance now that advanced buckets are gone.
 	var board := _make_board({
 		"distance_for_advanced_buckets": 3,
 		"should_show_advanced_buckets": true,
 	})
-	assert_equal(board._bucket_value_for_distance(2), 3, "below threshold: no offset")
+	assert_equal(board._bucket_value_for_distance(2), 3, "1 + 2*1 = 3")
+	assert_equal(board._bucket_value_for_distance(3), 4, "1 + 3*1 = 4 (was the old threshold)")
 	board.free()
 
 
@@ -488,34 +491,34 @@ func test_cell_in_cut_right_side() -> void:
 	assert_false(PlinkoBoard.cell_in_cut(2, 1, 3, 4, 1), "(2,1) x=0 < 1")
 
 
-func test_peg_indices_on_cut_includes_strict_column() -> void:
-	print("test_peg_indices_on_cut_includes_strict_column")
-	# Bomb at bucket 2 (LEFT cut on 5-bucket board). The destroyed peg set is
-	# everything with x ≤ 0. By inspection (row, col, x_norm):
-	#   (0, 0)  x=0     ✓
-	#   (1, 0)  x=-0.5  ✓
-	#   (1, 1)  x=0.5   ✗
-	#   (2, 0)  x=-1    ✓
-	#   (2, 1)  x=0     ✓
-	#   (2, 2)  x=1     ✗
+func test_peg_indices_on_cut_left_cut() -> void:
+	print("test_peg_indices_on_cut_left_cut")
+	# Bomb at bucket 1 on a 5-bucket (num_rows=4) board is a LEFT cut
+	# (bucket_x_norm = 1 - 2 = -1). The destroyed peg set is every peg with
+	# x ≤ -1. By inspection (row, col, x_norm):
+	#   (2, 0)  x=-1.0  ✓
 	#   (3, 0)  x=-1.5  ✓
-	#   (3, 1)  x=-0.5  ✓
-	#   (3, 2)  x=0.5   ✗
-	#   (3, 3)  x=1.5   ✗
-	# → 6 destroyed pegs.
+	# → 2 destroyed pegs (the leftmost column at rows 2 and 3).
+	var indices: PackedInt32Array = PlinkoBoard.peg_indices_on_cut(1, 4)
+	assert_equal(indices.size(), 2, "2 pegs destroyed in a LEFT cut at bucket 1")
+	# (2,0) flat idx = 2*3/2 + 0 = 3.
+	assert_true(indices.has(3), "the (2,0) peg is included")
+
+
+func test_peg_indices_on_cut_center_takes_all() -> void:
+	print("test_peg_indices_on_cut_center_takes_all")
+	# Bomb at the centre bucket 2 on a 5-bucket board is a CENTER cut — saws the
+	# whole board, so EVERY peg is destroyed (rows 0..3 → 1+2+3+4 = 10 pegs).
 	var indices: PackedInt32Array = PlinkoBoard.peg_indices_on_cut(2, 4)
-	assert_equal(indices.size(), 6, "6 pegs destroyed in a LEFT cut at bucket 2")
-	# (2,1) flat idx = 2*3/2 + 1 = 4 — the centre-column survivor under the
-	# old strict-only model, now also destroyed (saw-off semantics).
-	assert_true(indices.has(4), "the strict-column (2,1) peg is included")
+	assert_equal(indices.size(), 10, "centre cut destroys all 10 pegs")
 
 
 func test_buckets_on_cut_left_takes_everything_below() -> void:
 	print("test_buckets_on_cut_left_takes_everything_below")
-	# Bomb at bucket 2 (LEFT) saws off 0, 1, 2.
-	var sawed: PackedInt32Array = PlinkoBoard.buckets_on_cut(2, 4)
-	assert_equal(sawed.size(), 3, "3 buckets sawn off")
-	for b in [0, 1, 2]:
+	# Bomb at bucket 1 (LEFT) saws off 0, 1.
+	var sawed: PackedInt32Array = PlinkoBoard.buckets_on_cut(1, 4)
+	assert_equal(sawed.size(), 2, "2 buckets sawn off")
+	for b in [0, 1]:
 		assert_true(sawed.has(b), "bucket %d sawn" % b)
 
 
@@ -530,11 +533,12 @@ func test_buckets_on_cut_right_takes_everything_above() -> void:
 
 func test_should_fall_through_static_helper() -> void:
 	print("test_should_fall_through_static_helper")
-	# Bomb at bucket 2 (LEFT cut). Cells at x ≤ 0 fall through.
-	var voided: PackedInt32Array = PackedInt32Array([2])
-	assert_true(PlinkoBoard.should_fall_through(0, 0, voided, 4), "(0,0) x=0 LEFT-cut")
-	assert_true(PlinkoBoard.should_fall_through(2, 1, voided, 4), "(2,1) x=0 LEFT-cut")
-	assert_true(PlinkoBoard.should_fall_through(1, 0, voided, 4), "(1,0) x=-0.5 LEFT-cut")
+	# Bomb at bucket 1 on a 5-bucket (num_rows=4) board is a LEFT cut at
+	# bucket_x_norm = -1. Cells at x ≤ -1 fall through; everything else survives.
+	var voided: PackedInt32Array = PackedInt32Array([1])
+	assert_true(PlinkoBoard.should_fall_through(2, 0, voided, 4), "(2,0) x=-1 LEFT-cut")
+	assert_true(PlinkoBoard.should_fall_through(3, 0, voided, 4), "(3,0) x=-1.5 LEFT-cut")
+	assert_false(PlinkoBoard.should_fall_through(0, 0, voided, 4), "(0,0) x=0 survives")
 	assert_false(PlinkoBoard.should_fall_through(1, 1, voided, 4), "(1,1) x=0.5 survives")
 	# No voided columns → never fall through.
 	assert_false(PlinkoBoard.should_fall_through(0, 0, PackedInt32Array(), 4), "empty voided → never")

@@ -10,7 +10,7 @@ extends "res://test/test_base.gd"
 func _run_tests() -> void:
 	print("\n=== Autodropper HUD Tests ===\n")
 
-	test_currencies_header_always_visible()
+	test_currencies_header_gated_until_orange_unlocked()
 	test_headers_with_autodroppers()
 	test_upgrade_row_created_for_autodropper()
 	test_get_upgrade_row_returns_null_when_missing()
@@ -29,6 +29,23 @@ func _make_board_manager() -> BoardManager:
 	return bm
 
 
+## Single-currency model: the "Currencies" section is hidden until the orange
+## board is unlocked (until then the level bar IS the currency display). Adds an
+## orange board so CoinValues._currency_bars_revealed() is true.
+func _add_orange_board(bm: BoardManager) -> void:
+	var orange_board := PlinkoBoard.new()
+	orange_board.board_type = Enums.BoardType.ORANGE
+	orange_board.coin_queue = CoinQueue.new()
+	bm._boards.append(orange_board)
+
+
+func _has_label(cv: VBoxContainer, text: String) -> bool:
+	for child in cv.get_children():
+		if child is Label and child.text == text:
+			return true
+	return false
+
+
 func _make_coin_values(bm: BoardManager) -> VBoxContainer:
 	var cv := VBoxContainer.new()
 	cv.set_script(preload("res://entities/main/coin_values.gd"))
@@ -39,40 +56,42 @@ func _make_coin_values(bm: BoardManager) -> VBoxContainer:
 
 # --- Tests ---
 
-func test_currencies_header_always_visible() -> void:
-	print("test_currencies_header_always_visible")
+## Single-currency model: the Currencies section is gated on the orange board
+## being unlocked. With gold only it is hidden; once orange is unlocked it shows.
+func test_currencies_header_gated_until_orange_unlocked() -> void:
+	print("test_currencies_header_gated_until_orange_unlocked")
 	UpgradeManager.reset()
-	var bm := _make_board_manager()
-	var cv := _make_coin_values(bm)
 
-	var has_label := false
-	for child in cv.get_children():
-		if child is Label and child.text == "Currencies":
-			has_label = true
-	assert_true(has_label, "'Currencies' header always present")
-	assert_equal(cv._upgrade_rows.size(), 0, "no upgrade rows without autodroppers")
+	# Gold only → no Currencies header (the level bar is the currency display).
+	var bm_gold := _make_board_manager()
+	var cv_gold := _make_coin_values(bm_gold)
+	assert_false(_has_label(cv_gold, "Currencies"),
+		"Currencies header hidden before the orange board is unlocked")
+	assert_equal(cv_gold._upgrade_rows.size(), 0, "no upgrade rows without autodroppers")
+	cv_gold.queue_free()
+	bm_gold.queue_free()
 
-	cv.queue_free()
-	bm.queue_free()
+	# Orange unlocked → Currencies header appears.
+	var bm_orange := _make_board_manager()
+	_add_orange_board(bm_orange)
+	var cv_orange := _make_coin_values(bm_orange)
+	assert_true(_has_label(cv_orange, "Currencies"),
+		"Currencies header shown once the orange board is unlocked")
+	cv_orange.queue_free()
+	bm_orange.queue_free()
 
 
 func test_headers_with_autodroppers() -> void:
 	print("test_headers_with_autodroppers")
 	var bm := _make_board_manager()
+	_add_orange_board(bm)  # orange unlocked so the Currencies section is revealed
 	# Unlock the autodropper upgrade so CoinValues sees it
 	UpgradeManager.unlock(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER)
 
 	var cv := _make_coin_values(bm)
 
-	var has_currencies_label := false
-	var has_upgrades_label := false
-	for child in cv.get_children():
-		if child is Label and child.text == "Currencies":
-			has_currencies_label = true
-		if child is Label and child.text == "Universal upgrades":
-			has_upgrades_label = true
-	assert_true(has_currencies_label, "'Currencies' header present")
-	assert_true(has_upgrades_label, "'Universal upgrades' header present")
+	assert_true(_has_label(cv, "Currencies"), "'Currencies' header present")
+	assert_true(_has_label(cv, "Universal upgrades"), "'Universal upgrades' header present")
 
 	cv.queue_free()
 	bm.queue_free()

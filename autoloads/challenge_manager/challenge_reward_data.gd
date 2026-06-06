@@ -18,10 +18,13 @@ enum ModifierType {
 	STARTING_AUTODROPPERS,
 	STARTING_COINS,
 	MULTI_DROP,
-	ADVANCED_COIN_MULTIPLIER,
+	ADVANCED_COIN_MULTIPLIER,  # DORMANT: raw/advanced coins removed (single-currency model)
 	BUCKET_VALUE_PERCENT,
 	GOLD_COIN_SPEED_BOOST,
 	QUEUE_RATE_BONUS,
+	CENTER_BUCKET_VALUE,        # flat +N to the board's middle bucket (doesn't scale via upgrades)
+	DROP_COST_REDUCTION,        # -N fuel currency per drop on this board (floored at 1)
+	GOLDEN_BUCKET_MULTIPLIER,   # +N to the wandering golden-bucket payout (base 2x)
 }
 
 @export var type: RewardType
@@ -67,6 +70,15 @@ func _starting_modifier_text() -> String:
 			return "+%.1f raw orange multiplier" % modifier_amount
 		ModifierType.BUCKET_VALUE_PERCENT:
 			return "+%d%% %s bucket value" % [int(modifier_amount * 100), board]
+		ModifierType.CENTER_BUCKET_VALUE:
+			return "+%d %s middle bucket value" % [int(modifier_amount), board]
+		ModifierType.DROP_COST_REDUCTION:
+			# Cost is paid in the previous tier's primary currency (the "fuel").
+			var prev: TierData = TierRegistry.get_previous_tier(board_type)
+			var fuel: String = FormatUtils.currency_name(prev.primary_currency, false) if prev else "fuel"
+			return "%s coins cost %d less %s" % [board.capitalize(), int(modifier_amount), fuel]
+		ModifierType.GOLDEN_BUCKET_MULTIPLIER:
+			return "+%.1f %s golden bucket multiplier" % [modifier_amount, board]
 		ModifierType.STARTING_AUTODROPPERS:
 			return "+%d starting %s autodroppers" % [int(modifier_amount), board]
 		# GOLD_COIN_SPEED_BOOST / QUEUE_RATE_BONUS pull their magnitude live from
