@@ -11,6 +11,7 @@ func _run_tests() -> void:
 	print("\n=== Autodropper HUD Tests ===\n")
 
 	test_currencies_header_gated_until_orange_unlocked()
+	test_raw_currencies_never_shown()
 	test_headers_with_autodroppers()
 	test_upgrade_row_created_for_autodropper()
 	test_get_upgrade_row_returns_null_when_missing()
@@ -79,6 +80,30 @@ func test_currencies_header_gated_until_orange_unlocked() -> void:
 		"Currencies header shown once the orange board is unlocked")
 	cv_orange.queue_free()
 	bm_orange.queue_free()
+
+
+## Single-currency model: raw currencies are dormant and must NEVER appear in the
+## currency bar, even when their tier's board is unlocked (regression — they used
+## to show up as e.g. "Raw orange 0/100").
+func test_raw_currencies_never_shown() -> void:
+	print("test_raw_currencies_never_shown")
+	UpgradeManager.reset()
+	var bm := _make_board_manager()
+	_add_orange_board(bm)  # orange board unlocked
+	var cv := _make_coin_values(bm)
+
+	assert_false(cv._is_board_for_coin_type_unlocked(Enums.CurrencyType.RAW_ORANGE),
+		"raw currency is never considered visible")
+	assert_false(cv._visible_currencies.has(Enums.CurrencyType.RAW_ORANGE),
+		"raw orange is not listed in the currency bar")
+	# Primary currencies still show.
+	assert_true(cv._visible_currencies.has(Enums.CurrencyType.GOLD_COIN),
+		"gold (starting currency) still shown")
+	assert_true(cv._visible_currencies.has(Enums.CurrencyType.ORANGE_COIN),
+		"orange primary shown once its board is unlocked")
+
+	cv.queue_free()
+	bm.queue_free()
 
 
 func test_headers_with_autodroppers() -> void:
