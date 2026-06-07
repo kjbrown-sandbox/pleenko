@@ -24,6 +24,7 @@ var _survive_passed: bool = false
 var _current_bucket_group: int = 0
 var _total_drops: int = 0
 var _has_failed: bool = false
+var _has_completed: bool = false
 var _timer_started: bool = false
 # Last integer second-value emitted via ChallengeManager.tick. Tracks both the
 # regular and survive timers; -1 = nothing emitted yet.
@@ -60,6 +61,8 @@ func setup(_challenge: ChallengeData, _board_manager: BoardManager) -> void:
 	_survive_passed = false
 	_current_bucket_group = 0
 	_total_drops = 0
+	_has_failed = false
+	_has_completed = false
 	_timer_started = false
 	_last_tick_seconds = -1
 
@@ -183,16 +186,15 @@ func _process_survive(delta: float) -> void:
 		_survive_phase = SurvivePhase.DONE
 		_survive_passed = true
 		set_process(false)
-		if _are_all_objectives_met():
-			completed.emit()
+		_try_complete()
 
 
 func _on_time_up() -> void:
-	if _has_failed:
+	if _has_failed or _has_completed:
 		return
 	_survive_passed = true
 	if _are_all_objectives_met():
-		completed.emit()
+		_complete()
 	else:
 		_has_failed = true
 		failed.emit("Time's up!")
@@ -271,8 +273,7 @@ func _on_coin_landed(board_type: Enums.BoardType, bucket_index: int, _currency_t
 				return
 
 	# Check if all objectives are now met
-	if _are_all_objectives_met():
-		completed.emit()
+	_try_complete()
 
 
 # ── Currency constraints ──────────────────────────────────────────
@@ -291,6 +292,11 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 				_has_failed = true
 				failed.emit("Dropped below %d %s!" % [constraint.amount, Enums.CurrencyType.keys()[type]])
 				return
+
+	# A currency-balance objective (e.g. CoinGoal "get exactly X") can be
+	# satisfied without a coin landing — buying an upgrade, refining, or any
+	# other balance change. Re-check completion here so those sources count.
+	_try_complete()
 
 
 # ── Autodrop failure ──────────────────────────────────────────────
@@ -322,6 +328,21 @@ func mark_initial_visuals() -> void:
 
 
 # ── Objective validation ──────────────────────────────────────────
+
+## Completes the challenge if every objective is met and it hasn't already
+## ended. Safe to call from any signal source (coin landing, currency change,
+## survive timer) — the guard makes repeat calls idempotent.
+func _try_complete() -> void:
+	if _has_completed or _has_failed:
+		return
+	if _are_all_objectives_met():
+		_complete()
+
+
+func _complete() -> void:
+	_has_completed = true
+	completed.emit()
+
 
 func _are_all_objectives_met() -> bool:
 	for objective in challenge.objectives:
