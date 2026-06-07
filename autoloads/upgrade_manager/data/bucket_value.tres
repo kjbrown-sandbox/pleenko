@@ -6,7 +6,7 @@
 script = ExtResource("1")
 type = 1
 display_name = "Bucket value"
-description = "Increases the coin value of every bucket."
+description = "Increase how much currency each bucket rewards"
 base_cost = 10
 max_level = 7
 cost_type = 1

@@ -6,7 +6,9 @@
 script = ExtResource("1")
 type = 4
 display_name = "Autodropper"
-description = "Automatically drops coins on assigned boards."
+description = "+1 to universal autodropper pool.
+
+Autodroppers drop coins onto the chosen board. Requires queue space."
 base_cost = 50
 max_level = 5
 cost_type = 1

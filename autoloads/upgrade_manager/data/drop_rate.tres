@@ -6,7 +6,7 @@
 script = ExtResource("1")
 type = 2
 display_name = "Drop rate"
-description = "Coins drop faster."
+description = "Increase the frequency of drops"
 base_cost = 10
 max_level = 7
 cost_type = 1
