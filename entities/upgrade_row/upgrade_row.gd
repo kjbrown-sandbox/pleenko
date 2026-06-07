@@ -12,6 +12,11 @@ var _currency_type: int = -1
 var _dirty := false
 var _needs_attention := false
 
+## Optional Callable() -> String, injected by the owner (e.g. CoinValues) to add
+## a middle block to the hover tooltip (autodropper assignments, deflector odds).
+## Empty return = no extra block. PeekAnimator seam precedent.
+var _hover_extra_provider: Callable
+
 func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgrade: Callable) -> void:
 	_board_type = board_type
 	_upgrade_type = upgrade_type
@@ -92,6 +97,11 @@ func setup_minus(on_pressed: Callable, on_hover: Callable = Callable(), on_updat
 	bar.setup_minus(on_pressed, on_hover, on_update)
 
 
+## Owner-injected provider for the tooltip's middle block (see _hover_extra_provider).
+func set_hover_extra_provider(cb: Callable) -> void:
+	_hover_extra_provider = cb
+
+
 func _on_pressed() -> void:
 	_callback.call()
 	_update_button()
@@ -125,19 +135,20 @@ func _update_button() -> void:
 	var at_max: bool = state.current_cap > 0 and state.level >= state.current_cap
 
 	bar.update_text(data.display_name)
-	# Right-side text: "level/cap". When the upgrade has no cap (e.g. unlimited
-	# / unreachable here), num is empty and title centers across the whole bar.
-	# A full bar reads as MAX visually, no "(MAX)" suffix needed.
-	if state.current_cap > 0:
-		bar.num_text = "%d/%d" % [state.level, state.current_cap]
+	# Right-side text: progress toward affording the next purchase ("coins/cost"),
+	# capped at the cost so excess currency still reads as "500/500". Maxed-out
+	# upgrades show "MAX" instead. This matches the fill bar below (also balance/cost).
+	var balance: int = CurrencyManager.get_balance(TierRegistry.primary_currency(_board_type))
+	if at_max:
+		bar.num_text = "MAX"
 	else:
-		bar.num_text = ""
+		var shown: int = mini(balance, state.cost)
+		bar.num_text = "%s/%s" % [FormatUtils.format_number(shown), FormatUtils.format_number(state.cost)]
 
 	# Update fill percent
 	if at_max:
 		bar.set_fill(1.0)
 	elif state.cost > 0:
-		var balance: int = CurrencyManager.get_balance(TierRegistry.primary_currency(_board_type))
 		bar.set_fill(clampf(float(balance) / float(state.cost), 0.0, 1.0))
 	else:
 		bar.set_fill(0.0)
@@ -165,18 +176,24 @@ func _on_mouse_exited() -> void:
 	hover_info_changed.emit("")
 
 
-func _get_currency_name(currency_type: int) -> String:
-	return FormatUtils.currency_name(currency_type, false)
-
+# Tooltip format: short description, then "Level x/y". When an owner injects a
+# middle block (autodropper assignments, deflector odds), it's inserted between
+# the two, separated by blank lines. Maxed upgrades still show this (no early-out).
 func _get_purchase_hover_text() -> String:
+	var data: BaseUpgradeData = UpgradeManager.get_upgrade(_upgrade_type)
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
-	var at_max: bool = state.current_cap > 0 and state.level >= state.current_cap
-	if at_max:
-		return ""
-	var currency_name: String = _get_currency_name(TierRegistry.primary_currency(_board_type))
-	var text := "Cost: %s %s" % [FormatUtils.format_number(state.cost), currency_name]
-	if _upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
-		var odds := roundi(PlinkoBoard.deflector_bias_for_strength(
-			PlinkoBoard.DEFLECTOR_BASE_STRENGTH) * 100.0)
-		text += "\ncurrent odds: %d%%" % odds
-	return text
+	var level_line: String
+	if state.current_cap > 0:
+		level_line = "Level %d/%d" % [state.level, state.current_cap]
+	else:
+		level_line = "Level %d" % state.level
+
+	var extra := ""
+	if _hover_extra_provider.is_valid():
+		extra = _hover_extra_provider.call()
+
+	# Blank line before the level so wrapped description lines don't read as the
+	# same separation as the gap to the level line.
+	if extra.is_empty():
+		return "%s\n\n%s" % [data.description, level_line]
+	return "%s\n\n%s\n\n%s" % [data.description, extra, level_line]

@@ -84,6 +84,11 @@ var _coin_z_counter: int = 0  # Increments per coin so later coins render in fro
 # button so hovering one never suppresses the other's "Needs X" message.
 var _drop_main_hovered: bool = false
 var _drop_advanced_hovered: bool = false
+# Set while the autodropper +/- cap of a drop button is hovered, so the per-frame
+# "Needs X" refresh doesn't clobber the "Add/Remove autodropper" hover tooltip
+# (those caps aren't the main button, so _drop_*_hovered stays false on them).
+var _drop_main_side_hovered: bool = false
+var _drop_advanced_side_hovered: bool = false
 
 ## Optional gate: () -> bool. Returns true if drops should be blocked.
 ## Set externally (e.g. by BoardManager during challenges).
@@ -312,7 +317,7 @@ func setup(type: Enums.BoardType) -> void:
 	upgrade_section.setup(self, type)
 	build_board()
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
-	coin_queue.set_capacity(perm_queue)
+	coin_queue.set_capacity(_queue_capacity_for_level(perm_queue))
 	coin_queue.count_changed.connect(_on_queue_count_changed)
 	drop_section.set_queue_bonus(coin_queue.count, _queue_rate_bonus_per_coin)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
@@ -457,9 +462,18 @@ func _on_drop_advanced_hover_exit() -> void:
 ## connection time. Empty text means the hover ended — restore the "Needs X"
 ## messages instead of leaving the tooltip blank.
 func _on_drop_side_hover(text: String, tooltip: Tooltip) -> void:
+	var is_advanced := tooltip == _drop_advanced_tooltip
 	if text.is_empty():
+		if is_advanced:
+			_drop_advanced_side_hovered = false
+		else:
+			_drop_main_side_hovered = false
 		_refresh_needs_tooltips()
 	else:
+		if is_advanced:
+			_drop_advanced_side_hovered = true
+		else:
+			_drop_main_side_hovered = true
 		tooltip.update_and_show(text)
 
 
@@ -492,9 +506,9 @@ func _needs_tooltip_action(affordable: bool, hovered: bool) -> NeedsTooltipActio
 ## is anchored above its own button; the advanced button is skipped until its
 ## column is visible.
 func _refresh_needs_tooltips() -> void:
-	_apply_needs_tooltip(_drop_main_tooltip, _get_drop_costs(), _drop_main_hovered)
+	_apply_needs_tooltip(_drop_main_tooltip, _get_drop_costs(), _drop_main_hovered or _drop_main_side_hovered)
 	if _drop_advanced_column.visible:
-		_apply_needs_tooltip(_drop_advanced_tooltip, _get_advanced_drop_costs(), _drop_advanced_hovered)
+		_apply_needs_tooltip(_drop_advanced_tooltip, _get_advanced_drop_costs(), _drop_advanced_hovered or _drop_advanced_side_hovered)
 
 
 ## Applies the computed action to a single drop button's "Needs X" tooltip.
@@ -3056,8 +3070,19 @@ func _spawn_peg_ring(peg_local_pos: Vector3, ring_color: Color, t: VisualTheme) 
 	tween.tween_callback(ring.queue_free)
 
 
+## Effective queue slots for a raw queue level (purchased + permanent challenge
+## grants). Empty until the first level; the first level grants 2 slots, each
+## level after adds 1 (capacity = level + 1 once any level is owned).
+static func _queue_capacity_for_level(level: int) -> int:
+	return level + 1 if level > 0 else 0
+
+
 func increase_queue_capacity() -> void:
-	coin_queue.set_capacity(coin_queue.capacity + 1)
+	# upgrade_section._buy_upgrade() commits the QUEUE level via UpgradeManager.buy()
+	# before calling this, so the level read here is already the new value.
+	var level: int = UpgradeManager.get_level(board_type, Enums.UpgradeType.QUEUE) \
+		+ ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.QUEUE)
+	coin_queue.set_capacity(_queue_capacity_for_level(level))
 
 
 func try_autodrop(is_advanced: bool) -> void:
@@ -3097,32 +3122,19 @@ func set_advanced_autodroppers_visible(vis: bool) -> void:
 
 func _setup_autodropper_buttons(bid: StringName) -> void:
 	var bar = _drop_buttons[bid]
-	var currency_name: String = _get_currency_name_for_button(bid)
 	var captured_bid: StringName = bid
 	var is_adv: bool = (bid as String).ends_with("_ADVANCED")
-	var pool_board: Enums.BoardType = Enums.BoardType.RED if is_adv else Enums.BoardType.ORANGE
-	var pool_type: Enums.UpgradeType = Enums.UpgradeType.ADVANCED_AUTODROPPER if is_adv else Enums.UpgradeType.AUTODROPPER
 	var label: String = "advanced autodropper" if is_adv else "autodropper"
 
 	bar.setup_minus(
 		func(): autodropper_adjust_requested.emit(captured_bid, -1),
-		func() -> String:
-			var total: int = UpgradeManager.get_level(pool_board, pool_type)
-			return "Decrease %s for %s\nTotal: %d" % [label, currency_name, total],
+		func() -> String: return "Remove %s" % label,
 	)
 
 	bar.setup_plus(
 		func(): autodropper_adjust_requested.emit(captured_bid, 1),
-		func() -> String:
-			var total: int = UpgradeManager.get_level(pool_board, pool_type)
-			return "Increase %s for %s\nTotal: %d" % [label, currency_name, total],
+		func() -> String: return "Add %s" % label,
 	)
-
-
-func _get_currency_name_for_button(bid: StringName) -> String:
-	if (bid as String).ends_with("_ADVANCED"):
-		return FormatUtils.currency_name(advanced_bucket_type, false)
-	return FormatUtils.currency_name(TierRegistry.primary_currency(board_type), false)
 
 
 func update_autodropper_buttons(assignments: Dictionary, normal_free: int, advanced_free: int) -> void:
@@ -3191,7 +3203,7 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 
 	var queue_level: int = upgrade_state.get("QUEUE", 0)
 	var perm_q: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.QUEUE)
-	coin_queue.set_capacity(queue_level + perm_q)
+	coin_queue.set_capacity(_queue_capacity_for_level(queue_level + perm_q))
 
 	if upgrade_state.get("show_advanced_buckets", false):
 		should_show_advanced_buckets = true

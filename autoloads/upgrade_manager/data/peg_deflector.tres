@@ -6,6 +6,7 @@
 script = ExtResource("1")
 type = 6
 display_name = "Peg deflector"
+description = "Place arrows on pegs to nudge coins left or right."
 base_cost = 50
 max_level = 5
 cost_type = 1

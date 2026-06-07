@@ -104,10 +104,12 @@ func _setup_cap_raise_if_needed(row, upgrade_type: Enums.UpgradeType) -> void:
 		func(): # on_pressed
 			UpgradeManager.buy_cap_raise(bt, ut),
 		func() -> String: # on_hover
+			var state2: UpgradeManager.UpgradeState = UpgradeManager.get_state(bt, ut)
 			var cap_cost: int = UpgradeManager.get_cap_raise_cost(bt, ut)
 			var cap_currency: int = TierRegistry.cap_raise_currency(bt)
 			var currency_name: String = FormatUtils.currency_name(cap_currency, false)
-			return "Cost: %d %s" % [cap_cost, currency_name],
+			return "Increase max level %d → %d\n\nCost: %d %s" % [
+				state2.current_cap, state2.current_cap + 1, cap_cost, currency_name],
 		func(): # on_update
 			var can_raise: bool = UpgradeManager.can_buy_cap_raise(bt, ut)
 			r.bar.set_plus_disabled(not can_raise)

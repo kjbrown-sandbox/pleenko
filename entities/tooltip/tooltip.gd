@@ -33,6 +33,9 @@ func _ready() -> void:
 		# stretch to its parent container's width.
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		# Wrap long lines to the container width instead of overflowing/clipping.
+		# Only INLINE: positioned tooltips size to content and should stay single-line.
+		_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	_apply_theme()
 

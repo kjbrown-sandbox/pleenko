@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1")
 display_name = "Add rows"
+description = "Adds two rows of pegs, widening the board."
 base_cost = 6
 max_level = 6
 cost_type = 2
