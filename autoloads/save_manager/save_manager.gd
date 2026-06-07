@@ -260,6 +260,16 @@ func reset_state() -> void:
 	CurrencyManager.reset()
 	LevelManager.reset()
 	UpgradeManager.reset()
+	# reset() on these managers is silent (unlike deserialize, which broadcasts).
+	# Re-broadcast the cleared state so any UI that subscribed before this reset
+	# repaints from zeroed state instead of showing stale pre-reload values. This
+	# matters on challenge entry: the level bar + currency HUD _ready (and connect
+	# their signals) as children BEFORE Main's _ready runs reset_state, so without
+	# this they keep painting the previous session's tier/balances until the first
+	# in-challenge currency_changed. Level first so currency listeners that read
+	# current_level see the reset value.
+	LevelManager.level_changed.emit(LevelManager.current_level)
+	CurrencyManager.notify_all()
 	toggle_auto_save(false)
 	_board_manager = null
 	print("[SaveManager] Runtime state reset (currency/level/upgrades).")

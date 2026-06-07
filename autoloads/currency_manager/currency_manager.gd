@@ -126,6 +126,15 @@ func deserialize(data: Dictionary) -> void:
          balances[currency_type] = entry.get("balance", 0)
          caps[currency_type] = entry.get("cap", 500)
          _cap_raise_levels[currency_type] = entry.get("cap_raise_level", 0)
-   # Emit currency_changed for each type so UI updates
+   # Re-broadcast so connected UI repaints from the loaded state.
+   notify_all()
+
+
+## Re-broadcast current balance + cap for every currency. Mirrors the tail of
+## deserialize(). The reset() paths (challenge start, prestige/full reset) mutate
+## balances silently, so callers use this to make any UI that subscribed before
+## the reset repaint from the cleared state instead of showing stale pre-reload
+## values.
+func notify_all() -> void:
    for currency_type in Enums.CurrencyType.values():
       currency_changed.emit(currency_type, balances[currency_type], caps[currency_type])
