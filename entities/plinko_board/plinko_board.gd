@@ -3074,7 +3074,7 @@ func _spawn_peg_ring(peg_local_pos: Vector3, ring_color: Color, t: VisualTheme) 
 ## grants). Empty until the first level; the first level grants 2 slots, each
 ## level after adds 1 (capacity = level + 1 once any level is owned).
 static func _queue_capacity_for_level(level: int) -> int:
-	return level + 1 if level > 0 else 0
+	return (level + 1) if level > 0 else 0
 
 
 func increase_queue_capacity() -> void:
