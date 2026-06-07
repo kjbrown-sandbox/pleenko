@@ -76,11 +76,17 @@ func _build_tier_levels(board_type: Enums.BoardType) -> void:
 			2:  # Unlock DROP_RATE
 				data.message = "You have unlocked Drop Rate for %s." % tier_name
 				data.rewards = [_unlock_upgrade(Enums.UpgradeType.DROP_RATE, board_type)]
-			3:  # Unlock QUEUE
-				data.message = "You have unlocked Queue for %s." % tier_name
-				data.rewards = [_unlock_upgrade(Enums.UpgradeType.QUEUE, board_type)]
-			4:  # Special slot (autodroppers)
-				_set_special_slot(data, board_type, next_tier)
+			3:  # Gold unlocks its special (Autodropper) first; other boards get Queue here.
+				if board_type == Enums.BoardType.GOLD:
+					_set_special_slot(data, board_type, next_tier)
+				else:
+					_set_queue_slot(data, board_type, tier_name)
+			4:  # Gold gets Queue here (swapped with slot 3 so Autodropper unlocks
+				# first); other boards get their special slot (autodroppers/deflector).
+				if board_type == Enums.BoardType.GOLD:
+					_set_queue_slot(data, board_type, tier_name)
+				else:
+					_set_special_slot(data, board_type, next_tier)
 			5, 6, 7, 8:  # Coin frenzy (was: drop advanced coin — single-currency model)
 				_set_coin_frenzy(data, board_type)
 			9:  # Board completion (reach 500) — triggers prestige / next-board unlock.
@@ -98,6 +104,11 @@ func _set_coin_frenzy(data: LevelData, board_type: Enums.BoardType) -> void:
 	var currency: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
 	data.message = "Coin frenzy drop"
 	data.rewards = [_drop_coins(BONUS_COIN_DROP_COUNT, currency, board_type)]
+
+
+func _set_queue_slot(data: LevelData, board_type: Enums.BoardType, tier_name: String) -> void:
+	data.message = "You have unlocked Queue for %s." % tier_name
+	data.rewards = [_unlock_upgrade(Enums.UpgradeType.QUEUE, board_type)]
 
 
 func _set_special_slot(data: LevelData, board_type: Enums.BoardType, _next_tier: TierData) -> void:

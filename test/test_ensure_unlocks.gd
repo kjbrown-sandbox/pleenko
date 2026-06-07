@@ -14,8 +14,9 @@ func _run_tests() -> void:
 	test_level_1_unlocks_add_row()
 	test_level_2_unlocks_bucket_value()
 	test_level_3_unlocks_drop_rate()
-	test_level_4_unlocks_queue()
-	test_all_gold_upgrades_unlocked_at_level_4()
+	test_level_4_unlocks_autodropper()
+	test_level_5_unlocks_queue()
+	test_all_gold_upgrades_unlocked_at_level_5()
 	test_idempotent_when_already_unlocked()
 	test_partial_unlocks_repaired()
 	test_advanced_buckets_never_reconciled()
@@ -72,22 +73,36 @@ func test_level_3_unlocks_drop_rate() -> void:
 		"DROP_RATE should be unlocked at level 3")
 
 
-func test_level_4_unlocks_queue() -> void:
-	print("test_level_4_unlocks_queue")
+func test_level_4_unlocks_autodropper() -> void:
+	print("test_level_4_unlocks_autodropper")
 	_reset_state()
 	LevelManager.current_level = 4
+	LevelManager.ensure_state_for_level()
+	# Gold swaps slots 3/4: Autodropper now unlocks at level 4 (was Queue).
+	assert_true(
+		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER),
+		"AUTODROPPER should be unlocked at level 4 on gold")
+	assert_false(
+		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.QUEUE),
+		"QUEUE should NOT be unlocked yet at level 4 on gold")
+
+
+func test_level_5_unlocks_queue() -> void:
+	print("test_level_5_unlocks_queue")
+	_reset_state()
+	LevelManager.current_level = 5
 	LevelManager.ensure_state_for_level()
 	assert_true(
 		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.QUEUE),
-		"QUEUE should be unlocked at level 4")
+		"QUEUE should be unlocked at level 5 on gold (pushed after autodropper)")
 
 
-func test_all_gold_upgrades_unlocked_at_level_4() -> void:
-	print("test_all_gold_upgrades_unlocked_at_level_4")
+func test_all_gold_upgrades_unlocked_at_level_5() -> void:
+	print("test_all_gold_upgrades_unlocked_at_level_5")
 	_reset_state()
-	LevelManager.current_level = 4
+	LevelManager.current_level = 5
 	LevelManager.ensure_state_for_level()
-	# Levels 0-3: ADD_ROW, BUCKET_VALUE, DROP_RATE, QUEUE
+	# Gold slots 0-4: ADD_ROW, BUCKET_VALUE, DROP_RATE, AUTODROPPER, QUEUE
 	assert_true(
 		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW),
 		"ADD_ROW unlocked")
@@ -97,6 +112,9 @@ func test_all_gold_upgrades_unlocked_at_level_4() -> void:
 	assert_true(
 		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.DROP_RATE),
 		"DROP_RATE unlocked")
+	assert_true(
+		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER),
+		"AUTODROPPER unlocked")
 	assert_true(
 		UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.QUEUE),
 		"QUEUE unlocked")

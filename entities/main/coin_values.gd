@@ -194,6 +194,7 @@ func _try_spawn_upgrade_row(upgrade_type: Enums.UpgradeType, board_type: Enums.B
 		return
 	var row: UpgradeRow = UpgradeRowScene.instantiate()
 	row.setup(board_type, upgrade_type, _buy_upgrade.bind(board_type, upgrade_type))
+	_install_hover_extra_provider(row, upgrade_type)
 	row.hover_info_changed.connect(_on_upgrade_hover_changed)
 	add_child(row)
 	if _hover_tooltip:
@@ -217,10 +218,14 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 		func():
 			UpgradeManager.buy_cap_raise(bt, ut),
 		func() -> String:
+			# Re-read at hover time so the cap shown reflects any raises bought
+			# since setup (the outer `state` is captured once and goes stale).
+			var cap_state: UpgradeManager.UpgradeState = UpgradeManager.get_state(bt, ut)
 			var cap_cost: int = UpgradeManager.get_cap_raise_cost(bt, ut)
 			var cap_currency: int = TierRegistry.cap_raise_currency(bt)
 			var currency_name: String = FormatUtils.currency_name(cap_currency, false)
-			return "Cost: %d %s" % [cap_cost, currency_name],
+			return "Increase max level %d → %d\n\nCost: %d %s" % [
+				cap_state.current_cap, cap_state.current_cap + 1, cap_cost, currency_name],
 		func():
 			var can_raise: bool = UpgradeManager.can_buy_cap_raise(bt, ut)
 			r.bar.set_plus_disabled(not can_raise)
@@ -230,6 +235,39 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 	if _is_cap_reveal_suppressed(board_type):
 		# Wired but hidden — CapRaiseRevealAnimator reveals it on its own clock.
 		row.bar.show_plus_button(false)
+
+
+## Inject the tooltip middle-block provider for upgrade types that need one.
+## Autodropper rows list per-board assignments; deflector shows current odds.
+func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeType) -> void:
+	match upgrade_type:
+		Enums.UpgradeType.AUTODROPPER:
+			row.set_hover_extra_provider(_autodropper_assignment_text.bind(false))
+		Enums.UpgradeType.ADVANCED_AUTODROPPER:
+			row.set_hover_extra_provider(_autodropper_assignment_text.bind(true))
+		Enums.UpgradeType.PEG_DEFLECTOR:
+			row.set_hover_extra_provider(_deflector_odds_text)
+
+
+## One line per unlocked board (including zeros) of how many autodroppers of this
+## pool (normal/advanced) are assigned there.
+func _autodropper_assignment_text(advanced: bool) -> String:
+	if not is_instance_valid(_board_manager):
+		return ""
+	var key := "advanced" if advanced else "normal"
+	var lines: PackedStringArray = []
+	for bt in Enums.BoardType.values():
+		if not _board_manager.is_board_unlocked(bt):
+			continue
+		var counts: Dictionary = _board_manager.get_assigned_counts_for_board(bt)
+		lines.append("%d assigned to %s board" % [counts[key], FormatUtils.board_name(bt, false)])
+	return "\n".join(lines)
+
+
+func _deflector_odds_text() -> String:
+	var odds := roundi(PlinkoBoard.deflector_bias_for_strength(
+		PlinkoBoard.DEFLECTOR_BASE_STRENGTH) * 100.0)
+	return "Current odds: %d%%" % odds
 
 
 func _buy_upgrade(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
@@ -294,7 +332,11 @@ func _on_cap_hover(type: Enums.CurrencyType) -> void:
 	var cost := CurrencyManager.get_cap_raise_cost(type)
 	var cap_currency: int = CurrencyManager.cap_raise_currency(type)
 	var currency_name := _get_currency_name(cap_currency)
-	_hover_tooltip.update_and_show("Cost: %s %s" % [FormatUtils.format_number(cost), currency_name])
+	var cur_cap := CurrencyManager.get_cap(type)
+	var new_cap := cur_cap + CurrencyManager.cap_raise_amount(type)
+	_hover_tooltip.update_and_show("Increase max %s from %s → %s\n\nCost: %s %s" % [
+		_get_currency_name(type), FormatUtils.format_number(cur_cap),
+		FormatUtils.format_number(new_cap), FormatUtils.format_number(cost), currency_name])
 
 
 func _on_cap_unhover() -> void:

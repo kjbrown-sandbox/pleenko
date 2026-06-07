@@ -6,6 +6,9 @@
 script = ExtResource("1")
 type = 4
 display_name = "Autodropper"
-base_cost = 100
+description = "Automatically drops coins on assigned boards."
+base_cost = 50
 max_level = 5
-cost_delta = 100
+cost_type = 1
+cost_delta = 50
+delta_escalation = 25

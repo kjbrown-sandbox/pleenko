@@ -3,6 +3,8 @@ extends Resource
 
 @export var type: Enums.UpgradeType
 @export var display_name: String
+## Short, one-line description shown in the upgrade hover tooltip.
+@export var description: String = ""
 
 @export var base_cost: int
 @export var max_level: int  ## 0 = uncapped
