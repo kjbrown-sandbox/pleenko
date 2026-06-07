@@ -61,7 +61,9 @@ const BEATS_PER_BAR := 4
 
 const MELODY_POOL_SIZE := 12
 const CLICK_POOL_SIZE := 8
-const PEG_CLICK_VOLUME_DB := -18.0
+# 0.75x as loud as a bucket hit: bucket combined is -24.4 dB (-17.5 + 20*log10(0.45 harp gain));
+# Click's synth gain is 0.30 (-10.5 dB), so -16.5 + (-10.5) = -27.0 dB ≈ bucket - 2.5 dB = 0.75x.
+const PEG_CLICK_VOLUME_DB := -16.5
 const BUCKET_VOLUME_DB := -17.5
 
 # Peg-collision chime: brief bell-tone, 50/50 root or 5th of the current chord.
@@ -168,8 +170,8 @@ const BOMB_HUM_VOLUME_DB := -10.0
 # pitch (melody notes, bomb hum, bomb defuse) is computed as a multiplier
 # above/below this. Same value Triangle.gd uses internally.
 const C4_FREQ_HZ := 261.63
-# Global gain boost applied on top of the user's master volume slider. 3x linear ≈ +9.54 dB.
-const MASTER_GAIN_BOOST_DB := 9.542425
+# Global gain boost applied on top of the user's master volume slider. 6x linear ≈ +15.56 dB.
+const MASTER_GAIN_BOOST_DB := 15.563025
 var _silenced: bool = false  # gates all new sounds (prestige, scene transitions)
 var _muted: bool = false  # user preference — mutes the Master bus
 var _master_volume_percent: float = 50.0
