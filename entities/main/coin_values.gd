@@ -19,9 +19,10 @@ var _initial_setup_complete := false
 # reveal them one at a time. See begin/get_pending/end_cap_raise_reveal.
 var _cap_raise_reveal_active := false
 var _cap_raise_reveal_board: Enums.BoardType = Enums.BoardType.GOLD
-# The raw-currency bar that appears mid-reveal (e.g. raw orange): created hidden
-# during the reveal so the animator can fade it in after the currency cap
-# explodes, instead of it popping in the instant the coin lands. -1 = none.
+# The new board's primary-currency bar that appears mid-reveal (e.g. orange):
+# created hidden during the reveal so the animator can fade it in after the
+# currency cap explodes, instead of it popping in the instant the coin lands.
+# -1 = none.
 var _cap_raise_delayed_currency: int = -1
 
 # Debounce: collapse multiple currency_changed signals into one deferred update
@@ -103,14 +104,14 @@ func _currency_bars_revealed() -> bool:
 
 
 func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
+	# Raw currencies are dormant in the single-currency model — never show them.
+	if TierRegistry.is_raw_currency(coin_type):
+		return false
 	var tier := TierRegistry.get_tier_for_currency(coin_type)
 	if not tier:
 		return true
 	# Starting tier currencies are always visible
 	if TierRegistry.is_starting_tier(tier.board_type):
-		return true
-	# Raw currencies show up as soon as you have any (earned before board unlocks)
-	if TierRegistry.is_raw_currency(coin_type) and CurrencyManager.get_balance(coin_type) > 0:
 		return true
 	# Otherwise, the tier's board must be unlocked
 	return _board_manager.is_board_unlocked(tier.board_type)

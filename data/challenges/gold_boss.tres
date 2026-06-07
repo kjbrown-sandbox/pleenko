@@ -29,8 +29,7 @@ rows = 2
 
 [sub_resource type="Resource" id="starting_2"]
 script = ExtResource("8_start_coins")
-currency_type = 1
-amount = 20
+amount = 200
 
 [sub_resource type="Resource" id="starting_3"]
 script = ExtResource("9_start_delay")

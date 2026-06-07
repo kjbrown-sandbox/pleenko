@@ -343,11 +343,9 @@ func _setup_drop_bars() -> void:
 	_drop_main_column.add_theme_constant_override("separation", 2)
 	_drop_advanced_column.add_theme_constant_override("separation", 2)
 
-	# Main drop bar — non-gold boards drop raw currency, so label accordingly
-	var raw: int = TierRegistry.raw_currency(board_type)
-	var label_currency: Enums.CurrencyType = (raw as Enums.CurrencyType) if raw >= 0 else currency_type
+	# Single-currency model: every board drops its own primary currency.
 	_drop_main.setup(coin_color, coin_color_dark)
-	_drop_main.update_text("Drop %s" % FormatUtils.currency_name(label_currency, false))
+	_drop_main.update_text("Drop %s" % FormatUtils.currency_name(currency_type, false))
 	_drop_main.main_pressed.connect(func(): request_drop())
 	_drop_main.main_mouse_entered.connect(_on_drop_main_hover)
 	_drop_main.main_mouse_exited.connect(_on_drop_main_hover_exit)
