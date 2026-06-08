@@ -1288,6 +1288,8 @@ func _theme_melody_slot_seconds() -> float:
 # up the current chord one step per hover and resets after a short idle.
 const UI_HOVER_QUANTIZE_SECONDS := 0.125
 const UI_HOVER_QUEUE_CAPACITY := 3
+# Long ring (vs the 0.6s peg-chime default, matching MainMenu's hover) so a
+# single deliberate hover sustains instead of reading as a staccato blip.
 const UI_HOVER_NOTE_SUSTAIN_S := 3.0
 # Volume below a bucket hit. A literal "2/3 amplitude" (-3.5 dB) was inaudible —
 # the note is an octave up (the ear reads higher pitches as louder) and sits

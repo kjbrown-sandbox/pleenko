@@ -39,10 +39,12 @@ const PRESS_DARKEN := 0.10
 # border AND fill shade, recomputed by _refresh_interaction_visual() from the
 # inputs below. (Caps shade natively off their own draw mode instead.) Driving
 # the main bar by state rather than Godot's draw mode lets a held keyboard
-# shortcut force the pressed look — see set_held().
-var _visual_state := BtnState.NORMAL
+# shortcut force the pressed look — see set_force_pressed().
+var _visual_state: BtnState = BtnState.NORMAL
 var _mouse_pressed := false   # left mouse held down on the main bar
-var _held := false            # forced pressed by an external held shortcut (e.g. drop key)
+# Forced pressed by an external held shortcut (e.g. the drop key). Distinct from
+# is_held() below, which polls whether the MOUSE is held on the bar.
+var _force_pressed := false
 
 # Hover/held stretch — the MAIN bar grows and STAYS big the whole time it's
 # hovered or held (mouse or drop key), settling back only when it returns to rest.
@@ -53,7 +55,7 @@ var _held := false            # forced pressed by an external held shortcut (e.g
 const HOVER_STRETCH_AMOUNT := 0.03   # scale.x delta while stretched
 const HOVER_STRETCH_OUT := 0.12      # fast extend on enter
 const HOVER_STRETCH_RETURN := 0.5    # slower settle back on exit
-var _bump_tween: Tween
+var _stretch_tween: Tween
 var _stretched := false              # currently extended (hovered or held)
 
 
@@ -310,11 +312,16 @@ func _apply_fill() -> void:
 	# theme, tint, mode, disabled) THEN update geometry. Only reached from _apply()
 	# — the frequent fill_amount + press paths call _update_fill_geometry() alone,
 	# which allocates nothing.
-	if _fill_panel:
-		var has_minus := mode == Mode.WITH_BOTH
-		var has_plus := mode != Mode.NEITHER
-		_fill_panel.add_theme_stylebox_override("panel", _make_fill_style(has_minus, has_plus, demo_main_disabled))
+	_refresh_fill_shade()
 	_update_fill_geometry()
+
+
+# Rebuilds the fill panel's stylebox for the current tint / mode / _visual_state.
+# Shared by _apply_fill and _refresh_interaction_visual so the two can't drift.
+func _refresh_fill_shade() -> void:
+	if _fill_panel:
+		_fill_panel.add_theme_stylebox_override("panel",
+			_make_fill_style(mode == Mode.WITH_BOTH, mode != Mode.NEITHER, demo_main_disabled))
 
 
 func _update_fill_geometry() -> void:
@@ -329,14 +336,14 @@ func _update_fill_geometry() -> void:
 
 # Hover lightens, press darkens — matched to MainMenuButton. NORMAL (and the
 # "disabled" stylebox, which maps here) returns the tint unchanged.
-func _shade_for_state(tint: Color, state: int) -> Color:
+func _shade_for_state(tint: Color, state: BtnState) -> Color:
 	match state:
 		BtnState.HOVER: return tint.lightened(HOVER_LIGHTEN)
 		BtnState.PRESSED: return tint.darkened(PRESS_DARKEN)
 		_: return tint
 
 
-func _state_for(state_name: String) -> int:
+func _state_for(state_name: String) -> BtnState:
 	# Godot's "disabled" stylebox shares the resting (NORMAL) look on purpose.
 	match state_name:
 		"hover": return BtnState.HOVER
@@ -363,7 +370,7 @@ func _make_fill_style(has_minus: bool, has_plus: bool, disabled: bool = false) -
 	return s
 
 
-func _make_side_style(is_right_side: bool, filled: bool = true, state: int = BtnState.NORMAL) -> StyleBoxFlat:
+func _make_side_style(is_right_side: bool, filled: bool = true, state: BtnState = BtnState.NORMAL) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.content_margin_left = 10.0
 	s.content_margin_top = 6.0
@@ -395,7 +402,7 @@ func _make_side_style(is_right_side: bool, filled: bool = true, state: int = Btn
 	return s
 
 
-func _make_main_style(has_minus: bool, has_plus: bool, has_minus_active: bool, has_plus_active: bool, state: int = BtnState.NORMAL) -> StyleBoxFlat:
+func _make_main_style(has_minus: bool, has_plus: bool, has_minus_active: bool, has_plus_active: bool, state: BtnState = BtnState.NORMAL) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.content_margin_left = 14.0
 	s.content_margin_top = 6.0
@@ -521,13 +528,13 @@ func _set_stretched(on: bool) -> void:
 	if _stretched == on:
 		return
 	_stretched = on
-	if _bump_tween and _bump_tween.is_valid():
-		_bump_tween.kill()
+	if _stretch_tween and _stretch_tween.is_valid():
+		_stretch_tween.kill()
 	_apply_stretch_pivot()
 	var target: float = (1.0 + HOVER_STRETCH_AMOUNT) if on else 1.0
 	var duration: float = HOVER_STRETCH_OUT if on else HOVER_STRETCH_RETURN
-	_bump_tween = create_tween()
-	_bump_tween.tween_property(self, "scale:x", target, duration) \
+	_stretch_tween = create_tween()
+	_stretch_tween.tween_property(self, "scale:x", target, duration) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 
@@ -545,24 +552,25 @@ func _apply_stretch_pivot() -> void:
 	pivot_offset = Vector2(pivot_x, size.y * 0.5)
 
 
-# ── Main bar interaction: stretch bump + hover note + shade tracking ──
+# ── Main bar interaction: stretch + hover note + shade tracking ──
 
 ## Force the main bar's pressed look on/off from an external held shortcut (e.g.
-## holding the drop hotkey). Combines with mouse state in _refresh_interaction_visual.
-func set_held(held: bool) -> void:
-	if _held == held:
+## holding the drop hotkey). Independent of is_held() (which polls the MOUSE);
+## combines with mouse state in _refresh_interaction_visual.
+func set_force_pressed(pressed: bool) -> void:
+	if _force_pressed == pressed:
 		return
-	_held = held
+	_force_pressed = pressed
 	_refresh_interaction_visual()
 
 
 # Resolve the main bar's state from all inputs and reshade if it changed. Pressed
-# wins (mouse OR held shortcut), then hover, else normal.
+# wins (mouse OR forced shortcut), then hover, else normal.
 func _refresh_interaction_visual() -> void:
 	# Disabled only blocks the click — hover/press still shade so the button
 	# always acknowledges interaction (e.g. the drop bar with a full queue).
-	var state: int
-	if _mouse_pressed or _held:
+	var state: BtnState
+	if _mouse_pressed or _force_pressed:
 		state = BtnState.PRESSED
 	elif main_button.is_hovered():
 		state = BtnState.HOVER
@@ -576,9 +584,7 @@ func _refresh_interaction_visual() -> void:
 		return
 	_visual_state = state
 	_refresh_main_border()
-	if _fill_panel:
-		_fill_panel.add_theme_stylebox_override("panel",
-			_make_fill_style(mode == Mode.WITH_BOTH, mode != Mode.NEITHER, demo_main_disabled))
+	_refresh_fill_shade()
 
 
 # Border for the main bar — one stylebox shared across all draw modes, shaded by
