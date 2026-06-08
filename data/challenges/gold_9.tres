@@ -22,8 +22,7 @@ times = 30
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
 type = 1
-modifier_type = 1
-modifier_amount = 5.0
+modifier_type = 9
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("8_start")
