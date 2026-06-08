@@ -238,6 +238,12 @@ func _slot_position(index: int) -> Vector3:
 	return start_position + Vector3(-index * coin_spacing, 0, 0)
 
 
+## World-space position of a queue slot — for VFX that need to target the "queue
+## spot" (e.g. the first-queue-purchase particle swoop).
+func slot_world_position(index: int) -> Vector3:
+	return global_position + _slot_position(index)
+
+
 ## Tween all coins to their correct positions.
 func _slide_all_forward() -> void:
 	_slide_coins_from(0)

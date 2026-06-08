@@ -8,6 +8,30 @@ static func currency_name(type: Enums.CurrencyType, capital: bool = true) -> Str
 	return _sentence_case(n) if capital else n
 
 
+## Drop-rate readout shown beside the gate. Always the rate + "drops per second"
+## on its own line. The result comes first; once there are extra queued coins it
+## decomposes:
+##        0.33                          (no extra coins / pre-queue)
+##        drops per second
+##  ---
+##        0.60 = 0.33 + (4 * 0.07)      (extra coins boosting the rate)
+##        drops per second
+## base = 1/drop_delay (the unboosted rate), extra = queued coins past the "free"
+## first slot, per = base/5 (one queued coin adds a fifth of the base rate).
+## `total` is the real 1/effective_delay so the printed sum is the true rate
+## (component terms are rounded and may differ by a hundredth).
+static func drop_rate_text(drop_delay: float, count: int, total: float) -> String:
+	var base: float = (1.0 / drop_delay) if drop_delay > 0.0 else 0.0
+	var extra: int = maxi(0, count - 1)
+	var calc: String
+	if extra <= 0:
+		calc = "%.2f" % total
+	else:
+		var per: float = base / 5.0
+		calc = "%.2f = %.2f + (%d * %.2f)" % [total, base, extra, per]
+	return "%s\ndrops per second" % calc
+
+
 ## Human-readable name for a board type (e.g. "Gold", "orange").
 static func board_name(type: Enums.BoardType, capital: bool = true) -> String:
 	var n: String = Enums.BoardType.keys()[type].to_lower()

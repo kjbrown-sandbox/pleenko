@@ -3,18 +3,19 @@ extends "res://test/test_base.gd"
 ## Queue rate bonus tests — run with:
 ##   godot --headless --scene res://test/test_queue_rate_bonus.tscn
 ##
-## Verifies the math behind get_effective_drop_delay() and the proportional
-## timer rescale that fires when the queue's full count changes mid-cycle.
+## Verifies the math behind get_effective_drop_delay() (the first queued coin is
+## "free" — only EXTRA coins boost the rate) and the proportional timer rescale
+## that fires when the queue's full count changes mid-cycle.
 
 
 func _run_tests() -> void:
 	print("\n=== Queue Rate Bonus Tests ===\n")
 
-	test_effective_delay_zero_full_coins()
-	test_effective_delay_one_full_coin()
-	test_effective_delay_five_full_coins()
-	test_effective_delay_ten_full_coins_doubles_rate()
-	test_effective_delay_one_hundred_full_coins_never_zero()
+	test_effective_delay_zero_coins()
+	test_effective_delay_one_coin_is_free()
+	test_effective_delay_six_coins_five_extra()
+	test_effective_delay_eleven_coins_doubles_rate()
+	test_effective_delay_one_hundred_coins_never_zero()
 	test_effective_delay_with_null_queue()
 	test_rescale_proportional_grow()
 	test_rescale_proportional_shrink()
@@ -22,43 +23,46 @@ func _run_tests() -> void:
 
 # --- Helpers ---
 
-## Pure math: effective = base / (1 + bonus * N)
+## Pure math mirror of get_effective_drop_delay: the always-present first slot is
+## "free", so only EXTRA coins (max(0, count-1)) boost the rate:
+##   effective = base / (1 + bonus * max(0, count - 1))
 func _effective(base_delay: float, bonus_per_coin: float, full_count: int) -> float:
-	return base_delay / (1.0 + bonus_per_coin * float(full_count))
+	var extra: int = maxi(0, full_count - 1)
+	return base_delay / (1.0 + bonus_per_coin * float(extra))
 
 
 # --- Effective delay math ---
 
-func test_effective_delay_zero_full_coins() -> void:
-	print("test_effective_delay_zero_full_coins")
-	# 0 coins → unchanged
+func test_effective_delay_zero_coins() -> void:
+	print("test_effective_delay_zero_coins")
+	# 0 coins → unchanged (0 extra).
 	assert_near(_effective(1.5, 0.10, 0), 1.5, 0.0001, "0 coins gives base delay")
 
 
-func test_effective_delay_one_full_coin() -> void:
-	print("test_effective_delay_one_full_coin")
-	# 1 coin → 1.5 / 1.1 ≈ 1.3636
-	assert_near(_effective(1.5, 0.10, 1), 1.5 / 1.1, 0.0001, "1 coin: 1.5/1.1")
+func test_effective_delay_one_coin_is_free() -> void:
+	print("test_effective_delay_one_coin_is_free")
+	# 1 coin → still base delay; the first slot doesn't count (0 extra).
+	assert_near(_effective(1.5, 0.10, 1), 1.5, 0.0001, "first queued coin is free")
 
 
-func test_effective_delay_five_full_coins() -> void:
-	print("test_effective_delay_five_full_coins")
-	# 5 coins → 1.5 / 1.5 = 1.0 (50% rate boost)
-	assert_near(_effective(1.5, 0.10, 5), 1.0, 0.0001, "5 coins: 1.5/1.5 = 1.0")
+func test_effective_delay_six_coins_five_extra() -> void:
+	print("test_effective_delay_six_coins_five_extra")
+	# 6 coins → 5 extra → 1.5 / 1.5 = 1.0 (50% rate boost).
+	assert_near(_effective(1.5, 0.10, 6), 1.0, 0.0001, "6 coins: 1.5/(1+0.5)")
 
 
-func test_effective_delay_ten_full_coins_doubles_rate() -> void:
-	print("test_effective_delay_ten_full_coins_doubles_rate")
-	# 10 coins → 100% rate boost = half the delay
-	assert_near(_effective(1.5, 0.10, 10), 0.75, 0.0001, "10 coins: half delay")
+func test_effective_delay_eleven_coins_doubles_rate() -> void:
+	print("test_effective_delay_eleven_coins_doubles_rate")
+	# 11 coins → 10 extra → 100% rate boost = half the delay.
+	assert_near(_effective(1.5, 0.10, 11), 0.75, 0.0001, "11 coins: half delay")
 
 
-func test_effective_delay_one_hundred_full_coins_never_zero() -> void:
-	print("test_effective_delay_one_hundred_full_coins_never_zero")
-	# 100 coins → 1.5 / 11 ≈ 0.1364 (still positive, never zero)
+func test_effective_delay_one_hundred_coins_never_zero() -> void:
+	print("test_effective_delay_one_hundred_coins_never_zero")
+	# 100 coins → 99 extra → 1.5 / 10.9 (still positive, never zero).
 	var v: float = _effective(1.5, 0.10, 100)
 	assert_true(v > 0.0, "100 coins: delay still positive")
-	assert_near(v, 1.5 / 11.0, 0.0001, "100 coins: 1.5/11")
+	assert_near(v, 1.5 / 10.9, 0.0001, "100 coins: 1.5/10.9")
 
 
 func test_effective_delay_with_null_queue() -> void:
@@ -77,19 +81,19 @@ func test_effective_delay_with_null_queue() -> void:
 
 func test_rescale_proportional_grow() -> void:
 	print("test_rescale_proportional_grow")
-	# Player is 33% through a 1.5s timer when queue grows to 5 coins (effective 1.0s).
-	# Remaining (1.0s) should rescale to (1.0 / 1.5) * 1.0 ≈ 0.6667.
+	# Player is 33% through a 1.5s timer when the queue grows to 6 coins
+	# (effective 1.0s). Remaining (1.0s) rescales to (1.0 / 1.5) * 1.0 ≈ 0.6667.
 	var remaining: float = 1.0
 	var last_effective: float = 1.5
-	var new_effective: float = _effective(1.5, 0.10, 5)  # 1.0
+	var new_effective: float = _effective(1.5, 0.10, 6)  # 1.0
 	remaining *= new_effective / last_effective
 	assert_near(remaining, 1.0 * (1.0 / 1.5), 0.0001, "33% progress preserved on grow")
 
 
 func test_rescale_proportional_shrink() -> void:
 	print("test_rescale_proportional_shrink")
-	# Player at 50% of a 1.0s effective (5 coins) when queue drains to 0 (effective 1.5s).
-	# Remaining (0.5s) should rescale to (1.5 / 1.0) * 0.5 = 0.75s.
+	# Player at 50% of a 1.0s effective (6 coins) when the queue drains to 0
+	# (effective 1.5s). Remaining (0.5s) rescales to (1.5 / 1.0) * 0.5 = 0.75s.
 	var remaining: float = 0.5
 	var last_effective: float = 1.0
 	var new_effective: float = _effective(1.5, 0.10, 0)  # 1.5

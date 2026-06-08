@@ -32,14 +32,16 @@ horizontal_alignment = 1
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer" unique_id=1095684869]
 layout_mode = 2
 
-[node name="QueueBonusLabel" type="Label" parent="." unique_id=991122334]
+[node name="DropRateLabel" type="RichTextLabel" parent="." unique_id=991122334]
 visible = false
+clip_contents = false
 layout_mode = 0
-offset_right = 400.0
-offset_bottom = 64.0
-text = ""
-horizontal_alignment = 0
-vertical_alignment = 0
+offset_right = 700.0
+offset_bottom = 120.0
+mouse_filter = 2
+bbcode_enabled = true
+scroll_active = false
+autowrap_mode = 0
 
 [node name="DropButtons" type="HBoxContainer" parent="." unique_id=1414190653]
 layout_mode = 1
