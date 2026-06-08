@@ -25,6 +25,37 @@ const RADIUS_PX := 3
 # the cap reads as separate while the outer border stays continuous.
 const GAP_PX := 1
 
+# Interaction states. NORMAL is also reused for the "disabled" Godot stylebox
+# (a can't-afford button shows the resting look, never a hover/press tint).
+enum BtnState { NORMAL, HOVER, PRESSED }
+# Color response — same magnitudes as MainMenuButton: hover lightens the bar
+# tint, press darkens it (the menu's exact 0.12 / 0.10). Derived from the bar
+# tint, not raw colors, so theme swaps propagate. Applied to the cap bodies
+# (native styleboxes) AND the main bar's fill panel so the change is visible on
+# the bar itself, not just its thin border.
+const HOVER_LIGHTEN := 0.12
+const PRESS_DARKEN := 0.10
+# Resolved interaction state of the MAIN bar — single source of truth for its
+# border AND fill shade, recomputed by _refresh_interaction_visual() from the
+# inputs below. (Caps shade natively off their own draw mode instead.) Driving
+# the main bar by state rather than Godot's draw mode lets a held keyboard
+# shortcut force the pressed look — see set_held().
+var _visual_state := BtnState.NORMAL
+var _mouse_pressed := false   # left mouse held down on the main bar
+var _held := false            # forced pressed by an external held shortcut (e.g. drop key)
+
+# Hover/held stretch — the MAIN bar grows and STAYS big the whole time it's
+# hovered or held (mouse or drop key), settling back only when it returns to rest.
+# scale.x is visual only (no layout reflow); pivot is the CAPPED edge so the bar
+# grows toward its open side — left cap → grows right, right cap → grows left,
+# both/none → both ways from centre. Hovering a cap never stretches the whole
+# row (see _play_cap_hover).
+const HOVER_STRETCH_AMOUNT := 0.03   # scale.x delta while stretched
+const HOVER_STRETCH_OUT := 0.12      # fast extend on enter
+const HOVER_STRETCH_RETURN := 0.5    # slower settle back on exit
+var _bump_tween: Tween
+var _stretched := false              # currently extended (hovered or held)
+
 
 func _bar_tint() -> Color:
 	# bar_color overrides the theme's normal-text color when alpha > 0 —
@@ -159,7 +190,9 @@ func _flush_apply() -> void:
 
 func _flush_apply_fill() -> void:
 	_apply_fill_pending = false
-	if not _apply_pending and is_inside_tree(): _apply_fill()
+	# A fill_amount change only moves the clip — never the panel color/corners —
+	# so this hot path (every currency tick) updates geometry alone, no stylebox alloc.
+	if not _apply_pending and is_inside_tree(): _update_fill_geometry()
 
 
 func _flush_apply_text() -> void:
@@ -175,8 +208,12 @@ func _ready() -> void:
 	# plus/minus go through named handlers because they also fire stored
 	# callbacks + tooltip hover refresh.
 	main_button.pressed.connect(main_pressed.emit)
-	main_button.mouse_entered.connect(main_mouse_entered.emit)
-	main_button.mouse_exited.connect(main_mouse_exited.emit)
+	main_button.mouse_entered.connect(_on_main_mouse_entered)
+	main_button.mouse_exited.connect(_on_main_mouse_exited)
+	# Track press for the fill shade (the border shades natively; the fill panel
+	# is a separate node, so we drive it from the same state transitions).
+	main_button.button_down.connect(_on_main_button_down)
+	main_button.button_up.connect(_on_main_button_up)
 	plus_button.pressed.connect(_on_plus_pressed)
 	plus_button.mouse_entered.connect(_on_plus_mouse_entered)
 	plus_button.mouse_exited.connect(_on_plus_mouse_exited)
@@ -204,13 +241,14 @@ func _apply() -> void:
 	_fill_bounds.offset_top = 0
 	_fill_bounds.offset_bottom = 0
 
-	var minus_style := _make_side_style(false, demo_minus_filled)
-	var main_style := _make_main_style(has_minus, has_plus, has_minus_active, has_plus_active)
-	var plus_style := _make_side_style(true, demo_plus_filled)
+	# Caps shade natively (Godot swaps the per-state stylebox on hover/press).
+	# "disabled" maps to NORMAL so a can't-afford cap keeps the resting look.
 	for state in ["normal", "hover", "pressed", "disabled"]:
-		minus_button.add_theme_stylebox_override(state, minus_style)
-		main_button.add_theme_stylebox_override(state, main_style)
-		plus_button.add_theme_stylebox_override(state, plus_style)
+		var st := _state_for(state)
+		minus_button.add_theme_stylebox_override(state, _make_side_style(false, demo_minus_filled, st))
+		plus_button.add_theme_stylebox_override(state, _make_side_style(true, demo_plus_filled, st))
+	# Main bar border follows _visual_state (all draw modes share one stylebox).
+	_refresh_main_border()
 	# Hide Main's own text so the BaseLbl/FillLbl overlay alone shows the label.
 	main_button.text = ""
 	main_button.add_theme_color_override("font_color", Color.TRANSPARENT)
@@ -268,17 +306,42 @@ func _apply_text() -> void:
 
 
 func _apply_fill() -> void:
-	if not _fill_clip:
-		return
-	_fill_clip.anchor_right = fill_amount
+	# Full fill refresh: rebuild the panel stylebox (color/corners can shift with
+	# theme, tint, mode, disabled) THEN update geometry. Only reached from _apply()
+	# — the frequent fill_amount + press paths call _update_fill_geometry() alone,
+	# which allocates nothing.
 	if _fill_panel:
 		var has_minus := mode == Mode.WITH_BOTH
 		var has_plus := mode != Mode.NEITHER
 		_fill_panel.add_theme_stylebox_override("panel", _make_fill_style(has_minus, has_plus, demo_main_disabled))
+	_update_fill_geometry()
+
+
+func _update_fill_geometry() -> void:
+	if not _fill_clip:
+		return
+	_fill_clip.anchor_right = fill_amount
 	if fill_amount > 0.001:
 		var stretch := 1.0 / fill_amount
 		_fill_title_lbl.anchor_right = stretch
 		_fill_num_lbl.anchor_right = stretch
+
+
+# Hover lightens, press darkens — matched to MainMenuButton. NORMAL (and the
+# "disabled" stylebox, which maps here) returns the tint unchanged.
+func _shade_for_state(tint: Color, state: int) -> Color:
+	match state:
+		BtnState.HOVER: return tint.lightened(HOVER_LIGHTEN)
+		BtnState.PRESSED: return tint.darkened(PRESS_DARKEN)
+		_: return tint
+
+
+func _state_for(state_name: String) -> int:
+	# Godot's "disabled" stylebox shares the resting (NORMAL) look on purpose.
+	match state_name:
+		"hover": return BtnState.HOVER
+		"pressed": return BtnState.PRESSED
+		_: return BtnState.NORMAL
 
 
 func _make_fill_style(has_minus: bool, has_plus: bool, disabled: bool = false) -> StyleBoxFlat:
@@ -287,7 +350,10 @@ func _make_fill_style(has_minus: bool, has_plus: bool, disabled: bool = false) -
 	# bars (currencies) never gray out: their color is their identity.
 	var tint := _bar_tint()
 	var is_tinted := bar_color.a > 0.0
-	s.bg_color = tint.lightened(0.25) if disabled and not is_tinted else tint
+	var base: Color = tint.lightened(0.25) if disabled and not is_tinted else tint
+	# Hover lightens / press darkens the filled portion (the visible "bar"), so
+	# the color response reads on the bar itself — not just the thin border.
+	s.bg_color = _shade_for_state(base, _visual_state)
 	# Fill is flush with Main's outer edge on non-cap sides, so its corners
 	# match Main's outer curve exactly (covering the border with same color).
 	s.corner_radius_top_left = 0 if has_minus else RADIUS_PX
@@ -297,7 +363,7 @@ func _make_fill_style(has_minus: bool, has_plus: bool, disabled: bool = false) -
 	return s
 
 
-func _make_side_style(is_right_side: bool, filled: bool = true) -> StyleBoxFlat:
+func _make_side_style(is_right_side: bool, filled: bool = true, state: int = BtnState.NORMAL) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.content_margin_left = 10.0
 	s.content_margin_top = 6.0
@@ -309,9 +375,11 @@ func _make_side_style(is_right_side: bool, filled: bool = true) -> StyleBoxFlat:
 		s.bg_color = Color.TRANSPARENT
 		s.border_color = Color.TRANSPARENT
 		return s
-	var tint := _bar_tint()
-	s.bg_color = tint
-	s.border_color = tint
+	# Solid cap: the whole body (bg + border) lightens on hover / darkens on
+	# press, just like the menu button's solid bar.
+	var shade := _shade_for_state(_bar_tint(), state)
+	s.bg_color = shade
+	s.border_color = shade
 	# Border on outside + top + bottom only; inner seam (against Main) is borderless.
 	s.border_width_left = 0 if is_right_side else BORDER_PX
 	s.border_width_top = BORDER_PX
@@ -327,14 +395,16 @@ func _make_side_style(is_right_side: bool, filled: bool = true) -> StyleBoxFlat:
 	return s
 
 
-func _make_main_style(has_minus: bool, has_plus: bool, has_minus_active: bool, has_plus_active: bool) -> StyleBoxFlat:
+func _make_main_style(has_minus: bool, has_plus: bool, has_minus_active: bool, has_plus_active: bool, state: int = BtnState.NORMAL) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.content_margin_left = 14.0
 	s.content_margin_top = 6.0
 	s.content_margin_right = 14.0
 	s.content_margin_bottom = 6.0
 	s.bg_color = Color.TRANSPARENT
-	s.border_color = _bar_tint()
+	# Transparent body (the fill panel shows the progress color); only the border
+	# responds to hover/press — lightened / darkened to match the menu button.
+	s.border_color = _shade_for_state(_bar_tint(), state)
 	# Border: drawn only when the cap isn't actively covering that side, so
 	# the bar's outline closes itself when a cap is disabled.
 	s.border_width_left = 0 if has_minus_active else BORDER_PX
@@ -434,20 +504,114 @@ func set_attention(enabled: bool) -> void:
 		return
 	_attention_tween = ThemeProvider.theme.blink_scale_fade(self, 1.05, 0.5)
 
-func pulse_main(scale_override: float = 0.0) -> void:
-	if not main_button.disabled:
-		ThemeProvider.theme.pulse_control(main_button, scale_override)
-
-func pulse_plus() -> void:
-	if not plus_button.disabled:
-		ThemeProvider.theme.pulse_control(plus_button)
-
-func pulse_minus() -> void:
-	if not minus_button.disabled:
-		ThemeProvider.theme.pulse_control(minus_button)
-
 
 # ── Internal: signal handlers ──────────────────────────────────────────
+
+# Caps don't stretch the row — just a small scale pop on the cap itself plus the
+# hover note. Hover always acknowledges the hover, even when the cap is disabled
+# (disabled only blocks the click; the washed-out look + tooltip convey that).
+func _play_cap_hover(cap: Button) -> void:
+	ThemeProvider.theme.pulse_control(cap)
+	AudioManager.play_ui_hover()
+
+
+# Extend the WHOLE row and hold (on), or settle it back (off). scale.x only — no
+# layout reflow. See the HOVER_STRETCH_* block for the hold/pivot semantics.
+func _set_stretched(on: bool) -> void:
+	if _stretched == on:
+		return
+	_stretched = on
+	if _bump_tween and _bump_tween.is_valid():
+		_bump_tween.kill()
+	_apply_stretch_pivot()
+	var target: float = (1.0 + HOVER_STRETCH_AMOUNT) if on else 1.0
+	var duration: float = HOVER_STRETCH_OUT if on else HOVER_STRETCH_RETURN
+	_bump_tween = create_tween()
+	_bump_tween.tween_property(self, "scale:x", target, duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+
+# Pivot at the CAPPED edge so the bar grows toward its open side.
+func _apply_stretch_pivot() -> void:
+	var has_left_cap := mode == Mode.WITH_BOTH
+	var has_right_cap := mode != Mode.NEITHER
+	var pivot_x: float
+	if has_left_cap == has_right_cap:
+		pivot_x = size.x * 0.5            # both caps or none → grow both ways
+	elif has_left_cap:
+		pivot_x = 0.0                     # left cap only → anchor left, grow right
+	else:
+		pivot_x = size.x                  # right cap only → anchor right, grow left
+	pivot_offset = Vector2(pivot_x, size.y * 0.5)
+
+
+# ── Main bar interaction: stretch bump + hover note + shade tracking ──
+
+## Force the main bar's pressed look on/off from an external held shortcut (e.g.
+## holding the drop hotkey). Combines with mouse state in _refresh_interaction_visual.
+func set_held(held: bool) -> void:
+	if _held == held:
+		return
+	_held = held
+	_refresh_interaction_visual()
+
+
+# Resolve the main bar's state from all inputs and reshade if it changed. Pressed
+# wins (mouse OR held shortcut), then hover, else normal.
+func _refresh_interaction_visual() -> void:
+	# Disabled only blocks the click — hover/press still shade so the button
+	# always acknowledges interaction (e.g. the drop bar with a full queue).
+	var state: int
+	if _mouse_pressed or _held:
+		state = BtnState.PRESSED
+	elif main_button.is_hovered():
+		state = BtnState.HOVER
+	else:
+		state = BtnState.NORMAL
+	# Stay stretched the whole time the bar is hovered OR held (e.g. drop key
+	# down); settle back only at rest. This is what makes holding space stretch
+	# the drop bar, not just shade it.
+	_set_stretched(state != BtnState.NORMAL)
+	if state == _visual_state:
+		return
+	_visual_state = state
+	_refresh_main_border()
+	if _fill_panel:
+		_fill_panel.add_theme_stylebox_override("panel",
+			_make_fill_style(mode == Mode.WITH_BOTH, mode != Mode.NEITHER, demo_main_disabled))
+
+
+# Border for the main bar — one stylebox shared across all draw modes, shaded by
+# the resolved _visual_state (see the loop note in _apply).
+func _refresh_main_border() -> void:
+	var has_minus := mode == Mode.WITH_BOTH
+	var has_plus := mode != Mode.NEITHER
+	var style := _make_main_style(has_minus, has_plus,
+		has_minus and demo_minus_filled, has_plus and demo_plus_filled, _visual_state)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		main_button.add_theme_stylebox_override(state, style)
+
+
+func _on_main_mouse_entered() -> void:
+	_refresh_interaction_visual()  # → HOVER state + stretch out (held while hovering)
+	AudioManager.play_ui_hover()
+	main_mouse_entered.emit()
+
+
+func _on_main_mouse_exited() -> void:
+	_refresh_interaction_visual()
+	main_mouse_exited.emit()
+
+
+func _on_main_button_down() -> void:
+	_mouse_pressed = true
+	_refresh_interaction_visual()
+
+
+func _on_main_button_up() -> void:
+	_mouse_pressed = false
+	_refresh_interaction_visual()
+
 
 func _on_plus_pressed() -> void:
 	if _plus_callback.is_valid():
@@ -460,7 +624,7 @@ func _on_plus_pressed() -> void:
 
 
 func _on_plus_mouse_entered() -> void:
-	pulse_plus()
+	_play_cap_hover(plus_button)
 	if _plus_hover_callback.is_valid():
 		side_button_hover.emit(_plus_hover_callback.call())
 	plus_mouse_entered.emit()
@@ -478,7 +642,7 @@ func _on_minus_pressed() -> void:
 
 
 func _on_minus_mouse_entered() -> void:
-	pulse_minus()
+	_play_cap_hover(minus_button)
 	if _minus_hover_callback.is_valid():
 		side_button_hover.emit(_minus_hover_callback.call())
 	minus_mouse_entered.emit()

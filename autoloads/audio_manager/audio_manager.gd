@@ -105,6 +105,13 @@ var _active_coin_count: int = 0
 
 # Global throttle for peg chimes — last play timestamp in seconds.
 var _peg_chime_last_time_s: float = -1000.0
+# UI hover arpeggio — mirrors MainMenu's mechanism so gameplay buttons sing the
+# same way. One shared MenuHoverArpeggiator across every button advances ONE
+# note per hover (ping-pong up the chord, resets after idle); notes are queued
+# and a quantize timer pops one per grid tick. AudioManager owns it (single
+# owner, single chord source) just as MainMenu owns the menu's instance.
+var _ui_hover_arp := MenuHoverArpeggiator.new()
+var _ui_hover_pitch_queue: Array[float] = []
 var _peg_chime_rng: RandomNumberGenerator = RandomNumberGenerator.new()
 # Quantize mode (theme.peg_chime_quantize_seconds > 0): peg hits within a
 # quantum collapse to one chime fired on the next quantum boundary. The most
@@ -388,6 +395,14 @@ func _ready() -> void:
 	ChallengeManager.tick.connect(_on_challenge_tick)
 	PrestigeManager.prestige_phase_changed.connect(_on_prestige_phase_changed)
 	_on_theme_swap.call_deferred()
+
+	# Free-running eighth-note grid that pops queued UI-hover notes (mirrors
+	# MainMenu's _hover_quantize_timer). Cheap when the queue is empty.
+	var ui_hover_timer := Timer.new()
+	ui_hover_timer.wait_time = UI_HOVER_QUANTIZE_SECONDS
+	ui_hover_timer.autostart = true
+	ui_hover_timer.timeout.connect(_on_ui_hover_quantize_tick)
+	add_child(ui_hover_timer)
 
 	set_master_volume(50.0)
 	set_process(true)
@@ -1262,6 +1277,52 @@ func _theme_melody_slot_seconds() -> float:
 	if ThemeProvider and ThemeProvider.theme:
 		return ThemeProvider.theme.melody_slot_seconds
 	return SLOT_DURATION
+
+
+# UI hover audio — faithful copy of the main-menu hover (MainMenu._on_menu_button_hover):
+# each hover commits ONE note from the shared arpeggiator to a small queue; the
+# quantize timer pops one per 0.125s grid tick and rings it through the board's
+# bucket instrument (one octave up) so the buttons sing in the game's own voice.
+# Queue-full hovers are dropped WITHOUT advancing the arpeggiator, so the
+# progression stays aligned with what's actually audible. The arpeggiator walks
+# up the current chord one step per hover and resets after a short idle.
+const UI_HOVER_QUANTIZE_SECONDS := 0.125
+const UI_HOVER_QUEUE_CAPACITY := 3
+const UI_HOVER_NOTE_SUSTAIN_S := 3.0
+# Volume below a bucket hit. A literal "2/3 amplitude" (-3.5 dB) was inaudible —
+# the note is an octave up (the ear reads higher pitches as louder) and sits
+# below the Drones compressor threshold, so it needs a real cut. THE knob to
+# tune by ear: more negative = quieter.
+const UI_HOVER_VOLUME_OFFSET_DB := -8.0
+# Normal-bucket register (matches _play_bucket_now's octave_mult). We build the
+# chord pitches down here so the arpeggiator's built-in +1 octave lands the hover
+# note exactly ONE octave above the buckets (not two).
+const UI_HOVER_BUCKET_OCTAVE := 0.5
+
+func play_ui_hover() -> void:
+	if _silenced:
+		return
+	if _ui_hover_pitch_queue.size() >= UI_HOVER_QUEUE_CAPACITY:
+		return
+	var note: Vector2i = _ui_hover_arp.advance(Time.get_ticks_msec())
+	# Current chord's 4 note multipliers at the bucket register; pitch_mult_for
+	# adds the arpeggiator's one octave → one octave above the buckets.
+	var pitches := PackedFloat32Array([
+		_get_pitch_scale(0) * UI_HOVER_BUCKET_OCTAVE,
+		_get_pitch_scale(1) * UI_HOVER_BUCKET_OCTAVE,
+		_get_pitch_scale(2) * UI_HOVER_BUCKET_OCTAVE,
+		_get_pitch_scale(3) * UI_HOVER_BUCKET_OCTAVE])
+	_ui_hover_pitch_queue.append(MenuHoverArpeggiator.pitch_mult_for(note.x, note.y, pitches))
+
+
+func _on_ui_hover_quantize_tick() -> void:
+	if _ui_hover_pitch_queue.is_empty():
+		return
+	var pitch_mult: float = _ui_hover_pitch_queue.pop_front()
+	# Same instrument as the gameplay buckets (so the hover sings in the board's
+	# voice), held clearly below them via UI_HOVER_VOLUME_OFFSET_DB.
+	var vol_db: float = BUCKET_VOLUME_DB + UI_HOVER_VOLUME_OFFSET_DB
+	play_pitched_chime(pitch_mult, vol_db, UI_HOVER_NOTE_SUSTAIN_S, _theme_bucket_type())
 
 
 func play_peg_click(board_type: Enums.BoardType) -> void:

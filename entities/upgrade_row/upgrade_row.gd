@@ -167,7 +167,8 @@ func _on_mouse_entered() -> void:
 		bar.set_attention(false)
 	if not bar.main_button.disabled:
 		bar.apply_fill_colors(false)
-	bar.pulse_main(1.005)
+	# Hover pulse + blip are owned by RefinedBaselineButton itself now (a second
+	# pulse here would fight that tween on the same node).
 	hover_info_changed.emit(_get_purchase_hover_text())
 
 func _on_mouse_exited() -> void:
