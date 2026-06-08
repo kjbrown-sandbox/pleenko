@@ -33,9 +33,9 @@ func _apply_theme() -> void:
 	_drop_rate_label.add_theme_font_override("normal_font", btn_font)
 
 
-## Drop-rate readout (bbcode) shown to the right of the gate. Caller (PlinkoBoard)
-## builds the text via FormatUtils.drop_rate_text so the decomposition + bolding
-## live in one place. Empty text hides the label.
+## Drop-rate readout shown to the right of the gate. Caller (PlinkoBoard) builds
+## the text via FormatUtils.drop_rate_text so the decomposition lives in one
+## place. Empty text hides the label.
 func set_drop_rate_text(text: String) -> void:
 	if not _drop_rate_label:
 		return
@@ -140,8 +140,8 @@ func _on_rate_intro_arrived(new_text: String, on_done: Callable) -> void:
 		_rate_intro_active = false
 		on_done.call()
 		return
-	# Reveal via visible_characters (not substring) so the bbcode [b] tags stay
-	# intact — substringing would slice a tag mid-reveal.
+	# Reveal via visible_characters (the RichTextLabel native typewriter) rather
+	# than reassigning substrings each tick.
 	_drop_rate_label.text = new_text
 	_drop_rate_label.visible = true
 	_drop_rate_label.visible_characters = 0

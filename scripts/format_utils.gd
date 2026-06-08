@@ -27,6 +27,8 @@ static func drop_rate_text(drop_delay: float, count: int, total: float) -> Strin
 	if extra <= 0:
 		calc = "%.2f" % total
 	else:
+		# /5 mirrors PlinkoBoard.QUEUE_RATE_BONUS_PER_COIN (0.20 = 1/5); the printed
+		# `total` is the real rate, so this per-coin term is illustrative only.
 		var per: float = base / 5.0
 		calc = "%.2f = %.2f + (%d * %.2f)" % [total, base, extra, per]
 	return "%s\ndrops per second" % calc

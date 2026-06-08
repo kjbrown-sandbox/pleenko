@@ -48,10 +48,8 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var coin_queue: CoinQueue = $CoinQueue
 @onready var _drop_main_column: VBoxContainer = $DropSection/DropButtons/DropMainColumn
 @onready var _drop_main = $DropSection/DropButtons/DropMainColumn/DropMain
-@onready var _drop_main_label: Label = $DropSection/DropButtons/DropMainColumn/DropMainLabel
 @onready var _drop_advanced_column: VBoxContainer = $DropSection/DropButtons/DropAdvancedColumn
 @onready var _drop_advanced = $DropSection/DropButtons/DropAdvancedColumn/DropAdvanced
-@onready var _drop_advanced_label: Label = $DropSection/DropButtons/DropAdvancedColumn/DropAdvancedLabel
 @onready var _drop_main_tooltip: Tooltip = $DropSection/DropMainTooltip
 @onready var _drop_advanced_tooltip: Tooltip = $DropSection/DropAdvancedTooltip
 
@@ -3329,7 +3327,7 @@ func get_drop_button_ids() -> Array:
 ## bar, advanced for the advanced bar). Driven DOWN by BoardManager, which owns
 ## the assignment counts.
 func set_drop_main_text(button_id: StringName, autodropper_count: int, autodroppers_unlocked: bool) -> void:
-	var bar = _drop_buttons.get(button_id)
+	var bar: HBoxContainer = _drop_buttons.get(button_id)
 	if not bar:
 		return
 	var is_adv: bool = (button_id as String).ends_with("_ADVANCED")
@@ -3339,28 +3337,6 @@ func set_drop_main_text(button_id: StringName, autodropper_count: int, autodropp
 		bar.update_text("Drop %s • %d auto" % [coin_name, autodropper_count])
 	else:
 		bar.update_text("Drop %s" % coin_name)
-
-
-func set_drop_subtext(button_id: StringName, text: String) -> void:
-	var bar: HBoxContainer = _drop_buttons.get(button_id)
-	if not bar:
-		return
-	var label: Label
-	if bar == _drop_main:
-		label = _drop_main_label
-	elif bar == _drop_advanced:
-		label = _drop_advanced_label
-	else:
-		return
-	if not label.has_meta("styled"):
-		var t: VisualTheme = ThemeProvider.theme
-		label.add_theme_font_size_override("font_size", maxi(t.button_font_size - 4, 8))
-		label.add_theme_color_override("font_color", t.normal_text_color)
-		var btn_font: Font = t.button_font if t.button_font else preload("res://style_lab/VendSans-Bold.ttf")
-		label.add_theme_font_override("font", btn_font)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.set_meta("styled", true)
-	label.text = text
 
 
 ## Applies saved upgrade state to this board without going through buy logic.

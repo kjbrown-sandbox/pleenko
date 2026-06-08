@@ -1,8 +1,8 @@
 class_name DropGate
 extends Node3D
 
-## Purely-visual pinball-style drop gate beneath the coin spawn, sized to match an
-## inactive bucket (same width, same thinness). Two flaps split at the centre and
+## Purely-visual pinball-style drop gate beneath the coin spawn, sized off an
+## inactive bucket (~2/3 its width, same thinness). Two flaps split at the centre and
 ## hinge at the OUTER edges (double doors): closed they form a seamless flat bar;
 ## open they swing down to vertical. No collision — the drop is still governed
 ## entirely by the board's drop timer. PlinkoBoard calls open()/close() in sync
