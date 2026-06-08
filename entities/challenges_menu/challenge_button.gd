@@ -55,7 +55,7 @@ func _apply_theme() -> void:
 
 	match _state:
 		ChallengeProgressManager.ChallengeState.LOCKED:
-			outline_color = t.resolve(VisualTheme.Palette.BG_3)
+			outline_color = t.resolve(VisualTheme.Palette.BG_4)
 		ChallengeProgressManager.ChallengeState.UNLOCKED:
 			outline_color = t.normal_text_color if _hovered else tier_color
 		ChallengeProgressManager.ChallengeState.COMPLETED:

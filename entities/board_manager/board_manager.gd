@@ -169,8 +169,6 @@ func _spawn_board(type: Enums.BoardType) -> void:
 	board.row_upgrade_starting.connect(_on_row_upgrade_starting.bind(board))
 	board.row_upgrade_sweep_started.connect(_on_row_upgrade_sweep_started.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
-	# Queue count changes shift the effective drop delay — refresh subtext.
-	board.coin_queue.count_changed.connect(_on_board_queue_count_changed)
 	if _normal_autodroppers_unlocked:
 		board.set_normal_autodroppers_visible(true)
 	if _advanced_autodroppers_unlocked:
@@ -625,34 +623,20 @@ func _update_all_button_displays() -> void:
 	var advanced_free := get_free_advanced_autodroppers()
 	for board in _boards:
 		board.update_autodropper_buttons(_assignments, normal_free, advanced_free)
-	_update_all_drop_subtext()
+	_update_all_drop_labels()
 
 
-func _update_all_drop_subtext() -> void:
-	# Cheap: just refreshes the "auto N · Xs" label under each drop button.
-	# Called on every queue enqueue/dequeue without restyling buttons.
+func _update_all_drop_labels() -> void:
+	# Refreshes each drop button's face text ("Drop gold • N auto"). The auto
+	# count only changes on assignment/unlock, so this rides the assignment path
+	# only — NOT queue ticks. The drop-rate readout lives gate-side (driven by
+	# PlinkoBoard) and is no longer part of the button label.
 	for board in _boards:
-		var effective: float = board.get_effective_drop_delay()
-		var delay_str: String
-		if effective == int(effective):
-			delay_str = str(int(effective)) + "s"
-		else:
-			delay_str = "%.1fs" % effective
 		for bid in board.get_drop_button_ids():
 			var is_adv := _is_advanced_button(bid)
 			var autodrop_unlocked: bool = (_advanced_autodroppers_unlocked if is_adv else _normal_autodroppers_unlocked)
-			if autodrop_unlocked:
-				var assigned: int = _assignments.get(bid, 0)
-				board.set_drop_subtext(bid, "auto %d · %s" % [assigned, delay_str])
-			else:
-				board.set_drop_subtext(bid, delay_str)
-
-
-func _on_board_queue_count_changed(_new_count: int) -> void:
-	# Queue-count change only affects the drop-rate subtext (queue bonus
-	# alters effective delay); the +/- styling is governed by assignments
-	# and pool counts, which haven't changed.
-	_update_all_drop_subtext()
+			var assigned: int = _assignments.get(bid, 0)
+			board.set_drop_main_text(bid, assigned, autodrop_unlocked)
 
 
 func serialize() -> Dictionary:

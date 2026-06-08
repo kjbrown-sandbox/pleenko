@@ -6,7 +6,7 @@
 script = ExtResource("1")
 type = 3
 display_name = "Queue size"
-description = "Increase the number of coins that can be queued at once"
+description = "Increase the number of coins that can be queued at once. Queued coins increase drop rate."
 base_cost = 15
 max_level = 7
 cost_type = 1

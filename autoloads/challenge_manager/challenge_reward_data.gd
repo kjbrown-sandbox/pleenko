@@ -47,11 +47,10 @@ func display_text() -> String:
 		RewardType.STARTING_MODIFIER:
 			return _starting_modifier_text()
 		RewardType.PERMANENT_UPGRADE:
-			# board_type/upgrade_type both lower-cased so they read inline
-			# as one phrase ("+1 gold drop rate level").
-			var board: String = FormatUtils.board_name(board_type, false)
+			# Board name is omitted — these only ever apply to the board whose
+			# challenge granted them ("+1 permanent drop rate upgrade").
 			var upgrade: String = FormatUtils.upgrade_name(upgrade_type)
-			return "+%d %s %s level" % [int(modifier_amount), board, upgrade]
+			return "+%d permanent %s upgrade" % [int(modifier_amount), upgrade]
 	return ""
 
 
@@ -69,23 +68,23 @@ func _starting_modifier_text() -> String:
 			# (gold-only by design, like GOLD_COIN_SPEED_BOOST).
 			return "+%.1f raw orange multiplier" % modifier_amount
 		ModifierType.BUCKET_VALUE_PERCENT:
-			return "+%d%% %s bucket value" % [int(modifier_amount * 100), board]
+			return "+%d%% bucket value" % int(modifier_amount * 100)
 		ModifierType.CENTER_BUCKET_VALUE:
-			return "+%d %s middle bucket value" % [int(modifier_amount), board]
+			return "+%d middle bucket value" % int(modifier_amount)
 		ModifierType.DROP_COST_REDUCTION:
 			# Cost is paid in the previous tier's primary currency (the "fuel").
 			var prev: TierData = TierRegistry.get_previous_tier(board_type)
 			var fuel: String = FormatUtils.currency_name(prev.primary_currency, false) if prev else "fuel"
 			return "%s coins cost %d less %s" % [board.capitalize(), int(modifier_amount), fuel]
 		ModifierType.GOLDEN_BUCKET_MULTIPLIER:
-			return "+%.1f %s golden bucket multiplier" % [modifier_amount, board]
+			return "+%d special bucket modifier" % int(modifier_amount)
 		ModifierType.STARTING_AUTODROPPERS:
 			return "+%d starting %s autodroppers" % [int(modifier_amount), board]
 		# GOLD_COIN_SPEED_BOOST / QUEUE_RATE_BONUS pull their magnitude live from
 		# the gameplay constants — those constants are the canonical source for
 		# the displayed numbers, so the text can never go stale against them.
 		ModifierType.GOLD_COIN_SPEED_BOOST:
-			return "+%d%% gold coin fall speed" % int(Coin.COIN_SPEED_BOOST_PER_UNLOCK * 100)
+			return "+%d%% coin fall speed" % int(Coin.COIN_SPEED_BOOST_PER_UNLOCK * 100)
 		ModifierType.QUEUE_RATE_BONUS:
-			return "+%d%% gold queue bonus" % int(PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK * 100)
+			return "+%d%% queue bonus" % int(PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK * 100)
 	return ""

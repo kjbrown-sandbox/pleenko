@@ -8,12 +8,12 @@ var vertical_spacing: float
 @export var drop_delay_reduction_factor: float = 0.82
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
-## Each coin in the queue (FULL or FILLING) boosts drop rate by this multiplier
-## of the base rate. effective_delay = drop_delay / (1 + bonus * queue.count).
-## Additive in rate (not delay) keeps the curve self-bounded — delay shrinks
-## but never reaches zero. With 1.0, one queued coin doubles the rate, two
-## triples it, ten gives 11x the base rate.
-const QUEUE_RATE_BONUS_PER_COIN := 0.15
+## Each EXTRA queued coin (past the always-present first slot, which is "free")
+## boosts drop rate by this fraction of the base rate. One extra coin adds 1/5
+## of the base rate. effective_delay = drop_delay / (1 + bonus * extra), where
+## extra = max(0, queue.count - 1). Additive in rate (not delay) keeps the curve
+## self-bounded — delay shrinks but never reaches zero.
+const QUEUE_RATE_BONUS_PER_COIN := 0.20
 
 ## Each granted QUEUE_RATE_BONUS challenge reward adds this much to the
 ## per-queued-coin bonus above. Stackable; gold board only (counted globally,
@@ -30,10 +30,10 @@ const QUEUE_RATE_BONUS_PER_UNLOCK := 0.10
 ## null-queue path) works without setup().
 var _queue_rate_bonus_per_coin: float = QUEUE_RATE_BONUS_PER_COIN
 
-## Pixel offset from the projected spawn point to the top-left of the bonus
-## label box. +X pushes the label right of the queue (clear of the drop
-## column); -Y centers a single line vertically against the spawn dot.
-const QUEUE_BONUS_LABEL_OFFSET := Vector2(40.0, -16.0)
+## Pixel offset from the projected spawn point to the top-left of the drop-rate
+## label box. +X pushes the label right of the gate (clear of the drop column);
+## -Y centers a single line vertically against the spawn dot.
+const DROP_RATE_LABEL_OFFSET := Vector2(40.0, -16.0)
 
 ## Delay between each bonus coin in a multi-drop, so they don't all land simultaneously.
 const MULTI_DROP_STAGGER := 0.05
@@ -48,10 +48,8 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var coin_queue: CoinQueue = $CoinQueue
 @onready var _drop_main_column: VBoxContainer = $DropSection/DropButtons/DropMainColumn
 @onready var _drop_main = $DropSection/DropButtons/DropMainColumn/DropMain
-@onready var _drop_main_label: Label = $DropSection/DropButtons/DropMainColumn/DropMainLabel
 @onready var _drop_advanced_column: VBoxContainer = $DropSection/DropButtons/DropAdvancedColumn
 @onready var _drop_advanced = $DropSection/DropButtons/DropAdvancedColumn/DropAdvanced
-@onready var _drop_advanced_label: Label = $DropSection/DropButtons/DropAdvancedColumn/DropAdvancedLabel
 @onready var _drop_main_tooltip: Tooltip = $DropSection/DropMainTooltip
 @onready var _drop_advanced_tooltip: Tooltip = $DropSection/DropAdvancedTooltip
 
@@ -120,6 +118,23 @@ var _active_peg_pulses: Dictionary = {}  # peg_index -> { elapsed: float, durati
 # Lives only in the BoardManager save blob — cleared on prestige reset.
 var _deflectors: Dictionary = {}  # peg_index: int -> dir: int (Enums.Direction)
 var _deflector_editor: DeflectorEditor
+
+## Purely-visual drop gate beneath the spawn (opens/closes per drop). Placement
+## is board-local: just below the spawn point, nudged toward the camera so it
+## reads over the pegs.
+const GATE_Y_BELOW_SPAWN := 0.18
+const GATE_Z := 0.1
+var _drop_gate: DropGate
+
+## True while the first-queue-purchase intro is mid-flight; suppresses normal
+## drop-rate-text updates so the intro's typewriter owns the label.
+var _queue_intro_active: bool = false
+
+## Font size of the "no auto room" Label3D. The 2D rate readout is sized to this
+## label's on-screen height each frame so the two queue-side readouts match.
+const NO_ROOM_FONT_SIZE := 40
+var _label3d_default_pixel_size: float = 0.0  # engine default, read once
+var _last_rate_font_size: int = -1
 
 ## Bucket indices whose vertical column has been destroyed by a bomb detonation.
 ## Cleared on build_board (matches the deflectors-survive-prestige-only pattern
@@ -319,7 +334,13 @@ func setup(type: Enums.BoardType) -> void:
 	coin_queue.setup(Vector3(0, vertical_spacing + 0.2, 0))
 	coin_queue.set_capacity(_queue_capacity_for_level(perm_queue))
 	coin_queue.count_changed.connect(_on_queue_count_changed)
-	drop_section.set_queue_bonus(coin_queue.count, _queue_rate_bonus_per_coin)
+	coin_queue.capacity_changed.connect(_on_queue_capacity_changed)
+	_update_drop_rate_text()
+
+	# Drop gate: purely-visual flaps just below the spawn point.
+	_drop_gate = DropGate.new()
+	add_child(_drop_gate)
+	_drop_gate.position = Vector3(0, vertical_spacing + 0.2 - GATE_Y_BELOW_SPAWN, GATE_Z)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
@@ -404,16 +425,48 @@ func _show_no_room() -> void:
 		return  # Already showing
 	var t: VisualTheme = ThemeProvider.theme
 	_no_room_label = Label3D.new()
-	_no_room_label.text = "no\nauto\nroom"
-	_no_room_label.font_size = 32
+	_no_room_label.text = "no auto room"
+	_no_room_label.font_size = NO_ROOM_FONT_SIZE
 	if t.label_font:
 		_no_room_label.font = t.label_font
 	_no_room_label.modulate = t.normal_text_color
 	_no_room_label.outline_size = 0
 	_no_room_label.no_depth_test = true
-	_no_room_label.line_spacing = -16
-	_no_room_label.position = coin_queue.get_overflow_position() + Vector3(-0.2, 0, 0)
+	# Provisional spot (left of the queue); refined once the text mesh exists so
+	# the gap to the leftmost coin matches the gate↔rate-text gap on the right.
+	_no_room_label.position = coin_queue.get_overflow_position()
 	add_child(_no_room_label)
+	_position_no_room_label.call_deferred()
+
+
+## Places "no auto room" left of the queue, leaving the SAME gap from the
+## leftmost coin that the rate readout leaves from the gate on the right
+## (DROP_RATE_LABEL_OFFSET.x, converted from screen px to world units). Deferred
+## so the Label3D mesh AABB (for the text half-width) is available.
+func _position_no_room_label() -> void:
+	if not is_instance_valid(_no_room_label):
+		return
+	var leftmost_index: int = maxi(0, coin_queue.capacity - 1)
+	var leftmost_x: float = coin_queue.start_position.x - float(leftmost_index) * coin_queue.coin_spacing
+	var gap_world: float = _screen_px_to_world(DROP_RATE_LABEL_OFFSET.x)
+	var half_width: float = _no_room_label.get_aabb().size.x * 0.5
+	var base: Vector3 = coin_queue.get_overflow_position()
+	_no_room_label.position = Vector3(leftmost_x - gap_world - half_width, base.y, base.z)
+
+
+## World-space length of a screen-pixel span at the active orthographic camera's
+## zoom (the board camera is ortho, so pixels map linearly to world units at any
+## depth). Falls back to the Label3D default pixel_size when no camera is ready.
+func _screen_px_to_world(px: float) -> float:
+	var cam: Camera3D = get_active_camera()
+	if cam == null:
+		return px * 0.01
+	var vp_h: float = get_viewport().get_visible_rect().size.y
+	if vp_h <= 0.0:
+		return px * 0.01
+	if cam.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		return px * cam.size / vp_h
+	return px * 0.01
 
 
 func _hide_no_room() -> void:
@@ -430,7 +483,7 @@ func _format_cost_text(costs: Array) -> String:
 
 
 func _on_drop_main_hover() -> void:
-	_drop_main.pulse_main(1.005)
+	# Hover juice (stretch bump + note) is owned by RefinedBaselineButton now.
 	_drop_main_hovered = true
 	# Hover always shows the regular cost tooltip, overriding any persistent
 	# "Needs X" message until the mouse exits.
@@ -438,7 +491,6 @@ func _on_drop_main_hover() -> void:
 
 
 func _on_drop_advanced_hover() -> void:
-	_drop_advanced.pulse_main(1.005)
 	_drop_advanced_hovered = true
 	_drop_advanced_tooltip.update_and_show("Cost: %s\nHotkey: B" % _format_cost_text(_get_advanced_drop_costs()))
 
@@ -543,7 +595,7 @@ func _process(delta: float) -> void:
 		else:
 			request_drop()
 
-	_update_queue_bonus_label_position()
+	_update_drop_rate_label_position()
 
 	if not _active_flashes.is_empty():
 		_update_peg_flashes(delta)
@@ -832,6 +884,8 @@ func _launch_coin(coin: Coin) -> void:
 	coin.landed.connect(on_coin_landed)
 	coin.final_bounce_started.connect(_on_final_bounce_started)
 	coin.start(Vector3(0, 0.2, 0))
+	if is_instance_valid(_drop_gate):
+		_drop_gate.close()
 	coin_dropped.emit()
 	AudioManager.on_coin_dropped()
 
@@ -1056,15 +1110,18 @@ func _queue_rate_bonus_for_board(type: Enums.BoardType) -> float:
 		+ ChallengeProgressManager.get_queue_rate_bonus_count() * QUEUE_RATE_BONUS_PER_UNLOCK
 
 
-## Drop delay after applying the queue's rate bonus. Each queued coin (FULL or
-## FILLING) adds _queue_rate_bonus_per_coin (base + earned QUEUE_RATE_BONUS
-## challenge rewards, gold only) to the effective rate (rate = 1/delay), which
-## is equivalent to dividing the delay by (1 + bonus * queue.count).
-## Naturally bounded — delay shrinks but never reaches zero.
+## Drop delay after applying the queue's rate bonus. Each EXTRA queued coin past
+## the always-present first slot adds _queue_rate_bonus_per_coin (base + earned
+## QUEUE_RATE_BONUS challenge rewards, gold only) to the effective rate
+## (rate = 1/delay), which is equivalent to dividing the delay by
+## (1 + bonus * max(0, count - 1)). The first slot is "free" so a single queued
+## coin keeps the base cadence. Naturally bounded — delay shrinks but never
+## reaches zero.
 func get_effective_drop_delay() -> float:
 	if coin_queue == null:
 		return drop_delay
-	var bonus_mult: float = 1.0 + _queue_rate_bonus_per_coin * float(coin_queue.count)
+	var extra: int = maxi(0, coin_queue.count - 1)
+	var bonus_mult: float = 1.0 + _queue_rate_bonus_per_coin * float(extra)
 	return drop_delay / bonus_mult
 
 
@@ -1076,7 +1133,13 @@ func _on_queue_count_changed(_new_count: int) -> void:
 		var new_effective: float = get_effective_drop_delay()
 		_drop_timer_remaining *= new_effective / _last_effective_delay
 		_last_effective_delay = new_effective
-	drop_section.set_queue_bonus(coin_queue.count, _queue_rate_bonus_per_coin)
+	_update_drop_rate_text()
+
+
+## Buying the queue upgrade (capacity 1 -> 2) flips the readout from the
+## "opens every Xs" gate cadence to the decomposed "drops ... per second".
+func _on_queue_capacity_changed(_cap: int) -> void:
+	_update_drop_rate_text()
 
 
 ## Cached so we don't re-walk the viewport every frame. Refreshed on demand
@@ -1092,10 +1155,22 @@ func get_active_camera() -> Camera3D:
 	return _cached_camera
 
 
+## Build the decomposed drop-rate readout and hand it to the DropSection. The
+## decomposition itself lives in FormatUtils (single source of truth); the
+## printed total is the real 1/effective_delay so it matches the cadence.
+func _update_drop_rate_text() -> void:
+	if _queue_intro_active:
+		return  # the unlock intro's typewriter owns the label until it completes
+	if not is_instance_valid(coin_queue):
+		return
+	var total: float = 1.0 / get_effective_drop_delay()
+	drop_section.set_drop_rate_text(FormatUtils.drop_rate_text(drop_delay, coin_queue.count, total))
+
+
 ## Project the spawn point (slot 0 of the queue) into screen space and tell
-## the DropSection to anchor its bonus label there. Skipped when the section
+## the DropSection to anchor its drop-rate label there. Skipped when the section
 ## is hidden (non-active board) — saves the unproject + assignment cost.
-func _update_queue_bonus_label_position() -> void:
+func _update_drop_rate_label_position() -> void:
 	if not drop_section.visible:
 		return
 	if not is_instance_valid(coin_queue):
@@ -1106,13 +1181,47 @@ func _update_queue_bonus_label_position() -> void:
 			return
 	var spawn_world: Vector3 = coin_queue.global_position + coin_queue.start_position
 	var screen_pos: Vector2 = _cached_camera.unproject_position(spawn_world)
-	drop_section.set_queue_bonus_position(screen_pos + QUEUE_BONUS_LABEL_OFFSET)
+	drop_section.set_drop_rate_position(screen_pos + DROP_RATE_LABEL_OFFSET)
+	_match_rate_font_to_no_room(_cached_camera)
+
+
+## Sizes the 2D rate readout to the on-screen height of the 3D "no auto room"
+## Label3D so the two queue-side readouts read the same size. The Label3D is
+## world-space, so its apparent size shrinks as the camera zooms out with the
+## board — this tracks it. Re-applies only when the size actually changes.
+func _match_rate_font_to_no_room(cam: Camera3D) -> void:
+	if cam == null or cam.projection != Camera3D.PROJECTION_ORTHOGONAL:
+		return
+	var vp_h: float = get_viewport().get_visible_rect().size.y
+	if vp_h <= 0.0 or cam.size <= 0.0:
+		return
+	# Label3D renders font_size at pixel_size world-units/px; the ortho camera
+	# maps world→screen at vp_h/size px per world-unit. Product = on-screen px.
+	var px: int = int(round(float(NO_ROOM_FONT_SIZE) * _get_label3d_pixel_size() * vp_h / cam.size))
+	px = clampi(px, 8, 48)
+	if px != _last_rate_font_size:
+		_last_rate_font_size = px
+		drop_section.set_rate_font_size(px)
+
+
+## The engine default Label3D.pixel_size (the "no auto room" label leaves it
+## unset), read once so the rate-font match uses the exact same scale factor.
+func _get_label3d_pixel_size() -> float:
+	if _label3d_default_pixel_size <= 0.0:
+		var probe := Label3D.new()
+		_label3d_default_pixel_size = probe.pixel_size
+		probe.free()
+	return _label3d_default_pixel_size
 
 
 func _on_drop_timer_done() -> void:
 	is_waiting = false
 	_drop_timer_remaining = 0.0
 	_update_drop_fill()
+	# Gate opens at drop-ready; it then closes in _launch_coin if a coin drops,
+	# or holds open until one arrives.
+	if is_instance_valid(_drop_gate):
+		_drop_gate.open()
 	if coin_queue.has_queue() and not coin_queue.is_empty():
 		_drop_from_queue()
 
@@ -2914,6 +3023,7 @@ func decrease_drop_delay() -> void:
 	if is_waiting and old_delay > 0.0:
 		_drop_timer_remaining *= drop_delay / old_delay
 		_last_effective_delay = get_effective_drop_delay()
+	_update_drop_rate_text()
 	board_rebuilt.emit()
 
 func _show_floating_text(pos: Vector3, multiplier: float, total: int) -> void:
@@ -3072,7 +3182,10 @@ func _spawn_peg_ring(peg_local_pos: Vector3, ring_color: Color, t: VisualTheme) 
 ## grants). Empty until the first level; the first level grants 2 slots, each
 ## level after adds 1 (capacity = level + 1 once any level is owned).
 static func _queue_capacity_for_level(level: int) -> int:
-	return (level + 1) if level > 0 else 0
+	# Every board starts with a 1-slot queue (level 0 -> 1); each queue upgrade
+	# adds one more slot. The always-present first slot is "free" (does not
+	# count toward the rate bonus — see get_effective_drop_delay).
+	return level + 1
 
 
 func increase_queue_capacity() -> void:
@@ -3080,7 +3193,54 @@ func increase_queue_capacity() -> void:
 	# before calling this, so the level read here is already the new value.
 	var level: int = UpgradeManager.get_level(board_type, Enums.UpgradeType.QUEUE) \
 		+ ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.QUEUE)
-	coin_queue.set_capacity(_queue_capacity_for_level(level))
+	var old_cap: int = coin_queue.capacity
+	var new_cap: int = _queue_capacity_for_level(level)
+	# First queue purchase (1 -> 2 slots): play the unlock flourish instead of
+	# swapping the readout instantly. Suppressed in challenges (like the
+	# autodropper intro). The flag keeps _update_drop_rate_text from flipping the
+	# label early; the intro types the new text out once the particles land.
+	var first_unlock: bool = old_cap <= 1 and new_cap >= 2 and not ChallengeManager.is_active_challenge
+	if first_unlock:
+		_queue_intro_active = true
+	coin_queue.set_capacity(new_cap)
+	if first_unlock:
+		_play_queue_unlock_intro()
+
+
+func _play_queue_unlock_intro() -> void:
+	var cam: Camera3D = get_active_camera()
+	if cam == null:
+		# No camera (e.g. headless) — skip the flourish, just sync the text.
+		_on_queue_unlock_done()
+		return
+	# Particles start at the queue upgrade button and swoop to the newly-added
+	# slot (the last one) projected to the screen.
+	var source: Vector2 = _queue_upgrade_button_center()
+	var slot_world: Vector3 = coin_queue.slot_world_position(coin_queue.capacity - 1)
+	var target: Vector2 = cam.unproject_position(slot_world)
+	var total: float = 1.0 / get_effective_drop_delay()
+	var new_text: String = FormatUtils.drop_rate_text(drop_delay, coin_queue.count, total)
+	# Milestone "dark" particle color (matches the level-milestone burst), not the
+	# coin tint.
+	var color: Color = ThemeProvider.theme.normal_text_color
+	drop_section.play_queue_unlock(source, target, new_text, color, _on_queue_unlock_done)
+
+
+## Screen-space centre of the QUEUE upgrade button (particle source for the
+## first-queue-purchase flourish). Falls back to the upgrade section's centre if
+## the row isn't resolvable.
+func _queue_upgrade_button_center() -> Vector2:
+	var row: UpgradeRow = upgrade_section.get_upgrade_row(Enums.UpgradeType.QUEUE)
+	if is_instance_valid(row):
+		return row.get_global_rect().get_center()
+	return (upgrade_section as Control).get_global_rect().get_center()
+
+
+## Re-enables normal rate-text updates after the unlock intro finishes (or is
+## skipped) and syncs the label to the current queue state.
+func _on_queue_unlock_done() -> void:
+	_queue_intro_active = false
+	_update_drop_rate_text()
 
 
 func try_autodrop(is_advanced: bool) -> void:
@@ -3161,26 +3321,22 @@ func get_drop_button_ids() -> Array:
 	return _drop_buttons.keys()
 
 
-func set_drop_subtext(button_id: StringName, text: String) -> void:
+## Drop button face text. Folds the assigned autodropper count into the label
+## once autodroppers are unlocked: "Drop gold • 1 auto" (• = U+2022), or just
+## "Drop gold" before then. Currency is the button's own (primary for the main
+## bar, advanced for the advanced bar). Driven DOWN by BoardManager, which owns
+## the assignment counts.
+func set_drop_main_text(button_id: StringName, autodropper_count: int, autodroppers_unlocked: bool) -> void:
 	var bar: HBoxContainer = _drop_buttons.get(button_id)
 	if not bar:
 		return
-	var label: Label
-	if bar == _drop_main:
-		label = _drop_main_label
-	elif bar == _drop_advanced:
-		label = _drop_advanced_label
+	var is_adv: bool = (button_id as String).ends_with("_ADVANCED")
+	var currency_type: Enums.CurrencyType = advanced_bucket_type if is_adv else TierRegistry.primary_currency(board_type)
+	var coin_name: String = FormatUtils.currency_name(currency_type, false)
+	if autodroppers_unlocked:
+		bar.update_text("Drop %s • %d auto" % [coin_name, autodropper_count])
 	else:
-		return
-	if not label.has_meta("styled"):
-		var t: VisualTheme = ThemeProvider.theme
-		label.add_theme_font_size_override("font_size", maxi(t.button_font_size - 4, 8))
-		label.add_theme_color_override("font_color", t.normal_text_color)
-		var btn_font: Font = t.button_font if t.button_font else preload("res://style_lab/VendSans-Bold.ttf")
-		label.add_theme_font_override("font", btn_font)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.set_meta("styled", true)
-	label.text = text
+		bar.update_text("Drop %s" % coin_name)
 
 
 ## Applies saved upgrade state to this board without going through buy logic.

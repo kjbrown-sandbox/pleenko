@@ -19,8 +19,8 @@ script = ExtResource("2_obj")
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
-type = 1
-modifier_type = 5
+type = 2
+upgrade_type = 3
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("8_start")

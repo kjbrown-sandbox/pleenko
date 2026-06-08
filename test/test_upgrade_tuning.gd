@@ -4,7 +4,7 @@ extends "res://test/test_base.gd"
 ##   godot --headless --scene res://test/test_upgrade_tuning.tscn
 ##
 ## Covers:
-##  - PlinkoBoard._queue_capacity_for_level (queue is 0 until first level, then level+1)
+##  - PlinkoBoard._queue_capacity_for_level (every board starts with 1 slot; level+1)
 ##  - LevelManager gold unlock order (Autodropper before Queue) + the _set_queue_slot helper
 ##  - Autodropper / Advanced autodropper escalating cost curves (50/100/175/275/400)
 ##  - Queue cost curve + cap (15/30/65/120/195/290/405, cap 7)
@@ -24,8 +24,8 @@ func _run_tests() -> void:
 
 func test_queue_capacity_for_level() -> void:
 	print("test_queue_capacity_for_level")
-	# Empty until the first level; first level grants 2, each later level adds 1.
-	assert_equal(PlinkoBoard._queue_capacity_for_level(0), 0, "level 0 -> 0 slots")
+	# Every board starts with a 1-slot queue (level 0 -> 1); each level adds one.
+	assert_equal(PlinkoBoard._queue_capacity_for_level(0), 1, "level 0 -> 1 slot")
 	assert_equal(PlinkoBoard._queue_capacity_for_level(1), 2, "level 1 -> 2 slots")
 	assert_equal(PlinkoBoard._queue_capacity_for_level(2), 3, "level 2 -> 3 slots")
 	assert_equal(PlinkoBoard._queue_capacity_for_level(7), 8, "level 7 (cap) -> 8 slots")

@@ -50,7 +50,7 @@ func test_permanent_upgrade() -> void:
 	r.upgrade_type = Enums.UpgradeType.BUCKET_VALUE
 	r.board_type = Enums.BoardType.GOLD
 	r.modifier_amount = 1.0
-	assert_equal(r.display_text(), "+1 gold bucket value level", "PERMANENT_UPGRADE bucket value (gold)")
+	assert_equal(r.display_text(), "+1 permanent bucket value upgrade", "PERMANENT_UPGRADE bucket value")
 
 
 func test_starting_coins() -> void:
@@ -84,7 +84,7 @@ func test_center_bucket_value() -> void:
 	var r := _make_modifier(ChallengeRewardData.ModifierType.CENTER_BUCKET_VALUE)
 	r.board_type = Enums.BoardType.GOLD
 	r.modifier_amount = 3.0
-	assert_equal(r.display_text(), "+3 gold middle bucket value", "CENTER_BUCKET_VALUE gold")
+	assert_equal(r.display_text(), "+3 middle bucket value", "CENTER_BUCKET_VALUE")
 
 
 func test_drop_cost_reduction() -> void:
@@ -100,8 +100,8 @@ func test_golden_bucket_multiplier() -> void:
 	print("test_golden_bucket_multiplier")
 	var r := _make_modifier(ChallengeRewardData.ModifierType.GOLDEN_BUCKET_MULTIPLIER)
 	r.board_type = Enums.BoardType.GOLD
-	r.modifier_amount = 0.5
-	assert_equal(r.display_text(), "+0.5 gold golden bucket multiplier", "GOLDEN_BUCKET_MULTIPLIER gold")
+	r.modifier_amount = 1.0
+	assert_equal(r.display_text(), "+1 special bucket modifier", "GOLDEN_BUCKET_MULTIPLIER → special bucket modifier")
 
 
 func test_bucket_value_percent() -> void:
@@ -109,7 +109,7 @@ func test_bucket_value_percent() -> void:
 	var r := _make_modifier(ChallengeRewardData.ModifierType.BUCKET_VALUE_PERCENT)
 	r.board_type = Enums.BoardType.GOLD
 	r.modifier_amount = 1.0
-	assert_equal(r.display_text(), "+100% gold bucket value", "BUCKET_VALUE_PERCENT gold")
+	assert_equal(r.display_text(), "+100% bucket value", "BUCKET_VALUE_PERCENT")
 
 
 func test_starting_autodroppers() -> void:
@@ -125,7 +125,7 @@ func test_starting_autodroppers() -> void:
 func test_gold_coin_speed_boost_tracks_constant() -> void:
 	print("test_gold_coin_speed_boost_tracks_constant")
 	var r := _make_modifier(ChallengeRewardData.ModifierType.GOLD_COIN_SPEED_BOOST)
-	var expected := "+%d%% gold coin fall speed" % int(Coin.COIN_SPEED_BOOST_PER_UNLOCK * 100)
+	var expected := "+%d%% coin fall speed" % int(Coin.COIN_SPEED_BOOST_PER_UNLOCK * 100)
 	assert_equal(r.display_text(), expected, "GOLD_COIN_SPEED_BOOST tracks Coin constant")
 
 
@@ -134,7 +134,7 @@ func test_gold_coin_speed_boost_tracks_constant() -> void:
 func test_queue_rate_bonus_tracks_constant() -> void:
 	print("test_queue_rate_bonus_tracks_constant")
 	var r := _make_modifier(ChallengeRewardData.ModifierType.QUEUE_RATE_BONUS)
-	var expected := "+%d%% gold queue bonus" % int(PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK * 100)
+	var expected := "+%d%% queue bonus" % int(PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK * 100)
 	assert_equal(r.display_text(), expected, "QUEUE_RATE_BONUS tracks PlinkoBoard constant")
 
 
