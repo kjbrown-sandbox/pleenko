@@ -40,8 +40,11 @@ func fade_in() -> void:
 	_start_fade(1.0)
 
 
-## Fade the glass + panel out, then invoke `on_done` (callers hide/free). The
-## callback always fires (bound to this node's own tween).
+## Fade the glass + panel out, then invoke `on_done` (callers hide/free).
+## `on_done` fires on normal completion; it's dropped if the node leaves the tree
+## first (the tween is killed in `_exit_tree`), so don't route load-bearing
+## teardown through it — current callers only flip `visible`, which is moot on a
+## freed node.
 func fade_out(on_done: Callable = Callable()) -> void:
 	_start_fade(0.0, on_done)
 

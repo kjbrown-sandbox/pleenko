@@ -305,6 +305,10 @@ func _apply() -> void:
 const AUTO_SIZE_PADDING_PX := 40.0
 ## Fixed bar height for action buttons — matches the scene's Main min height.
 const ACTION_HEIGHT_PX := 48.0
+## Title label render size — MUST match TitleLbl/FillTitleLbl in
+## refined_baseline_button.tscn, so auto_size measures at the size it draws at
+## (measuring at the smaller theme button_font_size under-sizes and clips).
+const TITLE_FONT_SIZE := 22
 
 
 func _fit_to_text() -> void:
@@ -313,7 +317,7 @@ func _fit_to_text() -> void:
 	var font: Font = t.button_font if t.button_font else t.label_font
 	if not font: return
 	var w: float = font.get_string_size(
-		title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, t.button_font_size).x
+		title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_FONT_SIZE).x
 	custom_minimum_size = Vector2(w + AUTO_SIZE_PADDING_PX, ACTION_HEIGHT_PX)
 
 
