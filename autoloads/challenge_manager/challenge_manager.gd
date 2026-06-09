@@ -156,7 +156,7 @@ func activate_survive_autodroppers(objective: Survive) -> void:
 	var needed: int = objective.autodropper_count - _board_manager.get_free_autodroppers()
 	for i in needed:
 		UpgradeManager.force_apply(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER)
-	_board_manager._on_autodropper_unlocked()
+	_board_manager.reveal_autodropper_controls()
 
 	# Assign the autodroppers to this board, bypassing the player gate.
 	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[objective.board_type])
