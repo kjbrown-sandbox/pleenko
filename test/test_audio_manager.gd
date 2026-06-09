@@ -34,6 +34,7 @@ func _run_tests() -> void:
 	# Pitch scale
 	test_pitch_scale_root_is_based_on_chord()
 	test_pitch_scale_degree_wraps()
+	test_ui_hover_uses_chord_root_alternating_octave()
 
 	# Chord advance
 	test_chord_advance_clears_bucket_queue()
@@ -350,6 +351,41 @@ func test_pitch_scale_root_is_based_on_chord() -> void:
 	var expected_pitch: float = pow(2.0, expected_semitones / 12.0)
 	assert_near(AudioManager._get_pitch_scale(0), expected_pitch, 0.001,
 		"degree 0 pitch matches chord root")
+	_restore_state()
+
+
+## Challenge (melody-driven) themes: the UI hover plays the chord's base note,
+## alternating root / one octave lower on successive hovers — in tune with the
+## melody bed rather than the progression arpeggio.
+func test_ui_hover_uses_chord_root_alternating_octave() -> void:
+	print("test_ui_hover_uses_chord_root_alternating_octave")
+	_save_state()
+	var saved_seq: PackedInt32Array = ThemeProvider.theme.melody_sequence
+	var saved_melody_idx: int = AudioManager._melody_idx
+	var saved_queue: Array = AudioManager._ui_hover_pitch_queue.duplicate()
+	var saved_toggle: bool = AudioManager._ui_hover_octave_toggle
+
+	# Non-empty melody_sequence makes get_current_chord_root_midi() >= 0 (the
+	# challenge/melody path); a fixed _melody_idx keeps both hovers on one chord.
+	ThemeProvider.theme.melody_sequence = PackedInt32Array([48])
+	AudioManager._melody_idx = 1
+	AudioManager._silenced = false
+	AudioManager._ui_hover_pitch_queue.clear()
+	AudioManager._ui_hover_octave_toggle = false
+
+	AudioManager.play_ui_hover()
+	AudioManager.play_ui_hover()
+
+	assert_equal(AudioManager._ui_hover_pitch_queue.size(), 2, "two hovers queue two pitches")
+	if AudioManager._ui_hover_pitch_queue.size() == 2:
+		var p0: float = AudioManager._ui_hover_pitch_queue[0]
+		var p1: float = AudioManager._ui_hover_pitch_queue[1]
+		assert_near(p0 / p1, 2.0, 0.001, "successive hovers alternate one octave (root then octave-lower)")
+
+	ThemeProvider.theme.melody_sequence = saved_seq
+	AudioManager._melody_idx = saved_melody_idx
+	AudioManager._ui_hover_pitch_queue = saved_queue
+	AudioManager._ui_hover_octave_toggle = saved_toggle
 	_restore_state()
 
 
