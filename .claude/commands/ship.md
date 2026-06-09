@@ -1,6 +1,6 @@
 # Ship
 
-Prepare changes for merge by committing, reviewing with the 5-personality agent swarm, and fixing blocking issues.
+Commit changes, review with the 5-personality agent swarm, fix blocking issues, open a PR, then merge it into `main` and return to the `main` branch.
 
 ## Steps
 
@@ -52,10 +52,21 @@ If any fixes were made, commit them as a separate commit (e.g., "Fix review feed
 - Create a pull request using `gh pr create` with a clear title and body summarizing the changes, review findings, and fixes applied
 - Print the PR URL so the user can open it in their browser
 
-### 8. Report
+### 8. Merge and Return to `main`
+
+Once the PR is open and all genuinely-blocking issues are resolved, always merge it and switch back to `main`:
+
+- Merge the PR with `gh pr merge <num> --merge` (use a merge commit to match this repo's history).
+- Switch to `main` (`git checkout main`) and fast-forward it (`git pull --ff-only origin main`).
+- Delete the merged feature branch, local and remote (`git branch -d <branch>` then `git push origin --delete <branch>`).
+
+**Do not disturb unrelated uncommitted changes.** The working tree may hold changes from parallel/other work that were never staged in this ship. They carry across the branch switch untouched — never stash, discard, or commit them. Only ever act on the files this ship committed.
+
+### 9. Report
 
 Tell the user:
-- The PR URL (prominently, at the top)
+- That the PR was merged into `main` and the branch is now back on `main`
+- The PR URL
 - Summary of commits
 - Which blocking issues were fixed
 - Which advisory issues remain (if any worth noting)

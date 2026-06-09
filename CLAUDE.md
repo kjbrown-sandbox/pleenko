@@ -430,9 +430,19 @@ Only when the user enters plan mode for a new feature. Not for: simple bug fixes
 
 ## Branch Workflow
 
-### Plan Mode Creates a Branch
+### Plan Mode Creates a Worktree
 
-When the user enters plan mode for a feature, create a new git branch before any implementation begins. Branch naming: `feature/<kebab-case-name>` (e.g., `feature/juicy-prestige-animation`). Create from `main` after the plan is approved but before writing code. All implementation happens on the feature branch; commit regularly.
+When the user enters plan mode for a feature, after the plan is approved but before any implementation begins, create a new git **worktree** (not just a branch) so the work never disturbs the primary checkout — the user may have another agent actively working there and testing in Godot. Mechanics:
+
+- Run `tools/new_worktree.sh <kebab-case-name>`. It creates the worktree under `.claude/worktrees/<name>/` on a new branch `feature/<name>` off `main` and pre-seeds the Godot import cache (copies `.godot/imported` from the primary checkout, or falls back to a headless import) so the worktree opens warm.
+- All implementation happens inside the worktree; commit regularly. The primary checkout is left untouched.
+
+**Getting the work onto `main` to test:** the worktree's commits live on the `feature/<name>` branch, so from the primary checkout (on a clean `main`):
+
+- **`tools/land_worktree.sh <name>`** — fast-forward-merges `feature/<name>` into `main` with the warm import cache intact. Add `--remove` to also tear down the worktree + branch in the same step. It is fast-forward-only by design: if `main` has advanced since the worktree was cut it refuses and tells you to `git rebase main` inside the worktree first (keeps history linear and testing sequential).
+- To back out after testing: `git reset --hard origin/main`. To test in isolation without merging: `git switch feature/<name>`.
+
+When a worktree is abandoned without landing: `git worktree remove .claude/worktrees/<name>` (and `git branch -D feature/<name>`).
 
 ### Post-Implementation Review
 
