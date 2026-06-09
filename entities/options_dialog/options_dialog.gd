@@ -15,6 +15,10 @@ var context: Context = Context.IN_GAME
 ## The parent owns the confirm + the destructive call (signals up, calls down).
 signal reset_requested
 
+## Emitted (IN_GAME context, during a challenge only) when the player asks to
+## abandon the current challenge. The parent (Main) owns the teardown + reload.
+signal exit_challenge_requested
+
 var _overlay: ColorRect
 var _panel: VBoxContainer
 var _resume_button: Button
@@ -99,6 +103,14 @@ func _build_footer(t: VisualTheme) -> void:
 	_resume_button.pressed.connect(hide_dialog)
 	_panel.add_child(_resume_button)
 
+	# Only meaningful mid-challenge — lets the player abandon it for the picker.
+	if ChallengeManager.is_active_challenge:
+		var exit_button := Button.new()
+		exit_button.text = "Exit Challenge"
+		t.apply_button_theme(exit_button)
+		exit_button.pressed.connect(_on_exit_challenge_pressed)
+		_panel.add_child(exit_button)
+
 	_return_button = Button.new()
 	_return_button.text = "Return to Main Menu"
 	t.apply_button_theme(_return_button)
@@ -110,6 +122,13 @@ func _build_footer(t: VisualTheme) -> void:
 ## destructive SaveManager.full_reset() call — we just signal the intent up.
 func _on_reset_button_pressed() -> void:
 	reset_requested.emit()
+
+
+## IN_GAME, during a challenge. The parent (Main) clears the challenge and
+## reloads back to the picker — we just hide and signal the intent up.
+func _on_exit_challenge_pressed() -> void:
+	hide_dialog()
+	exit_challenge_requested.emit()
 
 
 func _make_section_header(text: String, font: Font) -> Label:

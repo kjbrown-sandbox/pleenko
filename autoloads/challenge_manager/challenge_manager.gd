@@ -55,6 +55,14 @@ func has_failed() -> bool:
 func setup(board_manager: BoardManager) -> void:
 	_board_manager = board_manager
 
+	# A restart reloads the scene with the challenge still active, so a tracker
+	# from the previous run may still be parented here (this autoload survives the
+	# reload). Tear it down before building the new one, otherwise we'd run two.
+	if _tracker:
+		_tracker.disconnect_all()
+		_tracker.queue_free()
+		_tracker = null
+
 	# Reset currency to starting state
 	CurrencyManager.reset()
 

@@ -23,6 +23,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 @onready var game_timer: Label = $CanvasLayer/GameTimer
 @onready var options_icon: TextureButton = $CanvasLayer/OptionsIcon
 @onready var volume_icon: TextureButton = $CanvasLayer/VolumeIcon
+@onready var restart_icon: TextureButton = $CanvasLayer/RestartIcon
 @onready var level_section = $CanvasLayer/LevelSection
 @onready var challenges_down_icon: TextureButton = $NavIconsLayer/ChallengesDownIcon
 @onready var challenges_up_icon: TextureButton = $NavIconsLayer/ChallengesUpIcon
@@ -38,6 +39,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 
 var _deflector_intro_animator: DeflectorIntroAnimator
 var _options_dialog: CanvasLayer
+var _confirm_dialog: ConfirmDialog
 var _coming_soon_overlay: CanvasLayer
 var _challenge_complete_dialog: CanvasLayer
 var _offline_earnings_dialog: CanvasLayer
@@ -82,7 +84,9 @@ func _ready() -> void:
 	coin_values.setup(board_manager)
 	_setup_gear_button()
 	_setup_volume_icon()
+	_setup_restart_icon()
 	_setup_options_dialog()
+	_setup_confirm_dialog()
 	_setup_coming_soon_overlay()
 	_setup_challenge_complete_dialog()
 	_setup_offline_earnings_dialog()
@@ -184,6 +188,7 @@ func apply_input_lock(locked: bool) -> void:
 
 func _setup_challenge() -> void:
 	challenge_hud.visible = true
+	restart_icon.visible = true
 	ChallengeManager.setup(board_manager)
 	ChallengeManager.challenge_completed.connect(_on_challenge_completed)
 	ChallengeManager.challenge_failed.connect(_on_challenge_failed)
@@ -251,6 +256,11 @@ func _exit_challenge_to_menu() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# Restart is the one action that fires DURING a challenge, so it must be
+	# handled before the active-challenge early return below.
+	if event.is_action_pressed("restart_challenge") and ChallengeManager.is_active_challenge:
+		_on_restart_pressed()
+		return
 	if ChallengeManager.is_active_challenge:
 		return
 	if event.is_action_pressed("challenges_down") and ModeManager.is_main():
@@ -356,6 +366,28 @@ func _on_volume_pressed() -> void:
 	_refresh_volume_icon()
 
 
+# Restart icon is hidden by default (tscn) and only revealed in _setup_challenge.
+func _setup_restart_icon() -> void:
+	restart_icon.pressed.connect(_on_restart_pressed)
+
+
+func _on_restart_pressed() -> void:
+	if not ChallengeManager.is_active_challenge:
+		return
+	_confirm_dialog.show_confirm(
+		"Restart this challenge? Progress will be lost.", "Restart", "Cancel")
+
+
+## Replay the current challenge from scratch. The challenge stays active across
+## the reload, so Main._ready re-runs _setup_challenge (which re-applies the
+## starting conditions). Mirrors the initial challenge-start call in
+## ChallengeGroupingManager.
+func _restart_challenge() -> void:
+	if not ChallengeManager.is_active_challenge:
+		return
+	SceneManager.set_new_scene(load("res://entities/main/main.tscn"), false, ThemeProvider.Kind.CHALLENGE)
+
+
 func _setup_options_dialog() -> void:
 	_options_dialog = CanvasLayer.new()
 	_options_dialog.layer = 10
@@ -363,7 +395,24 @@ func _setup_options_dialog() -> void:
 	# Explicit (it's the default too) so the in-game footer stays even if the
 	# default ever changes. Must be set before add_child — _ready builds the UI.
 	_options_dialog.context = OptionsDialog.Context.IN_GAME
+	_options_dialog.exit_challenge_requested.connect(_on_exit_challenge_requested)
 	add_child(_options_dialog)
+
+
+func _setup_confirm_dialog() -> void:
+	_confirm_dialog = ConfirmDialog.new()
+	_confirm_dialog.confirmed.connect(_restart_challenge)
+	add_child(_confirm_dialog)
+
+
+## Exit a challenge early via the options menu. Mirrors the failed-challenge
+## teardown (clear first, then the shared return-to-menu reload) so the player
+## lands back on the challenge selection menu.
+func _on_exit_challenge_requested() -> void:
+	if not ChallengeManager.is_active_challenge:
+		return
+	ChallengeManager.clear_challenge()
+	_exit_challenge_to_menu()
 
 
 func _setup_coming_soon_overlay() -> void:
