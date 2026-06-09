@@ -544,49 +544,6 @@ var frenzy_coin_color: Color:
 @export var frenzy_pop_uses_melody_root: bool = false
 
 
-# ── Button style helpers ─────────────────────────────────────────────
-
-func _make_stylebox(bg_color: Color, border_col: Color = Color.TRANSPARENT) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg_color
-	s.corner_radius_top_left = button_border_radius
-	s.corner_radius_top_right = button_border_radius
-	s.corner_radius_bottom_left = button_border_radius
-	s.corner_radius_bottom_right = button_border_radius
-	s.content_margin_left = button_padding.x
-	s.content_margin_right = button_padding.x
-	s.content_margin_top = button_padding.y
-	s.content_margin_bottom = button_padding.y
-	if button_border_width > 0:
-		s.border_width_left = button_border_width
-		s.border_width_right = button_border_width
-		s.border_width_top = button_border_width
-		s.border_width_bottom = button_border_width
-		s.border_color = border_col if border_col.a > 0 else button_border_color
-	return s
-
-
-func apply_button_theme(button: Button, currency_type: int = -1) -> void:
-	var enabled_col := get_coin_color(currency_type) if currency_type >= 0 else button_enabled_color
-	var hovered_col := get_coin_color(currency_type).lightened(0.2) if currency_type >= 0 else button_hovered_color
-	var disabled_col := get_coin_color_faded(currency_type) if currency_type >= 0 else button_disabled_color
-	var border_col := get_coin_color(currency_type) if currency_type >= 0 else button_border_color
-	button.add_theme_stylebox_override("normal", _make_stylebox(enabled_col, border_col))
-	button.add_theme_stylebox_override("hover", _make_stylebox(hovered_col, border_col))
-	# Pressed: solid flash matching normal text color for clear click feedback.
-	button.add_theme_stylebox_override("pressed", _make_stylebox(normal_text_color, normal_text_color))
-	button.add_theme_stylebox_override("disabled", _make_stylebox(disabled_col, border_col.darkened(0.3)))
-	button.add_theme_font_size_override("font_size", button_font_size)
-	var text_col := bg_shade_6 if currency_type >= 0 else button_text_color
-	button.add_theme_color_override("font_color", text_col)
-	button.add_theme_color_override("font_hover_color", text_col)
-	button.add_theme_color_override("font_pressed_color", text_col)
-	button.add_theme_color_override("font_disabled_color", text_col.darkened(0.4))
-	var font: Font = button_font if button_font else label_font
-	if font:
-		button.add_theme_font_override("font", font)
-
-
 # ── Color helpers ────────────────────────────────────────────────────
 
 func get_coin_color(currency_type: int) -> Color:
