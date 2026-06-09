@@ -112,6 +112,9 @@ var _peg_chime_last_time_s: float = -1000.0
 # owner, single chord source) just as MainMenu owns the menu's instance.
 var _ui_hover_arp := MenuHoverArpeggiator.new()
 var _ui_hover_pitch_queue: Array[float] = []
+## Challenge-mode hover plays the chord root, alternating root / octave-lower on
+## successive (accepted) hovers. See play_ui_hover.
+var _ui_hover_octave_toggle: bool = false
 var _peg_chime_rng: RandomNumberGenerator = RandomNumberGenerator.new()
 # Quantize mode (theme.peg_chime_quantize_seconds > 0): peg hits within a
 # quantum collapse to one chime fired on the next quantum boundary. The most
@@ -1300,11 +1303,23 @@ const UI_HOVER_VOLUME_OFFSET_DB := -8.0
 # chord pitches down here so the arpeggiator's built-in +1 octave lands the hover
 # note exactly ONE octave above the buckets (not two).
 const UI_HOVER_BUCKET_OCTAVE := 0.5
+## Challenge hover root register: one octave above the raw chord root (tunable).
+const UI_HOVER_ROOT_OCTAVE := 2.0
 
 func play_ui_hover() -> void:
 	if _silenced:
 		return
 	if _ui_hover_pitch_queue.size() >= UI_HOVER_QUEUE_CAPACITY:
+		return
+	# Melody-driven themes (challenge / glow_dark): the audible chord comes from the
+	# melody, so the progression arpeggio below is out of tune. Play the chord's base
+	# note instead (same source as the frenzy pop), alternating root / octave-lower.
+	var root_midi: int = get_current_chord_root_midi()
+	if root_midi >= 0:
+		var base: float = pow(2.0, float(root_midi - 60) / 12.0) * UI_HOVER_ROOT_OCTAVE
+		var pitch: float = base * (0.5 if _ui_hover_octave_toggle else 1.0)
+		_ui_hover_octave_toggle = not _ui_hover_octave_toggle
+		_ui_hover_pitch_queue.append(pitch)
 		return
 	var note: Vector2i = _ui_hover_arp.advance(Time.get_ticks_msec())
 	# Current chord's 4 note multipliers at the bucket register; pitch_mult_for
