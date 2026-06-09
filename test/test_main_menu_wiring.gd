@@ -28,6 +28,12 @@ func _make_menu() -> MainMenu:
 	return menu
 
 
+# The confirm overlay / options dialog fade out on dismiss (visible flips false
+# on the tween callback), so visibility assertions wait out the fade.
+func _await_fade() -> void:
+	await get_tree().create_timer(ThemeProvider.theme.overlay_blur_fade_duration + 0.1).timeout
+
+
 func test_url_constants_well_formed() -> void:
 	print("test_url_constants_well_formed")
 	for url in [MainMenu.DISCORD_URL, MainMenu.FEEDBACK_URL]:
@@ -81,15 +87,18 @@ func test_reset_path_reachable_via_settings() -> void:
 	# Drive the full chain: dialog asks → confirm shows → confirm wipes.
 	dialog.reset_requested.emit()
 	assert_true(menu.confirm_overlay.visible, "confirm overlay shown after request")
+	await _await_fade()
 	assert_false(dialog.visible, "options dialog hidden while confirm is up")
 
 	menu._on_confirm_reset_pressed()
 	assert_equal(reset_calls[0], 1, "full_reset seam called exactly once")
+	await _await_fade()
 	assert_false(menu.confirm_overlay.visible, "confirm overlay hidden after reset")
 
 	# Cancel re-opens Settings rather than dropping to the bare menu.
 	menu._on_reset_requested()
 	menu._on_cancel_pressed()
+	await _await_fade()
 	assert_false(menu.confirm_overlay.visible, "confirm overlay hidden after cancel")
 	assert_true(dialog.visible, "settings re-shown after cancel")
 	menu.free()

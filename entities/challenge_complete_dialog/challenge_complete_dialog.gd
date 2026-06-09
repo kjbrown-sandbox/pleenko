@@ -2,15 +2,15 @@ extends CanvasLayer
 
 signal closed
 
-@onready var overlay: ColorRect = $Overlay
-@onready var title_label: Label = $Overlay/Panel/MarginContainer/VBoxContainer/TitleLabel
-@onready var stats_label: Label = $Overlay/Panel/MarginContainer/VBoxContainer/StatsLabel
-@onready var rewards_label: Label = $Overlay/Panel/MarginContainer/VBoxContainer/RewardsLabel
-@onready var ok_button: Button = $Overlay/Panel/MarginContainer/VBoxContainer/OkButton
+@onready var overlay: FrostedOverlay = $Overlay
+@onready var title_label: Label = $Overlay/CenterContainer/VBoxContainer/TitleLabel
+@onready var stats_label: Label = $Overlay/CenterContainer/VBoxContainer/StatsLabel
+@onready var rewards_label: Label = $Overlay/CenterContainer/VBoxContainer/RewardsLabel
+@onready var ok_button: RefinedBaselineButton = $Overlay/CenterContainer/VBoxContainer/OkButton
 
 
 func _ready() -> void:
-	ok_button.pressed.connect(_on_ok_pressed)
+	ok_button.main_pressed.connect(_on_ok_pressed)
 	hide_dialog()
 	_apply_theme()
 
@@ -21,8 +21,7 @@ func _apply_theme() -> void:
 	title_label.add_theme_font_size_override("font_size", 32)
 	stats_label.add_theme_color_override("font_color", t.body_text_color)
 	rewards_label.add_theme_color_override("font_color", t.body_text_color)
-	$Overlay/Panel/MarginContainer/VBoxContainer/RewardsHeader.add_theme_color_override("font_color", t.normal_text_color)
-	t.apply_button_theme(ok_button)
+	$Overlay/CenterContainer/VBoxContainer/RewardsHeader.add_theme_color_override("font_color", t.normal_text_color)
 
 
 ## Show the dialog with stats and reward diff strings.
@@ -33,7 +32,7 @@ func show_with_results(stats: Dictionary, reward_lines: Array[String]) -> void:
 		rewards_label.text = "(no new rewards)"
 	else:
 		rewards_label.text = "\n".join(reward_lines)
-	overlay.visible = true
+	overlay.fade_in()
 
 
 func hide_dialog() -> void:
@@ -41,7 +40,7 @@ func hide_dialog() -> void:
 
 
 func _on_ok_pressed() -> void:
-	hide_dialog()
+	overlay.fade_out(func(): overlay.visible = false)
 	closed.emit()
 
 

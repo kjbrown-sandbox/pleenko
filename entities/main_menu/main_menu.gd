@@ -15,11 +15,10 @@ const FEEDBACK_URL := "https://docs.google.com/forms/d/e/1FAIpQLSdRHDVqaQzeNyE8e
 @onready var feedback_button: MainMenuButton = $CanvasLayer/ButtonColumn/FeedbackButton
 @onready var quit_button: MainMenuButton = $CanvasLayer/ButtonColumn/QuitButton
 @onready var menu_title: MenuTitle = $CanvasLayer/MenuTitle
-@onready var confirm_overlay: ColorRect = $ConfirmLayer/Overlay
-@onready var confirm_panel: PanelContainer = $ConfirmLayer/Overlay/Panel
-@onready var confirm_label: Label = $ConfirmLayer/Overlay/Panel/VBox/ConfirmLabel
-@onready var cancel_button: Button = $ConfirmLayer/Overlay/Panel/VBox/ButtonRow/CancelButton
-@onready var confirm_reset_button: Button = $ConfirmLayer/Overlay/Panel/VBox/ButtonRow/ConfirmResetButton
+@onready var confirm_overlay: FrostedOverlay = $ConfirmLayer/Overlay
+@onready var confirm_label: Label = $ConfirmLayer/Overlay/CenterContainer/VBox/ConfirmLabel
+@onready var cancel_button: RefinedBaselineButton = $ConfirmLayer/Overlay/CenterContainer/VBox/ButtonRow/CancelButton
+@onready var confirm_reset_button: RefinedBaselineButton = $ConfirmLayer/Overlay/CenterContainer/VBox/ButtonRow/ConfirmResetButton
 
 # Test seams (PeekAnimator precedent): production defaults; tests inject spies
 # so the suite never launches a browser, wipes the real save, or kills itself.
@@ -59,26 +58,13 @@ var _hover_quantize_timer: Timer
 
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	# MainMenuButtons own their own styling — only the confirm-dialog plain Buttons
-	# need the palette stylebox sweep.
-	for button in [cancel_button, confirm_reset_button]:
-		t.apply_button_theme(button)
+	# Confirm-dialog buttons are RefinedBaselineButtons (filled, capless) — they
+	# style themselves; MainMenuButtons own their styling too.
 
 	menu_title.setup(menu_board)
 
-	confirm_overlay.color = t.overlay_color
-	# The default PanelContainer stylebox is a dark engine grey, which kills the
-	# dark themed text. Give it an intentional light card from the palette so the
-	# dark text reads — same dark-on-light contrast as the rest of the menu UI.
-	# Colors come from the palette; border width / padding are plain layout
-	# constants (not part of the button theme), matching options_dialog.gd.
-	var card := StyleBoxFlat.new()
-	card.bg_color = t.bg_shade_6
-	card.border_color = t.button_border_color
-	card.set_border_width_all(2)
-	card.set_corner_radius_all(t.button_border_radius)
-	card.set_content_margin_all(28.0)
-	confirm_panel.add_theme_stylebox_override("panel", card)
+	# Content sits directly on the full-screen frosted overlay (no card box),
+	# matching the Settings dialog opened from this menu.
 	confirm_label.add_theme_color_override("font_color", t.normal_text_color)
 
 	_setup_options_dialog()
@@ -89,8 +75,9 @@ func _ready() -> void:
 	discord_button.pressed.connect(_on_discord_pressed)
 	feedback_button.pressed.connect(_on_feedback_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
-	cancel_button.pressed.connect(_on_cancel_pressed)
-	confirm_reset_button.pressed.connect(_on_confirm_reset_pressed)
+	cancel_button.main_pressed.connect(_on_cancel_pressed)
+	confirm_reset_button.main_pressed.connect(_on_confirm_reset_pressed)
+	RefinedBaselineButton.equalize_widths([cancel_button, confirm_reset_button])
 
 	_menu_buttons = [play_button, settings_button, discord_button, feedback_button, quit_button]
 	for btn in _menu_buttons:
@@ -104,7 +91,21 @@ func _ready() -> void:
 	_hover_quantize_timer.timeout.connect(_on_hover_quantize_tick)
 	add_child(_hover_quantize_timer)
 
+	# Feed the MenuBoard's live chord to AudioManager so the dialog/confirm
+	# RefinedBaselineButtons hover in tune with the bed, just like the
+	# MainMenuButtons (whose hover reads the same source directly).
+	AudioManager.ui_hover_chord_pitches_fn = func() -> PackedFloat32Array:
+		if not is_instance_valid(menu_board):
+			return PackedFloat32Array()
+		return menu_board.get_chord_pitches(menu_board.get_current_chord_index())
+
 	confirm_overlay.visible = false
+
+
+func _exit_tree() -> void:
+	# Drop the menu chord source so gameplay hovers fall back to the board chord.
+	if AudioManager.ui_hover_chord_pitches_fn.is_valid():
+		AudioManager.ui_hover_chord_pitches_fn = Callable()
 
 
 func _setup_options_dialog() -> void:
@@ -155,11 +156,11 @@ func _on_quit_pressed() -> void:
 # confirm (the reused, palette-styled ConfirmLayer) and the destructive call.
 func _on_reset_requested() -> void:
 	_options_dialog.hide_dialog()
-	confirm_overlay.visible = true
+	confirm_overlay.fade_in()
 
 
 func _on_cancel_pressed() -> void:
-	confirm_overlay.visible = false
+	confirm_overlay.fade_out(func(): confirm_overlay.visible = false)
 	_options_dialog.show_dialog()
 
 
@@ -167,7 +168,7 @@ func _on_confirm_reset_pressed() -> void:
 	# full_reset() clears all autoload state in memory and wipes the save, so
 	# no scene reload is needed — the menu shows no save-derived state.
 	_full_reset_fn.call()
-	confirm_overlay.visible = false
+	confirm_overlay.fade_out(func(): confirm_overlay.visible = false)
 
 
 # MenuBoard's chord bed fires every 0.5s; the strum walks down the column then

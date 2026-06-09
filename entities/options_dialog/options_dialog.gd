@@ -19,10 +19,10 @@ signal reset_requested
 ## abandon the current challenge. The parent (Main) owns the teardown + reload.
 signal exit_challenge_requested
 
-var _overlay: ColorRect
+var _overlay: FrostedOverlay
 var _panel: VBoxContainer
-var _resume_button: Button
-var _return_button: Button
+var _resume_button: RefinedBaselineButton
+var _return_button: RefinedBaselineButton
 var _volume_slider: HSlider
 var _volume_label: Label
 var _fps_option: OptionButton
@@ -33,8 +33,7 @@ func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var font: Font = t.button_font if t.button_font else t.label_font
 
-	_overlay = ColorRect.new()
-	_overlay.color = t.overlay_color
+	_overlay = FrostedOverlay.new()
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay.gui_input.connect(_on_overlay_input)
 	add_child(_overlay)
@@ -49,7 +48,7 @@ func _ready() -> void:
 	center.add_child(_panel)
 
 	var title := Label.new()
-	title.text = "OPTIONS"
+	title.text = "Options"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 44)
 	title.add_theme_color_override("font_color", t.normal_text_color)
@@ -58,11 +57,11 @@ func _ready() -> void:
 	_panel.add_child(title)
 
 	_panel.add_child(HSeparator.new())
-	_panel.add_child(_make_section_header("SOUND", font))
+	_panel.add_child(_make_section_header("Sound", font))
 	_panel.add_child(_make_slider_row(font))
 	_panel.add_child(HSeparator.new())
 
-	_panel.add_child(_make_section_header("PERFORMANCE", font))
+	_panel.add_child(_make_section_header("Performance", font))
 	# Display row is desktop-only. On a Web export the browser's Fullscreen API
 	# requires a real user gesture and itch.io's embed wrapper already exposes
 	# its own fullscreen button, so an in-game toggle would be unreliable and
@@ -72,7 +71,7 @@ func _ready() -> void:
 	_panel.add_child(_make_fps_row(font))
 	_panel.add_child(HSeparator.new())
 
-	_build_footer(t)
+	_build_footer()
 
 	visible = false
 
@@ -82,40 +81,36 @@ func _ready() -> void:
 ## Close" instead — and deliberately does NOT construct `_return_button` nor
 ## reference `_on_return_pressed` / `MAIN_MENU_PATH`, so that in-game-only
 ## navigation is structurally unreachable from the menu (not merely hidden).
-func _build_footer(t: VisualTheme) -> void:
+## Extra gap between the last settings section and the action buttons, so the
+## footer reads as a separate block rather than another settings row.
+const FOOTER_TOP_GAP := 24.0
+
+
+func _build_footer() -> void:
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, FOOTER_TOP_GAP)
+	_panel.add_child(gap)
+
+	# Built capless + always-filled action buttons, then equalized to one width
+	# so the stack reads as a uniform column rather than text-hugging pills.
+	var buttons: Array[RefinedBaselineButton] = []
 	if context == Context.MAIN_MENU:
-		var reset_button := Button.new()
-		reset_button.text = "Reset Game"
-		t.apply_button_theme(reset_button)
-		reset_button.pressed.connect(_on_reset_button_pressed)
-		_panel.add_child(reset_button)
+		buttons.append(RefinedBaselineButton.create_action("Reset game", _on_reset_button_pressed))
+		buttons.append(RefinedBaselineButton.create_action("Close", hide_dialog))
+	else:
+		_resume_button = RefinedBaselineButton.create_action("Return to game", hide_dialog)
+		buttons.append(_resume_button)
 
-		var close_button := Button.new()
-		close_button.text = "Close"
-		t.apply_button_theme(close_button)
-		close_button.pressed.connect(hide_dialog)
-		_panel.add_child(close_button)
-		return
+		# Only meaningful mid-challenge — lets the player abandon it for the picker.
+		if ChallengeManager.is_active_challenge:
+			buttons.append(RefinedBaselineButton.create_action("Exit challenge", _on_exit_challenge_pressed))
 
-	_resume_button = Button.new()
-	_resume_button.text = "Return to Game"
-	t.apply_button_theme(_resume_button)
-	_resume_button.pressed.connect(hide_dialog)
-	_panel.add_child(_resume_button)
+		_return_button = RefinedBaselineButton.create_action("Return to main menu", _on_return_pressed)
+		buttons.append(_return_button)
 
-	# Only meaningful mid-challenge — lets the player abandon it for the picker.
-	if ChallengeManager.is_active_challenge:
-		var exit_button := Button.new()
-		exit_button.text = "Exit Challenge"
-		t.apply_button_theme(exit_button)
-		exit_button.pressed.connect(_on_exit_challenge_pressed)
-		_panel.add_child(exit_button)
-
-	_return_button = Button.new()
-	_return_button.text = "Return to Main Menu"
-	t.apply_button_theme(_return_button)
-	_return_button.pressed.connect(_on_return_pressed)
-	_panel.add_child(_return_button)
+	for b in buttons:
+		_panel.add_child(b)
+	RefinedBaselineButton.equalize_widths(buttons)
 
 
 ## MAIN_MENU only. The parent (MainMenu) owns the confirm overlay and the
@@ -148,7 +143,7 @@ func _make_slider_row(font: Font) -> HBoxContainer:
 	row.add_theme_constant_override("separation", 12)
 
 	var label := Label.new()
-	label.text = "Master Volume"
+	label.text = "Master volume"
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	label.add_theme_font_size_override("font_size", 22)
@@ -193,7 +188,7 @@ func _make_fps_row(font: Font) -> HBoxContainer:
 	row.add_theme_constant_override("separation", 12)
 
 	var label := Label.new()
-	label.text = "FPS Max"
+	label.text = "FPS max"
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	label.add_theme_font_size_override("font_size", 22)
@@ -205,48 +200,17 @@ func _make_fps_row(font: Font) -> HBoxContainer:
 	_fps_option = OptionButton.new()
 	_fps_option.custom_minimum_size = Vector2(200.0, 0.0)
 	_fps_option.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	t.apply_button_theme(_fps_option)
+	RefinedBaselineButton.style_option_button(_fps_option)
 	var current := PerformanceSettings.get_max_fps()
 	for i in PerformanceSettings.FPS_OPTIONS.size():
 		var fps: int = PerformanceSettings.FPS_OPTIONS[i]
 		_fps_option.add_item(str(fps), i)
 		if fps == current:
 			_fps_option.select(i)
-	_style_option_popup(_fps_option, font)
 	_fps_option.item_selected.connect(_on_fps_selected)
 	row.add_child(_fps_option)
 
 	return row
-
-
-## OptionButton's drop-down PopupMenu is not covered by apply_button_theme, so
-## without this it renders with Godot's default styling — illegible against this
-## game's themed background. Mirror apply_button_theme's exact pairings (the
-## button-enabled/hovered backgrounds with button-text foreground) since those
-## are the theme-tested, contrast-safe combinations; ad-hoc pairings are not.
-func _style_option_popup(option: OptionButton, font: Font) -> void:
-	var t: VisualTheme = ThemeProvider.theme
-
-	var panel := StyleBoxFlat.new()
-	panel.bg_color = t.button_enabled_color
-	panel.border_color = t.button_border_color
-	panel.set_border_width_all(1)
-	panel.set_content_margin_all(8.0)
-
-	var hover := StyleBoxFlat.new()
-	hover.bg_color = t.button_hovered_color
-	hover.border_color = t.button_border_color
-	hover.set_border_width_all(1)
-
-	var popup := option.get_popup()
-	popup.add_theme_stylebox_override("panel", panel)
-	popup.add_theme_stylebox_override("hover", hover)
-	popup.add_theme_color_override("font_color", t.button_text_color)
-	popup.add_theme_color_override("font_hover_color", t.button_text_color)
-	popup.add_theme_color_override("font_accelerator_color", t.button_text_color)
-	popup.add_theme_font_size_override("font_size", 20)
-	if font:
-		popup.add_theme_font_override("font", font)
 
 
 func _on_fps_selected(index: int) -> void:
@@ -275,14 +239,13 @@ func _make_display_row(font: Font) -> HBoxContainer:
 	_display_option = OptionButton.new()
 	_display_option.custom_minimum_size = Vector2(200.0, 0.0)
 	_display_option.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	t.apply_button_theme(_display_option)
+	RefinedBaselineButton.style_option_button(_display_option)
 	var current := PerformanceSettings.get_window_mode()
 	for i in PerformanceSettings.WINDOW_MODE_OPTIONS.size():
 		var mode: int = PerformanceSettings.WINDOW_MODE_OPTIONS[i]
 		_display_option.add_item(_label_for_window_mode(mode), i)
 		if mode == current:
 			_display_option.select(i)
-	_style_option_popup(_display_option, font)
 	_display_option.item_selected.connect(_on_display_mode_selected)
 	row.add_child(_display_option)
 
@@ -309,10 +272,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func show_dialog() -> void:
 	visible = true
+	_overlay.fade_in()
 
 
 func hide_dialog() -> void:
-	visible = false
+	_overlay.fade_out(func(): visible = false)
 
 
 func _on_overlay_input(event: InputEvent) -> void:

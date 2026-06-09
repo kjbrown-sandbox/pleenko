@@ -115,6 +115,12 @@ var _ui_hover_pitch_queue: Array[float] = []
 ## Challenge-mode hover plays the chord root, alternating root / octave-lower on
 ## successive (accepted) hovers. See play_ui_hover.
 var _ui_hover_octave_toggle: bool = false
+## Optional live-chord source for the UI hover, set by MainMenu so the hover
+## arpeggiates in tune with the MenuBoard's chord bed — AudioManager's own chord
+## state is idle on the menu (no gameplay board driving it). Returns the active
+## chord's pitch multipliers; null/empty falls back to the gameplay chord paths.
+## Cleared on menu exit.
+var ui_hover_chord_pitches_fn: Callable = Callable()
 var _peg_chime_rng: RandomNumberGenerator = RandomNumberGenerator.new()
 # Quantize mode (theme.peg_chime_quantize_seconds > 0): peg hits within a
 # quantum collapse to one chime fired on the next quantum boundary. The most
@@ -1311,6 +1317,16 @@ func play_ui_hover() -> void:
 		return
 	if _ui_hover_pitch_queue.size() >= UI_HOVER_QUEUE_CAPACITY:
 		return
+	# Menu context: MainMenu supplies the MenuBoard's live chord so the hover
+	# arpeggiates in tune with the bed (the gameplay chord paths below are idle on
+	# the menu). Same arpeggiator + register as the menu's own button hover.
+	if ui_hover_chord_pitches_fn.is_valid():
+		var menu_pitches: PackedFloat32Array = ui_hover_chord_pitches_fn.call()
+		if not menu_pitches.is_empty():
+			var mnote: Vector2i = _ui_hover_arp.advance(Time.get_ticks_msec())
+			_ui_hover_pitch_queue.append(
+				MenuHoverArpeggiator.pitch_mult_for(mnote.x, mnote.y, menu_pitches))
+			return
 	# Melody-driven themes (challenge / glow_dark): the audible chord comes from the
 	# melody, so the progression arpeggio below is out of tune. Play the chord's base
 	# note instead (same source as the frenzy pop), alternating root / octave-lower.
@@ -1336,10 +1352,11 @@ func _on_ui_hover_quantize_tick() -> void:
 	if _ui_hover_pitch_queue.is_empty():
 		return
 	var pitch_mult: float = _ui_hover_pitch_queue.pop_front()
-	# Same instrument as the gameplay buckets (so the hover sings in the board's
-	# voice), held clearly below them via UI_HOVER_VOLUME_OFFSET_DB.
+	# MUSIC_BOX timbre to match the main-menu button hover (MainMenu plays the
+	# same instrument), rather than the per-theme bucket voice. Held clearly
+	# below the gameplay buckets via UI_HOVER_VOLUME_OFFSET_DB.
 	var vol_db: float = BUCKET_VOLUME_DB + UI_HOVER_VOLUME_OFFSET_DB
-	play_pitched_chime(pitch_mult, vol_db, UI_HOVER_NOTE_SUSTAIN_S, _theme_bucket_type())
+	play_pitched_chime(pitch_mult, vol_db, UI_HOVER_NOTE_SUSTAIN_S, Instrument.Type.MUSIC_BOX)
 
 
 func play_peg_click(board_type: Enums.BoardType) -> void:

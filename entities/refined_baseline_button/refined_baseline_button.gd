@@ -91,6 +91,16 @@ enum Mode { WITH_BOTH, WITH_PLUS, NEITHER }
 		num_text = value
 		_queue_apply_text()
 
+# Action-button mode: size the bar's min width to fit `title_text` (centered,
+# capless, always-filled dialog/menu buttons created via `create_action`).
+# Left false for gameplay bars (upgrade rows / drop / currency), which size to
+# their container instead — so this flag never changes their layout.
+@export var auto_size := false:
+	set(value):
+		if auto_size == value: return
+		auto_size = value
+		_queue_apply_text()
+
 @export_range(0.0, 1.0) var fill_amount: float = 0.36:
 	set(value):
 		var clamped := clampf(value, 0.0, 1.0)
@@ -290,7 +300,29 @@ func _apply() -> void:
 	_apply_fill()
 
 
+## Horizontal chrome around the title label (FillBounds inset + TitleLbl
+## offsets + breathing room) used to size an auto_size action button to its text.
+const AUTO_SIZE_PADDING_PX := 40.0
+## Fixed bar height for action buttons — matches the scene's Main min height.
+const ACTION_HEIGHT_PX := 48.0
+## Title label render size — MUST match TitleLbl/FillTitleLbl in
+## refined_baseline_button.tscn, so auto_size measures at the size it draws at
+## (measuring at the smaller theme button_font_size under-sizes and clips).
+const TITLE_FONT_SIZE := 22
+
+
+func _fit_to_text() -> void:
+	if not auto_size: return
+	var t: VisualTheme = ThemeProvider.theme
+	var font: Font = t.button_font if t.button_font else t.label_font
+	if not font: return
+	var w: float = font.get_string_size(
+		title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_FONT_SIZE).x
+	custom_minimum_size = Vector2(w + AUTO_SIZE_PADDING_PX, ACTION_HEIGHT_PX)
+
+
 func _apply_text() -> void:
+	_fit_to_text()
 	if _title_lbl:
 		_title_lbl.text = title_text
 		_fill_title_lbl.text = title_text
@@ -428,6 +460,91 @@ func _make_main_style(has_minus: bool, has_plus: bool, has_minus_active: bool, h
 
 
 # ── Public API ──
+
+## Build a unified action button — no caps, 100% filled, a single centered
+## label sized to its text — the shared look for dialog / menu action buttons
+## that replaced the old `Button.new()` + `apply_button_theme()` pattern.
+## Connect via the returned button's `main_pressed`, or pass `on_pressed`.
+## `tint` overrides the bar color (default = theme normal-text via `_bar_tint`).
+static func create_action(
+	text: String, on_pressed: Callable = Callable(), tint: Color = Color(0, 0, 0, 0)
+) -> RefinedBaselineButton:
+	var btn: RefinedBaselineButton = load(
+		"res://entities/refined_baseline_button/refined_baseline_button.tscn").instantiate()
+	btn.mode = Mode.NEITHER
+	btn.auto_size = true
+	btn.fill_amount = 1.0
+	btn.bar_color = tint
+	btn.title_text = text
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	if on_pressed.is_valid():
+		btn.main_pressed.connect(on_pressed)
+	return btn
+
+
+## Style an OptionButton (FPS / Display dropdowns) to match the action-button
+## look — they can't BE RefinedBaselineButtons (they need a drop-down), so this
+## paints the same `normal_text_color` fill / `background_color` text / border /
+## radius and the same hover-lighten / press-darken response, popup included.
+static func style_option_button(option: OptionButton) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var tint: Color = t.normal_text_color
+	var text: Color = t.background_color
+	var font: Font = t.button_font if t.button_font else t.label_font
+
+	option.add_theme_stylebox_override("normal", _action_box(tint))
+	option.add_theme_stylebox_override("hover", _action_box(tint.lightened(HOVER_LIGHTEN)))
+	option.add_theme_stylebox_override("pressed", _action_box(tint.darkened(PRESS_DARKEN)))
+	option.add_theme_stylebox_override("focus", _action_box(tint))
+	option.add_theme_stylebox_override("disabled", _action_box(tint.lightened(0.25)))
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		option.add_theme_color_override(c, text)
+	# Tint the drop-down arrow to the text color so it stays visible on the
+	# near-white fill (the default icon would wash out).
+	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
+		option.add_theme_color_override(c, text)
+	option.add_theme_font_size_override("font_size", t.button_font_size)
+	if font:
+		option.add_theme_font_override("font", font)
+
+	var popup := option.get_popup()
+	popup.add_theme_stylebox_override("panel", _action_box(tint))
+	popup.add_theme_stylebox_override("hover", _action_box(tint.darkened(PRESS_DARKEN)))
+	for c in ["font_color", "font_hover_color", "font_accelerator_color"]:
+		popup.add_theme_color_override(c, text)
+	popup.add_theme_font_size_override("font_size", 20)
+	if font:
+		popup.add_theme_font_override("font", font)
+
+
+## The action-button fill stylebox (solid `bg`, matching border, capless radius)
+## reused for the OptionButton styling so it can't drift from the bar look.
+static func _action_box(bg: Color) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = bg
+	s.set_border_width_all(BORDER_PX)
+	s.set_corner_radius_all(RADIUS_PX)
+	s.content_margin_left = 14.0
+	s.content_margin_right = 14.0
+	s.content_margin_top = 6.0
+	s.content_margin_bottom = 6.0
+	return s
+
+
+## Give every action button in `buttons` the width of the widest, so a group
+## (a dialog footer, a Cancel/Confirm row) reads as a uniform stack/row rather
+## than text-hugging pills of mismatched width. Call AFTER the buttons are in
+## the tree (their auto_size min-width is resolved on _ready).
+static func equalize_widths(buttons: Array) -> void:
+	var max_w := 0.0
+	for b in buttons:
+		if b is RefinedBaselineButton:
+			max_w = maxf(max_w, (b as RefinedBaselineButton).custom_minimum_size.x)
+	for b in buttons:
+		if b is RefinedBaselineButton:
+			(b as RefinedBaselineButton).custom_minimum_size.x = max_w
+
 
 func setup(_fill_color: Color, _disabled_color: Color) -> void:
 	# Bar tint is set explicitly via `bar_color` (currencies do it; upgrade

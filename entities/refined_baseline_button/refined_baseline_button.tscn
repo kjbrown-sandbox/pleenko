@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cbbeofkeqqvdm"]
 
-[ext_resource type="Script" uid="uid://jmaqrq81ybpi" path="res://style_lab/refined_baseline_button.gd" id="2_script"]
+[ext_resource type="Script" uid="uid://jmaqrq81ybpi" path="res://entities/refined_baseline_button/refined_baseline_button.gd" id="2_script"]
 
 [node name="RefinedBaselineButton" type="HBoxContainer" unique_id=1792706077]
 size_flags_horizontal = 3

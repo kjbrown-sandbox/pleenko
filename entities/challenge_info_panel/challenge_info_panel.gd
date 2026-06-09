@@ -37,7 +37,7 @@ func _ready() -> void:
 	_difficulty_container = HBoxContainer.new()
 	_difficulty_container.add_theme_constant_override("separation", 4)
 	var tab := Label.new()
-	tab.text = "EASY"
+	tab.text = "Easy"
 	tab.add_theme_font_size_override("font_size", int(t.button_font_size))
 	tab.add_theme_color_override("font_color", t.button_disabled_text_color)
 	_apply_font(tab, t)
