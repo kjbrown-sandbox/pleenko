@@ -140,7 +140,7 @@ func _update_button() -> void:
 	# upgrades show "MAX" instead. This matches the fill bar below (also balance/cost).
 	var balance: int = CurrencyManager.get_balance(TierRegistry.primary_currency(_board_type))
 	if at_max:
-		bar.num_text = "MAX"
+		bar.num_text = "Max"
 	else:
 		var shown: int = mini(balance, state.cost)
 		bar.num_text = "%s/%s" % [FormatUtils.format_number(shown), FormatUtils.format_number(state.cost)]

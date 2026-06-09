@@ -33,7 +33,7 @@ func _ready() -> void:
 
 	# "Plunk Up!" title
 	var title := Label.new()
-	title.text = "Plunk Up!"
+	title.text = "Plunk up!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 48)
 	title.add_theme_color_override("font_color", contrast_color)
@@ -61,21 +61,10 @@ func _ready() -> void:
 	spacer.custom_minimum_size = Vector2(0, 20)
 	vbox.add_child(spacer)
 
-	# Claim button — override theme colors for stark contrast against flash background
-	var claim_button := Button.new()
-	claim_button.text = "Claim Rewards"
-	claim_button.focus_mode = Control.FOCUS_NONE
-	claim_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	t.apply_button_theme(claim_button)
-	claim_button.add_theme_font_size_override("font_size", 28)
-	claim_button.add_theme_color_override("font_color", flash_color)
-	claim_button.add_theme_color_override("font_hover_color", flash_color)
-	claim_button.add_theme_color_override("font_pressed_color", flash_color)
-	var btn_style := t._make_stylebox(contrast_color, contrast_color)
-	claim_button.add_theme_stylebox_override("normal", btn_style)
-	claim_button.add_theme_stylebox_override("hover", btn_style)
-	claim_button.add_theme_stylebox_override("pressed", btn_style)
-	claim_button.pressed.connect(_on_claim_pressed)
+	# Claim button — contrast bar color so the filled pill stands out against the
+	# bright flash background.
+	var claim_button := RefinedBaselineButton.create_action(
+		"Claim rewards", _on_claim_pressed, contrast_color)
 	claim_button.modulate.a = 0.0
 	vbox.add_child(claim_button)
 

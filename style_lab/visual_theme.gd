@@ -118,6 +118,13 @@ enum Palette {
 @export var bomb_detonation_color_source: Palette = Palette.RED_MAIN  # column-of-light flash colour at detonation
 @export var void_column_light_source: Palette = Palette.BG_4     # color of the "void shaft" left behind after detonation (a single muted column running through the destroyed pegs)
 
+# ── Overlay Blur ─────────────────────────────────────────────────────
+# Frosted-glass modal backdrop (FrostedOverlay). Tint reuses overlay_color /
+# overlay_opacity above — no separate color here.
+@export_group("Overlay Blur")
+@export var overlay_blur_size := 8.0                              # Gaussian sample radius in texels (higher = blurrier)
+@export var overlay_blur_fade_duration := 0.25                   # seconds for a modal to fade its glass + panel in/out
+
 # ── Environment ──────────────────────────────────────────────────────
 @export_group("Environment")
 @export var unshaded := true                                      # flat color, no lighting

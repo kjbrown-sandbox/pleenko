@@ -35,6 +35,7 @@ func _run_tests() -> void:
 	test_pitch_scale_root_is_based_on_chord()
 	test_pitch_scale_degree_wraps()
 	test_ui_hover_uses_chord_root_alternating_octave()
+	test_ui_hover_provider_overrides_chord_path()
 
 	# Chord advance
 	test_chord_advance_clears_bucket_queue()
@@ -386,6 +387,30 @@ func test_ui_hover_uses_chord_root_alternating_octave() -> void:
 	AudioManager._melody_idx = saved_melody_idx
 	AudioManager._ui_hover_pitch_queue = saved_queue
 	AudioManager._ui_hover_octave_toggle = saved_toggle
+	_restore_state()
+
+
+# The injectable chord seam (MainMenu sets it so the menu hover stays in tune
+# with the MenuBoard bed) takes precedence over the gameplay/melody chord paths.
+func test_ui_hover_provider_overrides_chord_path() -> void:
+	print("test_ui_hover_provider_overrides_chord_path")
+	_save_state()
+	var saved_fn: Callable = AudioManager.ui_hover_chord_pitches_fn
+	var saved_queue: Array = AudioManager._ui_hover_pitch_queue.duplicate()
+
+	AudioManager._silenced = false
+	AudioManager._ui_hover_pitch_queue.clear()
+	AudioManager.ui_hover_chord_pitches_fn = func() -> PackedFloat32Array:
+		return PackedFloat32Array([1.0, 1.25, 1.5, 2.0])
+	AudioManager.play_ui_hover()
+
+	assert_equal(AudioManager._ui_hover_pitch_queue.size(), 1,
+		"provider hover queues one pitch from the supplied chord")
+	if AudioManager._ui_hover_pitch_queue.size() == 1:
+		assert_true(AudioManager._ui_hover_pitch_queue[0] > 0.0, "queued pitch is positive")
+
+	AudioManager.ui_hover_chord_pitches_fn = saved_fn
+	AudioManager._ui_hover_pitch_queue = saved_queue
 	_restore_state()
 
 

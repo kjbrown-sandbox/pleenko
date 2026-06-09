@@ -4,6 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://b8mnpq3vk2xra" path="res://entities/menu_board/menu_board.tscn" id="2_mboard"]
 [ext_resource type="PackedScene" uid="uid://dgmcj5xrytqkb" path="res://entities/main_menu_button/main_menu_button.tscn" id="3_mbtn"]
 [ext_resource type="PackedScene" uid="uid://drm5plm7d4xte" path="res://entities/menu_title/menu_title.tscn" id="4_mtitle"]
+[ext_resource type="Script" path="res://entities/frosted_overlay/frosted_overlay.gd" id="5_frost"]
+[ext_resource type="PackedScene" uid="uid://cbbeofkeqqvdm" path="res://entities/refined_baseline_button/refined_baseline_button.tscn" id="6_rbb"]
 
 [node name="MainMenu" type="Node3D" unique_id=1111347995]
 script = ExtResource("1_6wyxo")
@@ -74,44 +76,48 @@ layer = 10
 
 [node name="Overlay" type="ColorRect" parent="ConfirmLayer" unique_id=1643047356]
 visible = false
+script = ExtResource("5_frost")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Panel" type="PanelContainer" parent="ConfirmLayer/Overlay" unique_id=1843576638]
-layout_mode = 0
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
+[node name="CenterContainer" type="CenterContainer" parent="ConfirmLayer/Overlay" unique_id=1843576638]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBox" type="VBoxContainer" parent="ConfirmLayer/Overlay/Panel" unique_id=335179807]
+[node name="VBox" type="VBoxContainer" parent="ConfirmLayer/Overlay/CenterContainer" unique_id=335179807]
 layout_mode = 2
+custom_minimum_size = Vector2(680, 0)
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="ConfirmLabel" type="Label" parent="ConfirmLayer/Overlay/Panel/VBox" unique_id=1204630543]
+[node name="ConfirmLabel" type="Label" parent="ConfirmLayer/Overlay/CenterContainer/VBox" unique_id=1204630543]
 layout_mode = 2
 text = "Reset all progress?
 This erases everything and cannot be undone."
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="ButtonRow" type="HBoxContainer" parent="ConfirmLayer/Overlay/Panel/VBox" unique_id=1912745230]
+[node name="ButtonRow" type="HBoxContainer" parent="ConfirmLayer/Overlay/CenterContainer/VBox" unique_id=1912745230]
 layout_mode = 2
 theme_override_constants/separation = 16
 alignment = 1
 
-[node name="CancelButton" type="Button" parent="ConfirmLayer/Overlay/Panel/VBox/ButtonRow" unique_id=1010917559]
+[node name="CancelButton" parent="ConfirmLayer/Overlay/CenterContainer/VBox/ButtonRow" unique_id=1010917559 instance=ExtResource("6_rbb")]
 layout_mode = 2
-focus_mode = 0
-text = "Cancel"
+size_flags_horizontal = 4
+auto_size = true
+fill_amount = 1.0
+title_text = "Cancel"
 
-[node name="ConfirmResetButton" type="Button" parent="ConfirmLayer/Overlay/Panel/VBox/ButtonRow" unique_id=1356933696]
+[node name="ConfirmResetButton" parent="ConfirmLayer/Overlay/CenterContainer/VBox/ButtonRow" unique_id=1356933696 instance=ExtResource("6_rbb")]
 layout_mode = 2
-focus_mode = 0
-text = "Reset"
+size_flags_horizontal = 4
+auto_size = true
+fill_amount = 1.0
+title_text = "Reset"
