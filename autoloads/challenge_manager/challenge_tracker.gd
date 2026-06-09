@@ -170,8 +170,10 @@ func _process_survive(delta: float) -> void:
 		return
 	_survive_elapsed += delta
 	_survive_phase_remaining -= delta
-	if _survive_phase == SurvivePhase.SURVIVING:
-		_maybe_emit_tick(_survive_phase_remaining)
+	# Emit the per-second tick in BOTH phases so the challenge audio sequencer
+	# (started by AudioManager._on_challenge_tick) and the countdown clock run
+	# during the WAITING buildup, not just while SURVIVING.
+	_maybe_emit_tick(_survive_phase_remaining)
 	if _survive_phase_remaining > 0.0:
 		return
 
