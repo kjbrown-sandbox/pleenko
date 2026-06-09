@@ -15,6 +15,7 @@ const IconTintShader := preload("res://entities/icon/icon_tint.gdshader")
 # Sound on: <a href="https://www.flaticon.com/free-icons/volume" title="volume icons">Volume icons created by Bharat Icons - Flaticon</a>
 # Sound off: <a href="https://www.flaticon.com/free-icons/sound-off" title="sound off icons">Sound off icons created by See Icons - Flaticon</a>
 # Close x: <a href="https://www.flaticon.com/free-icons/close" title="close icons">Close icons created by ariefstudio - Flaticon</a>
+# Retry: <a href="https://www.flaticon.com/free-icons/reload" title="reload icons">Reload icons created by Uniconlabs - Flaticon</a>
 
 @export var interactive: bool = true
 
