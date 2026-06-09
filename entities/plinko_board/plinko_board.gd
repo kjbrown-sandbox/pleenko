@@ -595,6 +595,12 @@ func _process(delta: float) -> void:
 		else:
 			request_drop()
 
+	# A held drop hotkey reads as a pressed button for as long as it's down
+	# (mouse-hold is already handled by the button's own press tracking).
+	_drop_main.set_force_pressed(Input.is_action_pressed("drop_coin") and drop_section.visible)
+	_drop_advanced.set_force_pressed(Input.is_action_pressed("drop_unrefined") \
+		and drop_section.visible and _drop_advanced_column.visible)
+
 	_update_drop_rate_label_position()
 
 	if not _active_flashes.is_empty():
