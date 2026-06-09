@@ -372,6 +372,9 @@ func _setup_restart_icon() -> void:
 
 
 func _on_restart_pressed() -> void:
+	# The confirm overlay doesn't pause the challenge — a falling coin can still
+	# complete/fail it (clearing the challenge) while the prompt is open, so every
+	# entry point re-checks is_active_challenge.
 	if not ChallengeManager.is_active_challenge:
 		return
 	_confirm_dialog.show_confirm(
