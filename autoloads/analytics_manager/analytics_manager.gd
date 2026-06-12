@@ -47,7 +47,7 @@ func _ready() -> void:
 	var player_id := _load_or_create_player_id()
 	_ga.setExternalUserId(player_id)
 	_ga.configureUserId(player_id)
-	_ga.configureBuild("0.1.0")
+	_ga.configureBuild("1.4")
 
 	_ga.init(keys["game_key"], keys["secret_key"])
 
