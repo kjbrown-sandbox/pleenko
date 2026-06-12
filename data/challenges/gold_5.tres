@@ -21,8 +21,8 @@ times = 15
 
 [sub_resource type="Resource" id="reward_1"]
 script = ExtResource("3_reward")
-type = 2
-upgrade_type = 1
+type = 1
+modifier_type = 7
 
 [sub_resource type="Resource" id="starting_1"]
 script = ExtResource("8_start")
