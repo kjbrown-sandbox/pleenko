@@ -302,8 +302,10 @@ func _on_return_pressed() -> void:
 
 
 ## IN_GAME only — wired solely by the IN_GAME branch of `_build_footer`.
-## Saves before exiting the app (challenge runtime state is never persisted,
-## mirroring `_on_return_pressed`), then quits.
+## Saves before exiting the app, reusing `_on_return_pressed`'s save decision:
+## skip the save mid-challenge (challenge runtime state is never persisted). It
+## needs none of `_on_return_pressed`'s challenge cleanup arm — the process is
+## ending, so autoload runtime state dies with it.
 func _on_quit_pressed() -> void:
 	if not ChallengeManager.is_active_challenge:
 		SaveManager.save_game()
