@@ -24,9 +24,11 @@ func _ready() -> void:
 func _apply_theme() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	title_label.add_theme_color_override("font_color", t.red_main)
-	title_label.add_theme_font_size_override("font_size", 32)
+	title_label.add_theme_font_size_override("font_size", 44)
 	reason_label.add_theme_color_override("font_color", t.body_text_color)
+	reason_label.add_theme_font_size_override("font_size", 26)
 	hint_label.add_theme_color_override("font_color", t.body_text_color)
+	hint_label.add_theme_font_size_override("font_size", 26)
 
 
 ## Show the failure screen with the reason string and an optional hint (the hint

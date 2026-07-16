@@ -228,6 +228,10 @@ func _on_challenge_completed() -> void:
 		"coins_dropped": ChallengeManager.get_total_drops(),
 	}
 
+	# Capture first-clear state BEFORE marking complete, so the dialog button can
+	# read "Claim rewards" on a first clear vs "Continue" on a replay.
+	var is_first_completion: bool = \
+		ChallengeProgressManager.get_state(challenge.id) != ChallengeProgressManager.ChallengeState.COMPLETED
 	ChallengeProgressManager.complete_challenge(challenge.id, next_ids, challenge.rewards)
 	SaveManager.save_challenge_progress()
 
@@ -243,7 +247,7 @@ func _on_challenge_completed() -> void:
 	challenge_hud.show_result("Challenge Complete!")
 	await get_tree().create_timer(2.0).timeout
 
-	_challenge_complete_dialog.show_with_results(stats, reward_lines)
+	_challenge_complete_dialog.show_with_results(stats, reward_lines, is_first_completion)
 	await _challenge_complete_dialog.closed
 
 	_exit_challenge_to_menu()

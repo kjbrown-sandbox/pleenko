@@ -18,15 +18,22 @@ func _ready() -> void:
 func _apply_theme() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	title_label.add_theme_color_override("font_color", t.normal_text_color)
-	title_label.add_theme_font_size_override("font_size", 32)
+	title_label.add_theme_font_size_override("font_size", 44)
 	stats_label.add_theme_color_override("font_color", t.body_text_color)
+	stats_label.add_theme_font_size_override("font_size", 26)
 	rewards_label.add_theme_color_override("font_color", t.body_text_color)
-	$Overlay/CenterContainer/VBoxContainer/RewardsHeader.add_theme_color_override("font_color", t.normal_text_color)
+	rewards_label.add_theme_font_size_override("font_size", 26)
+	var rewards_header: Label = $Overlay/CenterContainer/VBoxContainer/RewardsHeader
+	rewards_header.add_theme_color_override("font_color", t.normal_text_color)
+	rewards_header.add_theme_font_size_override("font_size", 30)
 
 
-## Show the dialog with stats and reward diff strings.
-func show_with_results(stats: Dictionary, reward_lines: Array[String]) -> void:
+## Show the dialog with stats and reward diff strings. On a first clear the OK
+## button reads "Claim rewards"; on a replay (already completed) it reads
+## "Continue" since no new rewards are granted.
+func show_with_results(stats: Dictionary, reward_lines: Array[String], is_first_completion: bool = true) -> void:
 	_apply_theme()
+	ok_button.title_text = "Claim rewards" if is_first_completion else "Continue"
 	stats_label.text = _format_stats(stats)
 	if reward_lines.is_empty():
 		rewards_label.text = "(no new rewards)"

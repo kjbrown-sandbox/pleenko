@@ -41,6 +41,10 @@ layout_mode = 2
 horizontal_alignment = 1
 text = ""
 
+[node name="StatsRewardsSpacer" type="Control" parent="Overlay/CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+
 [node name="RewardsHeader" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
 layout_mode = 2
 horizontal_alignment = 1
