@@ -28,6 +28,9 @@ var _volume_label: Label
 var _fps_option: OptionButton
 var _display_option: OptionButton
 
+## Injectable for headless tests (MainMenu precedent). Production quits the app.
+var _quit_fn := func() -> void: get_tree().quit()
+
 
 func _ready() -> void:
 	var t: VisualTheme = ThemeProvider.theme
@@ -107,6 +110,8 @@ func _build_footer() -> void:
 
 		_return_button = RefinedBaselineButton.create_action("Return to main menu", _on_return_pressed)
 		buttons.append(_return_button)
+
+		buttons.append(RefinedBaselineButton.create_action("Quit game", _on_quit_pressed))
 
 	for b in buttons:
 		_panel.add_child(b)
@@ -294,3 +299,13 @@ func _on_return_pressed() -> void:
 		ChallengeManager.clear_challenge()
 		SaveManager.reset_state()
 	SceneManager.set_new_scene(load(MAIN_MENU_PATH), false, ThemeProvider.Kind.NORMAL)
+
+
+## IN_GAME only — wired solely by the IN_GAME branch of `_build_footer`.
+## Saves before exiting the app (challenge runtime state is never persisted,
+## mirroring `_on_return_pressed`), then quits.
+func _on_quit_pressed() -> void:
+	if not ChallengeManager.is_active_challenge:
+		SaveManager.save_game()
+		SaveManager.toggle_auto_save(false)
+	_quit_fn.call()

@@ -6,6 +6,10 @@ extends "res://test/test_base.gd"
 ## The IN_GAME footer grows an "Exit challenge" button only while a challenge is
 ## active; pressing it hides the dialog and emits exit_challenge_requested up to
 ## the parent (Main), which owns the teardown.
+##
+## The IN_GAME footer also carries a "Quit game" button (absent in MAIN_MENU,
+## which has its own Quit) that saves before quitting via the injectable
+## `_quit_fn` seam.
 
 
 func _run_tests() -> void:
@@ -15,6 +19,11 @@ func _run_tests() -> void:
 	test_exit_button_absent_outside_challenge()
 	test_exit_button_absent_in_main_menu_context()
 	await test_exit_button_emits_and_hides()
+
+	test_quit_button_present_in_game()
+	test_quit_button_absent_in_main_menu_context()
+	test_quit_calls_quit_fn_outside_challenge()
+	test_quit_calls_quit_fn_during_challenge()
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -91,5 +100,58 @@ func test_exit_button_emits_and_hides() -> void:
 	assert_equal(rec.count, 1, "exit_challenge_requested emitted once")
 	await _await_fade()
 	assert_false(dialog.visible, "dialog hidden after exit fades out")
+	dialog.queue_free()
+	ChallengeManager.clear_challenge()
+
+
+# ── Quit-game tests ─────────────────────────────────────────────────
+
+func test_quit_button_present_in_game() -> void:
+	print("test_quit_button_present_in_game")
+	ChallengeManager.clear_challenge()
+	var dialog := _make_dialog(OptionsDialog.Context.IN_GAME)
+	assert_true(_find_button(dialog, "Quit game") != null,
+		"Quit game button built in the IN_GAME footer")
+	dialog.queue_free()
+
+
+func test_quit_button_absent_in_main_menu_context() -> void:
+	print("test_quit_button_absent_in_main_menu_context")
+	# MAIN_MENU has its own Quit — the dialog's Quit is IN_GAME only.
+	var dialog := _make_dialog(OptionsDialog.Context.MAIN_MENU)
+	assert_true(_find_button(dialog, "Quit game") == null,
+		"Quit game button never appears in MAIN_MENU context")
+	dialog.queue_free()
+
+
+func test_quit_calls_quit_fn_outside_challenge() -> void:
+	print("test_quit_calls_quit_fn_outside_challenge")
+	ChallengeManager.clear_challenge()
+	var dialog := _make_dialog(OptionsDialog.Context.IN_GAME)
+	# save_game() is a safe no-op here (no board manager registered); we only
+	# assert the quit seam fires so the headless run can't actually exit.
+	var quit_calls := [0]
+	dialog._quit_fn = func() -> void: quit_calls[0] += 1
+
+	var button := _find_button(dialog, "Quit game")
+	assert_true(button != null, "quit button exists")
+	button.main_pressed.emit()
+
+	assert_equal(quit_calls[0], 1, "quit_fn called once outside a challenge")
+	dialog.queue_free()
+
+
+func test_quit_calls_quit_fn_during_challenge() -> void:
+	print("test_quit_calls_quit_fn_during_challenge")
+	ChallengeManager.set_challenge(ChallengeData.new())
+	var dialog := _make_dialog(OptionsDialog.Context.IN_GAME)
+	var quit_calls := [0]
+	dialog._quit_fn = func() -> void: quit_calls[0] += 1
+
+	var button := _find_button(dialog, "Quit game")
+	assert_true(button != null, "quit button exists mid-challenge")
+	button.main_pressed.emit()
+
+	assert_equal(quit_calls[0], 1, "quit_fn called once during a challenge")
 	dialog.queue_free()
 	ChallengeManager.clear_challenge()
