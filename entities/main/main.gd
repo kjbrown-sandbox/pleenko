@@ -3,6 +3,7 @@ extends Node3D
 const OptionsDialogScript := preload("res://entities/options_dialog/options_dialog.gd")
 const ComingSoonOverlayScript := preload("res://entities/coming_soon_overlay/coming_soon_overlay.gd")
 const ChallengeCompleteDialogScene := preload("res://entities/challenge_complete_dialog/challenge_complete_dialog.tscn")
+const ChallengeFailDialogScene := preload("res://entities/challenge_fail_dialog/challenge_fail_dialog.tscn")
 const OfflineEarningsDialogScene := preload("res://entities/offline_earnings_dialog/offline_earnings_dialog.tscn")
 const VolumeUpTexture := preload("res://assets/icons/volume-up.png")
 const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
@@ -42,6 +43,7 @@ var _options_dialog: CanvasLayer
 var _confirm_dialog: ConfirmDialog
 var _coming_soon_overlay: CanvasLayer
 var _challenge_complete_dialog: CanvasLayer
+var _challenge_fail_dialog: CanvasLayer
 var _offline_earnings_dialog: CanvasLayer
 
 # Nav arrow blink state
@@ -193,7 +195,15 @@ func _setup_challenge() -> void:
 	ChallengeManager.challenge_completed.connect(_on_challenge_completed)
 	ChallengeManager.challenge_failed.connect(_on_challenge_failed)
 	challenge_hud.start(ChallengeManager.get_challenge())
+	_setup_challenge_fail_dialog()
 	_setup_forbidden_bucket_reveal_animator()
+
+
+func _setup_challenge_fail_dialog() -> void:
+	_challenge_fail_dialog = ChallengeFailDialogScene.instantiate()
+	_challenge_fail_dialog.retry_pressed.connect(_on_fail_retry)
+	_challenge_fail_dialog.return_pressed.connect(_on_fail_return)
+	add_child(_challenge_fail_dialog)
 
 
 func _setup_forbidden_bucket_reveal_animator() -> void:
@@ -218,6 +228,10 @@ func _on_challenge_completed() -> void:
 		"coins_dropped": ChallengeManager.get_total_drops(),
 	}
 
+	# Capture first-clear state BEFORE marking complete, so the dialog button can
+	# read "Claim rewards" on a first clear vs "Continue" on a replay.
+	var is_first_completion: bool = \
+		ChallengeProgressManager.get_state(challenge.id) != ChallengeProgressManager.ChallengeState.COMPLETED
 	ChallengeProgressManager.complete_challenge(challenge.id, next_ids, challenge.rewards)
 	SaveManager.save_challenge_progress()
 
@@ -233,15 +247,43 @@ func _on_challenge_completed() -> void:
 	challenge_hud.show_result("Challenge Complete!")
 	await get_tree().create_timer(2.0).timeout
 
-	_challenge_complete_dialog.show_with_results(stats, reward_lines)
+	_challenge_complete_dialog.show_with_results(stats, reward_lines, is_first_completion)
 	await _challenge_complete_dialog.closed
 
 	_exit_challenge_to_menu()
 
 
 func _on_challenge_failed(reason: String) -> void:
-	challenge_hud.show_result("Failed: %s" % reason)
-	await get_tree().create_timer(2.0).timeout
+	# Read the per-challenge hint before anything can clear the challenge (Retry
+	# needs it to stay active, so we do NOT clear here — that moves into the
+	# Return handler).
+	var challenge := ChallengeManager.get_challenge()
+	var hint: String = challenge.failure_hint if challenge else ""
+	# Lock navigation and focus the challenge's Survive board (where the objective
+	# plays out) so the player sees where it went wrong; non-Survive failures keep
+	# the active board (get_survive_board_type() returns -1). Manual drops and
+	# autodroppers are already frozen via drop_blocked (has_failed()), and the
+	# failure screen's frosted overlay swallows all clicks the instant it's shown
+	# — so nothing more can be bought or dropped. The board still pans (blurred)
+	# behind the overlay.
+	apply_input_lock(true)
+	var focus_board_type: int = ChallengeManager.get_survive_board_type()
+	if focus_board_type != -1:
+		board_manager.switch_to_board_type(focus_board_type)
+	# Hold on the focused board for a beat so the player registers what happened
+	# before the failure screen covers it.
+	await get_tree().create_timer(1.5).timeout
+	_challenge_fail_dialog.show_with_failure(reason, hint)
+
+
+## Retry: replay the current challenge from scratch. The challenge stays active
+## across the reload (no clear_challenge), so Main._ready re-runs _setup_challenge.
+func _on_fail_retry() -> void:
+	_restart_challenge()
+
+
+## Return to Main: leave the challenge and land back on the challenge menu.
+func _on_fail_return() -> void:
 	ChallengeManager.clear_challenge()
 	_exit_challenge_to_menu()
 

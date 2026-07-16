@@ -1,10 +1,10 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://entities/challenge_complete_dialog/challenge_complete_dialog.gd" id="1_script"]
+[ext_resource type="Script" path="res://entities/challenge_fail_dialog/challenge_fail_dialog.gd" id="1_script"]
 [ext_resource type="Script" path="res://entities/frosted_overlay/frosted_overlay.gd" id="2_frost"]
 [ext_resource type="PackedScene" uid="uid://cbbeofkeqqvdm" path="res://entities/refined_baseline_button/refined_baseline_button.tscn" id="3_rbb"]
 
-[node name="ChallengeCompleteDialog" type="CanvasLayer"]
+[node name="ChallengeFailDialog" type="CanvasLayer"]
 layer = 11
 process_mode = 3
 script = ExtResource("1_script")
@@ -34,31 +34,35 @@ alignment = 1
 [node name="TitleLabel" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
 layout_mode = 2
 horizontal_alignment = 1
-text = "Challenge complete!"
+text = "Failure"
 
-[node name="StatsLabel" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
-layout_mode = 2
-horizontal_alignment = 1
-text = ""
-
-[node name="StatsRewardsSpacer" type="Control" parent="Overlay/CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-
-[node name="RewardsHeader" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
-layout_mode = 2
-horizontal_alignment = 1
-text = "Rewards"
-
-[node name="RewardsLabel" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
+[node name="ReasonLabel" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
 layout_mode = 2
 horizontal_alignment = 1
 text = ""
 autowrap_mode = 2
 
-[node name="OkButton" parent="Overlay/CenterContainer/VBoxContainer" instance=ExtResource("3_rbb")]
+[node name="HintLabel" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
+layout_mode = 2
+horizontal_alignment = 1
+text = ""
+autowrap_mode = 2
+
+[node name="ButtonRow" type="HBoxContainer" parent="Overlay/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="RetryButton" parent="Overlay/CenterContainer/VBoxContainer/ButtonRow" instance=ExtResource("3_rbb")]
 layout_mode = 2
 size_flags_horizontal = 4
 auto_size = true
 fill_amount = 1.0
-title_text = "Continue"
+title_text = "Retry"
+
+[node name="ReturnButton" parent="Overlay/CenterContainer/VBoxContainer/ButtonRow" instance=ExtResource("3_rbb")]
+layout_mode = 2
+size_flags_horizontal = 4
+auto_size = true
+fill_amount = 1.0
+title_text = "Return to Main"

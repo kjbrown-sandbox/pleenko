@@ -226,6 +226,12 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 			return
 
 
+## Public wrapper so callers (e.g. Main's failure flow) can focus a board by
+## type without knowing its index (boards spawn in unlock order).
+func switch_to_board_type(type: Enums.BoardType) -> void:
+	_switch_to_board_type(type)
+
+
 func _switch_to_board_type(type: Enums.BoardType) -> void:
 	for i in _boards.size():
 		if _boards[i].board_type == type:
@@ -456,10 +462,16 @@ func get_assigned_counts_for_board(bt: Enums.BoardType) -> Dictionary:
 
 
 func _on_autodropper_adjust(button_id: StringName, delta: int, from_player: bool = true) -> void:
-	# During an active challenge the player isn't allowed to add or remove
-	# autodroppers — only the challenge itself (via from_player = false) can.
+	# During a challenge the player may freely adjust autodroppers on normal
+	# boards (e.g. buy + place on gold to build income), but NOT on the Survive
+	# board — those are challenge-controlled. Non-survive challenges keep the old
+	# blanket block. The challenge assigns its own via from_player = false, which
+	# bypasses this entirely.
 	if from_player and ChallengeManager.is_active_challenge:
-		return
+		var survive_bt: int = ChallengeManager.get_survive_board_type()
+		var board: PlinkoBoard = _find_board_for_button(button_id)
+		if survive_bt == -1 or not board or board.board_type == survive_bt:
+			return
 
 	var current: int = _assignments.get(button_id, 0)
 	var new_count: int = current + delta

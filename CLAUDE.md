@@ -120,10 +120,12 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Emits: `challenge_completed`, `challenge_failed(reason)`, `challenge_state_changed` (AudioManager listens), `tick(seconds_remaining)` (per integer second from the tracker — AudioManager and ChallengeClock listen).
 - Challenge start flow: caller calls `set_challenge`, then `ThemeProvider.set_theme(CHALLENGE)`, then `get_tree().reload_current_scene()`. After reload, `Main._setup_challenge` calls `ChallengeManager.setup(board_manager)` which creates the tracker.
 - `setup(board_manager)` installs `upgrade_gate` on `UpgradeManager` and `board_gate` on `BoardManager`; `clear_challenge` removes them. After starting conditions are applied (boards built), it calls `get_active_board().seed_first_peg_deflector()` so a player who owns a deflector slot starts the challenge with one on the active board's top peg (no-ops when no slot is available).
+- `get_survive_board_type()` returns the active Survive objective's board (or -1). Single source consumed by `BoardManager._on_autodropper_adjust` + `PlinkoBoard._is_challenge_locked_board` to block the player's autodropper +/- on the Survive board only (challenge-controlled) while other boards stay adjustable, and by `Main._on_challenge_failed` to focus that board. Non-survive challenges keep the old blanket autodropper block.
 
 **ChallengeTracker** (child of ChallengeManager) — `autoloads/challenge_manager/challenge_tracker.gd`
 
 - Runs one challenge: tracks coin landings, checks constraints and objectives, decrements `time_remaining`. Emits `tick` per integer second. Handles two-phase Survive objectives (WAITING → SURVIVING; activates autodroppers at transition).
+- First-drop gate: nothing counts down until the player's first drop flips `_timer_started` (in `_on_coin_dropped`). The gate sits above the Survive dispatch in `_process`, so the Survive WAITING buildup also waits for the first drop — standardized across every challenge type (also the moment hazard countdowns arm).
 - Listens: per-board `coin_landed`, `coin_dropped`, `autodrop_failed`; `BoardManager.board_switched`; `CurrencyManager.currency_changed`.
 - Hazards: `setup_hazards()` instantiates a `ChallengeHazardRuntime` per authored `ChallengeHazard` and parents it to the tracker, so `_process` ticks and `queue_free` cascade through for free. `_on_coin_landed` forwards to each runtime in order. Hazard-triggered failure routes through `hazard_fail(reason)` so the single `failed` signal stays the one source of truth. `disconnect_all` tears runtimes down before the existing board-disconnect path.
 
@@ -287,6 +289,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - `_on_mode_changed` / `_on_board_switched` consult `peek_animator.is_peeking()` and skip the "mark visited / clear unseen" side effects when the switch is peek-driven — preserves the blink as a real signal of "you haven't been here yet."
 - `is_loading_from_save()` accessor exposes `_loading_from_save` to `PeekAnimator` so it can suppress peek enqueues during deserialize.
 - `_exit_challenge_to_menu()` — single teardown shared by `_on_challenge_completed`/`_on_challenge_failed`: sets `ModeManager.pending_challenges_menu`, `SaveManager.reset_state()`, reloads `main.tscn` (NORMAL). `_ready` then consumes the flag and calls `ModeManager.switch_to_challenges()` so the player lands back on the challenge selection menu.
+- `_on_challenge_failed` locks input, focuses the Survive board (`ChallengeManager.get_survive_board_type()`; keeps the active board when -1), holds 1.5s, then shows the `ChallengeFailDialog` (`entities/challenge_fail_dialog/`, a frosted `CanvasLayer` mirroring `ChallengeCompleteDialog`) with the reason + `ChallengeData.failure_hint`. It does NOT clear the challenge: **Retry** (`retry_pressed`) reuses `_restart_challenge()` (challenge stays active → fresh attempt); **Return to Main** (`return_pressed`) clears + `_exit_challenge_to_menu()`. Autodrops/drops are already frozen via `drop_blocked = has_failed()` (`PlinkoBoard.try_autodrop` now honors it too).
 
 **PeekAnimator** — `entities/main/peek_animator.gd`
 
@@ -341,7 +344,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 **ChallengeData** — `autoloads/challenge_manager/challenge_data.gd`
 
-- Per-challenge metadata: `id`, `display_name`, `time_limit_seconds`, `objectives[]`, `constraints[]`, `starting_conditions[]`, `rewards[]`.
+- Per-challenge metadata: `id`, `display_name`, `time_limit_seconds`, `objectives[]`, `constraints[]`, `starting_conditions[]`, `hazards[]`, `rewards[]`, `failure_hint` (optional text shown on the failure screen; empty → no hint row).
 
 **ChallengeRewardData** — `autoloads/challenge_manager/challenge_reward_data.gd`
 

@@ -140,10 +140,14 @@ func _on_board_switched(_board: PlinkoBoard) -> void:
 # ── Timer ─────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
+	# Standardized across all challenge types: nothing counts down until the
+	# player drops their first coin (_timer_started flips in _on_coin_dropped).
+	# The Survive dispatch sits below this gate so its WAITING buildup also waits
+	# for the first drop, like every other challenge.
+	if not _timer_started:
+		return
 	if _survive_objective:
 		_process_survive(delta)
-		return
-	if not _timer_started:
 		return
 	time_remaining -= delta
 	if time_remaining <= 0.0:
@@ -309,7 +313,7 @@ func _on_autodrop_failed(board_type: Enums.BoardType) -> void:
 	for objective in challenge.objectives:
 		if objective is Survive and objective.board_type == board_type:
 			_has_failed = true
-			failed.emit("Autodropper can't afford to drop!")
+			failed.emit("Auto dropper could not drop: insufficient funds.")
 			return
 
 
