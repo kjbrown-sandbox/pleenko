@@ -226,6 +226,12 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 			return
 
 
+## Public wrapper so callers (e.g. Main's failure flow) can focus a board by
+## type without knowing its index (boards spawn in unlock order).
+func switch_to_board_type(type: Enums.BoardType) -> void:
+	_switch_to_board_type(type)
+
+
 func _switch_to_board_type(type: Enums.BoardType) -> void:
 	for i in _boards.size():
 		if _boards[i].board_type == type:

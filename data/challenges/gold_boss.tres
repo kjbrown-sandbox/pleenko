@@ -49,6 +49,7 @@ script = ExtResource("1_data")
 id = "gold_boss"
 display_name = "The Gauntlet"
 time_limit_seconds = 135.0
+failure_hint = "The autodropper must continue to drop through the entirety of the survival time."
 objectives = Array[ExtResource("2_obj_base")]([SubResource("objective_1")])
 starting_conditions = Array[ExtResource("6_start_base")]([SubResource("starting_1"), SubResource("starting_2"), SubResource("starting_3"), SubResource("starting_4"), SubResource("starting_5")])
 rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])

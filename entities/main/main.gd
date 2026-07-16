@@ -3,6 +3,7 @@ extends Node3D
 const OptionsDialogScript := preload("res://entities/options_dialog/options_dialog.gd")
 const ComingSoonOverlayScript := preload("res://entities/coming_soon_overlay/coming_soon_overlay.gd")
 const ChallengeCompleteDialogScene := preload("res://entities/challenge_complete_dialog/challenge_complete_dialog.tscn")
+const ChallengeFailDialogScene := preload("res://entities/challenge_fail_dialog/challenge_fail_dialog.tscn")
 const OfflineEarningsDialogScene := preload("res://entities/offline_earnings_dialog/offline_earnings_dialog.tscn")
 const VolumeUpTexture := preload("res://assets/icons/volume-up.png")
 const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
@@ -42,6 +43,7 @@ var _options_dialog: CanvasLayer
 var _confirm_dialog: ConfirmDialog
 var _coming_soon_overlay: CanvasLayer
 var _challenge_complete_dialog: CanvasLayer
+var _challenge_fail_dialog: CanvasLayer
 var _offline_earnings_dialog: CanvasLayer
 
 # Nav arrow blink state
@@ -193,7 +195,15 @@ func _setup_challenge() -> void:
 	ChallengeManager.challenge_completed.connect(_on_challenge_completed)
 	ChallengeManager.challenge_failed.connect(_on_challenge_failed)
 	challenge_hud.start(ChallengeManager.get_challenge())
+	_setup_challenge_fail_dialog()
 	_setup_forbidden_bucket_reveal_animator()
+
+
+func _setup_challenge_fail_dialog() -> void:
+	_challenge_fail_dialog = ChallengeFailDialogScene.instantiate()
+	_challenge_fail_dialog.retry_pressed.connect(_on_fail_retry)
+	_challenge_fail_dialog.return_pressed.connect(_on_fail_return)
+	add_child(_challenge_fail_dialog)
 
 
 func _setup_forbidden_bucket_reveal_animator() -> void:
@@ -240,8 +250,29 @@ func _on_challenge_completed() -> void:
 
 
 func _on_challenge_failed(reason: String) -> void:
-	challenge_hud.show_result("Failed: %s" % reason)
-	await get_tree().create_timer(2.0).timeout
+	# Read the per-challenge hint before anything can clear the challenge (Retry
+	# needs it to stay active, so we do NOT clear here — that moves into the
+	# Return handler).
+	var challenge := ChallengeManager.get_challenge()
+	var hint: String = challenge.failure_hint if challenge else ""
+	# Lock navigation and focus the board where the objective plays out. Manual
+	# drops and autodroppers are already frozen via drop_blocked (has_failed()),
+	# and the failure screen's frosted overlay swallows all clicks the instant
+	# it's shown — so nothing more can be bought or dropped. The orange board
+	# still pans (blurred) behind the overlay.
+	apply_input_lock(true)
+	board_manager.switch_to_board_type(Enums.BoardType.ORANGE)
+	_challenge_fail_dialog.show_with_failure(reason, hint)
+
+
+## Retry: replay the current challenge from scratch. The challenge stays active
+## across the reload (no clear_challenge), so Main._ready re-runs _setup_challenge.
+func _on_fail_retry() -> void:
+	_restart_challenge()
+
+
+## Return to Main: leave the challenge and land back on the challenge menu.
+func _on_fail_return() -> void:
 	ChallengeManager.clear_challenge()
 	_exit_challenge_to_menu()
 

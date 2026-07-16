@@ -309,7 +309,7 @@ func _on_autodrop_failed(board_type: Enums.BoardType) -> void:
 	for objective in challenge.objectives:
 		if objective is Survive and objective.board_type == board_type:
 			_has_failed = true
-			failed.emit("Autodropper can't afford to drop!")
+			failed.emit("Auto dropper could not drop: insufficient funds.")
 			return
 
 

@@ -1,0 +1,68 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://entities/challenge_fail_dialog/challenge_fail_dialog.gd" id="1_script"]
+[ext_resource type="Script" path="res://entities/frosted_overlay/frosted_overlay.gd" id="2_frost"]
+[ext_resource type="PackedScene" uid="uid://cbbeofkeqqvdm" path="res://entities/refined_baseline_button/refined_baseline_button.tscn" id="3_rbb"]
+
+[node name="ChallengeFailDialog" type="CanvasLayer"]
+layer = 11
+process_mode = 3
+script = ExtResource("1_script")
+
+[node name="Overlay" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("2_frost")
+
+[node name="CenterContainer" type="CenterContainer" parent="Overlay"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Overlay/CenterContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(680, 0)
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "Failure"
+
+[node name="ReasonLabel" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
+layout_mode = 2
+horizontal_alignment = 1
+text = ""
+autowrap_mode = 2
+
+[node name="HintLabel" type="Label" parent="Overlay/CenterContainer/VBoxContainer"]
+layout_mode = 2
+horizontal_alignment = 1
+text = ""
+autowrap_mode = 2
+
+[node name="ButtonRow" type="HBoxContainer" parent="Overlay/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="RetryButton" parent="Overlay/CenterContainer/VBoxContainer/ButtonRow" instance=ExtResource("3_rbb")]
+layout_mode = 2
+size_flags_horizontal = 4
+auto_size = true
+fill_amount = 1.0
+title_text = "Retry"
+
+[node name="ReturnButton" parent="Overlay/CenterContainer/VBoxContainer/ButtonRow" instance=ExtResource("3_rbb")]
+layout_mode = 2
+size_flags_horizontal = 4
+auto_size = true
+fill_amount = 1.0
+title_text = "Return to Main"

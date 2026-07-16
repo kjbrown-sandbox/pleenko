@@ -3250,6 +3250,10 @@ func _on_queue_unlock_done() -> void:
 
 
 func try_autodrop(is_advanced: bool) -> void:
+	# Same gate as request_drop — once a challenge is marked failed, drop_blocked
+	# returns true and autodroppers stop too (no-op outside challenges).
+	if drop_blocked.is_valid() and drop_blocked.call():
+		return
 	var costs: Array = _get_advanced_drop_costs() if is_advanced else _get_drop_costs()
 	if not _can_afford(costs):
 		autodrop_failed.emit(board_type)
