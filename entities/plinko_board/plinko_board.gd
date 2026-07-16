@@ -3296,23 +3296,32 @@ func _setup_autodropper_buttons(bid: StringName) -> void:
 
 	bar.setup_minus(
 		func(): autodropper_adjust_requested.emit(captured_bid, -1),
-		func() -> String: return "Remove %s" % label,
+		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Remove %s" % label,
 	)
 
 	bar.setup_plus(
 		func(): autodropper_adjust_requested.emit(captured_bid, 1),
-		func() -> String: return "Add %s" % label,
+		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Add %s" % label,
 	)
 
 
+## True when this board is the active challenge's Survive board, whose
+## autodroppers are challenge-controlled — the player's +/- is disabled on it.
+func _is_challenge_locked_board() -> bool:
+	return ChallengeManager.is_active_challenge and board_type == ChallengeManager.get_survive_board_type()
+
+
 func update_autodropper_buttons(assignments: Dictionary, normal_free: int, advanced_free: int) -> void:
+	# The Survive board's autodroppers are challenge-controlled: force both +/-
+	# disabled regardless of pool/assignment (hover explains via the callback).
+	var challenge_locked: bool = _is_challenge_locked_board()
 	for bid in _drop_buttons:
 		var bar = _drop_buttons[bid]
 		var assigned: int = assignments.get(bid, 0)
 		var free: int = advanced_free if (bid as String).ends_with("_ADVANCED") else normal_free
-		bar.set_minus_disabled(assigned <= 0)
+		bar.set_minus_disabled(challenge_locked or assigned <= 0)
 		bar.set_minus_filled(assigned > 0)
-		bar.set_plus_disabled(free <= 0)
+		bar.set_plus_disabled(challenge_locked or free <= 0)
 		bar.set_plus_filled(free > 0)
 
 

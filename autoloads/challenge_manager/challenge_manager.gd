@@ -28,6 +28,19 @@ func get_challenge() -> ChallengeData:
 	return _challenge
 
 
+## Board type of the active challenge's Survive objective, or -1 when there is no
+## active challenge / no Survive objective. The Survive board's autodroppers are
+## challenge-controlled, so the player's +/- is blocked on it while other boards
+## stay freely adjustable.
+func get_survive_board_type() -> int:
+	if not is_active_challenge or not _challenge:
+		return -1
+	for objective in _challenge.objectives:
+		if objective is Survive:
+			return objective.board_type
+	return -1
+
+
 func get_time_remaining() -> float:
 	return _tracker.time_remaining if _tracker else 0.0
 

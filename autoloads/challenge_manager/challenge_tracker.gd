@@ -140,10 +140,14 @@ func _on_board_switched(_board: PlinkoBoard) -> void:
 # ── Timer ─────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
+	# Standardized across all challenge types: nothing counts down until the
+	# player drops their first coin (_timer_started flips in _on_coin_dropped).
+	# The Survive dispatch sits below this gate so its WAITING buildup also waits
+	# for the first drop, like every other challenge.
+	if not _timer_started:
+		return
 	if _survive_objective:
 		_process_survive(delta)
-		return
-	if not _timer_started:
 		return
 	time_remaining -= delta
 	if time_remaining <= 0.0:

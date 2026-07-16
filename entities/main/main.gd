@@ -266,6 +266,9 @@ func _on_challenge_failed(reason: String) -> void:
 	# still pans (blurred) behind the overlay.
 	apply_input_lock(true)
 	board_manager.switch_to_board_type(Enums.BoardType.ORANGE)
+	# Hold on the focused board for a beat so the player registers what happened
+	# before the failure screen covers it.
+	await get_tree().create_timer(1.5).timeout
 	_challenge_fail_dialog.show_with_failure(reason, hint)
 
 
