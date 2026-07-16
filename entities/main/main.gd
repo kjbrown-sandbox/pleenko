@@ -259,13 +259,17 @@ func _on_challenge_failed(reason: String) -> void:
 	# Return handler).
 	var challenge := ChallengeManager.get_challenge()
 	var hint: String = challenge.failure_hint if challenge else ""
-	# Lock navigation and focus the board where the objective plays out. Manual
-	# drops and autodroppers are already frozen via drop_blocked (has_failed()),
-	# and the failure screen's frosted overlay swallows all clicks the instant
-	# it's shown — so nothing more can be bought or dropped. The orange board
-	# still pans (blurred) behind the overlay.
+	# Lock navigation and focus the challenge's Survive board (where the objective
+	# plays out) so the player sees where it went wrong; non-Survive failures keep
+	# the active board (get_survive_board_type() returns -1). Manual drops and
+	# autodroppers are already frozen via drop_blocked (has_failed()), and the
+	# failure screen's frosted overlay swallows all clicks the instant it's shown
+	# — so nothing more can be bought or dropped. The board still pans (blurred)
+	# behind the overlay.
 	apply_input_lock(true)
-	board_manager.switch_to_board_type(Enums.BoardType.ORANGE)
+	var focus_board_type: int = ChallengeManager.get_survive_board_type()
+	if focus_board_type != -1:
+		board_manager.switch_to_board_type(focus_board_type)
 	# Hold on the focused board for a beat so the player registers what happened
 	# before the failure screen covers it.
 	await get_tree().create_timer(1.5).timeout
