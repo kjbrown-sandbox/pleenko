@@ -87,8 +87,8 @@ func _get_line_color(start_state: int, end_state: int) -> Color:
 	# One completed, one unlocked → tier color
 	if start_state == COMPLETED or end_state == COMPLETED:
 		return t.resolve(start_challenge.color_source)
-	# Default (locked) → dimmed
-	return t.resolve(VisualTheme.Palette.BG_4)
+	# Default (locked) → dimmed one step toward the background so paths recede
+	return t.resolve(VisualTheme.Palette.BG_5)
 
 
 func _add_segment(center: Vector3, direction: Vector3, length: float, color: Color) -> void:
