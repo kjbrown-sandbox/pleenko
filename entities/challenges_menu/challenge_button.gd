@@ -141,7 +141,7 @@ func _start_pulse() -> void:
 		_pulse_tween.kill()
 	# Mirrors VisualTheme.blink_scale_fade (Control-only) in 3D: same timing and
 	# ease so the diamond pulse matches the nav-arrow pulse.
-	var half := ThemeProvider.theme.attention_blink_duration / 2.0
+	var half: float = ThemeProvider.theme.attention_blink_duration / 2.0
 	_pulse_tween = create_tween().set_loops()
 	_pulse_tween.tween_property(self, "scale", _base_scale * PULSE_PEAK_SCALE, half) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
