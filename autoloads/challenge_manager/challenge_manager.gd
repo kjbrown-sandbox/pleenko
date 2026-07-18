@@ -83,8 +83,15 @@ func setup(board_manager: BoardManager) -> void:
 	UpgradeManager.upgrade_gate = is_upgrade_allowed
 	_board_manager.board_gate = is_board_allowed
 
-	# Apply starting conditions before tracker connects (may spawn new boards)
+	# Apply starting conditions before tracker connects (may spawn new boards).
+	# Starting coins are injected in bulk while current_level is 0; suppress the
+	# milestone bar's per-threshold explosion (the player should silently own
+	# those permanent rewards, like a loaded save) and reconcile the crossed
+	# levels' rewards afterward. begin_ must precede the currency add, which
+	# fires currency_changed synchronously.
+	LevelManager.begin_silent_catch_up()
 	_apply_starting_conditions()
+	LevelManager.end_silent_catch_up()
 
 	# Set gates on individual boards (after starting conditions, which may create boards)
 	var _drop_blocked := func() -> bool: return has_failed()

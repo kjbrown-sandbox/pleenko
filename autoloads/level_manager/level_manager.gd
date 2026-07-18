@@ -9,6 +9,16 @@ var current_level: int = 0
 ## Queue of level-ups waiting to be processed.
 var _pending: Array = []  # Array of { level: int, level_data: LevelData }
 
+## While true, currency changes still advance current_level and emit
+## level_changed (so progress UI stays correct), but the level-up animation is
+## suppressed — no _pending entries, no level_up_ready. Challenge setup injects
+## starting coins in bulk while current_level is 0; the player should silently
+## own the crossed milestones' permanent rewards rather than watch the bar
+## explode once per threshold. Mirrors the save-load catch-up, where
+## current_level is restored before currency is broadcast. See
+## begin_silent_catch_up() / end_silent_catch_up().
+var _suppress_level_up_vfx: bool = false
+
 ## Emitted when a level-up occurs. VFX listeners react to this (particles, camera shake).
 ## Rewards are auto-claimed immediately after — no dialog interaction needed.
 signal level_up_ready(level: int, level_data: LevelData)
@@ -35,6 +45,23 @@ func _ready() -> void:
 func reset() -> void:
 	current_level = 0
 	_pending.clear()
+
+
+## Enter silent catch-up: subsequent currency changes advance current_level
+## without firing the level-up animation. Used to bulk-inject starting currency
+## (challenge setup) the way a loaded save would — no milestone explosions.
+## Must be called BEFORE the currency is added, since CurrencyManager.add emits
+## currency_changed synchronously. Pair with end_silent_catch_up().
+func begin_silent_catch_up() -> void:
+	_suppress_level_up_vfx = true
+
+
+## Exit silent catch-up and reconcile the crossed levels' state-affecting rewards
+## through the idempotent reconcile_reward path (DROP_COINS / coin frenzy is
+## skipped — a passed frenzy drop just disappears). Mirrors the save-load flow.
+func end_silent_catch_up() -> void:
+	_suppress_level_up_vfx = false
+	ensure_state_for_level()
 
 
 func rebuild_levels() -> void:
@@ -183,7 +210,8 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 			break
 		if new_balance >= next_level_data.threshold:
 			current_level += 1
-			_pending.append({ "level": current_level, "level_data": next_level_data })
+			if not _suppress_level_up_vfx:
+				_pending.append({ "level": current_level, "level_data": next_level_data })
 			level_changed.emit(current_level)
 			print("[LevelManager] Level %d reached (threshold=%d)" % [current_level, next_level_data.threshold])
 		else:
@@ -191,7 +219,7 @@ func _on_currency_changed(type: Enums.CurrencyType, new_balance: int, _new_cap: 
 
 	# Notify listeners that a level-up is ready.
 	# level_section drives the particle animation and calls claim_rewards() when done.
-	if was_empty and not _pending.is_empty():
+	if not _suppress_level_up_vfx and was_empty and not _pending.is_empty():
 		var entry = _pending[0]
 		level_up_ready.emit(entry["level"], entry["level_data"])
 
