@@ -8,6 +8,9 @@
 # Build output (exported via build.sh, pushed to itch via butler)
 builds/
 
+# SteamPipe upload logs / chunk cache
+steam/output/
+
 # GdUnit4 (dev dependency, installed via AssetLib)
 addons/gdUnit4/
 movies/

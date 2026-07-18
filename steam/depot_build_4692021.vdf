@@ -1,0 +1,19 @@
+"DepotBuildConfig"
+{
+	"DepotID"	"4692021"
+
+	// Folder whose contents become the depot. Everything Godot exported into
+	// builds/windows/ (Plunk.exe + Plunk.pck, or just Plunk.exe if you embed
+	// the PCK) is uploaded.
+	"ContentRoot"	"/Users/kjbrown/src/pleenko/builds/windows/"
+
+	"FileMapping"
+	{
+		"LocalPath"	"*"
+		"DepotPath"	"."
+		"recursive"	"1"
+	}
+
+	// Never ship debug symbols.
+	"FileExclusion"	"*.pdb"
+}

@@ -1,0 +1,21 @@
+"appbuild"
+{
+	"appid"	"4692020"
+	"desc"	"Plunk demo build"
+
+	// Where steamcmd writes its build logs / chunk cache (created if missing).
+	"buildoutput"	"/Users/kjbrown/src/pleenko/steam/output/"
+
+	// Root that depot LocalPaths are resolved against (overridden per-depot below).
+	"contentroot"	"/Users/kjbrown/src/pleenko/builds/windows/"
+
+	// Empty = do NOT auto-set-live. Set the build live manually in Steamworks
+	// the first time so you can verify it before players can download it.
+	// Later you can change this to "default" to auto-promote uploads.
+	"setlive"	""
+
+	"depots"
+	{
+		"4692021"	"depot_build_4692021.vdf"
+	}
+}
