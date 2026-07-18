@@ -20,7 +20,5 @@ func create_runtime() -> ChallengeHazardRuntime:
 
 func get_text() -> String:
 	if bomb_count > 1:
-		return "%d bombs roam the board" \
-			% [bomb_count, defuse_multiplier]
-	return "A bomb roams the board" \
-		% [defuse_multiplier]
+		return "%d bombs roam the board" % bomb_count
+	return "A bomb roams the board"

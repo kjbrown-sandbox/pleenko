@@ -23,6 +23,7 @@ func _run_tests() -> void:
 	test_bomb_idle_when_no_reachable_buckets()
 	test_bomb_countdown_label_updates_on_integer_seconds()
 	test_bomb_does_not_tick_until_started()
+	test_bomb_hazard_get_text_singular_and_plural()
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -251,3 +252,17 @@ func test_bomb_does_not_tick_until_started() -> void:
 	rt._process(2.5)
 	assert_equal(void_rec.calls.size(), 1, "detonates once ticking is armed")
 	rt.free()
+
+
+func test_bomb_hazard_get_text_singular_and_plural() -> void:
+	print("test_bomb_hazard_get_text_singular_and_plural")
+	# Guards the format-string arg-count bug: the plural branch must substitute
+	# bomb_count (not render a literal "%d"), and neither branch may pass a stray
+	# arg to a string with no matching specifier. Twin Fuse (gold_13) is the
+	# first challenge to use bomb_count > 1, so this branch was never exercised.
+	var one := BombHazard.new()
+	one.bomb_count = 1
+	assert_equal(one.get_text(), "A bomb roams the board", "single-bomb text")
+	var many := BombHazard.new()
+	many.bomb_count = 2
+	assert_equal(many.get_text(), "2 bombs roam the board", "two-bomb text substitutes the count")
