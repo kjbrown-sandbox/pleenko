@@ -10,6 +10,10 @@ signal hovered(button: ChallengeButton)
 @export var next_challenges: Array[String] = []
 @export var is_boss := false
 
+# Continuous attention pulse for available-but-incomplete challenges. Gentler
+# than the hover pop (1.15) so hovering still reads as a distinct extra step.
+const PULSE_PEAK_SCALE := 1.1
+
 @onready var outline: Node3D = $Outline
 @onready var fill_mesh: MeshInstance3D = $FillMesh
 @onready var area: Area3D = $Area3D
@@ -18,6 +22,7 @@ var _state: ChallengeProgressManager.ChallengeState = ChallengeProgressManager.C
 var _hovered := false
 var _base_scale := Vector3.ONE
 var _outline_meshes: Array[MeshInstance3D] = []
+var _pulse_tween: Tween
 
 
 func _ready() -> void:
@@ -36,11 +41,13 @@ func _ready() -> void:
 	area.mouse_entered.connect(_on_mouse_entered)
 	area.mouse_exited.connect(_on_mouse_exited)
 	ChallengeProgressManager.challenge_state_changed.connect(_on_challenge_state_changed)
+	_update_pulse()
 
 
 func set_state(state: ChallengeProgressManager.ChallengeState) -> void:
 	_state = state
 	_apply_theme()
+	_update_pulse()
 
 
 func _apply_theme() -> void:
@@ -55,7 +62,8 @@ func _apply_theme() -> void:
 
 	match _state:
 		ChallengeProgressManager.ChallengeState.LOCKED:
-			outline_color = t.resolve(VisualTheme.Palette.BG_4)
+			# One step toward the background so locked challenges recede.
+			outline_color = t.resolve(VisualTheme.Palette.BG_5)
 		ChallengeProgressManager.ChallengeState.UNLOCKED:
 			outline_color = t.normal_text_color if _hovered else tier_color
 		ChallengeProgressManager.ChallengeState.COMPLETED:
@@ -94,6 +102,7 @@ func _on_mouse_entered() -> void:
 	# All challenges are hoverable (to see details), regardless of state
 	_hovered = true
 	_apply_theme()
+	_kill_pulse()  # hover pop owns the scale while hovered
 	var tween := create_tween()
 	tween.tween_property(self, "scale", _base_scale * 1.15, 0.1)
 	hovered.emit(self)
@@ -102,8 +111,51 @@ func _on_mouse_entered() -> void:
 func _on_mouse_exited() -> void:
 	_hovered = false
 	_apply_theme()
-	var tween := create_tween()
-	tween.tween_property(self, "scale", _base_scale, 0.1)
+	if _should_pulse():
+		# Let the resumed pulse animate the scale home; don't run a second
+		# return-to-base tween in parallel (they'd fight over `scale`).
+		_start_pulse()
+	else:
+		var tween := create_tween()
+		tween.tween_property(self, "scale", _base_scale, 0.1)
+
+
+func _should_pulse() -> bool:
+	# Available but not yet completed — the actionable state worth flagging.
+	return _state == ChallengeProgressManager.ChallengeState.UNLOCKED and not _hovered
+
+
+func _update_pulse() -> void:
+	if _should_pulse():
+		if not _pulse_tween or not _pulse_tween.is_valid():
+			_start_pulse()
+	else:
+		_kill_pulse()
+
+
+func _start_pulse() -> void:
+	# Kill the handle directly (not _kill_pulse) so we don't snap scale home —
+	# the first leg then animates smoothly from wherever scale currently sits
+	# (e.g. the 1.15 hover pop on un-hover).
+	if _pulse_tween and _pulse_tween.is_valid():
+		_pulse_tween.kill()
+	# Mirrors VisualTheme.blink_scale_fade (Control-only) in 3D: same timing and
+	# ease so the diamond pulse matches the nav-arrow pulse.
+	var half := ThemeProvider.theme.attention_blink_duration / 2.0
+	_pulse_tween = create_tween().set_loops()
+	_pulse_tween.tween_property(self, "scale", _base_scale * PULSE_PEAK_SCALE, half) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_pulse_tween.tween_property(self, "scale", _base_scale, half) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+
+func _kill_pulse() -> void:
+	if _pulse_tween and _pulse_tween.is_valid():
+		_pulse_tween.kill()
+	_pulse_tween = null
+	# Only snap home when the hover pop isn't the current owner of `scale`.
+	if not _hovered:
+		scale = _base_scale
 
 
 func _on_challenge_state_changed(challenge_id: String, new_state: ChallengeProgressManager.ChallengeState) -> void:
