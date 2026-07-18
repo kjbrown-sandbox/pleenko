@@ -10,8 +10,10 @@ signal hovered(button: ChallengeButton)
 @export var next_challenges: Array[String] = []
 @export var is_boss := false
 
+# Hover pop; larger than the ambient pulse so hovering reads as a distinct step.
+const HOVER_PEAK_SCALE := 1.15
 # Continuous attention pulse for available-but-incomplete challenges. Gentler
-# than the hover pop (1.15) so hovering still reads as a distinct extra step.
+# than the hover pop so the two states stay visually distinct.
 const PULSE_PEAK_SCALE := 1.1
 
 @onready var outline: Node3D = $Outline
@@ -23,6 +25,7 @@ var _hovered := false
 var _base_scale := Vector3.ONE
 var _outline_meshes: Array[MeshInstance3D] = []
 var _pulse_tween: Tween
+var _hover_tween: Tween
 
 
 func _ready() -> void:
@@ -103,8 +106,7 @@ func _on_mouse_entered() -> void:
 	_hovered = true
 	_apply_theme()
 	_kill_pulse()  # hover pop owns the scale while hovered
-	var tween := create_tween()
-	tween.tween_property(self, "scale", _base_scale * 1.15, 0.1)
+	_tween_hover_scale(_base_scale * HOVER_PEAK_SCALE)
 	hovered.emit(self)
 
 
@@ -112,12 +114,25 @@ func _on_mouse_exited() -> void:
 	_hovered = false
 	_apply_theme()
 	if _should_pulse():
-		# Let the resumed pulse animate the scale home; don't run a second
+		# Let the resumed pulse animate the scale home; don't run a separate
 		# return-to-base tween in parallel (they'd fight over `scale`).
 		_start_pulse()
 	else:
-		var tween := create_tween()
-		tween.tween_property(self, "scale", _base_scale, 0.1)
+		_tween_hover_scale(_base_scale)
+
+
+func _tween_hover_scale(target: Vector3) -> void:
+	# Single owned handle: killing the prior pop before starting a new one means
+	# a rapid hover-in/out can't leave two tweens writing `scale` at once.
+	_kill_hover_tween()
+	_hover_tween = create_tween()
+	_hover_tween.tween_property(self, "scale", target, 0.1)
+
+
+func _kill_hover_tween() -> void:
+	if _hover_tween and _hover_tween.is_valid():
+		_hover_tween.kill()
+	_hover_tween = null
 
 
 func _should_pulse() -> bool:
@@ -134,9 +149,11 @@ func _update_pulse() -> void:
 
 
 func _start_pulse() -> void:
-	# Kill the handle directly (not _kill_pulse) so we don't snap scale home —
-	# the first leg then animates smoothly from wherever scale currently sits
-	# (e.g. the 1.15 hover pop on un-hover).
+	# Kill any in-flight hover pop so the pulse fully owns `scale`.
+	_kill_hover_tween()
+	# Kill the pulse handle directly (not _kill_pulse) so we don't snap scale
+	# home — the first leg then animates smoothly from wherever scale currently
+	# sits (e.g. the hover pop on un-hover).
 	if _pulse_tween and _pulse_tween.is_valid():
 		_pulse_tween.kill()
 	# Mirrors VisualTheme.blink_scale_fade (Control-only) in 3D: same timing and

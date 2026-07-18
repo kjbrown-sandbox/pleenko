@@ -17,13 +17,13 @@ func _ready() -> void:
 	# CanvasLayer's mode-driven visibility toggle without extra wiring in Main.
 	var title_container := MarginContainer.new()
 	title_container.anchor_right = 1.0
+	# Drop the title clear of the top edge (deeper than the standard HUD inset).
 	title_container.add_theme_constant_override("margin_top", margin * 3)
 	add_child(title_container)
 
 	var title_label := Label.new()
 	title_label.text = "BONUS CHALLENGES"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_label.add_theme_font_size_override("font_size", 40)
 	title_label.add_theme_color_override("font_color", t.normal_text_color)
 	_apply_font(title_label, t)
