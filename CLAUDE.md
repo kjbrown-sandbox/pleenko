@@ -438,12 +438,21 @@ Only when the user enters plan mode for a new feature. Not for: simple bug fixes
 When the user enters plan mode for a feature, after the plan is approved but before any implementation begins, create a new git **worktree** (not just a branch) so the work never disturbs the primary checkout — the user may have another agent actively working there and testing in Godot. Mechanics:
 
 - Run `tools/new_worktree.sh <kebab-case-name>`. It creates the worktree under `.claude/worktrees/<name>/` on a new branch `feature/<name>` off `main` and pre-seeds the Godot import cache (copies `.godot/imported` from the primary checkout, or falls back to a headless import) so the worktree opens warm.
+- **Relocate the session into the worktree, don't just create it.** Creating the worktree is not enough — after `new_worktree.sh`, actually move into `.claude/worktrees/<name>/` and do every edit and command from there (use the harness's native worktree-enter if available, otherwise target that path explicitly). A session that creates a worktree but keeps editing files by their normal paths is editing the **primary** checkout and defeats the entire point — that is exactly the collision the worktree exists to prevent. "I made a worktree" and "I am working *inside* the worktree" are different claims; only the second one buys isolation.
 - All implementation happens inside the worktree; commit regularly. The primary checkout is left untouched.
 
-**Getting the work onto `main` to test:** the worktree's commits live on the `feature/<name>` branch, so from the primary checkout (on a clean `main`):
+**When the feature is done, always hand the user a paste-ready test command.** The user tests by eyeballing the game in the Godot editor already open on their primary checkout — they do NOT open a second project. To load your worktree's code into that already-open project, they pull the branch into the primary checkout. So the last thing you output when a feature is ready to test is, verbatim and in a copyable code block:
+
+```
+git switch --detach feature/<name>
+```
+
+(followed by a one-line reminder: alt-tab to Godot, then F5 to run; and `git switch main` to return). `--detach` is required — git refuses to check out `feature/<name>` in the primary checkout while the worktree already holds that branch, so we check out its *commit* instead, leaving the worktree untouched. If you push more commits to the worktree afterward, tell the user to re-run the same command to jump to the new tip. Emit this on every "feature ready" hand-off, without being asked.
+
+**Getting the work onto `main` for good:** the worktree's commits live on the `feature/<name>` branch, so from the primary checkout (on a clean `main`):
 
 - **`tools/land_worktree.sh <name>`** — fast-forward-merges `feature/<name>` into `main` with the warm import cache intact. Add `--remove` to also tear down the worktree + branch in the same step. It is fast-forward-only by design: if `main` has advanced since the worktree was cut it refuses and tells you to `git rebase main` inside the worktree first (keeps history linear and testing sequential).
-- To back out after testing: `git reset --hard origin/main`. To test in isolation without merging: `git switch feature/<name>`.
+- To back out after a `--detach` test without landing: `git switch main` (the worktree and its branch are untouched). To back out after landing: `git reset --hard origin/main`.
 
 When a worktree is abandoned without landing: `git worktree remove .claude/worktrees/<name>` (and `git branch -D feature/<name>`).
 
