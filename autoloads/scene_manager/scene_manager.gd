@@ -14,6 +14,18 @@ func set_new_scene(new_scene: PackedScene, instant: bool = false, theme: ThemePr
 	SaveManager.save_game()
 	var current_scene := get_tree().current_scene
 
+	# Freeze the outgoing scene the instant the transition starts. It is not
+	# paused during the fade and is only queue_free'd at the swap, so without
+	# this it keeps mutating shared autoload state — landing coins / autodroppers
+	# crediting CurrencyManager — right up to and through the swap-frame overlap
+	# with the incoming scene. When the incoming scene is a challenge, that stray
+	# currency lands AFTER the challenge's currency reset: it shows up as "weird
+	# starting currency", auto-wins CoinGoal challenges, and trips board-unlock
+	# thresholds. Disabling process here makes the reset the authoritative last
+	# word. (save_game() above already captured the outgoing state.)
+	if current_scene:
+		current_scene.process_mode = Node.PROCESS_MODE_DISABLED
+
 	if instant:
 		if theme >= 0:
 			ThemeProvider.set_theme(theme)
