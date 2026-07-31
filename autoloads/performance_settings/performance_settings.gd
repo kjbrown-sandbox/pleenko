@@ -57,9 +57,18 @@ func get_window_mode() -> int:
 ## fullscreen preference on startup would silently fail. The OptionsDialog row
 ## is hidden on web for the same reason — the saved value just sits dormant
 ## until the player returns to a desktop build.
+##
+## The window-mode assignment is guarded on an actual mode change. This autoload's
+## _apply() runs during early init, before the OS window is fully realized;
+## re-asserting fullscreen there (when the window already boots fullscreen via
+## display/window/size/mode) left the window mis-sized and offset on Windows.
+## Only writing get_window().mode when it differs means the boot-time fullscreen
+## the engine created natively is left untouched, and later real transitions
+## (Options toggle, a saved windowed pref) still apply. Mirrors the working
+## windowed->fullscreen re-toggle players used as a manual fix.
 func _apply() -> void:
 	Engine.max_fps = _max_fps
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-		if not OS.has_feature("web"):
+		if not OS.has_feature("web") and get_window().mode != _window_mode:
 			get_window().mode = _window_mode

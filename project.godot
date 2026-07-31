@@ -18,7 +18,11 @@ config/name="Plunk"
 run/main_scene="uid://cfuxy0nnxo0pt"
 config/auto_accept_quit=false
 config/features=PackedStringArray("4.6", "GL Compatibility")
-config/icon="res://icon.svg"
+config/icon="res://icon.png"
+boot_splash/bg_color=Color(0.764706, 0.729412, 0.670588, 1)
+boot_splash/image="res://loading_splash.png"
+boot_splash/fullsize=true
+boot_splash/use_filter=true
 
 [audio]
 
@@ -46,6 +50,7 @@ AnalyticsManager="*res://autoloads/analytics_manager/analytics_manager.gd"
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
+window/size/mode=3
 window/size/resizable=false
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
