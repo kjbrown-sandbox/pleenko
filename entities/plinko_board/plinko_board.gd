@@ -157,10 +157,7 @@ var _destroyed_bucket_indices: Dictionary = {}  # bucket_index: int -> true
 var deflector_total_query: Callable
 
 # MultiMesh coin state
-var _coin_multimesh_instance: MultiMeshInstance3D
-var _coin_free_indices: Array[int] = []
-var _active_coin_indices: Dictionary = {}  # Coin -> int (multimesh index)
-var _coin_mesh_basis: Basis = Basis.IDENTITY
+var _coin_pool := CoinPool.new()
 
 signal board_rebuilt
 signal autodropper_adjust_requested(button_id: StringName, delta: int)
@@ -207,9 +204,7 @@ signal forbidden_bucket_detonated(board_type: Enums.BoardType, bucket_index: int
 var _drop_burst_times: Array[float] = []
 
 # MultiMesh drop burst state
-var _drop_burst_mm_instance: MultiMeshInstance3D
-var _drop_burst_free_indices: Array[int] = []
-var _active_drop_bursts: Array[Dictionary] = []
+var _burst_field := BurstField.new()
 
 # Downward particle spray played when a coin lands in a bucket. Self-contained
 # pooled node — created once, persists across rebuilds (like the MultiMeshes).
@@ -603,11 +598,11 @@ func _process(delta: float) -> void:
 	if not _active_peg_pulses.is_empty():
 		_update_peg_pulses(delta)
 
-	if not _active_coin_indices.is_empty():
-		_sync_coin_multimesh(delta)
+	if not _coin_pool.is_idle():
+		_coin_pool.update(delta, ThemeProvider.theme)
 
-	if not _active_drop_bursts.is_empty():
-		_sync_drop_burst(delta)
+	if not _burst_field.is_idle():
+		_burst_field.update(delta)
 
 	if _gameplay_target_enabled and _gameplay_target_index >= 0:
 		_gameplay_target_timer -= delta
@@ -699,110 +694,27 @@ func _is_hold_to_drop_advanced_active() -> bool:
 		and _drop_advanced_column.visible
 
 
-# --- Coin MultiMesh management ---
-
-func _allocate_coin_multimesh(coin: Coin) -> void:
-	if _coin_free_indices.is_empty():
-		_grow_coin_multimesh()
-	var idx: int = _coin_free_indices.pop_back()
-	_active_coin_indices[coin] = idx
-	coin.multimesh_index = idx
-	coin.set_mesh_visible(false)
-	_coin_multimesh_instance.multimesh.set_instance_color(idx, coin.cached_color)
-
-
-func _release_coin_multimesh(coin: Coin) -> void:
-	if coin.multimesh_index < 0:
-		return
-	var idx: int = coin.multimesh_index
-	var hidden := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
-	_coin_multimesh_instance.multimesh.set_instance_transform(idx, hidden)
-	_coin_free_indices.append(idx)
-	_active_coin_indices.erase(coin)
-	coin.multimesh_index = -1
-
-
-func eject_coin_from_multimesh(coin: Coin) -> void:
-	_release_coin_multimesh(coin)
-	coin.set_mesh_visible(true)
-
-
-## Toggles visibility of all coins on this board (in-flight, queued, prestige).
-## Pegs and buckets stay visible. Used by BoardManager to hide inactive boards' coins.
+## Toggles every coin on this board (in-flight, queued, prestige). Pegs and
+## buckets stay visible. Used by BoardManager to hide inactive boards' coins.
 func set_coins_visible(vis: bool) -> void:
-	if _coin_multimesh_instance:
-		_coin_multimesh_instance.visible = vis
-	for coin in _active_coin_indices.keys():
+	_coin_pool.set_visible(vis)
+	for coin in _coin_pool.coins():
 		if is_instance_valid(coin):
 			coin.visible = vis
 	if coin_queue:
 		coin_queue.visible = vis
 
 
-func _grow_coin_multimesh() -> void:
-	var mm := _coin_multimesh_instance.multimesh
-	var old_count: int = mm.instance_count
-	var new_count: int = old_count * 2
-
-	# Save existing data
-	var old_transforms: Array[Transform3D] = []
-	var old_colors: Array[Color] = []
-	for i in old_count:
-		old_transforms.append(mm.get_instance_transform(i))
-		old_colors.append(mm.get_instance_color(i))
-
-	# Resize
-	mm.instance_count = new_count
-
-	# Restore existing data
-	var hidden := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
-	for i in old_count:
-		mm.set_instance_transform(i, old_transforms[i])
-		mm.set_instance_color(i, old_colors[i])
-	for i in range(old_count, new_count):
-		mm.set_instance_transform(i, hidden)
-
-	# Add new indices to pool (in reverse so pop_back gives lowest first)
-	for i in range(new_count - 1, old_count - 1, -1):
-		_coin_free_indices.append(i)
-
-
-func _sync_coin_multimesh(delta: float) -> void:
-	var mm := _coin_multimesh_instance.multimesh
-	var t: VisualTheme = ThemeProvider.theme
-	var impact_duration: float = t.coin_impact_squash_duration
-	var impact_peak: Vector3 = t.coin_impact_squash_scale
-	var coin_radius: float = t.coin_radius
-	for coin: Coin in _active_coin_indices:
-		if not is_instance_valid(coin):
-			continue
-		var idx: int = _active_coin_indices[coin]
-
-		# Impact squash: lerp from peak scale back to identity over the recovery
-		# duration. Triggered by Coin._bounce_or_despawn on peg contact.
-		var basis: Basis = _coin_mesh_basis
-		var pos: Vector3 = coin.position
-		if coin.impact_squash_remaining > 0.0 and impact_duration > 0.0:
-			coin.impact_squash_remaining = maxf(0.0, coin.impact_squash_remaining - delta)
-			var k: float = coin.impact_squash_remaining / impact_duration  # 1=peak, 0=done
-			var scale: Vector3 = Vector3.ONE.lerp(impact_peak, k)
-			# Apply scale in world space (left-multiply) so the squash flattens
-			# along world Y regardless of how _coin_mesh_basis rotates the mesh.
-			basis = Basis.IDENTITY.scaled(scale) * _coin_mesh_basis
-			# Sink the coin so its bottom edge stays planted on the peg as it
-			# squashes — otherwise the squash makes it look like it's hovering.
-			pos.y -= coin_radius * (1.0 - scale.y)
-
-		mm.set_instance_transform(idx, Transform3D(basis, pos))
-		mm.set_instance_color(idx, coin.cached_color)
+func eject_coin_from_multimesh(coin: Coin) -> void:
+	_coin_pool.eject(coin)
 
 
 func _on_coin_tree_exiting(coin: Coin) -> void:
-	_release_coin_multimesh(coin)
+	_coin_pool.release(coin)
 
 
 func has_in_flight_coins() -> bool:
-	return not _active_coin_indices.is_empty()
+	return not _coin_pool.is_idle()
 
 
 func request_drop(costs: Array = [], coin_type: int = -1, is_manual: bool = true) -> void:
@@ -880,7 +792,7 @@ func _launch_coin(coin: Coin) -> void:
 	_coin_z_counter += 1
 	coin.position = Vector3(0, vertical_spacing + 0.2, _coin_z_counter * 0.001)
 	add_child(coin)
-	_allocate_coin_multimesh(coin)
+	_coin_pool.acquire(coin)
 	coin.tree_exiting.connect(_on_coin_tree_exiting.bind(coin), CONNECT_ONE_SHOT)
 	coin.landed.connect(on_coin_landed)
 	coin.final_bounce_started.connect(_on_final_bounce_started)
@@ -943,7 +855,7 @@ func _frenzy_drop_one(coin_type: Enums.CurrencyType, step: int) -> void:
 	# per-second rate limit so EVERY frenzy coin pops — plus a bell pop two octaves
 	# up at 2/3 the volume of a bucket hit (amplitude, ≈ -3.5 dB below it).
 	if t.drop_burst_enabled:
-		_spawn_drop_burst_3d(Vector3(0, vertical_spacing + 0.2, 0), frenzy_color)
+		_burst_field.spawn_burst(Vector3(0, vertical_spacing + 0.2, 0), frenzy_color, ThemeProvider.theme)
 	# Theme-driven pop — `step` walks the chord progression so the frenzy
 	# arpeggiates through all the chord roots (bell themes ignore it).
 	AudioManager.play_frenzy_pop(step)
@@ -963,125 +875,10 @@ func _try_emit_drop_burst(drop_coin_type: Enums.CurrencyType) -> void:
 		return
 	_drop_burst_times.append(now)
 	var local_pos := Vector3(0, vertical_spacing + 0.2, 0)
-	_spawn_drop_burst_3d(local_pos, t.get_coin_color(drop_coin_type))
+	_burst_field.spawn_burst(local_pos, t.get_coin_color(drop_coin_type), t)
 
 
 ## Radial burst of small quads scattering outward in the board's XY plane.
-## Seeds slots in the shared drop burst MultiMesh; _sync_drop_burst animates them.
-func _spawn_drop_burst_3d(local_pos: Vector3, color: Color) -> void:
-	var t: VisualTheme = ThemeProvider.theme
-	var particle_size: float = t.drop_burst_particle_size
-	var count: int = t.drop_burst_particle_count
-
-	for i in count:
-		if _drop_burst_free_indices.is_empty():
-			return
-		var idx: int = _drop_burst_free_indices.pop_back()
-
-		var angle: float = randf() * TAU
-		var distance: float = t.drop_burst_spread * randf_range(0.5, 1.0)
-		var target: Vector3 = local_pos + Vector3(cos(angle) * distance, sin(angle) * distance, 0.0)
-		var duration: float = t.drop_burst_duration * randf_range(0.7, 1.0)
-
-		_active_drop_bursts.append({
-			"idx": idx,
-			"start": local_pos,
-			"target": target,
-			"elapsed": 0.0,
-			"duration": duration,
-			"size": particle_size,
-			"color": color,
-		})
-
-
-func _sync_drop_burst(delta: float) -> void:
-	var mm := _drop_burst_mm_instance.multimesh
-	var hidden := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
-	var i: int = 0
-	while i < _active_drop_bursts.size():
-		var p: Dictionary = _active_drop_bursts[i]
-		p.elapsed += delta
-		if p.elapsed < 0.0:
-			mm.set_instance_transform(p.idx, hidden)
-			i += 1
-			continue
-		var k: float = clampf(p.elapsed / p.duration, 0.0, 1.0)
-
-		if k >= 1.0:
-			mm.set_instance_transform(p.idx, hidden)
-			_drop_burst_free_indices.append(p.idx)
-			_active_drop_bursts.remove_at(i)
-			continue
-
-		var eased_pos: float = 1.0 - (1.0 - k) * (1.0 - k)  # ease-out quad
-		var pos: Vector3 = (p.start as Vector3).lerp(p.target, eased_pos)
-		var alpha: float = 1.0 - k * k  # ease-in quad fade
-
-		var size: float = p.size
-		var basis := Basis.IDENTITY.scaled(Vector3(size, size, size))
-		mm.set_instance_transform(p.idx, Transform3D(basis, pos))
-		var c: Color = p.color
-		c.a = alpha
-		mm.set_instance_color(p.idx, c)
-
-		i += 1
-
-
-## Spawns a stream of particles traveling from center to a target bucket
-## position, arriving in travel_time seconds. Reuses the drop burst MultiMesh.
-func _spawn_ripple_particles(from: Vector3, to: Vector3, travel_time: float, color: Color, t: VisualTheme) -> void:
-	var count: int = 3
-	var particle_size: float = t.drop_burst_particle_size * 0.8
-	for i in count:
-		if _drop_burst_free_indices.is_empty():
-			return
-		var idx: int = _drop_burst_free_indices.pop_back()
-		# Stagger particles slightly and add perpendicular scatter
-		var stagger: float = float(i) / float(count) * travel_time * 0.3
-		var dir: Vector3 = (to - from).normalized()
-		var perp: Vector3 = Vector3(-dir.y, dir.x, 0.0)
-		var scatter: float = randf_range(-0.15, 0.15)
-		var scattered_target: Vector3 = to + perp * scatter
-		_active_drop_bursts.append({
-			"idx": idx,
-			"start": from,
-			"target": scattered_target,
-			"elapsed": -stagger,
-			"duration": travel_time,
-			"size": particle_size,
-			"color": color,
-		})
-
-
-## Firework splash at the edge buckets. direction is -1 (left) or +1 (right).
-## 10 particles burst in all directions from the edge bucket.
-func _spawn_edge_splash(origin: Vector3, _direction: float, delay: float, color: Color, t: VisualTheme) -> void:
-	var count: int = 10
-	var particle_size: float = t.drop_burst_particle_size
-	var spread: float = t.drop_burst_spread * 1.5
-	var duration: float = 0.4
-	for i in count:
-		if _drop_burst_free_indices.is_empty():
-			return
-		var idx: int = _drop_burst_free_indices.pop_back()
-		var angle: float = randf() * TAU
-		var dist: float = spread * randf_range(0.5, 1.0)
-		var target: Vector3 = origin + Vector3(
-			cos(angle) * dist,
-			sin(angle) * dist,
-			0.0
-		)
-		_active_drop_bursts.append({
-			"idx": idx,
-			"start": origin,
-			"target": target,
-			"elapsed": -delay - randf_range(0.0, 0.05),
-			"duration": duration * randf_range(0.8, 1.0),
-			"size": particle_size,
-			"color": color,
-		})
-
-
 func _drop_from_queue() -> void:
 	if coin_queue.is_empty():
 		return
@@ -1998,7 +1795,7 @@ func _play_column_detonation_vfx(bucket_index: int) -> void:
 func _vaporise_coins_in_cut(bomb_index: int, side: int) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var to_free: Array[Coin] = []
-	for coin: Coin in _active_coin_indices.keys():
+	for coin: Coin in _coin_pool.coins():
 		if not is_instance_valid(coin):
 			continue
 		if cell_in_cut(coin._row, coin._col, bomb_index, num_rows, side):
@@ -2119,7 +1916,7 @@ func _vaporise_coins_in_radius(center: Vector2, radius: float) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var r2: float = radius * radius
 	var to_free: Array[Coin] = []
-	for coin: Coin in _active_coin_indices.keys():
+	for coin: Coin in _coin_pool.coins():
 		if not is_instance_valid(coin):
 			continue
 		var cp: Vector3 = cell_to_world(coin._row, coin._col)
@@ -2456,64 +2253,25 @@ func build_board() -> void:
 	_peg_multimesh_instance.material_override = t.make_peg_shader_material()
 	pegs_container.add_child(_peg_multimesh_instance)
 
-	# --- Coin MultiMesh (only created once, persists across rebuilds) ---
-	if not _coin_multimesh_instance:
-		var coin_capacity := 64
-		var coin_mm := MultiMesh.new()
-		coin_mm.transform_format = MultiMesh.TRANSFORM_3D
-		coin_mm.use_colors = true
-		coin_mm.mesh = t.make_coin_mesh()
-		coin_mm.instance_count = coin_capacity
-
-		var hidden_xform := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
-		for i in coin_capacity:
-			coin_mm.set_instance_transform(i, hidden_xform)
-
-		_coin_multimesh_instance = MultiMeshInstance3D.new()
-		_coin_multimesh_instance.multimesh = coin_mm
+	# --- Coin pool (only created once, persists across rebuilds) ---
+	if not _coin_pool.is_created():
 		var coin_mat := ShaderMaterial.new()
 		coin_mat.shader = preload("res://entities/coin/coin_multimesh.gdshader")
-		_coin_multimesh_instance.material_override = coin_mat
-		add_child(_coin_multimesh_instance)
+		_coin_pool.create(self, t.make_coin_mesh(), coin_mat)
 
-		for i in range(coin_capacity - 1, -1, -1):
-			_coin_free_indices.append(i)
-
-	# --- Drop burst MultiMesh (only created once, persists across rebuilds) ---
-	if not _drop_burst_mm_instance:
-		var burst_capacity := 64
-		var burst_mesh := QuadMesh.new()
-		burst_mesh.size = Vector2.ONE  # scaled per-instance via transform basis
-
-		var burst_mm := MultiMesh.new()
-		burst_mm.transform_format = MultiMesh.TRANSFORM_3D
-		burst_mm.use_colors = true
-		burst_mm.mesh = burst_mesh
-		burst_mm.instance_count = burst_capacity
-
-		var hidden_burst_xform := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3(0, -9999, 0))
-		for i in burst_capacity:
-			burst_mm.set_instance_transform(i, hidden_burst_xform)
-
-		_drop_burst_mm_instance = MultiMeshInstance3D.new()
-		_drop_burst_mm_instance.multimesh = burst_mm
+	# --- Drop burst field (only created once, persists across rebuilds) ---
+	if not _burst_field.is_created():
 		var burst_mat := ShaderMaterial.new()
 		burst_mat.shader = preload("res://entities/plinko_board/drop_burst_multimesh.gdshader")
-		_drop_burst_mm_instance.material_override = burst_mat
-		add_child(_drop_burst_mm_instance)
-
-		for i in range(burst_capacity - 1, -1, -1):
-			_drop_burst_free_indices.append(i)
+		_burst_field.create(self, burst_mat)
 
 	# --- Coin landing burst (only created once, persists across rebuilds) ---
 	if not _coin_burst_field:
 		_coin_burst_field = _COIN_BURST_FIELD_SCENE.instantiate()
 		add_child(_coin_burst_field)
 
-	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
-		_coin_mesh_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
-	else:
-		_coin_mesh_basis = Basis.IDENTITY
+	_coin_pool.mesh_basis = Basis.from_euler(Vector3(PI / 2, 0, 0)) \
+		if t.coin_shape == VisualTheme.CoinShape.CYLINDER else Basis.IDENTITY
 
 	var num_buckets = num_rows + 1
 	var bucket_x_offset = -space_between_pegs * (num_buckets - 1) / 2
@@ -2717,7 +2475,7 @@ func _play_bucket_value_upgrade_ripple() -> void:
 		for entry in group_for_particles:
 			var bucket: Bucket = entry["bucket"]
 			var target_pos: Vector3 = buckets_container.position + bucket.position
-			_spawn_ripple_particles(center_pos, target_pos, travel_time, ripple_color, t)
+			_burst_field.spawn_ripple(center_pos, target_pos, travel_time, ripple_color, t)
 
 	# Splash at the edges: when the wavefront reaches the outermost buckets,
 	# particles burst outward like water hitting the end of a pipe.
@@ -2726,10 +2484,10 @@ func _play_bucket_value_upgrade_ripple() -> void:
 	var right_bucket: Bucket = get_bucket(num_buckets - 1)
 	if left_bucket:
 		var left_pos: Vector3 = buckets_container.position + left_bucket.position
-		_spawn_edge_splash(left_pos, -1.0, splash_delay, ripple_color, t)
+		_burst_field.spawn_edge_splash(left_pos, splash_delay, ripple_color, t)
 	if right_bucket:
 		var right_pos: Vector3 = buckets_container.position + right_bucket.position
-		_spawn_edge_splash(right_pos, 1.0, splash_delay, ripple_color, t)
+		_burst_field.spawn_edge_splash(right_pos, splash_delay, ripple_color, t)
 
 	_upgrade_ripple_tween = create_tween()
 	_upgrade_ripple_tween.bind_node(self)
