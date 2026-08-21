@@ -41,7 +41,7 @@ const MULTI_DROP_STAGGER := 0.05
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
 
-@onready var pegs_container: Node3D = $Pegs
+@onready var peg_field: PegField = $Pegs
 @onready var buckets_container: Node3D = $Buckets
 @onready var upgrade_section = $UpgradeSection
 @onready var drop_section: DropSection = $DropSection
@@ -103,12 +103,6 @@ var _gameplay_target_timer: float = 0.0
 var _gameplay_target_fading: bool = false
 
 # MultiMesh peg state
-var _peg_multimesh_instance: MultiMeshInstance3D
-var _peg_positions: PackedVector3Array
-var _peg_base_color: Color
-var _peg_basis: Basis
-var _active_flashes: Dictionary = {}  # peg_index -> { start_color: Color, elapsed: float, duration: float }
-var _active_peg_pulses: Dictionary = {}  # peg_index -> { elapsed: float, duration: float }
 
 # Player-placed deflectors. The DeflectorEditor child is a pure view+input node.
 # Lives only in the BoardManager save blob — cleared on prestige reset.
@@ -593,11 +587,6 @@ func _process(delta: float) -> void:
 
 	_update_drop_rate_label_position()
 
-	if not _active_flashes.is_empty():
-		_update_peg_flashes(delta)
-	if not _active_peg_pulses.is_empty():
-		_update_peg_pulses(delta)
-
 	if not _coin_pool.is_idle():
 		_coin_pool.update(delta, ThemeProvider.theme)
 
@@ -613,61 +602,6 @@ func _process(delta: float) -> void:
 				bucket.start_gameplay_target_fade(GAMEPLAY_TARGET_FADE_START)
 		if _gameplay_target_timer <= 0.0:
 			_pick_new_gameplay_target()
-
-
-func _update_peg_flashes(delta: float) -> void:
-	var mm := _peg_multimesh_instance.multimesh
-	var finished: PackedInt32Array = []
-
-	for idx: int in _active_flashes:
-		var flash: Dictionary = _active_flashes[idx]
-		flash.elapsed += delta
-		var t_ratio: float = clampf(flash.elapsed / flash.duration, 0.0, 1.0)
-		var eased: float = t_ratio * t_ratio  # EASE_IN + TRANS_QUAD
-		var color: Color = flash.start_color.lerp(_peg_base_color, eased)
-		mm.set_instance_color(idx, color)
-
-		if t_ratio >= 1.0:
-			finished.append(idx)
-
-	for idx in finished:
-		_active_flashes.erase(idx)
-
-
-func _update_peg_pulses(delta: float) -> void:
-	var mm := _peg_multimesh_instance.multimesh
-	var t: VisualTheme = ThemeProvider.theme
-	var pulse_scale: float = 1.0 + (t.bucket_pulse_scale - 1.0) * 3.0
-	var finished: PackedInt32Array = []
-
-	for idx: int in _active_peg_pulses:
-		var pulse: Dictionary = _active_peg_pulses[idx]
-		pulse.elapsed += delta
-		var t_ratio: float = clampf(pulse.elapsed / pulse.duration, 0.0, 1.0)
-		# Snap to peak, then elastic-out settle back to 1.0 — same jello feel
-		# as MenuBoard's _wobble_peg, but driven by a manual delta loop instead
-		# of a per-peg Tween (cheaper at scale; gameplay can have many pegs
-		# pulsing simultaneously).
-		var scale: float = lerpf(pulse_scale, 1.0, _elastic_out(t_ratio))
-		var scaled_basis: Basis = _peg_basis.scaled(Vector3.ONE * scale)
-		mm.set_instance_transform(idx, Transform3D(scaled_basis, _peg_positions[idx]))
-
-		if t_ratio >= 1.0:
-			finished.append(idx)
-
-	for idx in finished:
-		mm.set_instance_transform(idx, Transform3D(_peg_basis, _peg_positions[idx]))
-		_active_peg_pulses.erase(idx)
-
-
-## Elastic-out easing — equivalent to `Tween.TRANS_ELASTIC + EASE_OUT`. Pure
-## static so the peg-pulse curve can be unit-tested without a scene tree.
-static func _elastic_out(x: float) -> float:
-	if x <= 0.0:
-		return 0.0
-	if x >= 1.0:
-		return 1.0
-	return pow(2.0, -10.0 * x) * sin((x * 10.0 - 0.75) * (TAU / 3.0)) + 1.0
 
 
 ## Pacing for hold-to-drop. Returns true when a drop should fire this frame.
@@ -1673,7 +1607,7 @@ func void_column(bucket_index: int) -> void:
 	# on the bomb bucket — the limb falls as a single piece.
 	var peg_indices: PackedInt32Array = peg_indices_on_cut(bucket_index, num_rows)
 	_animate_falling_pegs(peg_indices)
-	_hide_pegs(peg_indices)
+	peg_field.hide_pegs(peg_indices)
 	_animate_falling_buckets(truly_new)
 	_vaporise_coins_in_cut(bucket_index, side)
 	_play_column_detonation_vfx(bucket_index)
@@ -1683,7 +1617,7 @@ func void_column(bucket_index: int) -> void:
 
 
 func _animate_falling_pegs(indices: PackedInt32Array) -> void:
-	if not _peg_multimesh_instance or indices.is_empty():
+	if not peg_field.is_built() or indices.is_empty():
 		return
 	var t: VisualTheme = ThemeProvider.theme
 	# Spawn one MeshInstance3D per peg as a falling debris copy. The originals
@@ -1696,12 +1630,12 @@ func _animate_falling_pegs(indices: PackedInt32Array) -> void:
 	var fall_distance: float = vertical_spacing * (num_rows + 3) + space_between_pegs * 2.0
 	var fall_duration: float = t.bomb_debris_fall_duration
 	for flat_idx in indices:
-		if flat_idx < 0 or flat_idx >= _peg_positions.size():
+		if flat_idx < 0 or flat_idx >= peg_field.count():
 			continue
 		var debris := MeshInstance3D.new()
 		debris.mesh = peg_mesh
 		debris.material_override = peg_mat
-		debris.transform = Transform3D(_peg_basis, _peg_positions[flat_idx])
+		debris.transform = Transform3D(peg_field.mesh_basis, peg_field.position_of(flat_idx))
 		add_child(debris)
 		var spin: float = randf_range(-PI * 1.5, PI * 1.5)
 		var drift_x: float = randf_range(-0.35, 0.35)
@@ -1755,10 +1689,10 @@ func _spawn_destruction_particles(indices: PackedInt32Array) -> void:
 		return
 	var t: VisualTheme = ThemeProvider.theme
 	for flat_idx in indices:
-		if flat_idx < 0 or flat_idx >= _peg_positions.size():
+		if flat_idx < 0 or flat_idx >= peg_field.count():
 			continue
 		# Several bursts per peg so the explosion reads as big.
-		var world_pos: Vector3 = to_global(_peg_positions[flat_idx])
+		var world_pos: Vector3 = to_global(peg_field.position_of(flat_idx))
 		for _i in 3:
 			_coin_burst_field.spawn(world_pos, t.bomb_detonation_color)
 
@@ -1807,24 +1741,6 @@ func _vaporise_coins_in_cut(bomb_index: int, side: int) -> void:
 		coin.queue_free()
 
 
-func _hide_pegs(indices: PackedInt32Array) -> void:
-	if not _peg_multimesh_instance:
-		return
-	var mm: MultiMesh = _peg_multimesh_instance.multimesh
-	var hidden_basis: Basis = _peg_basis.scaled(Vector3.ZERO)
-	for flat_idx in indices:
-		if flat_idx < 0 or flat_idx >= _peg_positions.size():
-			continue
-		# Clear any flash / pulse claims on this index so per-frame loops don't
-		# write the transform back to a non-zero scale. Without this, a peg
-		# being detonated mid-bounce-flash visually stays around for the pulse
-		# duration.
-		_active_flashes.erase(flat_idx)
-		_active_peg_pulses.erase(flat_idx)
-		mm.set_instance_transform(flat_idx,
-			Transform3D(hidden_basis, _peg_positions[flat_idx]))
-
-
 ## Re-applies peg hiding for every voided column after a board rebuild. Called
 ## from build_board at the end so voids persist across add_two_rows (and any
 ## other mid-challenge rebuild like the advanced-bucket reward).
@@ -1844,7 +1760,7 @@ func _reapply_voided_pegs() -> void:
 			if should_fall_through(row, col, _voided_columns, num_rows):
 				@warning_ignore("integer_division")
 				hide.append(row * (row + 1) / 2 + col)
-	_hide_pegs(hide)
+	peg_field.hide_pegs(hide)
 	# Hide any buckets that should be voided — for the post-rebuild state, just
 	# set visible=false. (Animation only fires on the live detonation path.)
 	for B in _voided_columns:
@@ -1874,8 +1790,8 @@ func detonate_radius(bucket_index: int, radius: float) -> void:
 		b_offset.y + center_bucket.position.y)
 	var r2: float = radius * radius
 	var peg_indices: PackedInt32Array = PackedInt32Array()
-	for i in _peg_positions.size():
-		var p: Vector3 = _peg_positions[i]
+	for i in peg_field.count():
+		var p: Vector3 = peg_field.position_of(i)
 		var dx: float = p.x - center.x
 		var dy: float = p.y - center.y
 		if dx * dx + dy * dy <= r2:
@@ -1901,7 +1817,7 @@ func detonate_radius(bucket_index: int, radius: float) -> void:
 		_destroyed_bucket_indices[i] = true
 	if not peg_indices.is_empty():
 		_animate_falling_pegs(peg_indices)
-		_hide_pegs(peg_indices)
+		peg_field.hide_pegs(peg_indices)
 	if not bucket_indices.is_empty():
 		_animate_falling_buckets(bucket_indices)
 	_vaporise_coins_in_radius(center, radius)
@@ -1944,8 +1860,8 @@ func _reapply_voided_radii() -> void:
 	for entry: Dictionary in _voided_radii:
 		var r: float = entry["radius"]
 		r2_list.append(r * r)
-	for i in _peg_positions.size():
-		var p: Vector3 = _peg_positions[i]
+	for i in peg_field.count():
+		var p: Vector3 = peg_field.position_of(i)
 		for j in _voided_radii.size():
 			var entry: Dictionary = _voided_radii[j]
 			var dx: float = p.x - entry["cx"]
@@ -1953,7 +1869,7 @@ func _reapply_voided_radii() -> void:
 			if dx * dx + dy * dy <= r2_list[j]:
 				hide.append(i)
 				break
-	_hide_pegs(hide)
+	peg_field.hide_pegs(hide)
 	# Hide buckets whose centres fall in any radius — post-rebuild snap, no fall.
 	var b_offset: Vector3 = buckets_container.position
 	var num_buckets: int = buckets_container.get_child_count()
@@ -2143,9 +2059,9 @@ func get_peg_palette_source() -> VisualTheme.Palette:
 
 
 func get_peg_local_position(idx: int) -> Vector3:
-	if idx < 0 or idx >= _peg_positions.size():
+	if idx < 0 or idx >= peg_field.count():
 		return Vector3.ZERO
-	return _peg_positions[idx]
+	return peg_field.position_of(idx)
 
 
 ## A roughly-central peg (mid row, mid column) — the sparkle/pulse target.
@@ -2157,9 +2073,21 @@ func get_center_peg_index() -> int:
 	return peg_index(row, col)
 
 
+## Coins currently drawn by the shared pool. Read by PrestigeVfx to desaturate
+## the world; the pool itself stays private.
+func get_pooled_coins() -> Array:
+	return _coin_pool.coins()
+
+
+## Peg MultiMesh, or null before the board is built. Read by PrestigeVfx to
+## cache and restore per-instance colours.
+func get_peg_multimesh() -> MultiMesh:
+	return peg_field.multimesh()
+
+
 func get_center_peg_screen_position() -> Vector2:
 	var cam := get_active_camera()
-	if cam == null or _peg_positions.is_empty():
+	if cam == null or peg_field.count() == 0:
 		return Vector2.ZERO
 	return cam.unproject_position(
 		to_global(get_peg_local_position(get_center_peg_index())))
@@ -2172,19 +2100,9 @@ func start_deflector_center_hint() -> void:
 		_deflector_editor.start_center_peg_hint(get_center_peg_index())
 
 
-## Flat index of the peg nearest a board-local point, or -1 if none within
-## max_dist. Scans the authoritative _peg_positions array (same kind of lookup
-## as flash_nearest_peg) — used by the DeflectorEditor for hover/click, never
-## on the coin hot path.
+## Used by the DeflectorEditor for hover/click, never on the coin hot path.
 func nearest_peg_index_to_local(local_pos: Vector3, max_dist: float) -> int:
-	var best := -1
-	var best_dist := max_dist
-	for i in _peg_positions.size():
-		var d := local_pos.distance_to(_peg_positions[i])
-		if d < best_dist:
-			best_dist = d
-			best = i
-	return best
+	return peg_field.nearest_to(local_pos, max_dist)
 
 
 func get_nearest_bucket(x_position: float) -> Bucket:
@@ -2193,65 +2111,38 @@ func get_nearest_bucket(x_position: float) -> Bucket:
 			return bucket
 	return buckets_container.get_children()[0]
 
+## Peg positions for the current row count, in build order (row-major, matching
+## peg_index). position_x_for is the one canonical lattice->x formula, so pegs
+## and coin paths can't drift.
+func _compute_peg_positions() -> PackedVector3Array:
+	@warning_ignore("integer_division")
+	var total: int = num_rows * (num_rows + 1) / 2
+	var out := PackedVector3Array()
+	out.resize(total)
+	var idx := 0
+	for row in range(num_rows):
+		var y := -vertical_spacing * row
+		for col in range(row + 1):
+			out[idx] = Vector3(position_x_for(row, col), y, 0)
+			idx += 1
+	return out
+
+
 func build_board() -> void:
 	# Kill any in-flight upgrade ripple — its bucket references become stale.
 	if _upgrade_ripple_tween and _upgrade_ripple_tween.is_valid():
 		_upgrade_ripple_tween.kill()
 	_upgrade_animating = false
 
-	# Clear old pegs (MultiMesh)
-	if _peg_multimesh_instance:
-		_peg_multimesh_instance.queue_free()
-		_peg_multimesh_instance = null
-	_active_flashes.clear()
 	# Voided columns are per-challenge runtime state and PERSIST across rebuilds
 	# (add_two_rows mid-challenge would otherwise resurrect destroyed pegs).
-	# `clear_all_markings` (called by the tracker on challenge end) wipes them.
-	# Re-applying the cuts happens at the bottom of this function, after the new
-	# peg MultiMesh is populated.
-	for child in pegs_container.get_children():
-		child.queue_free()
-
+	# clear_all_markings wipes them; the cuts are re-applied at the bottom.
 	for child in buckets_container.get_children():
 		buckets_container.remove_child(child)
 		child.queue_free()
 
 	var t: VisualTheme = ThemeProvider.theme
-	_peg_base_color = t.peg_color
-
-	# Calculate peg positions
-	var total_pegs: int = num_rows * (num_rows + 1) / 2
-	_peg_positions = PackedVector3Array()
-	_peg_positions.resize(total_pegs)
-
-	var idx := 0
-	for i in range(num_rows):
-		var y := -vertical_spacing * i
-		for j in range(i + 1):
-			# position_x_for is the single canonical lattice->x formula (also
-			# used by cell_to_world / the Coin), so build and gameplay can't drift.
-			_peg_positions[idx] = Vector3(position_x_for(i, j), y, 0)
-			idx += 1
-
-	# Build MultiMesh
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.instance_count = total_pegs
-	mm.mesh = t.make_peg_mesh()
-
-	_peg_basis = Basis.IDENTITY
-	if t.peg_shape == VisualTheme.PegShape.CYLINDER:
-		_peg_basis = Basis.from_euler(Vector3(PI / 2, 0, 0))
-
-	for i in total_pegs:
-		mm.set_instance_transform(i, Transform3D(_peg_basis, _peg_positions[i]))
-		mm.set_instance_color(i, _peg_base_color)
-
-	_peg_multimesh_instance = MultiMeshInstance3D.new()
-	_peg_multimesh_instance.multimesh = mm
-	_peg_multimesh_instance.material_override = t.make_peg_shader_material()
-	pegs_container.add_child(_peg_multimesh_instance)
+	peg_field.build(_compute_peg_positions(), t)
 
 	# --- Coin pool (only created once, persists across rebuilds) ---
 	if not _coin_pool.is_created():
@@ -2689,7 +2580,7 @@ func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> v
 				bucket.fade_in(fall_duration)
 			bucket.mark_singing()
 			AudioManager.force_play_bucket(board_type, i, entry["glissando_degree"], is_adv)
-			_reveal_new_pegs(entry["reveal_peg_indices"])
+			peg_field.reveal_pegs(entry["reveal_peg_indices"])
 		)
 		_upgrade_ripple_tween.tween_interval(glissando_interval)
 
@@ -2699,29 +2590,10 @@ func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> v
 	)
 
 
-## Zero-scales every new-row peg in the MultiMesh so it's invisible until its
-## column's step reveals it. No-op without the multimesh (e.g. bare-instance
-## tests, which never reach this code path).
+## Hides every new-row peg until its column's step in the glissando reveals it.
 func _set_new_pegs_hidden(columns: Array) -> void:
-	if not _peg_multimesh_instance:
-		return
-	var mm: MultiMesh = _peg_multimesh_instance.multimesh
-	var hidden_basis: Basis = _peg_basis.scaled(Vector3.ZERO)
 	for col_data in columns:
-		for flat_idx in col_data["reveal_peg_indices"]:
-			mm.set_instance_transform(flat_idx,
-				Transform3D(hidden_basis, _peg_positions[flat_idx]))
-
-
-## Restores the given peg MultiMesh instances to their full transform —
-## triggered per-column by the glissando wavefront.
-func _reveal_new_pegs(indices: PackedInt32Array) -> void:
-	if not _peg_multimesh_instance:
-		return
-	var mm: MultiMesh = _peg_multimesh_instance.multimesh
-	for flat_idx in indices:
-		mm.set_instance_transform(flat_idx,
-			Transform3D(_peg_basis, _peg_positions[flat_idx]))
+		peg_field.hide_pegs(col_data["reveal_peg_indices"])
 
 
 func decrease_drop_delay() -> void:
@@ -2784,26 +2656,13 @@ func _show_multi_drop_label(count: int) -> void:
 # not snapped to a peg, so it must tolerate the bounce arc. Kept separate from
 # the deflector lookup on purpose — they answer different questions.
 func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
-	if _peg_positions.is_empty():
+	if peg_field.count() == 0 or not AudioManager.is_active_board(board_type):
 		return
-	if not AudioManager.is_active_board(board_type):
+	var idx := peg_field.nearest_to(to_local(coin_pos), space_between_pegs * 0.8)
+	if idx < 0:
 		return
 
 	var t: VisualTheme = ThemeProvider.theme
-	var local_pos := to_local(coin_pos)
-	var closest_idx := -1
-	var closest_dist := INF
-	var threshold := space_between_pegs * 0.8
-
-	for i in _peg_positions.size():
-		var dist := local_pos.distance_to(_peg_positions[i])
-		if dist < closest_dist and dist < threshold:
-			closest_dist = dist
-			closest_idx = i
-
-	if closest_idx < 0:
-		return
-
 	var glow_color := t.get_coin_color(currency_type)
 
 	# Sparkle is the rare, rewarding event (gated by should_sparkle's proximity
@@ -2815,77 +2674,15 @@ func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
 		AudioManager.play_peg_chime()
 
 	if t.peg_flash_enabled:
-		_peg_multimesh_instance.multimesh.set_instance_color(closest_idx, glow_color)
-		_active_flashes[closest_idx] = {
-			"start_color": glow_color,
-			"elapsed": 0.0,
-			"duration": t.peg_glow_duration,
-		}
-
-	# Pulse fires on every peg hit so the player always gets a scale-pop cue
-	# on contact. The expanding coin-colored ring below is the sparkle cue.
+		peg_field.flash(idx, glow_color, t.peg_glow_duration)
+	# Pulse fires on every hit so contact always reads; the ring is the rarer
+	# sparkle accent and would look busy on the throttled chime layer.
 	if t.peg_pulse_enabled:
-		_active_peg_pulses[closest_idx] = {
-			"elapsed": 0.0,
-			"duration": t.peg_pulse_duration,
-		}
-
+		peg_field.pulse(idx, t.peg_pulse_duration)
 	if t.peg_glow_halo_enabled:
-		_spawn_peg_halo(_peg_positions[closest_idx], glow_color, t)
-	# Ring is the sparkle visual — coin-colored so it reads as a rewarding
-	# accent rather than a generic ripple. Chimes never get the ring; they're
-	# the high-frequency throttled layer and would look too busy.
+		peg_field.spawn_halo(peg_field.position_of(idx), glow_color, t)
 	if t.peg_ring_enabled and is_sparkle:
-		_spawn_peg_ring(_peg_positions[closest_idx], glow_color, t)
-
-
-func _spawn_peg_halo(peg_local_pos: Vector3, glow_color: Color, t: VisualTheme) -> void:
-	var halo_shader: Shader = preload("res://entities/coin/coin_halo.gdshader")
-	var halo := MeshInstance3D.new()
-	var halo_mesh := QuadMesh.new()
-	halo_mesh.size = Vector2(t.peg_glow_halo_radius, t.peg_glow_halo_radius)
-	halo.mesh = halo_mesh
-	var halo_mat := ShaderMaterial.new()
-	halo_mat.shader = halo_shader
-	var halo_color := glow_color
-	halo_color.a = t.peg_glow_halo_opacity
-	halo_mat.set_shader_parameter("glow_color", halo_color)
-	halo_mat.set_shader_parameter("opacity_mult", 1.0)
-	halo.material_override = halo_mat
-	halo.position = Vector3(peg_local_pos.x, peg_local_pos.y, peg_local_pos.z - 0.05)
-	add_child(halo)
-	var halo_tween := create_tween()
-	halo_tween.tween_property(halo_mat, "shader_parameter/opacity_mult", 0.0, t.peg_glow_duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	halo_tween.tween_callback(halo.queue_free)
-
-
-func _spawn_peg_ring(peg_local_pos: Vector3, ring_color: Color, t: VisualTheme) -> void:
-	var ring_shader: Shader = preload("res://entities/plinko_board/peg_ring.gdshader")
-	var ring := MeshInstance3D.new()
-	var ring_mesh := QuadMesh.new()
-	var quad_size: float = t.peg_ring_max_radius * 2.0
-	ring_mesh.size = Vector2(quad_size, quad_size)
-	ring.mesh = ring_mesh
-	var mat := ShaderMaterial.new()
-	mat.shader = ring_shader
-	mat.set_shader_parameter("ring_color", ring_color)
-	mat.set_shader_parameter("ring_thickness", t.peg_ring_thickness)
-	mat.set_shader_parameter("ring_radius", 0.0)
-	mat.set_shader_parameter("opacity_mult", 0.0)
-	ring.material_override = mat
-	ring.position = Vector3(peg_local_pos.x, peg_local_pos.y, peg_local_pos.z - 0.04)
-	add_child(ring)
-
-	var duration: float = t.peg_ring_duration
-	var max_opacity: float = t.peg_ring_max_opacity
-	var tween := create_tween()
-	tween.tween_method(
-		func(p: float) -> void:
-			mat.set_shader_parameter("ring_radius", p)
-			mat.set_shader_parameter("opacity_mult", sin(p * PI) * max_opacity),
-		0.0, 1.0, duration)
-	tween.tween_callback(ring.queue_free)
+		peg_field.spawn_ring(peg_field.position_of(idx), glow_color, t)
 
 
 ## Effective queue slots for a raw queue level (purchased + permanent challenge

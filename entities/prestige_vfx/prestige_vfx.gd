@@ -40,8 +40,8 @@ func setup(camera: Camera3D, board: PlinkoBoard, target_bucket: Bucket, target_c
 func _collect_world_materials() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	# Pegs (MultiMesh — store per-instance colors)
-	if _board._peg_multimesh_instance:
-		var mm := _board._peg_multimesh_instance.multimesh
+	var mm := _board.get_peg_multimesh()
+	if mm:
 		for i in mm.instance_count:
 			var color := mm.get_instance_color(i)
 			_darkened_peg_instances.append([mm, i, color])
@@ -57,7 +57,7 @@ func _collect_world_materials() -> void:
 			_darkened_labels.append([b._label, b._label.modulate])
 
 	# Non-prestige coins — desaturate via cached_color (MultiMesh sync propagates it)
-	for coin: Coin in _board._active_coin_indices:
+	for coin: Coin in _board.get_pooled_coins():
 		if coin == _target_coin:
 			continue
 		_darkened_coin_caches.append([coin, coin.cached_color])

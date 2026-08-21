@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dqosetipfxq2w"]
 
 [ext_resource type="Script" uid="uid://dpicrqh1sc34f" path="res://entities/plinko_board/plinko_board.gd" id="1_wje3v"]
+[ext_resource type="Script" path="res://entities/plinko_board/peg_field.gd" id="5_pegfield"]
 [ext_resource type="PackedScene" uid="uid://dwssqmgrhvooe" path="res://entities/plinko_board/upgrade_section.tscn" id="2_upgrade"]
 [ext_resource type="Script" uid="uid://6isft3gag7vp" path="res://entities/coin_queue/coin_queue.gd" id="3_coinqueue"]
 [ext_resource type="PackedScene" uid="uid://h4rwxjeyfqx" path="res://entities/drop_section/drop_section.tscn" id="4_drop"]
@@ -9,6 +10,7 @@
 script = ExtResource("1_wje3v")
 
 [node name="Pegs" type="Node3D" parent="." unique_id=2007669668]
+script = ExtResource("5_pegfield")
 
 [node name="Buckets" type="Node3D" parent="." unique_id=395647080]
 
