@@ -732,21 +732,16 @@ func _tick_beat_grid(delta: float) -> void:
 
 # ── Public API: musical sounds ───────────────────────────────────────
 
-## Register a bucket hit. Returns true if the caller should light up the
-## bucket visually. Three modes, selected by theme data:
-##   1. Drum-layer (drum_instruments non-empty): activate the tier's drum
-##      pattern; audio waits for the tier's next beat slot.
-##   2. Arpeggio (arpeggio_pattern non-empty): register + first-hit-immediate.
-##   3. Queue (default): BUCKET_WAIT-spaced dispatch.
-## NOTE: `degree` = bucket's distance from center. Drum-layer mode indexes
-## its parallel arrays (drum_instruments, drum_patterns, drum_volumes) by
-## this same value, where it's called a "tier." Arpeggio / harp modes use
-## it as a chord-tone offset via _get_pitch_scale. Three words, one concept.
-## `is_repeat` (queue mode only): when true, the entry is routed to the
-## lower-priority `_repeat_bucket_queue` instead, never preempts primary,
-## and the per-bucket count check in `_play_bucket_now` softens or caps it.
-## In drum-layer and arpeggio modes the flag is ignored — softening only
-## applies in queue mode where the harp drones overlap.
+## Register a bucket hit; returns true if the caller should light the bucket.
+## Theme data picks the mode: drum-layer (waits for the tier's next beat slot),
+## arpeggio (first hit immediate), or the default BUCKET_WAIT-spaced queue.
+##
+## `degree` is the bucket's distance from centre — drum mode indexes its
+## parallel arrays by it (there called a "tier"), other modes use it as a
+## chord-tone offset. One concept, three names.
+##
+## `is_repeat` only applies in queue mode, where harp drones overlap: it routes
+## to the lower-priority queue and can be softened or capped. Ignored elsewhere.
 func request_bucket_play(board_type: Enums.BoardType, bucket_idx: int, degree: int, is_advanced: bool, is_repeat: bool = false) -> bool:
 	if _silenced:
 		return false
@@ -1042,22 +1037,14 @@ func play_peg_sparkle(board_type: Enums.BoardType) -> void:
 	_active_drones[key] = _make_drone_entry(idx, SPARKLE_DRONE_SUSTAIN, degree, sparkle_octave, DroneState.SPARKLE, false)
 
 
-## Records a peg-contact event for the chime layer. Two timing modes selected
-## by the active theme:
-##   Throttle (default): play immediately if PEG_CHIME_MIN_INTERVAL_S has
-##     elapsed since the last play, else drop.
-##   Quantize (theme.peg_chime_quantize_seconds > 0): mark "pending" and let
-##     _tick_peg_chime_quantize fire exactly one chime on the next quantum
-##     boundary, regardless of how many pegs were hit since.
-## `degrees`: chord-array indices the chime randomly picks from (chord arrays
-## are stored as root/3rd/5th/7th/octave/...). Empty = default [0, 2]
-## (root/5th). Per-call-site override exists so future themes/screens can
-## pass a richer pool without a theme-field round-trip.
-## `min_interval_seconds`: per-call-site throttle override in throttle mode.
-## Negative = use PEG_CHIME_MIN_INTERVAL_S.
-## `volume_db`: per-call-site loudness override. NAN = use PEG_CHIME_VOLUME_DB.
-## No board gate — call sites self-gate (PlinkoBoard via flash_nearest_peg's
-## is_active_board check).
+## Records a peg contact for the chime layer. Throttle mode (default) plays if
+## PEG_CHIME_MIN_INTERVAL_S has elapsed, else drops; quantize mode (theme sets
+## peg_chime_quantize_seconds) collapses all hits since the last boundary into
+## one chime on the next one.
+##
+## `degrees` are chord-array indices to pick from (empty = root/5th),
+## `min_interval_seconds` negative and `volume_db` NAN fall back to the
+## constants. No board gate — call sites self-gate.
 func play_peg_chime(degrees: Array[int] = [], min_interval_seconds: float = -1.0, volume_db: float = NAN) -> void:
 	if _silenced:
 		return
@@ -1547,14 +1534,11 @@ const BOMB_HUM_SEMITONE_OFFSET := -12
 const BOMB_DEFUSE_SEMITONE_OFFSET := 24
 
 
-## The midi value of the "root" of the chord currently playing. The chord
-## changes every 16 slots; we cycle through `_CHORD_ROOT_MIDI_CYCLE` indexed
-## by (slot / 16) mod 4. Returns the most-recently-played chord's root.
-## Reused by the bomb defuse cue and the sustained root-hum updater.
+## Midi root of the chord currently playing — the chord changes every 16 slots.
+## Reused by the bomb defuse cue and the root-hum updater.
 ##
-## NOTE: the lookup table is hand-pinned to glow_dark's progression. Other
-## themes with their own progressions will get wrong-key bomb cues until
-## the table is moved onto the theme/AudioStyle resource.
+## The lookup table is hand-pinned to glow_dark; other progressions get
+## wrong-key bomb cues until it moves onto the theme/AudioStyle resource.
 func get_current_chord_root_midi() -> int:
 	var chord_idx: int = get_current_chord_index()
 	if chord_idx < 0:

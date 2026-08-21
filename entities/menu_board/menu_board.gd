@@ -1,43 +1,30 @@
 class_name MenuBoard
 extends Node3D
 
-## Decorative, visual-only Plinko board for the main-menu background.
+## Decorative, visual-only Plinko board behind the main menu.
 ##
-## Why a triangular lattice: it is the SAME 30/60/90 peg packing the real game
-## uses (shared `Lattice` module, also behind `PlinkoBoard`), so the menu
-## previews the actual game feel instead of an unrelated graphic.
+## Uses the same shared `Lattice` as the real board, so the menu previews actual
+## game feel rather than an unrelated graphic. The camera is perspective (not
+## the gameplay ortho) purely for looks — pegs read as physical pins and the row
+## field recedes. It is authored in menu_board.tscn so it stays gizmo-tunable;
+## code only sets the key light's rotation.
 ##
-## Why a perspective camera when the gameplay board is orthographic: purely an
-## aesthetic choice for the menu. A `Camera3D` tilted down from near the board's
-## top makes pegs read as physical 3D pins and the tall row field recede and
-## shrink toward the bottom of the screen. The camera is authored directly in
-## menu_board.tscn (transform + fov on the `$Camera3D` node) so it can be moved
-## live with the editor gizmo; nothing in code touches it. The key light's
-## rotation is still set in code (only a direction, no transpose risk).
+## Decorative means decorative: no currency, save, upgrades, buckets, rewards,
+## or `Coin` entity. Coins bounce row-by-row and despawn at the bottom. Audio is
+## two independent layers through AudioManager.play_pitched_chime — peg-contact
+## ticks and a chord bed; see the CLAUDE.md MenuBoard entry for the map.
 ##
-## Why decorative-only: these coins are visual sugar. No currency, no save, no
-## upgrades, no `Coin` entity, no buckets, no rewards, no landing signal. A coin
-## bounces row-by-row (random left/right) then despawns at the bottom row.
-## Reads `ThemeProvider.theme` for visual config and calls
-## `AudioManager.play_pitched_chime` for two independent audio layers —
-## peg-contact ticks + a background chord progression bed. See the CLAUDE.md
-## `MenuBoard` entry for the audio-layer system map.
-##
-## Emits `chime_beat_fired` once per chord-bed tick so the main menu can
-## strum the menu buttons in time with the music (visual-only on the
-## listener side — this node still owns the audio).
+## Emits `chime_beat_fired` per chord-bed tick so the menu can strum its buttons
+## in time. This node still owns the audio; listeners are visual-only.
 signal chime_beat_fired(chord_idx: int, beat_idx: int)
 
 ## Peg rows in the decorative lattice — taller than any early-game board so the
 ## field reads as receding into the distance under the perspective camera.
 const MENU_BOARD_ROWS := 25
 
-## Hard cap on simultaneously-falling coins (anti-leak backstop). Kept well
-## ABOVE steady-state so the cap is never actually hit — coins must never stop
-## dropping. Steady-state ≈ full-board fall time ÷ spawn interval ≈
-## (MENU_BOARD_ROWS × ~0.4s) ÷ COIN_SPAWN_INTERVAL_SEC; at 25 rows that's ≈ 22,
-## so 180 is a large safety margin. Bump this if MENU_BOARD_ROWS or the fall
-## time grows a lot.
+## Anti-leak backstop, deliberately far above steady-state (~22 coins at 25
+## rows) so it is never actually hit — coins must never stop dropping. Raise it
+## if MENU_BOARD_ROWS or the fall time grows a lot.
 const MAX_DECORATIVE_COINS := 180
 
 const COIN_SPAWN_INTERVAL_SEC := 0.45
@@ -87,18 +74,13 @@ const MENU_BOUNCE_HEIGHT_MULT := 1.5
 const PEG_WOBBLE_SCALE_PEAK := 1.5
 const PEG_WOBBLE_DURATION := 2.7
 
-## Authored chord progression. Each chord is FOUR notes authored in ascending
-## order (root → up). The index parity selects the playback DIRECTION: even
-## chords arpeggiate ascending (low→high), odd arpeggiate descending (high→low).
-## `intro` plays on beat 0 alongside the regular note — an octave above one of
-## the chord tones, picked per-chord to "announce" the new harmony. Held back
-## until the second loop of the progression so the first time through is bare
-## arpeggios (gradual reveal). `mid` is a higher-octave grace note that plays
-## on the middle beat starting at loop 2 (third play-through), giving an
-## x-x- pattern across the chord (intro on 0, grace on 2).
-## Drop either key (or set "") to skip that note on a chord.
-## To swap chords, edit the `notes` arrays. To flip a chord's direction, just
-## reorder its position in the array.
+## Chord progression. Four notes per chord, authored ascending; index parity
+## picks direction, so even chords arpeggiate up and odd ones down — reorder a
+## chord to flip it.
+##
+## `intro` announces a new harmony on beat 0, `mid` is a grace note on the
+## middle beat. Both are held back (loop 1 and loop 2) so the first pass is bare
+## arpeggios and the texture builds. Omit either key to skip that note.
 const PEG_CHIME_PROGRESSION: Array[Dictionary] = [
 	{"name": "Cmaj7", "notes": ["C3", "E3", "G3", "B3"],   "intro": "C5",  "mid": "E5"},
 	{"name": "C7",    "notes": ["Db3", "E3", "G3", "Bb3"], "intro": "Bb4", "mid": "D5"},
@@ -140,21 +122,16 @@ const PEG_CHIME_VOLUME_OFFSET_DB := 6.0
 ## gates) is preserved for an easy re-enable.
 const PEG_CHIME_ENABLED := true
 
-## Tonal blip on coin/peg contact — picks a random note from the currently-
-## active chord and plays it through the PEG_TICK glass-marble timbre
-## (deliberately NOT the chord bed's MUSIC_BOX; the percussive clink reads as
-## "physical hit" while still landing on a chord-appropriate pitch). Rate-
-## limited with a per-hit RANDOM interval so dense bounces don't strobe and
-## the texture feels organic rather than metronomic.
+## Tonal blip on peg contact: a random note from the active chord, played
+## through the PegTick glass-marble timbre rather than the bed's MusicBox — the
+## clink reads as a physical hit while staying in key. The rate limit uses a
+## random per-hit interval so dense bounces feel organic, not metronomic.
 const PEG_TICK_INTERVAL_MIN_S := 0.1
 const PEG_TICK_INTERVAL_MAX_S := 0.4
-## Pitch multiplier applied to the chord note before hand-off to PegTick.
-## 4.0 = two octaves up. PegTick is a noise burst with a fixed 2800 Hz
-## resonance; passing the chord notes at their authored C3-B3 octave
-## (pitch_mult ≈ 0.5) stretches the sample back at half speed and the marble
-## loses its clink. Shifting up two octaves plays the marble at a bright,
-## in-character speed AND moves the resonance peak closer to the actual
-## chord pitches.
+## Two octaves up, applied to the chord note before hand-off to PegTick.
+## PegTick is a noise burst with a fixed 2800 Hz resonance: at the authored
+## C3-B3 octave the sample stretches to half speed and loses its clink. +2
+## octaves restores the marble attack and moves the resonance nearer the chord.
 const PEG_TICK_PITCH_MULT := 4.0
 ## dB offset from BUCKET_VOLUME_DB — peg tick is texture under the chord bed.
 ## Roughly 6 dB quieter than an earlier tuning pass, ≈ half the prior amplitude.
@@ -198,13 +175,10 @@ const MENU_COIN_CURRENCIES: Array[Enums.CurrencyType] = [
 const MENU_LIGHT_ROTATION_DEG := Vector3(-30.0, -55.0, 0.0)
 const MENU_LIGHT_ENERGY := 0.95
 
-## How far ABOVE each peg row a coin rests (same idea as
-## PlinkoBoard.COIN_ROW_Y_OFFSET). Pegs sit at y = -vspace*row; lifting every
-## coin waypoint by this much makes coins bounce ON TOP of the pegs instead of
-## clipping through their centres, while staying in the SAME Z plane (so they
-## still track the peg columns — no parallax). Roughly peg_radius + coin_radius.
-## Local (not PlinkoBoard's) so the lattice parity test stays a pure
-## PlinkoBoard-vs-Lattice comparison.
+## How far above each peg row a coin rests, so coins bounce on top of pegs
+## instead of through their centres. Same Z plane, so columns still track with
+## no parallax. Local rather than PlinkoBoard's, to keep the lattice parity test
+## a pure PlinkoBoard-vs-Lattice comparison.
 const COIN_ROW_Y_OFFSET := 0.22
 
 ## Lattice geometry. Plain fields (defaulted from the theme in `_ready`) so the

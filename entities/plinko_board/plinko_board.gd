@@ -8,26 +8,17 @@ var vertical_spacing: float
 @export var drop_delay_reduction_factor: float = 0.82
 @export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
-## Each EXTRA queued coin (past the always-present first slot, which is "free")
-## boosts drop rate by this fraction of the base rate. One extra coin adds 1/5
-## of the base rate. effective_delay = drop_delay / (1 + bonus * extra), where
-## extra = max(0, queue.count - 1). Additive in rate (not delay) keeps the curve
-## self-bounded — delay shrinks but never reaches zero.
+## Rate boost per queued coin past the free first slot. Additive in rate, not
+## delay, so the curve is self-bounded — see get_effective_drop_delay.
 const QUEUE_RATE_BONUS_PER_COIN := 0.20
 
-## Each granted QUEUE_RATE_BONUS challenge reward adds this much to the
-## per-queued-coin bonus above. Stackable; gold board only (counted globally,
-## applied to gold — mirrors GOLD_COIN_SPEED_BOOST).
-## The reward's displayed text is derived live from this constant by
-## ChallengeRewardData.display_text() (QUEUE_RATE_BONUS case), so changing the
-## value updates every reward display automatically — no .tres edits needed.
+## Added to the per-queued-coin bonus per granted QUEUE_RATE_BONUS reward.
+## Stackable, gold board only. ChallengeRewardData.display_text() reads this
+## live, so changing it updates every reward display — no .tres edits.
 const QUEUE_RATE_BONUS_PER_UNLOCK := 0.10
 
-## Effective per-queued-coin bonus after folding in earned QUEUE_RATE_BONUS
-## rewards. Cached in setup() (challenge progress only changes on a scene
-## reload, like Coin's _fall_speed_multiplier) so the autoload isn't queried
-## every drop cycle. Defaults to the base so a bare PlinkoBoard.new() (tests,
-## null-queue path) works without setup().
+## Base bonus plus earned QUEUE_RATE_BONUS rewards. Cached in setup() — challenge
+## progress only changes on scene reload. Defaults to base so a bare board works.
 var _queue_rate_bonus_per_coin: float = QUEUE_RATE_BONUS_PER_COIN
 
 ## Pixel offset from the projected spawn point to the top-left of the drop-rate
@@ -126,24 +117,16 @@ const NO_ROOM_FONT_SIZE := 40
 var _label3d_default_pixel_size: float = 0.0  # engine default, read once
 var _last_rate_font_size: int = -1
 
-## Bucket indices whose vertical column has been destroyed by a bomb detonation.
-## Cleared on build_board (matches the deflectors-survive-prestige-only pattern
-## but for a per-challenge runtime concept). Read by Coin via
-## is_lattice_cell_voided to drive fall-through; never persisted. PEGS REMAIN
-## "purely visual" — coin behavior couples to *columns*, not to peg instances.
+## Bucket indices whose column a bomb destroyed. Read by Coin via
+## is_lattice_cell_voided; never persisted. Pegs stay purely visual — coin
+## behaviour couples to columns, not to peg instances.
 var _voided_columns: PackedInt32Array = PackedInt32Array()
-## Radial voids carved by ForbiddenBucketHazard detonations. Each entry is
-## `{cx, cy, radius}` in PlinkoBoard-local space. Independent of `_voided_columns`
-## (different geometry — circle vs strict-vertical-strip); `is_lattice_cell_voided`
-## unions both. Cleared in `clear_all_markings` and re-applied across rebuilds
-## by `_reapply_voided_radii`, same lifecycle as `_voided_columns`.
+## Radial voids from ForbiddenBucketHazard, as {cx, cy, radius} in board space.
+## Separate geometry from _voided_columns; is_lattice_cell_voided unions both.
 var _voided_radii: Array[Dictionary] = []
-## Bucket indices destroyed by ANY radial detonation. Populated synchronously
-## in `detonate_radius` BEFORE the fall animation starts, so any coin still in
-## flight during the (multi-second) fall sees the cell as voided and refuses
-## to land. Survives rebuilds; cleared with `_voided_radii` in
-## `clear_all_markings`. (Bomb-cut buckets are tracked separately via
-## `_voided_columns` — their column-cut semantics already handle this.)
+## Buckets destroyed by a radial detonation. Filled before the fall animation
+## so in-flight coins refuse to land. Survives rebuilds; cleared with
+## _voided_radii. Bomb-cut buckets live in _voided_columns instead.
 var _destroyed_bucket_indices: Dictionary = {}  # bucket_index: int -> true
 ## Set by BoardManager — returns total deflectors placed across ALL boards
 ## (the universal cap is global). Falls back to this board's own count when
@@ -173,13 +156,9 @@ signal forbidden_bucket_coin_landed(coin: Coin, predicted_bucket: Bucket)
 ## unlock path. BoardManager connects this to unlock_board.
 signal next_board_unlock_requested(board_type: Enums.BoardType)
 
-## Add-rows juice. `row_upgrade_starting` fires at the top of add_two_rows
-## (before build_board) so BoardManager can suppress the default fit-tween
-## that board_rebuilt would otherwise trigger; `row_upgrade_sweep_started`
-## carries the sweep geometry so BoardManager can drive the zoom-in/track/
-## settle camera. Signals up, calls down — PlinkoBoard never touches the
-## camera. Naming pair matches the lifecycle: `_starting` (prepare,
-## suppression flag) → `_sweep_started` (commit, with payload).
+## Add-rows juice. `_starting` fires before build_board so BoardManager can
+## suppress the default fit-tween; `_sweep_started` carries the sweep geometry
+## for its camera. Signals up, calls down — the board never moves the camera.
 signal row_upgrade_starting
 signal row_upgrade_sweep_started(start_local_x: float, end_local_x: float, focus_local_y: float, sweep_duration: float)
 
@@ -296,6 +275,7 @@ func _on_drum_tier_expired(tier: int) -> void:
 				bucket.mark_stop_singing()
 				_singing_positions.erase(_bucket_position_key(bucket.position.x + buckets_container.position.x))
 
+# ── Setup ─────────────────────────────────────────────────────────────────────
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
@@ -343,6 +323,7 @@ func setup(type: Enums.BoardType) -> void:
 	_deflector_editor.set_capacity(get_deflector_cap())
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
 
+# ── Drop bars, labels + tooltips ──────────────────────────────────────────────
 
 func _setup_drop_bars() -> void:
 	var t: VisualTheme = ThemeProvider.theme
@@ -531,11 +512,9 @@ func _format_missing_cost_text(costs: Array) -> String:
 enum NeedsTooltipAction { SHOW, HIDE, KEEP }
 
 
-## Decides what to do with a drop button's persistent "Needs X" tooltip.
-## Cooldown is deliberately NOT a factor — if the player can't afford a drop the
-## warning stays put steadily while the drop timer cycles (otherwise it flickers
-## once per drop). KEEP means the button is hovered, so its hover handler owns
-## the tooltip (showing cost) and the refresh must not clobber it.
+## What to do with a drop button's persistent "Needs X" tooltip. Cooldown is
+## deliberately not a factor, or the warning flickers once per drop cycle.
+## KEEP means the button is hovered and its hover handler owns the tooltip.
 func _needs_tooltip_action(affordable: bool, hovered: bool) -> NeedsTooltipAction:
 	if hovered:
 		return NeedsTooltipAction.KEEP
@@ -561,6 +540,7 @@ func _apply_needs_tooltip(tooltip: Tooltip, costs: Array, hovered: bool) -> void
 		NeedsTooltipAction.KEEP:
 			pass
 
+# ── Per-frame ─────────────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
 	if is_waiting:
@@ -627,6 +607,7 @@ func _is_hold_to_drop_advanced_active() -> bool:
 		and drop_section.visible \
 		and _drop_advanced_column.visible
 
+# ── Coin rendering ────────────────────────────────────────────────────────────
 
 ## Toggles every coin on this board (in-flight, queued, prestige). Pegs and
 ## buckets stay visible. Used by BoardManager to hide inactive boards' coins.
@@ -650,6 +631,7 @@ func _on_coin_tree_exiting(coin: Coin) -> void:
 func has_in_flight_coins() -> bool:
 	return not _coin_pool.is_idle()
 
+# ── Dropping ──────────────────────────────────────────────────────────────────
 
 func request_drop(costs: Array = [], coin_type: int = -1, is_manual: bool = true) -> void:
 	if drop_blocked.is_valid() and drop_blocked.call():
@@ -811,6 +793,7 @@ func _try_emit_drop_burst(drop_coin_type: Enums.CurrencyType) -> void:
 	var local_pos := Vector3(0, vertical_spacing + 0.2, 0)
 	_burst_field.spawn_burst(local_pos, t.get_coin_color(drop_coin_type), t)
 
+# ── Drop timer + rate ─────────────────────────────────────────────────────────
 
 ## Radial burst of small quads scattering outward in the board's XY plane.
 func _drop_from_queue() -> void:
@@ -842,13 +825,9 @@ func _queue_rate_bonus_for_board(type: Enums.BoardType) -> float:
 		+ ChallengeProgressManager.get_queue_rate_bonus_count() * QUEUE_RATE_BONUS_PER_UNLOCK
 
 
-## Drop delay after applying the queue's rate bonus. Each EXTRA queued coin past
-## the always-present first slot adds _queue_rate_bonus_per_coin (base + earned
-## QUEUE_RATE_BONUS challenge rewards, gold only) to the effective rate
-## (rate = 1/delay), which is equivalent to dividing the delay by
-## (1 + bonus * max(0, count - 1)). The first slot is "free" so a single queued
-## coin keeps the base cadence. Naturally bounded — delay shrinks but never
-## reaches zero.
+## Drop delay with the queue rate bonus applied. Each queued coin past the first
+## adds to the rate, so delay = base / (1 + bonus * extra) — shrinks but never
+## reaches zero. The first slot is free, keeping a single coin at base cadence.
 func get_effective_drop_delay() -> float:
 	if coin_queue == null:
 		return drop_delay
@@ -988,6 +967,7 @@ func _update_drop_fill() -> void:
 
 	_refresh_needs_tooltips()
 
+# ── Landing ───────────────────────────────────────────────────────────────────
 
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
@@ -1023,12 +1003,9 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	var num_buckets: int = buckets_container.get_child_count()
 	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
-	# Suppress all bucket audio during the upgrade ripple — the ripple owns the arpeggio.
-	# Repeat hits route to the lower-priority queue and play softer per concurrent
-	# active drone for the bucket (see AudioManager.REPEAT_ATTENUATION_DB / CAP).
-	# Visual singing is gated on the audio request being accepted so an inactive or
-	# silenced board doesn't visually mark its buckets (would resurface via
-	# _singing_positions on board switch-back).
+	# The ripple owns the arpeggio, so bucket audio is suppressed while it runs.
+	# Visual singing is gated on the audio request being accepted — otherwise a
+	# silenced board marks buckets that resurface on switch-back.
 	if not _upgrade_animating:
 		var accepted: bool = AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced, was_already_singing)
 		if accepted and not was_already_singing:
@@ -1057,12 +1034,9 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 ## Called when a coin starts its final bounce and we can predict which bucket it will land in.
 ## If this landing would trigger a prestige, emit prestige_coin_landed so the animator can take over.
 func _on_final_bounce_started(coin: Coin, predicted_bucket: Bucket) -> void:
-	# Mutually exclusive beats, all keyed off "this coin completes the board"
-	# (reaches 500 of the board's primary currency):
-	#  - 1st completion (next board can still prestige) -> PRESTIGE.
-	#  - 2nd completion (already prestiged, caps not yet revealed) -> unlock the
-	#    next board + reveal cap "+" buttons.
-	#  - forbidden landing is orthogonal (challenge bucket marking).
+	# Mutually exclusive beats, keyed off "this coin completes the board":
+	# 1st completion -> prestige. 2nd -> unlock next board + reveal cap buttons.
+	# Forbidden landing is orthogonal (challenge bucket marking).
 	if _will_trigger_prestige_completion(coin, predicted_bucket):
 		prestige_coin_landed.emit(coin, predicted_bucket)
 	elif _will_reveal_cap_raise_completion(coin, predicted_bucket):
@@ -1144,17 +1118,16 @@ func _will_reveal_cap_raise_completion(coin: Coin, predicted_bucket: Bucket) -> 
 	return not UpgradeManager.is_cap_raise_available(board_type)
 
 
-## True when this final bounce will land in a still-living forbidden bucket —
-## the trigger for the ForbiddenBucketRevealAnimator zoom. The visible check
-## makes the zoom one-shot per bucket-instance for free: once a forbidden bucket
-## is detonated, the bucket is invisible (fell off), so a later coin routed
-## toward its now-voided column won't re-trigger the zoom.
+## True when this bounce lands in a still-living forbidden bucket (the zoom
+## trigger). The visible check makes it one-shot: a detonated bucket has fallen
+## away, so a later coin down its voided column can't re-trigger.
 func _will_reveal_forbidden_landing(predicted_bucket: Bucket) -> bool:
 	if not is_instance_valid(predicted_bucket) or not predicted_bucket.visible:
 		return false
 	var idx: int = _get_bucket_index(predicted_bucket)
 	return _bucket_markings.get(idx, &"") == &"forbidden"
 
+# ── Buckets + markings ────────────────────────────────────────────────────────
 
 func _get_bucket_index(bucket: Bucket) -> int:
 	var children := buckets_container.get_children()
@@ -1248,6 +1221,7 @@ func clear_all_markings() -> void:
 	_destroyed_bucket_indices.clear()
 	_active_bomb_multipliers.clear()
 
+# ── Gameplay target ───────────────────────────────────────────────────────────
 
 ## Gameplay target: picks a new random bucket, avoiding the current one.
 ## Picker delegates to WanderingBucketSelector — shared with BombHazardRuntime
@@ -1300,6 +1274,7 @@ func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0, show_burst: bo
 	if show_burst:
 		_try_emit_drop_burst(type)
 
+# ── Level rewards ─────────────────────────────────────────────────────────────
 
 func _on_rewards_claimed(level: int, rewards: Array[RewardData]) -> void:
 	for reward in rewards:
@@ -1359,18 +1334,10 @@ func _show_advanced_drop_bar() -> void:
 		_setup_autodropper_buttons(adv_id)
 
 
-# ---------------------------------------------------------------------------
-# Lattice model + deflectors
-#
-# The board is a triangular Galton lattice. A coin's position is the integer
-# cell (row, col): row 0 has one peg (col 0); row r has r+1 pegs (col 0..r).
-# Moving RIGHT off (row, col) lands on (row+1, col+1); LEFT lands on (row+1,
-# col). The geometry lives in the shared Lattice module; these methods are thin
-# forwarders so build_board(), the Coin, and the decorative MenuBoard all go
-# through the ONE mapping and can't drift against each other. (flash_nearest_peg
-# is intentionally separate: it answers "nearest rendered peg to a mid-bounce
-# position", a different question.)
-# ---------------------------------------------------------------------------
+# ── Lattice geometry + deflector vocabulary ───────────────────────────────────
+# Triangular Galton lattice: row r has r+1 pegs. RIGHT off (row, col) lands on
+# (row+1, col+1); LEFT on (row+1, col). These forward to the shared Lattice so
+# build_board, Coin and MenuBoard share one mapping and can't drift.
 
 ## Y of a coin resting on a peg row, slightly above the peg centres. Matches the
 ## historical bounce arithmetic (coin spawns at vertical_spacing + 0.2, start()
@@ -1415,22 +1382,12 @@ func next_lattice_cell(row: int, col: int, direction: int) -> Vector2i:
 	return Lattice.next_cell(row, col, direction)
 
 
-# ── Voided columns (bomb-hazard "saw-off-the-limb" fallout) ───────
-# Vocabulary used throughout this section:
-#   • detonate — the event (BombHazardRuntime calls void_column)
-#   • void     — the state (`_voided_columns`, `is_column_voided`, `column_voided`)
-#   • cut      — the geometry (`cell_in_cut`, `peg_indices_on_cut`, `bomb_cut_side`)
+# ── Voided columns (bomb "saw-off-the-limb" fallout) ──────────────────────────
+# Vocabulary: detonate = the event, void = the state, cut = the geometry.
 #
-# When a bomb detonates at bucket B, the cut runs from the bomb through the
-# nearer board edge: every bucket and peg with world-x on that side of B
-# (including B's own column) falls away. CENTER bombs (only on odd-bucket-
-# count boards) take the whole board down. The surviving buckets are always
-# a contiguous range bounded by the cuts from previous detonations.
-#
-# State lives in `_voided_columns` (PackedInt32Array of voided bucket indices).
-# Voids persist across build_board() rebuilds (e.g. add_two_rows mid-challenge)
-# — only `clear_all_markings` resets them, which the tracker calls on challenge
-# end.
+# A bomb at bucket B saws off everything between B and the nearer edge (B
+# included); a CENTER bomb takes the whole board. Survivors stay contiguous.
+# Voids persist across rebuilds — only clear_all_markings resets them.
 
 ## Return values of `bomb_cut_side` — named so callers branching on the
 ## result aren't reading raw -1 / 0 / +1 ints.
@@ -1531,12 +1488,8 @@ func is_column_voided(bucket_index: int) -> bool:
 func is_lattice_cell_voided(row: int, col: int) -> bool:
 	if should_fall_through(row, col, _voided_columns, num_rows):
 		return true
-	# Bucket row: an explicit "this bucket was destroyed" set is the
-	# authoritative answer. Synchronously populated by `detonate_radius`
-	# BEFORE the fall animation starts, so coins in flight during the
-	# multi-second fall see the cell as voided immediately rather than landing
-	# in a falling-but-still-scoring bucket. Avoids both the y-offset
-	# boundary case AND the mid-fall position confusion.
+	# Bucket row: detonate_radius fills this set before the fall animation, so a
+	# coin in flight can't land in a bucket that is already falling.
 	if row >= num_rows:
 		if _destroyed_bucket_indices.has(col):
 			return true
@@ -1581,11 +1534,8 @@ func get_targetable_bucket_indices() -> PackedInt32Array:
 	return out
 
 
-## Detonate bucket `bucket_index`: saw off everything on the cut side. Voids
-## buckets, destroys pegs, animates the falling limb, vaporises in-flight coins
-## inside the blast, plays the dragon explosion sound. Idempotent — if the
-## bucket was already voided we no-op (avoids double-cuts if multiple bombs
-## end up resolving at the same target across one frame).
+## Saws off everything on `bucket_index`'s cut side. Idempotent: an already-
+## voided bucket no-ops, so two bombs resolving on one frame can't double-cut.
 func void_column(bucket_index: int) -> void:
 	if is_column_voided(bucket_index):
 		return
@@ -1620,11 +1570,8 @@ func _animate_falling_pegs(indices: PackedInt32Array) -> void:
 	if not peg_field.is_built() or indices.is_empty():
 		return
 	var t: VisualTheme = ThemeProvider.theme
-	# Spawn one MeshInstance3D per peg as a falling debris copy. The originals
-	# are scale-zeroed in the MM (next call) so we don't double-render. The
-	# shader material is shared across all debris this detonation — peg colour
-	# is uniform, no per-instance tinting needed; freed via RefCounted when
-	# the last MeshInstance3D drops it.
+	# One debris copy per peg; the originals are scale-zeroed next call so we
+	# don't double-render. Material is shared - peg colour is uniform.
 	var peg_mesh: Mesh = t.make_peg_mesh()
 	var peg_mat: ShaderMaterial = t.make_peg_shader_material()
 	var fall_distance: float = vertical_spacing * (num_rows + 3) + space_between_pegs * 2.0
@@ -1741,14 +1688,8 @@ func _vaporise_coins_in_cut(bomb_index: int, side: int) -> void:
 		coin.queue_free()
 
 
-## Re-applies peg hiding for every voided column after a board rebuild. Called
-## from build_board at the end so voids persist across add_two_rows (and any
-## other mid-challenge rebuild like the advanced-bucket reward).
-##
-## Uses the same `should_fall_through` predicate that Coin queries at bounce
-## time, so the visual hide-set is guaranteed to match the gameplay cut-set —
-## no chance of pegs visible in cells that would fall a coin through, or vice
-## versa. Handles LEFT / RIGHT / CENTER cuts uniformly.
+## Re-hides voided pegs after a rebuild. Shares should_fall_through with Coin,
+## so the hidden set always matches the set coins fall through.
 func _reapply_voided_pegs() -> void:
 	if _voided_columns.is_empty():
 		return
@@ -1769,15 +1710,9 @@ func _reapply_voided_pegs() -> void:
 			bucket.visible = false
 
 
-## Detonate a circular blast centered on bucket `bucket_index`. Destroys every
-## peg + bucket inside `radius`, vaporises in-flight coins inside the blast,
-## adds the circle to `_voided_radii` so future coin paths fall through it, and
-## plays the bomb detonation SFX. Idempotent on the bucket: if the bucket is
-## already gone (re-call), no new peg/bucket animations fire because the
-## already-hidden filter rejects them, and the new radius entry is harmless.
-##
-## Pure VFX + voided-cell carve-out — does NOT end the challenge (that's the
-## hazard runtime's old behavior; we deliberately keep playing).
+## Circular blast at `bucket_index`: destroys pegs/buckets inside `radius` and
+## records the circle so later coin paths fall through it. Idempotent.
+## Does NOT end the challenge — play deliberately continues.
 func detonate_radius(bucket_index: int, radius: float) -> void:
 	if radius <= 0.0 or not buckets_container:
 		return
@@ -1806,12 +1741,8 @@ func detonate_radius(bucket_index: int, radius: float) -> void:
 		var by: float = b_offset.y + b.position.y - center.y
 		if bx * bx + by * by <= r2:
 			bucket_indices.append(i)
-	# Register voids BEFORE animating so any same-frame coin step sees them.
-	# _destroyed_bucket_indices is the authoritative "this bucket no longer
-	# scores" set — synchronously true the instant the fall starts, even though
-	# the bucket's `visible` flag doesn't flip until ~1.5s later when the fall
-	# tween completes. `is_lattice_cell_voided` checks this for the bucket row
-	# so in-flight coins targeting a falling bucket switch to void_fall.
+	# Register voids BEFORE animating: the bucket stops scoring the instant the
+	# fall starts, ~1.5s before its `visible` flag flips.
 	_voided_radii.append({"cx": center.x, "cy": center.y, "radius": radius})
 	for i in bucket_indices:
 		_destroyed_bucket_indices[i] = true
@@ -1905,6 +1836,7 @@ func predicted_bucket_index(_row: int, col: int) -> int:
 ## DeflectorOutcome) and the lattice→peg_index mapping.
 const DEFLECTOR_BASE_STRENGTH := DeflectorModel.BASE_STRENGTH
 
+# ── Deflectors ────────────────────────────────────────────────────────────────
 
 ## Static so UI (the upgrade row's "current odds") can read it without a board.
 static func deflector_bias_for_strength(s: int) -> float:
@@ -2051,6 +1983,7 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, _p_board_type: Enums
 		if _deflector_editor:
 			_deflector_editor.set_capacity(get_deflector_cap())
 
+# ── Peg queries ───────────────────────────────────────────────────────────────
 
 ## Palette source the pegs use — so the deflector remove-X (a TintedIcon)
 ## resolves to the same neutral peg color and survives theme swaps.
@@ -2127,6 +2060,7 @@ func _compute_peg_positions() -> PackedVector3Array:
 			idx += 1
 	return out
 
+# ── Building the board ────────────────────────────────────────────────────────
 
 func build_board() -> void:
 	# Kill any in-flight upgrade ripple — its bucket references become stale.
@@ -2241,13 +2175,10 @@ func get_bounds() -> Rect2:
 	var half_width := (num_rows / 2.0) * space_between_pegs + 0.5
 	return Rect2(-half_width, bottom, half_width * 2.0, top - bottom)
 
+# ── Upgrades + juice ──────────────────────────────────────────────────────────
 
-## `animated` defaults to true (the player-purchase path runs the full juice).
-## ChallengeManager._apply_starting_conditions sets it false so challenge setup
-## doesn't fire the glissando + camera sweep before the player has even seen
-## the board — the prior bug was that every `StartingBoards` row count fired
-## row_upgrade_starting/sweep, suppressing BoardManager's normal fit-tween and
-## playing audio cues during scene init.
+## `animated` false is for challenge setup, which builds rows before the player
+## has seen the board — the glissando + camera sweep must not fire there.
 func add_two_rows(animated: bool = true) -> void:
 	# Voided columns are bucket-indexed; adding two rows adds one bucket on
 	# each side, shifting every existing bucket's index by +1. Shift before
@@ -2257,14 +2188,9 @@ func add_two_rows(animated: bool = true) -> void:
 		num_rows += 2
 		build_board()
 		return
-	# Snapshot the OLD row count + container Y first — the scheduler needs the
-	# row count to identify the two new peg rows (those with row >= old_num_rows)
-	# that get hidden until the wavefront passes them, and the assert in
-	# _play_row_upgrade_glissando uses the container delta to verify the lift
-	# math against any future change to build_board's offset formula.
-	# Emit `row_upgrade_starting` BEFORE build_board so BoardManager suppresses
-	# the default fit-tween that board_rebuilt will fire mid-call; otherwise it
-	# would race the sweep camera.
+	# Snapshot the old row count + container Y before the rebuild — the scheduler
+	# needs both. Emit row_upgrade_starting BEFORE build_board so BoardManager
+	# suppresses the fit-tween that board_rebuilt would otherwise race.
 	var old_num_rows := num_rows
 	var old_container_y := buckets_container.position.y
 	row_upgrade_starting.emit()
@@ -2425,18 +2351,10 @@ func _play_bucket_value_upgrade_ripple() -> void:
 	)
 
 
-## Pure scheduler for the add-rows glissando + new-peg reveal. No scene tree,
-## no autoloads — primitives in, dictionary out (testable like get_bounds).
-##
-## A left→right wavefront drops bucket column i at step i. Each newly-added peg
-## (row in [num_rows_before, num_rows_after - 1]) is revealed on the step of the
-## bucket immediately to its left, so a peg never appears before the bucket left
-## of it starts dropping.
-##
-## start_offset = 2 * vertical_spacing: after add_two_rows the buckets_container
-## drops by 2 * vertical_spacing, so lifting each bucket's local y by that much
-## puts the new row visually at the OLD row height; the fall tween brings it
-## back to rest.
+## Pure scheduler for the add-rows glissando — primitives in, dictionary out.
+## A left-to-right wavefront drops bucket column i at step i; each new peg is
+## revealed by the bucket to its left, so pegs never appear early.
+## start_offset = 2 * vertical_spacing puts the new row at the OLD row height.
 func _compute_row_upgrade_schedule(num_rows_before: int, num_rows_after: int,
 		num_buckets: int, space: float, vert_spacing: float,
 		glissando_interval: float) -> Dictionary:
@@ -2482,13 +2400,9 @@ func _compute_row_upgrade_schedule(num_rows_before: int, num_rows_after: int,
 	}
 
 
-## Animates Add Rows as a left→right "piano glissando": the just-rebuilt bucket
-## row is pre-lifted to the OLD row height, then each column falls + bounces +
-## sings one at a time, with ascending pitch. Newly-added peg rows stay hidden
-## until the bucket to their left begins dropping. Mirrors
-## _play_bucket_value_upgrade_ripple's tween cadence and reuses
-## _upgrade_animating + _upgrade_ripple_tween (so build_board()'s kill-on-rebuild
-## handles re-trigger mid-animation for free).
+## Add Rows as a left-to-right piano glissando: buckets pre-lift to the old row
+## height, then fall + bounce + sing one column at a time, ascending. Reuses
+## _upgrade_ripple_tween so build_board's kill-on-rebuild handles re-triggers.
 func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> void:
 	_upgrade_animating = true
 	if _upgrade_ripple_tween and _upgrade_ripple_tween.is_valid():
@@ -2518,18 +2432,12 @@ func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> v
 	var start_offset: float = schedule["start_offset"]
 	var columns: Array = schedule["columns"]
 
-	# Guard the load-bearing claim that lifting buckets by `start_offset` puts
-	# them at the OLD bucket-row height. The scheduler computes `start_offset`
-	# from `vertical_spacing` alone; this assert verifies it matches the actual
-	# container Y delta produced by build_board. If build_board's offset
-	# formula ever drifts, this trips before the glissando looks wrong.
+	# The scheduler derives start_offset from vertical_spacing alone; this trips
+	# if build_board's offset formula ever drifts away from it.
 	assert(is_equal_approx(start_offset, old_container_y - buckets_container.position.y))
 
-	# Pre-stage in one frame, before the tween starts: every bucket up to the
-	# old height, every new-row peg hidden. New EDGE buckets (positions that
-	# didn't exist on the previous bucket row — always indices 0 and
-	# num_buckets-1, since each add-rows widens by exactly 2) also start
-	# invisible; they fade in during their fall.
+	# Pre-stage in one frame: buckets lifted to the old height, new pegs hidden.
+	# The two new edge buckets (always 0 and num_buckets-1) fade in as they fall.
 	var last_idx: int = num_buckets - 1
 	for i in num_buckets:
 		var b: Bucket = get_bucket(i)
@@ -2749,6 +2657,7 @@ func _on_queue_unlock_done() -> void:
 	_queue_intro_active = false
 	_update_drop_rate_text()
 
+# ── Autodroppers ──────────────────────────────────────────────────────────────
 
 func try_autodrop(is_advanced: bool) -> void:
 	# Same gate as request_drop — once a challenge is marked failed, drop_blocked
@@ -2841,11 +2750,8 @@ func get_drop_button_ids() -> Array:
 	return _drop_buttons.keys()
 
 
-## Drop button face text. Folds the assigned autodropper count into the label
-## once autodroppers are unlocked: "Drop gold • 1 auto" (• = U+2022), or just
-## "Drop gold" before then. Currency is the button's own (primary for the main
-## bar, advanced for the advanced bar). Driven DOWN by BoardManager, which owns
-## the assignment counts.
+## Drop button face text — "Drop gold - 1 auto" once autodroppers are unlocked,
+## else "Drop gold". Driven DOWN by BoardManager, which owns the counts.
 func set_drop_main_text(button_id: StringName, autodropper_count: int, autodroppers_unlocked: bool) -> void:
 	var bar: HBoxContainer = _drop_buttons.get(button_id)
 	if not bar:
@@ -2858,6 +2764,7 @@ func set_drop_main_text(button_id: StringName, autodropper_count: int, autodropp
 	else:
 		bar.update_text("Drop %s" % coin_name)
 
+# ── Save ──────────────────────────────────────────────────────────────────────
 
 ## Applies saved upgrade state to this board without going through buy logic.
 ## Permanent challenge bonuses are added on top of player-bought upgrade levels.
