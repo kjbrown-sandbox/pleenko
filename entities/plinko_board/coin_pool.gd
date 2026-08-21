@@ -4,8 +4,8 @@ extends RefCounted
 ## Renders every in-flight coin on one board as instances of a single MultiMesh.
 ##
 ## A Coin node still owns its own position and bounce logic; this only mirrors
-## that state into a mesh instance each frame, so coin count costs draw calls of
-## one. Coins that need to be drawn individually (the prestige coin, which gets
+## that state into a mesh instance each frame, so any number of coins costs one
+## draw call. Coins that need drawing individually (the prestige coin, which has
 ## its own animation) are ejected back to their own mesh.
 
 const INITIAL_CAPACITY := 64
