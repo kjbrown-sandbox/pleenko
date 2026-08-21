@@ -127,7 +127,8 @@ func get_drop_costs(board_type: Enums.BoardType) -> Array:
 
 # ── Timing ──────────────────────────────────────────────────────────
 
-func get_base_drop_delay(board_type: Enums.BoardType) -> float:
-	var idx: int = _index_of.get(board_type, 0)
+## Uniform across tiers today; takes board_type so per-tier tuning stays a
+## one-line change here rather than a call-site migration.
+func get_base_drop_delay(_board_type: Enums.BoardType) -> float:
 	return BASE_DROP_DELAY + 1
-	
+

@@ -73,8 +73,6 @@ var _singing_positions: Dictionary = {}  # _bucket_position_key(x) -> true, surv
 var _upgrade_animating: bool = false
 var _upgrade_ripple_tween: Tween
 var multi_drop_count: int = -1
-@export var hack_space: bool = false
-@export var hack_burst: int = 10 
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 # True while the mouse is hovering the respective drop button — used by the
 # tooltip refresh logic so that button's persistent "Needs X" message is
@@ -112,11 +110,9 @@ var _peg_basis: Basis
 var _active_flashes: Dictionary = {}  # peg_index -> { start_color: Color, elapsed: float, duration: float }
 var _active_peg_pulses: Dictionary = {}  # peg_index -> { elapsed: float, duration: float }
 
-# Player-placed deflectors. Key is peg_index(row, col); value is an
-# Enums.Direction (+1 right / -1 left) the coin is forced toward at that peg.
-# Owned here (the model); the DeflectorEditor child is a pure view+input node.
+# Player-placed deflectors. The DeflectorEditor child is a pure view+input node.
 # Lives only in the BoardManager save blob — cleared on prestige reset.
-var _deflectors: Dictionary = {}  # peg_index: int -> dir: int (Enums.Direction)
+var _deflectors := DeflectorModel.new()
 var _deflector_editor: DeflectorEditor
 
 ## Purely-visual drop gate beneath the spawn (opens/closes per drop). Placement
@@ -238,6 +234,11 @@ const HOLD_DROP_INTERVAL: float = 0.1
 # Primed at HOLD_DROP_INTERVAL so the first frame of a fresh hold fires
 # immediately rather than waiting an interval.
 var _hold_drop_accumulator: float = HOLD_DROP_INTERVAL
+
+func _init() -> void:
+	_deflectors.cap_fn = get_deflector_cap
+	_deflectors.placed_total_fn = _global_deflectors_placed
+
 
 func _ready() -> void:
 	space_between_pegs = ThemeProvider.theme.space_between_pegs
@@ -573,12 +574,6 @@ func _apply_needs_tooltip(tooltip: Tooltip, costs: Array, hovered: bool) -> void
 
 
 func _process(delta: float) -> void:
-	# TEMP: performance test — spam coins while holding spacebar
-	if hack_space and Input.is_action_pressed("drop_coin") and drop_section.visible:
-		for i in hack_burst:
-			is_waiting = false
-			_drop_timer_remaining = 0.0
-			request_drop()
 	if is_waiting:
 		_drop_timer_remaining = maxf(0.0, _drop_timer_remaining - delta)
 		_update_drop_fill()
@@ -2192,68 +2187,45 @@ func predicted_bucket_index(_row: int, col: int) -> int:
 	return col
 
 
-## Base deflector strength. Strength s biases a deflected peg toward its
-## chosen direction with probability (s+1)/(s+2): s=5 → 6/7 (1 in 7 still go
-## the other way — a 1:6 split), s=6 → 7/8, … asymptotic to but never 100%
-## (deflectors *encourage*, they don't *force*). Higher strength is intended
-## to come from challenge rewards later (board-agnostic, like the slot pool).
-const DEFLECTOR_BASE_STRENGTH := 5
+## Deflector rules + state live in DeflectorModel; these are the board-facing
+## forwards. The board keeps the public vocabulary (ClickAction /
+## DeflectorOutcome) and the lattice→peg_index mapping.
+const DEFLECTOR_BASE_STRENGTH := DeflectorModel.BASE_STRENGTH
 
 
-## Single source of truth for strength → bias. Static so UI (the upgrade row's
-## "current odds") can read it without a board instance.
+## Static so UI (the upgrade row's "current odds") can read it without a board.
 static func deflector_bias_for_strength(s: int) -> float:
-	return float(s + 1) / float(s + 2)
+	return DeflectorModel.bias_for_strength(s)
 
 
 func get_deflector_strength() -> int:
 	return DEFLECTOR_BASE_STRENGTH
 
 
-## Probability a deflected coin actually follows its deflector's direction.
 func _deflector_bias() -> float:
-	return deflector_bias_for_strength(get_deflector_strength())
+	return _deflectors.bias()
 
 
-## Legacy 50/50 pick — bit-identical to the old `1 if randf() < 0.5 else -1`.
 func _random_dir(roll: float) -> int:
-	return Enums.Direction.RIGHT if roll < 0.5 else Enums.Direction.LEFT
+	return DeflectorModel.random_dir(roll)
 
 
-## The direction a coin leaves peg (row, col): a deflector *encourages* its
-## direction (followed with probability _deflector_bias(), else the opposite);
-## otherwise `roll` gives the legacy 50/50 pick. Bit-identical to the old
-## `1 if randf() < 0.5 else -1` when no deflector is present.
 func resolve_bounce_direction(row: int, col: int, roll: float) -> int:
-	if _deflectors.is_empty():
-		return _random_dir(roll)
-	var idx := peg_index(row, col)
-	if _deflectors.has(idx):
-		var d: int = _deflectors[idx]
-		return d if roll < _deflector_bias() else -d
-	return _random_dir(roll)
+	return _deflectors.resolve_bounce(peg_index(row, col), roll)
 
 
-## Did the coin follow or fight the deflector at cell (row, col)? Pure query —
-## reads _deflectors only, no RNG, no side effects. `direction` is the already
-## resolved bounce direction (an Enums.Direction); this just compares it to the
-## stored deflector dir, so resolve_bounce_direction stays bit-identical and the
-## trajectory tests are unaffected. NONE when this peg has no deflector.
+## Did the coin follow or fight the deflector at (row, col)? Pure query — no RNG,
+## no side effects. `direction` is the already-resolved bounce direction.
 func deflector_outcome(row: int, col: int, direction: int) -> DeflectorOutcome:
-	if _deflectors.is_empty():
+	var d := _deflectors.dir_of(peg_index(row, col))
+	if d == 0:
 		return DeflectorOutcome.NONE
-	var idx := peg_index(row, col)
-	if not _deflectors.has(idx):
-		return DeflectorOutcome.NONE
-	return DeflectorOutcome.FOLLOWED if _deflectors[idx] == direction \
-		else DeflectorOutcome.MISSED
+	return DeflectorOutcome.FOLLOWED if d == direction else DeflectorOutcome.MISSED
 
 
-## Event hook (called DOWN by Coin alongside flash_nearest_peg, before its cell
-## reassignment): the coin's deflector interaction at (row, col) is decided —
-## drive the reaction VFX. Fire-and-forget and a safe no-op when no deflector
-## editor exists (bare test boards) or this peg has no deflector. Pure view:
-## never mutates _deflectors and never saves.
+## Event hook (called DOWN by Coin alongside flash_nearest_peg): the deflector
+## interaction at (row, col) is decided — drive the reaction VFX. Pure view;
+## a safe no-op when there is no editor (bare test boards).
 func notify_deflector_resolved(row: int, col: int, direction: int) -> void:
 	if not _deflector_editor:
 		return
@@ -2273,15 +2245,15 @@ func get_deflector_cap() -> int:
 
 
 func deflector_count() -> int:
-	return _deflectors.size()
+	return _deflectors.count()
 
 
-## Total deflectors placed across every board (BoardManager-provided), or this
-## board's own count when the query is unset (bare tests / single board).
+## Deflectors placed across every board (BoardManager-provided), or this board's
+## own count when the query is unset (bare tests / single board).
 func _global_deflectors_placed() -> int:
 	if deflector_total_query.is_valid():
 		return deflector_total_query.call()
-	return _deflectors.size()
+	return _deflectors.count()
 
 
 func has_deflector(peg_idx: int) -> bool:
@@ -2293,59 +2265,33 @@ func get_deflector_keys() -> Array:
 
 
 func get_deflector_dir(peg_idx: int) -> int:
-	return _deflectors.get(peg_idx, 0)
+	return _deflectors.dir_of(peg_idx)
 
 
-## Place (or re-aim) a deflector. Rejected only when it would exceed the slot
-## cap (re-aiming an existing peg never consumes a new slot).
 func place_deflector(peg_idx: int, dir: int) -> bool:
-	if not _deflectors.has(peg_idx) and _global_deflectors_placed() >= get_deflector_cap():
-		return false
-	_deflectors[peg_idx] = dir
-	return true
+	return _deflectors.place(peg_idx, dir)
 
 
 func remove_deflector(peg_idx: int) -> void:
-	_deflectors.erase(peg_idx)
+	_deflectors.remove(peg_idx)
 
 
 ## Pure click→intent decision (testable without the editor/raycast).
-func resolve_click_action(peg_idx: int) -> int:
+func resolve_click_action(peg_idx: int) -> ClickAction:
 	if _deflectors.has(peg_idx):
 		return ClickAction.REMOVE
-	if _global_deflectors_placed() < get_deflector_cap():
-		return ClickAction.PLACE
-	return ClickAction.IGNORE
+	return ClickAction.PLACE if _deflectors.can_place(peg_idx) else ClickAction.IGNORE
 
 
 func serialize_deflectors() -> Array:
-	var out: Array = []
-	for idx in _deflectors:
-		out.append({"peg": idx, "dir": _deflectors[idx]})
-	return out
+	return _deflectors.serialize()
 
 
-## Pure restore — drops entries off the current grid or beyond the slot cap.
-## Safe to call on a bare board (does NOT touch build_board / scene nodes).
+## Safe on a bare board — does NOT touch build_board / scene nodes.
 func restore_deflectors(raw: Array) -> void:
-	_deflectors.clear()
 	@warning_ignore("integer_division")
 	var total_pegs: int = num_rows * (num_rows + 1) / 2
-	var cap: int = get_deflector_cap()
-	for entry in raw:
-		if not (entry is Dictionary):
-			continue
-		var idx: int = int(entry.get("peg", -1))
-		var dir: int = int(entry.get("dir", 0))
-		if idx < 0 or idx >= total_pegs:
-			continue
-		if dir != Enums.Direction.LEFT and dir != Enums.Direction.RIGHT:
-			continue
-		# Global cap (boards restore sequentially; deflector_total_query already
-		# wired) — same invariant place_deflector/resolve_click_action enforce.
-		if _global_deflectors_placed() >= cap:
-			break
-		_deflectors[idx] = dir
+	_deflectors.restore(raw, total_pegs)
 
 
 ## Editor → board intent (signals up, calls down). dir 0 removes; ±1 places.
