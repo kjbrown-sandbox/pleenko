@@ -1557,7 +1557,8 @@ func void_column(bucket_index: int) -> void:
 	# on the bomb bucket — the limb falls as a single piece.
 	var peg_indices: PackedInt32Array = peg_indices_on_cut(bucket_index, num_rows)
 	_animate_falling_pegs(peg_indices)
-	peg_field.hide_pegs(peg_indices)
+	if peg_field:
+		peg_field.hide_pegs(peg_indices)
 	_animate_falling_buckets(truly_new)
 	_vaporise_coins_in_cut(bucket_index, side)
 	_play_column_detonation_vfx(bucket_index)
@@ -1567,7 +1568,7 @@ func void_column(bucket_index: int) -> void:
 
 
 func _animate_falling_pegs(indices: PackedInt32Array) -> void:
-	if not peg_field.is_built() or indices.is_empty():
+	if not peg_field or not peg_field.is_built() or indices.is_empty():
 		return
 	var t: VisualTheme = ThemeProvider.theme
 	# One debris copy per peg; the originals are scale-zeroed next call so we
@@ -1632,6 +1633,8 @@ func _animate_falling_buckets(bucket_indices: PackedInt32Array) -> void:
 ## spawn API — fire-and-forget pooled particles already battle-tested for the
 ## landing burst.
 func _spawn_destruction_particles(indices: PackedInt32Array) -> void:
+	if not peg_field:
+		return
 	if not _coin_burst_field:
 		return
 	var t: VisualTheme = ThemeProvider.theme
@@ -1992,7 +1995,7 @@ func get_peg_palette_source() -> VisualTheme.Palette:
 
 
 func get_peg_local_position(idx: int) -> Vector3:
-	if idx < 0 or idx >= peg_field.count():
+	if not peg_field or idx < 0 or idx >= peg_field.count():
 		return Vector3.ZERO
 	return peg_field.position_of(idx)
 
@@ -2015,12 +2018,12 @@ func get_pooled_coins() -> Array:
 ## Peg MultiMesh, or null before the board is built. Read by PrestigeVfx to
 ## cache and restore per-instance colours.
 func get_peg_multimesh() -> MultiMesh:
-	return peg_field.multimesh()
+	return peg_field.multimesh() if peg_field else null
 
 
 func get_center_peg_screen_position() -> Vector2:
 	var cam := get_active_camera()
-	if cam == null or peg_field.count() == 0:
+	if cam == null or not peg_field or peg_field.count() == 0:
 		return Vector2.ZERO
 	return cam.unproject_position(
 		to_global(get_peg_local_position(get_center_peg_index())))
@@ -2035,7 +2038,7 @@ func start_deflector_center_hint() -> void:
 
 ## Used by the DeflectorEditor for hover/click, never on the coin hot path.
 func nearest_peg_index_to_local(local_pos: Vector3, max_dist: float) -> int:
-	return peg_field.nearest_to(local_pos, max_dist)
+	return peg_field.nearest_to(local_pos, max_dist) if peg_field else -1
 
 
 func get_nearest_bucket(x_position: float) -> Bucket:
@@ -2500,6 +2503,8 @@ func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> v
 
 ## Hides every new-row peg until its column's step in the glissando reveals it.
 func _set_new_pegs_hidden(columns: Array) -> void:
+	if not peg_field:
+		return
 	for col_data in columns:
 		peg_field.hide_pegs(col_data["reveal_peg_indices"])
 
@@ -2564,7 +2569,7 @@ func _show_multi_drop_label(count: int) -> void:
 # not snapped to a peg, so it must tolerate the bounce arc. Kept separate from
 # the deflector lookup on purpose — they answer different questions.
 func flash_nearest_peg(coin_pos: Vector3, currency_type: int) -> void:
-	if peg_field.count() == 0 or not AudioManager.is_active_board(board_type):
+	if not peg_field or peg_field.count() == 0 or not AudioManager.is_active_board(board_type):
 		return
 	var idx := peg_field.nearest_to(to_local(coin_pos), space_between_pegs * 0.8)
 	if idx < 0:
