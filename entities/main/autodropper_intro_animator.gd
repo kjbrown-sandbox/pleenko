@@ -79,55 +79,14 @@ func _find_gold_board() -> PlinkoBoard:
 func _spawn_particles(source: Vector2, target: Vector2) -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var color: Color = t.get_coin_color(Enums.CurrencyType.GOLD_COIN)
-	var particles: Array[ColorRect] = []
+	var particles := VfxUtils.burst_particles(
+		_particle_overlay, t.level_up_particle_count, color, func(_i: int) -> Vector2: return source)
 
-	# Phase 1: Burst upward from the source position.
-	for i in t.level_up_particle_count:
-		var particle := ColorRect.new()
-		particle.size = Vector2(6, 6)
-		particle.color = color
-		particle.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		particle.position = source
-		_particle_overlay.add_child(particle)
-		particles.append(particle)
-
-		var scatter_x: float = source.x + randf_range(-60.0, 60.0)
-		var scatter_y: float = source.y - randf_range(80.0, 200.0)
-		var burst_duration: float = t.level_up_particle_burst_duration * randf_range(0.7, 1.0)
-
-		var tween := particle.create_tween()
-		tween.tween_property(particle, "position", Vector2(scatter_x, scatter_y), burst_duration) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-
-	# Phase 2: After burst, swoop all particles toward the drop button.
 	var swoop_timer := get_tree().create_timer(t.level_up_particle_burst_duration)
-	swoop_timer.timeout.connect(func():
-		_swoop_particles(particles, target)
+	swoop_timer.timeout.connect(func() -> void:
+		VfxUtils.swoop_particles(
+			particles, func(_i: int) -> Vector2: return target, _on_all_particles_arrived)
 	)
-
-
-func _swoop_particles(particles: Array[ColorRect], target: Vector2) -> void:
-	var t: VisualTheme = ThemeProvider.theme
-	var arrived := [0]
-	var total := particles.size()
-
-	for particle in particles:
-		if not is_instance_valid(particle):
-			arrived[0] += 1
-			if arrived[0] >= total:
-				_on_all_particles_arrived()
-			continue
-
-		var swoop_duration: float = t.level_up_particle_swoop_duration * randf_range(0.8, 1.2)
-		var tween := particle.create_tween()
-		tween.tween_property(particle, "position", target, swoop_duration) \
-			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		tween.tween_callback(func():
-			particle.queue_free()
-			arrived[0] += 1
-			if arrived[0] >= total:
-				_on_all_particles_arrived()
-		)
 
 
 func _on_all_particles_arrived() -> void:

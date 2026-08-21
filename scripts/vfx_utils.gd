@@ -68,3 +68,85 @@ static func _spawn_single_ring(
 	tween.tween_method(func(r: float): mat.set_shader_parameter("radius", r), 0.0, 1.5, duration) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	tween.tween_callback(canvas.queue_free)
+
+
+# ── Burst-and-swoop particles ─────────────────────────────────────────────────
+# Two-phase sparkle flight: particles burst upward from a source, then swoop to
+# a target. Used by the first-time intro animators and the milestone bar. Split
+# into three steps so each caller keeps its own policy for what happens between
+# and after the phases.
+
+## Particle edge length, in pixels.
+const BURST_PARTICLE_SIZE := Vector2(6, 6)
+## Horizontal scatter and upward travel of the burst phase.
+const BURST_SCATTER_X := 60.0
+const BURST_RISE_MIN := 80.0
+const BURST_RISE_MAX := 200.0
+
+
+## Phase 1 — spawns `count` particles into `overlay` and bursts them upward.
+## `start_fn(i) -> Vector2` gives each particle's global start position.
+## Returns the particles so a later swoop/fade can drive them.
+static func burst_particles(overlay: Control, count: int, color: Color,
+		start_fn: Callable) -> Array[ColorRect]:
+	var t: VisualTheme = ThemeProvider.theme
+	var particles: Array[ColorRect] = []
+
+	for i in count:
+		var start: Vector2 = start_fn.call(i)
+		var particle := ColorRect.new()
+		particle.size = BURST_PARTICLE_SIZE
+		particle.color = color
+		particle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		particle.position = start
+		overlay.add_child(particle)
+		particles.append(particle)
+
+		var scattered := Vector2(
+			start.x + randf_range(-BURST_SCATTER_X, BURST_SCATTER_X),
+			start.y - randf_range(BURST_RISE_MIN, BURST_RISE_MAX))
+		var tween := particle.create_tween()
+		tween.tween_property(particle, "position", scattered,
+			t.level_up_particle_burst_duration * randf_range(0.7, 1.0)) 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+	return particles
+
+
+## Phase 2 — swoops each particle to `target_fn(i)` and frees it on arrival.
+## `on_all_arrived` fires once every particle has landed; particles already
+## freed count as arrived, so the callback can't be stranded. Callers guard
+## against re-entry themselves.
+static func swoop_particles(particles: Array[ColorRect], target_fn: Callable,
+		on_all_arrived: Callable) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	var arrived := [0]
+	var total := particles.size()
+
+	var count_one := func() -> void:
+		arrived[0] += 1
+		if arrived[0] >= total:
+			on_all_arrived.call()
+
+	for i in particles.size():
+		var particle := particles[i]
+		if not is_instance_valid(particle):
+			count_one.call()
+			continue
+
+		var tween := particle.create_tween()
+		tween.tween_property(particle, "position", target_fn.call(i),
+			t.level_up_particle_swoop_duration * randf_range(0.8, 1.2)) 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.tween_callback(func() -> void:
+			particle.queue_free()
+			count_one.call()
+		)
+
+
+## Alternative phase 2 — fades the particles out where they are.
+static func fade_particles(particles: Array[ColorRect], duration: float) -> void:
+	for particle in particles:
+		if not is_instance_valid(particle):
+			continue
+		var tween := particle.create_tween()
+		tween.tween_property(particle, "modulate:a", 0.0, duration) 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.tween_callback(particle.queue_free)

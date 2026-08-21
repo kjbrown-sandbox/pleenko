@@ -84,47 +84,18 @@ func _spawn_rate_intro_particles(source: Vector2, target: Vector2, color: Color,
 	_rate_intro_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_rate_intro_overlay)
 
-	var particles: Array[ColorRect] = []
-	for i in t.level_up_particle_count:
-		var particle := ColorRect.new()
-		particle.size = Vector2(6, 6)
-		particle.color = color
-		particle.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		particle.position = source
-		_rate_intro_overlay.add_child(particle)
-		particles.append(particle)
-
-		var scatter := source + Vector2(randf_range(-60.0, 60.0), -randf_range(80.0, 200.0))
-		var burst_duration: float = t.level_up_particle_burst_duration * randf_range(0.7, 1.0)
-		var tween := particle.create_tween()
-		tween.tween_property(particle, "position", scatter, burst_duration) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	var particles := VfxUtils.burst_particles(
+		_rate_intro_overlay, t.level_up_particle_count, color,
+		func(_i: int) -> Vector2: return source)
 
 	# After the burst, swoop everything to the new queue slot.
 	var swoop_timer := get_tree().create_timer(t.level_up_particle_burst_duration)
-	swoop_timer.timeout.connect(func(): _swoop_rate_intro_particles(particles, target, new_text, on_done))
-
-
-func _swoop_rate_intro_particles(particles: Array[ColorRect], target: Vector2, new_text: String, on_done: Callable) -> void:
-	var t: VisualTheme = ThemeProvider.theme
-	var arrived := [0]
-	var total := particles.size()
-	for particle in particles:
-		if not is_instance_valid(particle):
-			arrived[0] += 1
-			if arrived[0] >= total:
-				_on_rate_intro_arrived(new_text, on_done)
-			continue
-		var swoop_duration: float = t.level_up_particle_swoop_duration * randf_range(0.8, 1.2)
-		var tween := particle.create_tween()
-		tween.tween_property(particle, "position", target, swoop_duration) \
-			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		tween.tween_callback(func():
-			particle.queue_free()
-			arrived[0] += 1
-			if arrived[0] >= total:
-				_on_rate_intro_arrived(new_text, on_done)
-		)
+	swoop_timer.timeout.connect(func() -> void:
+		VfxUtils.swoop_particles(
+			particles,
+			func(_i: int) -> Vector2: return target,
+			func() -> void: _on_rate_intro_arrived(new_text, on_done))
+	)
 
 
 ## Once every particle lands (guarded against the per-particle callback race),

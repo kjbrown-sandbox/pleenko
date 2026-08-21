@@ -1076,34 +1076,15 @@ func _spawn_bar_explosion(targets: Array[Vector2]) -> void:
 
 func _spawn_particles_with_swoop(targets: Array[Vector2]) -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	# Milestone particles match the bar color (not the currency tint).
-	var color: Color = t.normal_text_color
+	# Milestone particles match the bar color, not the currency tint.
 	var bar_global: Vector2 = segments_hbox.global_position
 	var bar_width: float = segments_hbox.size.x
-	var particles: Array[ColorRect] = []
-
-	for i in t.level_up_particle_count:
-		var particle := ColorRect.new()
-		particle.size = Vector2(6, 6)
-		particle.color = color
-		particle.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-		var start_x: float = bar_global.x + randf() * bar_width
-		var start_y: float = bar_global.y
-		particle.position = Vector2(start_x, start_y)
-		_particle_overlay.add_child(particle)
-		particles.append(particle)
-
-		var scatter_x: float = start_x + randf_range(-60.0, 60.0)
-		var scatter_y: float = start_y - randf_range(80.0, 200.0)
-		var burst_duration: float = t.level_up_particle_burst_duration * randf_range(0.7, 1.0)
-
-		var tween := particle.create_tween()
-		tween.tween_property(particle, "position", Vector2(scatter_x, scatter_y), burst_duration) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	var particles := VfxUtils.burst_particles(
+		_particle_overlay, t.level_up_particle_count, t.normal_text_color,
+		func(_i: int) -> Vector2: return Vector2(bar_global.x + randf() * bar_width, bar_global.y))
 
 	var swoop_timer := get_tree().create_timer(t.level_up_particle_burst_duration)
-	swoop_timer.timeout.connect(func():
+	swoop_timer.timeout.connect(func() -> void:
 		if targets.is_empty():
 			_fade_and_claim(particles)
 		else:
@@ -1111,40 +1092,16 @@ func _spawn_particles_with_swoop(targets: Array[Vector2]) -> void:
 	)
 
 
+## Particles are distributed round-robin across the reward targets.
 func _swoop_particles_to_targets(particles: Array[ColorRect], targets: Array[Vector2]) -> void:
-	var t: VisualTheme = ThemeProvider.theme
-	var state := [0]
-	var total := particles.size()
-
-	for i in particles.size():
-		var particle := particles[i]
-		if not is_instance_valid(particle):
-			state[0] += 1
-			if state[0] >= total:
-				LevelManager.claim_rewards()
-			continue
-
-		var target: Vector2 = targets[i % targets.size()]
-		var swoop_duration: float = t.level_up_particle_swoop_duration * randf_range(0.8, 1.2)
-
-		var tween := particle.create_tween()
-		tween.tween_property(particle, "position", target, swoop_duration) \
-			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		tween.tween_callback(func():
-			particle.queue_free()
-			state[0] += 1
-			if state[0] >= total:
-				LevelManager.claim_rewards()
-		)
+	VfxUtils.swoop_particles(
+		particles,
+		func(i: int) -> Vector2: return targets[i % targets.size()],
+		LevelManager.claim_rewards)
 
 
 func _fade_and_claim(particles: Array[ColorRect]) -> void:
-	for particle in particles:
-		if is_instance_valid(particle):
-			var tween := particle.create_tween()
-			tween.tween_property(particle, "modulate:a", 0.0, 0.4) \
-				.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-			tween.tween_callback(particle.queue_free)
+	VfxUtils.fade_particles(particles, 0.4)
 	var claim_timer := get_tree().create_timer(0.2)
 	claim_timer.timeout.connect(LevelManager.claim_rewards)
 
