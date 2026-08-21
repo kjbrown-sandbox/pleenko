@@ -59,7 +59,7 @@ Coins should calculate their path **row by row**, not all at once. This way if t
 
 - `autoloads/` — singleton managers. One subdirectory per autoload.
 - `entities/` — scenes (`.tscn` + `.gd` pairs). Each is self-contained.
-- `scripts/` — shared data classes, utilities (enums, reward/tier data, format utils, offline earnings, `lattice.gd` Galton-lattice geometry).
+- `scripts/` — shared data classes, utilities (enums, reward/tier data, format utils, offline earnings, `lattice.gd` Galton-lattice geometry, `multimesh_pool.gd` pooled-instance mechanic, `vfx_utils.gd` shockwave + burst-swoop particles).
 - `style_lab/` — `VisualTheme` resource, presets under `style_lab/presets/*.tres`, plus the in-editor style lab scene.
 - `assets/` — icons, sounds, fonts.
 
@@ -197,7 +197,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 **PlinkoBoard** — `entities/plinko_board/plinko_board.gd`
 
-- Per-board gameplay: peg + bucket multimesh rendering, coin spawning, drop queue, drop timer, per-board upgrade multipliers, bucket marking API for challenges.
+- Per-board gameplay: bucket rendering, coin spawning, drop queue, drop timer, per-board upgrade multipliers, bucket marking API for challenges. Peg rendering (`PegField`), coin instancing (`CoinPool`), particle sprays (`BurstField`) and deflector state (`DeflectorModel`) are delegated — the board keeps the lattice, the public API and the gameplay decisions.
 - Emits: `coin_dropped`, `coin_landed(board_type, bucket_index, currency_type, amount, multiplier)`, `board_rebuilt`, `autodropper_adjust_requested`, `prestige_coin_landed`, `cap_raise_coin_landed(coin, predicted_bucket)` (final-bounce start of the coin that first earns a raw currency post-prestige — `CapRaiseRevealAnimator` listens; mutually exclusive with `prestige_coin_landed` via `_will_reveal_cap_raise` / `_will_trigger_prestige`), `autodrop_failed(board_type)`, `row_upgrade_starting`, `row_upgrade_sweep_started(start_local_x, end_local_x, focus_local_y, sweep_duration)`, `bomb_spawned(board_type, bucket_index, seconds)` / `bomb_defused(board_type, bucket_index, multiplier)` / `bomb_detonated(board_type, bucket_index)` / `column_voided(board_type, bucket_index)` (bomb-hazard lifecycle; BombHazardRuntime listens to itself via its own state machine, audio + future VFX can subscribe externally).
 - Owns `_voided_columns: PackedInt32Array` (bucket indices whose strict vertical was destroyed by `void_column(idx)`) and `_active_bomb_multipliers: Dictionary` (bucket_index → defuse multiplier set by `mark_bucket_bomb(idx, multiplier)`, consumed in `finalize_coin_landing` next to the gameplay-target multiplier path). `_voided_columns` is cleared in `build_board()` — voids are per-challenge runtime state, not persistent.
 - Add-rows juice: `add_two_rows(animated := true)` is the player-purchase entry point (UpgradeSection passes default `true`; `ChallengeManager._apply_starting_conditions` passes `false` so challenge setup just rebuilds with no animation). The animated path emits `row_upgrade_starting` *before* `build_board()` so BoardManager can suppress the default fit-tween in time, then runs `_play_row_upgrade_glissando`: the pure scheduler `_compute_row_upgrade_schedule` returns per-column drop times + new-peg reveal indices; the cascade lifts every bucket up by `2*vertical_spacing` (the OLD row height) and snap-hides the two new edge buckets at indices 0 and `num_buckets-1` (positions that didn't exist on the previous row); each column step then plunges + bounces (`Bucket.fall_to_rest`), sings (`Bucket.mark_singing`), fires `AudioManager.force_play_bucket` with `degree = column index` for an ascending diatonic glissando, reveals that column's new pegs (MultiMesh per-instance transform restore), and (for the two edges only) calls `Bucket.fade_in`. Reuses `_upgrade_animating` + `_upgrade_ripple_tween` shared with the bucket-value ripple, so `build_board()`'s kill-on-rebuild handles re-trigger mid-animation for free. All tunables live in `VisualTheme` under the VFX group (`row_upgrade_*`).
@@ -210,7 +210,37 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Queue rate bonus: `get_effective_drop_delay()` returns `drop_delay / (1 + _queue_rate_bonus_per_coin * coin_queue.count)` — additive in rate, never reaches zero. `_queue_rate_bonus_per_coin` is cached in `setup()` via the pure `_queue_rate_bonus_for_board(type)`: base `QUEUE_RATE_BONUS_PER_COIN` for every board, plus `ChallengeProgressManager.get_queue_rate_bonus_count() * QUEUE_RATE_BONUS_PER_UNLOCK` on the gold board only (mirrors the `GOLD_COIN_SPEED_BOOST` → `Coin` precedent; challenge progress only changes on scene reload so the cache can't go stale). `_start_drop_timer` and `decrease_drop_delay` track `_last_effective_delay` so a queue-size change mid-cycle rescales `_drop_timer_remaining` proportionally without losing accumulated progress.
 - Per frame, `_update_queue_bonus_label_position` projects `coin_queue.global_position + coin_queue.start_position` to viewport space (using a cached `Camera3D`) and tells `DropSection` where to anchor its bonus label. Skipped when `drop_section.visible` is false.
 - Lattice math (`position_x_for`, `cell_to_world`, `next_lattice_cell`, and the `vertical_spacing = space*√3/2` derivation) forwards to the shared pure `Lattice` module (`scripts/lattice.gd`) — single source of truth shared with `Coin` and the decorative `MenuBoard`, so they can't drift. Public signatures unchanged; `cell_to_world` passes the stored `vertical_spacing`/`COIN_ROW_Y_OFFSET` in (not recomputed). `style_lab.gd`'s editor-only re-derivations are deliberately deferred (`# TODO(Lattice)`).
-- Deflectors: `_deflectors` (peg_index → ±1 dir) is the model; `DEFLECTOR_BASE_STRENGTH = 5` → bias `(s+1)/(s+2) = 6/7 ≈ 86%` (a 1:6 split — *encourage, never force*). Single source of truth: `resolve_bounce_direction` reads it live (bit-identical to the legacy 50/50 when no deflector — trajectory tests depend on this) and `UpgradeRow`'s "current odds" hover reads the static `deflector_bias_for_strength(s)`. `deflector_outcome(row, col, direction) -> DeflectorOutcome {NONE, FOLLOWED, MISSED}` is a pure RNG-free comparator over `_deflectors` (does NOT re-roll). `notify_deflector_resolved(row, col, direction)` is a pure-view event hook called DOWN by `Coin` that dispatches FOLLOWED/MISSED to `_deflector_editor.play_deflector_hit/miss`; safe no-op when no editor (bare test boards), never mutates the model, never saves.
+- Deflectors: `_deflectors` is a `DeflectorModel` (see below); the board keeps the `ClickAction` / `DeflectorOutcome` vocabulary and the lattice→peg_index mapping, and forwards every public deflector method to the model.
+
+**PegField** — `entities/plinko_board/peg_field.gd` (`class_name PegField`, script on `PlinkoBoard`'s `Pegs` node)
+
+- Owns every peg on one board: the MultiMesh, positions, base colour, mesh basis, and the contact VFX (colour flash, scale pulse, glow halo, sparkle ring).
+- Pegs stay purely visual. The board computes lattice positions and hands them down via `build(positions, theme)`; PegField never decides where a coin goes.
+- Flash/pulse run on its own `_process`, gated by `set_process` so an idle board costs nothing. Manual delta loops rather than per-peg Tweens — many pegs light at once.
+- Sits at the board's origin, so peg coordinates are board-local either way.
+- **Invariant:** a bare `PlinkoBoard.new()` (unit tests) never enters the tree, so `peg_field` is null there. Board-side callers guard on it; `void_column` still records the void and only skips the visuals.
+
+**CoinPool** — `entities/plinko_board/coin_pool.gd` (`class_name CoinPool`)
+
+- Draws every in-flight coin on one board as instances of a single MultiMesh, so coin count costs one draw call. A `Coin` node still owns its own position and bounce logic; the pool only mirrors that state each frame and applies the impact squash.
+- `eject(coin)` hands a coin back to its own mesh — used by the prestige handover, which animates one coin individually.
+- Grows by doubling when full. Read by `PrestigeVfx` through `PlinkoBoard.get_pooled_coins()`.
+
+**BurstField** — `entities/plinko_board/burst_field.gd` (`class_name BurstField`)
+
+- The board's three particle sprays — drop burst, bucket-upgrade ripple, edge splash — over one pooled MultiMesh and one update loop. They differ only in how they aim.
+- Motion is analytic (lerp + eased alpha), never physics. An exhausted pool silently drops particles rather than growing: a missing particle is invisible, a mid-drop resize is a hitch.
+
+**DeflectorModel** — `entities/plinko_board/deflector_model.gd` (`class_name DeflectorModel`)
+
+- Deflector state and rules for one board: which pegs hold one, which way it points, whether another fits.
+- Pure `RefCounted` — no scene tree, no autoloads, no saving. The slot cap and the global placed-count are injected as Callables (`cap_fn`, `placed_total_fn`), so the cap stays a cross-board concern and a bare model is testable.
+- **Invariant:** `resolve_bounce` is bit-identical to the legacy 50/50 when no deflector is present — the trajectory tests depend on it. `BASE_STRENGTH = 5` → bias `(s+1)/(s+2) = 6/7` (a 1:6 split — *encourage, never force*).
+
+**MultiMeshPool** — `scripts/multimesh_pool.gd` (`class_name MultiMeshPool`)
+
+- The shared fixed-slot MultiMesh mechanic: slot allocation over a free-index stack, the off-screen park transform for a released slot, and the data-preserving `grow()`. Backs `CoinPool` and `BurstField`.
+- `CoinBurstField` and `MenuTriangleField` still hand-roll the same pattern; folding them in is the remaining consolidation.
 
 **Coin** — `entities/coin/coin.gd`
 
