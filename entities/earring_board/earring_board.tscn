@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://bx3bhc5eihbqi"]
+
+[ext_resource type="Script" path="res://entities/earring_board/earring_board.gd" id="1_earring"]
+[ext_resource type="Script" path="res://entities/plinko_board/peg_field.gd" id="2_pegfield"]
+
+[node name="EarringBoard" type="Node3D"]
+script = ExtResource("1_earring")
+
+[node name="Pegs" type="Node3D" parent="."]
+script = ExtResource("2_pegfield")
+
+[node name="Buckets" type="Node3D" parent="."]

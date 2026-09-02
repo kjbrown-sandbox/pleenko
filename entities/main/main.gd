@@ -324,6 +324,12 @@ func _input(event: InputEvent) -> void:
 		var active_b := board_manager.get_active_board()
 		if active_b and not ChallengeManager.is_active_challenge:
 			_preview_add_rows(active_b)
+	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_E:
+		# Dev tool: punch the camera in on the active board's earrings, and back.
+		var zoom_board := board_manager.get_active_board()
+		if zoom_board:
+			zoom_board.toggle_earring_zoom()
+			board_manager._tween_camera_to_active_board()
 
 
 func _debug_test_prestige() -> void:
@@ -361,14 +367,16 @@ func _preview_add_rows(board: PlinkoBoard) -> void:
 	if _add_rows_preview_active:
 		return
 	_add_rows_preview_active = true
+	# Capture BOTH halves of the size: past the main-board cap add_two_rows
+	# grows the earrings instead, and reverting only num_rows would strand them.
 	var original_rows: int = board.num_rows
+	var original_earring_rows: int = board.get_earring_rows()
 	board.add_two_rows()  # animated=true by default, runs the full glissando
 
 	await get_tree().create_timer(_ADD_ROWS_PREVIEW_HOLD).timeout
 
 	if is_instance_valid(board):
-		board.num_rows = original_rows
-		board.build_board()  # silent rebuild — no glissando, no camera sweep
+		board.restore_size(original_rows, original_earring_rows)  # silent rebuild
 	_add_rows_preview_active = false
 
 

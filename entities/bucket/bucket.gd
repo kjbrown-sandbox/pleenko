@@ -18,6 +18,11 @@ signal stopped_singing
 
 var currency_type: Enums.CurrencyType
 var is_prestige_bucket: bool = false
+## Replaces the numeric value on the label when non-empty. Used for buckets
+## whose payout isn't a number: earring gateways (fall through, pay nothing)
+## and the transporter (sends the coin onward). Set before setup().
+var label_override: String = ""
+
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
 var _is_singing: bool = false
@@ -46,6 +51,8 @@ func _process(delta: float) -> void:
 
 
 func _label_text() -> String:
+	if not label_override.is_empty():
+		return label_override
 	return "?" if is_prestige_bucket else str(value)
 
 
