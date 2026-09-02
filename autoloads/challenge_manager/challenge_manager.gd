@@ -41,6 +41,18 @@ func get_survive_board_type() -> int:
 	return -1
 
 
+## Whether boards built right now divert ADD_ROW growth into earrings.
+##
+## Normal play always does. A challenge board only when its ChallengeData
+## authored it — otherwise the board stays uncapped so StartingBoards can grow
+## it to any authored size. Single source read by PlinkoBoard.setup and by
+## UpgradeManager's ADD_ROW hard cap, so the two can't disagree.
+func boards_grow_earrings() -> bool:
+	if not is_active_challenge:
+		return true
+	return _challenge != null and _challenge.grows_earrings
+
+
 func get_time_remaining() -> float:
 	return _tracker.time_remaining if _tracker else 0.0
 

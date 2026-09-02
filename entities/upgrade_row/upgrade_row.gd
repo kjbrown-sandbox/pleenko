@@ -132,7 +132,11 @@ func _on_side_button_hover(text: String) -> void:
 func _update_button() -> void:
 	var data: BaseUpgradeData = UpgradeManager.get_upgrade(_upgrade_type)
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
-	var at_max: bool = state.current_cap > 0 and state.level >= state.current_cap
+	# get_max_level, not state.current_cap: a hard-capped upgrade (ADD_ROW once
+	# the earrings meet) must read "Max" here, or the button shows as buyable
+	# while UpgradeManager.can_buy refuses it.
+	var max_level: int = UpgradeManager.get_max_level(_board_type, _upgrade_type)
+	var at_max: bool = max_level > 0 and state.level >= max_level
 
 	bar.update_text(data.display_name)
 	# Right-side text: progress toward affording the next purchase ("coins/cost"),
@@ -184,8 +188,9 @@ func _get_purchase_hover_text() -> String:
 	var data: BaseUpgradeData = UpgradeManager.get_upgrade(_upgrade_type)
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, _upgrade_type)
 	var level_line: String
-	if state.current_cap > 0:
-		level_line = "Level %d/%d" % [state.level, state.current_cap]
+	var max_level: int = UpgradeManager.get_max_level(_board_type, _upgrade_type)
+	if max_level > 0:
+		level_line = "Level %d/%d" % [state.level, max_level]
 	else:
 		level_line = "Level %d" % state.level
 

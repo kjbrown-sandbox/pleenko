@@ -691,6 +691,10 @@ func serialize() -> Dictionary:
 		var key: String = Enums.BoardType.keys()[board.board_type]
 		board_state[key] = {
 			"num_rows": board.num_rows,
+			# Derived, not authoritative — OfflineCalculator needs it to know the
+			# edge buckets are gateways. Missing on pre-earrings saves, where the
+			# reader's 0 default reproduces the old layout.
+			"earring_rows": board.get_earring_rows(),
 			"drop_delay": board.drop_delay,
 			"bucket_value_multiplier": board.bucket_value_multiplier,
 			"advanced_coin_multiplier": board.advanced_coin_multiplier,

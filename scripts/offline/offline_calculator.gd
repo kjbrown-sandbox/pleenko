@@ -85,6 +85,9 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 			continue
 
 		var num_rows: int = bs.get("num_rows", 2)
+		# Earring rows are derived state written alongside num_rows. Absent in
+		# pre-earrings saves, where 0 reproduces the old layout exactly.
+		var earring_rows: int = bs.get("earring_rows", 0)
 		var bucket_value_multiplier: int = bs.get("bucket_value_multiplier", 1)
 		var advanced_coin_multiplier: float = bs.get("advanced_coin_multiplier", 2.0)
 		var distance_for_advanced: int = bs.get("distance_for_advanced_buckets", 3)
@@ -94,7 +97,7 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 		var probabilities: Array = _get_pascal_probabilities(num_rows)
 		var bucket_layout: Array = _get_bucket_layout(
 			num_rows, bucket_value_multiplier, distance_for_advanced,
-			show_advanced, board_type)
+			show_advanced, board_type, earring_rows)
 
 		for assignment_type in ["NORMAL", "ADVANCED"]:
 			var assignment_key := "%s_%s" % [board_str, assignment_type]
@@ -203,7 +206,16 @@ static func _get_pascal_probabilities(num_rows: int) -> Array:
 	return probabilities
 
 
-static func _get_bucket_layout(num_rows: int, bucket_value_multiplier: int, distance_for_advanced: int, show_advanced: bool, board_type: Enums.BoardType) -> Array:
+## Per-bucket currency + value for the offline model.
+##
+## `earring_rows` > 0 means the two edge buckets are gateways: they pay nothing
+## themselves, and the coin falls through into an earring where every bucket is
+## worth EarringBoard.EARRING_BUCKET_VALUE. Without this the edges would be
+## credited as the highest-value buckets on the board while awarding nothing in
+## live play. (The transporter, reachable on 1 in 2^earring_rows of those
+## landings once the earrings meet, pays 0; at the meeting size that is a 0.4%
+## over-credit and is deliberately not modelled.)
+static func _get_bucket_layout(num_rows: int, bucket_value_multiplier: int, distance_for_advanced: int, show_advanced: bool, board_type: Enums.BoardType, earring_rows: int = 0) -> Array:
 	var num_buckets: int = num_rows + 1
 	var primary_currency: String = _primary_currency_key(board_type)
 	var advanced_currency: String = _advanced_currency_key(board_type)
@@ -220,6 +232,9 @@ static func _get_bucket_layout(num_rows: int, bucket_value_multiplier: int, dist
 			distance_from_center -= distance_for_advanced
 
 		value += distance_from_center * bucket_value_multiplier
+		if EarringGeometry.is_gateway_bucket(i, num_buckets, earring_rows):
+			currency_key = primary_currency
+			value = EarringBoard.EARRING_BUCKET_VALUE
 		layout.append({"currency_key": currency_key, "value": value})
 
 	return layout

@@ -1,8 +1,8 @@
 class_name PlinkoBoard
-extends Node3D
+extends CoinSurface
 
-@export var num_rows: int = 2
-var space_between_pegs: float
+## num_rows, space_between_pegs and board_type are declared on CoinSurface —
+## Coin reads them through that contract, and GDScript forbids redeclaring them.
 var vertical_spacing: float
 @export var drop_delay: float = 2.0
 @export var drop_delay_reduction_factor: float = 0.82
@@ -31,6 +31,24 @@ const MULTI_DROP_STAGGER := 0.05
 
 const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
+const EarringBoardScene: PackedScene = preload("res://entities/earring_board/earring_board.tscn")
+
+# ── Earrings ──────────────────────────────────────────────────────────────────
+# Once the main triangle is full, ADD_ROW purchases grow two sub-boards hanging
+# beneath its edge buckets instead. Sizing lives in EarringGeometry; this board
+# owns the nodes, the coin handoff and the shared transporter.
+#
+# Tunables are local consts, not VisualTheme fields, on purpose — the earring
+# look is self-contained and the theme schema is owned by another branch.
+
+## Vertical gap between an edge bucket and the top peg of its earring.
+const EARRING_GAP_BELOW_BUCKET := 0.4
+## Label shown on a gateway (edge) bucket: it pays nothing, it drops you through.
+const GATEWAY_BUCKET_LABEL := "\u2193"
+## Label shown on the transporter bucket where the two earrings meet.
+const TRANSPORTER_BUCKET_LABEL := "\u2726"
+## Transporter reads as bigger than a normal bucket so it's obviously not one.
+const TRANSPORTER_BUCKET_SCALE := 1.3
 
 @onready var peg_field: PegField = $Pegs
 @onready var buckets_container: Node3D = $Buckets
@@ -44,7 +62,6 @@ const CoinScene := preload("res://entities/coin/coin.tscn")
 @onready var _drop_main_tooltip: Tooltip = $DropSection/DropMainTooltip
 @onready var _drop_advanced_tooltip: Tooltip = $DropSection/DropAdvancedTooltip
 
-var board_type: Enums.BoardType
 var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
@@ -136,6 +153,29 @@ var deflector_total_query: Callable
 # MultiMesh coin state
 var _coin_pool := CoinPool.new()
 
+## True when this board diverts ADD_ROW growth into earrings once the main
+## triangle is full. Always true in normal play; in a challenge it comes from
+## the authored ChallengeData.grows_earrings, and when false the board is
+## UNCAPPED (StartingBoards grows challenge boards by looping add_two_rows, so
+## an unconditional cap would silently shrink every authored challenge board).
+var earrings_enabled: bool = true
+## Peg rows in EACH earring. Pure function of the ADD_ROW level — derived on
+## load and on growth, never saved.
+var _earring_rows: int = 0
+var _left_earring: EarringBoard
+var _right_earring: EarringBoard
+## Wrapper for the shared transporter bucket. NEVER parented to
+## buckets_container: build_board() frees that container's children and
+## predicted_bucket_index / num_buckets assume col <-> child-index 1:1 there.
+var _transporter_root: Node3D
+var _transporter_bucket: Bucket
+## Camera punch-in on the earrings (dev/inspection toggle) — see get_bounds.
+var _zoom_to_earrings: bool = false
+## Credits an earring landing: (currency_type, amount) -> void. Injectable so a
+## headless test can observe the payout without CurrencyManager state
+## (DeflectorModel / PeekAnimator seam precedent).
+var earring_credit_fn: Callable
+
 signal board_rebuilt
 signal autodropper_adjust_requested(button_id: StringName, delta: int)
 signal coin_landed(board_type: Enums.BoardType, bucket_index: int, currency_type: Enums.CurrencyType, amount: int, multiplier: float)
@@ -171,6 +211,11 @@ signal bomb_defused(board_type: Enums.BoardType, bucket_index: int, multiplier: 
 signal bomb_detonated(board_type: Enums.BoardType, bucket_index: int)
 signal column_voided(board_type: Enums.BoardType, bucket_index: int)
 signal forbidden_bucket_detonated(board_type: Enums.BoardType, bucket_index: int)
+## A coin reached the transporter where the two earrings meet. `world_pos` is
+## global. Emitted just before the coin despawns; the transporter pays no
+## currency, sending the coin onward IS the reward. Nothing on this branch
+## listens — the space board (built in parallel) connects to it defensively.
+signal coin_transported(board_type: Enums.BoardType, currency_type: Enums.CurrencyType, world_pos: Vector3)
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
@@ -279,6 +324,12 @@ func _on_drum_tier_expired(tier: int) -> void:
 
 func setup(type: Enums.BoardType) -> void:
 	board_type = type
+	# Growth mode is fixed for this board's lifetime: normal play always grows
+	# earrings, a challenge board only when its ChallengeData authored it.
+	# Challenge state only changes across a scene reload, so caching is safe.
+	earrings_enabled = ChallengeManager.boards_grow_earrings()
+	if not earring_credit_fn.is_valid():
+		earring_credit_fn = CurrencyManager.add
 	# advanced_coin_multiplier is legacy (raw/advanced coins removed). Kept as a
 	# plain base for force-dropped bonus coins; no longer boosted by challenges.
 	advanced_coin_multiplier = 2.0
@@ -971,7 +1022,87 @@ func _update_drop_fill() -> void:
 
 func on_coin_landed(coin: Coin) -> void:
 	var bucket = get_nearest_bucket(coin.global_position.x)
+	var bucket_idx: int = _get_bucket_index(bucket)
+	if _is_gateway_bucket(bucket_idx):
+		_handoff_to_earring(coin, bucket_idx == 0)
+		return
 	finalize_coin_landing(coin, bucket)
+
+
+## True for the two edge buckets once earrings hang beneath them. They stop
+## paying entirely and become pure gateways into the earring below.
+func _is_gateway_bucket(bucket_idx: int) -> bool:
+	if bucket_idx < 0:
+		return false
+	return EarringGeometry.is_gateway_bucket(bucket_idx,
+		buckets_container.get_child_count(), _earring_rows)
+
+
+## Hands a coin off from an edge bucket into the earring beneath it.
+##
+## The coin stays a child of THIS board: CoinPool mirrors coin.position
+## (parent-local) into a board-parented MultiMesh, so reparenting would draw
+## every coin in the wrong place, and the tree_exiting -> _coin_pool.release
+## hookup would have to be re-established. Only the surface it queries changes.
+func _handoff_to_earring(coin: Coin, is_left: bool) -> void:
+	var earring: EarringBoard = _left_earring if is_left else _right_earring
+	if earring == null:
+		# Defensive: no earring to fall into, so pay it as a normal bucket
+		# rather than leaking the coin.
+		finalize_coin_landing(coin, get_nearest_bucket(coin.global_position.x))
+		return
+
+	# Both main-board listeners must go. Leaving final_bounce_started connected
+	# would run _will_trigger_prestige_completion against an earring bucket.
+	if coin.landed.is_connected(on_coin_landed):
+		coin.landed.disconnect(on_coin_landed)
+	if coin.final_bounce_started.is_connected(_on_final_bounce_started):
+		coin.final_bounce_started.disconnect(_on_final_bounce_started)
+	coin.landed.connect(_on_earring_coin_landed.bind(earring))
+
+	# _active_tweens is append-only and cleared only here, so the finished
+	# main-board tweens must be dropped before start() appends new ones.
+	coin.kill_tweens()
+	coin.board = earring
+	# start() resets the coin's lattice cursor to (0, 0) itself. cell_to_world
+	# is parent-local, which is the frame the coin's position lives in.
+	coin.start(earring.get_top_peg_local())
+
+
+## A coin finished its descent through one of the earrings.
+func _on_earring_coin_landed(coin: Coin, earring: EarringBoard) -> void:
+	finalize_earring_landing(coin, earring, earring.bucket_for_coin(coin))
+
+
+## Credits an earring landing and despawns the coin.
+##
+## Deliberately does NOT emit coin_landed. That signal's one runtime listener is
+## ChallengeTracker (which fans out to the hazard runtimes), and every consumer
+## indexes by MAIN-board bucket index — earring indices would collide with them.
+## Nothing under-reports as a result: level-ups, cap-raise availability and
+## offline accrual all ride CurrencyManager.currency_changed. Audio, which the
+## main path gets for free alongside the signal, is called explicitly here.
+func finalize_earring_landing(coin: Coin, earring: EarringBoard, bucket: Bucket) -> void:
+	var t: VisualTheme = ThemeProvider.theme
+	if bucket == null:
+		coin.queue_free()
+		return
+
+	if earring.is_transporter(bucket):
+		# The transporter pays no currency — sending the coin onward is the
+		# whole reward. Emit before queue_free so listeners can read the coin.
+		coin_transported.emit(board_type, coin.coin_type, coin.global_position)
+	else:
+		var amount: int = roundi(bucket.value * coin.multiplier)
+		earring_credit_fn.call(bucket.currency_type, amount)
+	bucket.pulse()
+	# Only the ambience tick, never request_bucket_play: that path keys its
+	# queue + visuals by MAIN-board bucket index, which an earring column would
+	# alias onto. Earrings stay out of the bucket-harmony machinery entirely.
+	AudioManager.on_coin_landed()
+	if _coin_burst_field:
+		_coin_burst_field.spawn(coin.global_position, t.get_coin_color(coin.coin_type))
+	coin.queue_free()
 
 
 ## Completes the normal landing flow: adds currency, emits signal, cleans up coin.
@@ -1059,6 +1190,11 @@ func _on_final_bounce_started(coin: Coin, predicted_bucket: Bucket) -> void:
 ## landing will cross the board-completion threshold.
 func _predicted_bucket_gain(coin: Coin, bucket: Bucket) -> int:
 	var bucket_idx := _get_bucket_index(bucket)
+	# A gateway pays nothing, so it can never complete the board. Without this
+	# the prestige / cap-raise / next-board cinematics would fire for a coin
+	# that credits 0.
+	if _is_gateway_bucket(bucket_idx):
+		return 0
 	var target_multiplier: float = 1.0
 	if _gameplay_target_enabled and bucket_idx == _gameplay_target_index:
 		target_multiplier = _golden_bucket_multiplier()
@@ -1223,6 +1359,16 @@ func clear_all_markings() -> void:
 
 # ── Gameplay target ───────────────────────────────────────────────────────────
 
+## Buckets the wandering golden target may land on. Gateways are excluded:
+## they pay nothing, so a golden multiplier on one would be a lie.
+func get_gameplay_target_candidates() -> PackedInt32Array:
+	var out: PackedInt32Array = PackedInt32Array()
+	for i in buckets_container.get_child_count():
+		if not _is_gateway_bucket(i):
+			out.append(i)
+	return out
+
+
 ## Gameplay target: picks a new random bucket, avoiding the current one.
 ## Picker delegates to WanderingBucketSelector — shared with BombHazardRuntime
 ## so the "pick a wandering target, never the current one" rule has one home.
@@ -1235,9 +1381,9 @@ func _pick_new_gameplay_target() -> void:
 		var old_bucket := get_bucket(_gameplay_target_index)
 		if old_bucket:
 			old_bucket.stop_gameplay_target()
-	var allowed: PackedInt32Array = PackedInt32Array()
-	for i in num_buckets:
-		allowed.append(i)
+	var allowed: PackedInt32Array = get_gameplay_target_candidates()
+	if allowed.is_empty():
+		return
 	var rng_fn: Callable = func(n: int) -> int: return randi() % maxi(1, n)
 	_gameplay_target_index = WanderingBucketSelector.pick(allowed, _gameplay_target_index, rng_fn)
 	_gameplay_target_timer = GAMEPLAY_TARGET_DURATION
@@ -2118,6 +2264,12 @@ func build_board() -> void:
 		var bucket_currency: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
 
 		var value: int = _bucket_value_for_distance(distance_from_center)
+		# Once earrings hang beneath them the two edge buckets stop paying and
+		# become pure gateways: the coin falls through into the earring and is
+		# paid down there instead.
+		if EarringGeometry.is_gateway_bucket(i, num_buckets, _earring_rows):
+			value = 0
+			bucket.label_override = GATEWAY_BUCKET_LABEL
 		# No single "prestige bucket" anymore — prestige is triggered by reaching
 		# 500 of the currency, which any bucket can do (see _coin_completes_board).
 		bucket.is_prestige_bucket = false
@@ -2160,6 +2312,8 @@ func build_board() -> void:
 	if _deflector_editor:
 		_deflector_editor.refresh()
 
+	_rebuild_earrings()
+
 	# Voids survive rebuilds — re-paint the destroyed pegs + hide the voided
 	# buckets in the freshly-built MultiMesh / bucket nodes. Both column-based
 	# (bomb hazard) and radial (forbidden bucket) voids share the same
@@ -2170,25 +2324,205 @@ func build_board() -> void:
 	board_rebuilt.emit()
 
 
+# ── Earrings ──────────────────────────────────────────────────────────────────
+
+## Rebuilds both earrings (and the shared transporter) for the current
+## _earring_rows. Called from the tail of build_board, so earrings track every
+## rebuild the main board does.
+func _rebuild_earrings() -> void:
+	_clear_earrings()
+	if _earring_rows <= 0:
+		return
+	var num_buckets: int = buckets_container.get_child_count()
+	if num_buckets < 2:
+		return
+	var left_bucket: Bucket = get_bucket(0)
+	var right_bucket: Bucket = get_bucket(num_buckets - 1)
+	if left_bucket == null or right_bucket == null:
+		return
+
+	var left_apex: Vector3 = _earring_apex_local(left_bucket)
+	var right_apex: Vector3 = _earring_apex_local(right_bucket)
+
+	# The transporter only exists once the two earrings' inner corners have
+	# actually arrived at the board centre — asked of the geometry, not of a row
+	# count. It is built BEFORE the earrings so both can point at it.
+	var transporter_col_left: int = -1
+	var transporter_col_right: int = -1
+	if EarringGeometry.earrings_meet(_earring_rows, num_buckets):
+		_build_transporter(left_apex.y)
+		transporter_col_left = EarringGeometry.innermost_bottom_col(
+			_earring_rows, EarringGeometry.SIDE_LEFT)
+		transporter_col_right = EarringGeometry.innermost_bottom_col(
+			_earring_rows, EarringGeometry.SIDE_RIGHT)
+
+	_left_earring = _spawn_earring(EarringGeometry.SIDE_LEFT, left_apex, transporter_col_left)
+	_right_earring = _spawn_earring(EarringGeometry.SIDE_RIGHT, right_apex, transporter_col_right)
+
+
+## Board-local position of the top peg of the earring hanging under `bucket`.
+func _earring_apex_local(bucket: Bucket) -> Vector3:
+	return buckets_container.position + bucket.position \
+		+ Vector3(0, -EARRING_GAP_BELOW_BUCKET, 0)
+
+
+func _spawn_earring(side: int, apex_local: Vector3, transporter_col: int) -> EarringBoard:
+	var earring: EarringBoard = EarringBoardScene.instantiate()
+	add_child(earring)
+	earring.position = apex_local
+	if transporter_col >= 0 and _transporter_bucket:
+		earring.set_transporter(transporter_col, _transporter_bucket)
+	earring.setup(_earring_rows, side, space_between_pegs, board_type)
+	return earring
+
+
+## The single shared bucket at board-local x = 0 where the two earrings meet.
+##
+## Parented to its own Transporter node, never to buckets_container:
+## build_board() frees that container's children, and predicted_bucket_index /
+## the num_buckets child count there assume column <-> child index 1:1.
+func _build_transporter(apex_y: float) -> void:
+	_transporter_root = Node3D.new()
+	_transporter_root.name = "Transporter"
+	add_child(_transporter_root)
+	_transporter_root.position = Vector3(
+		0.0, apex_y - vertical_spacing * _earring_rows + (vertical_spacing / 3.0), 0.0)
+	_transporter_bucket = BucketScene.instantiate()
+	_transporter_bucket.is_prestige_bucket = false
+	_transporter_bucket.label_override = TRANSPORTER_BUCKET_LABEL
+	_transporter_root.add_child(_transporter_bucket)
+	# Value 0: the transporter pays no currency at all — sending the coin
+	# onward is its entire reward.
+	_transporter_bucket.setup(TierRegistry.primary_currency(board_type), Vector3.ZERO, 0)
+	_transporter_bucket.scale = Vector3.ONE * TRANSPORTER_BUCKET_SCALE
+
+
+## Frees the earrings, the transporter and any coin still bouncing on them.
+##
+## Coins first: a handed-off coin stays parented to THIS board while querying
+## the earring, so a freed earring would leave its next _bounce_or_despawn
+## calling into a dead instance.
+func _clear_earrings() -> void:
+	if _left_earring or _right_earring:
+		for child in get_children():
+			if child is Coin and (child.board == _left_earring or child.board == _right_earring):
+				child.kill_tweens()
+				child.queue_free()
+	if _left_earring:
+		_left_earring.queue_free()
+		_left_earring = null
+	if _right_earring:
+		_right_earring.queue_free()
+		_right_earring = null
+	if _transporter_root:
+		_transporter_root.queue_free()
+		_transporter_root = null
+	_transporter_bucket = null
+
+
+## (main_rows, earring_rows) one ADD_ROW purchase past this board's current
+## size. The growth path's ONLY size decision — see add_two_rows.
+func next_size() -> Vector2i:
+	return EarringGeometry.grow(num_rows, _earring_rows, earrings_enabled)
+
+
+## (main_rows, earring_rows) a saved ADD_ROW level corresponds to. The load
+## path's ONLY size decision — see apply_saved_state.
+##
+## Board size is decided in exactly these two functions, and both bottom out in
+## the same EarringGeometry table, so a loaded board and a board grown
+## click-by-click to the same level are always identical.
+func size_for_add_row_level(add_row_level: int) -> Vector2i:
+	return Vector2i(
+		EarringGeometry.main_rows_for_level(add_row_level, earrings_enabled),
+		EarringGeometry.earring_rows_for_level(add_row_level, earrings_enabled))
+
+
+## Peg rows in each earring. 0 while the main triangle is still growing.
+func get_earring_rows() -> int:
+	return _earring_rows
+
+
+## Restores a previously captured size without going through the growth path.
+## Dev-tool only (Main's KEY_7 add-rows preview reverts with it) — both halves
+## are needed because past the main cap growth lands in the earrings.
+func restore_size(main_rows: int, earring_rows: int) -> void:
+	num_rows = main_rows
+	_earring_rows = earring_rows
+	build_board()
+
+
+## The shared transporter bucket, or null when the earrings haven't met.
+func get_transporter_bucket() -> Bucket:
+	return _transporter_bucket
+
+
 ## Returns the bounding rect of this board in local space.
-## Used by BoardManager to frame the camera.
+## Used by BoardManager to frame the camera. Earrings are folded in so the
+## default framing shows the whole structure; toggle_earring_zoom() punches in
+## on just the earrings.
 func get_bounds() -> Rect2:
+	if _zoom_to_earrings and _left_earring and _right_earring:
+		return _earrings_combined_bounds()
+	var rect := main_board_bounds()
+	if _left_earring:
+		rect = rect.merge(_earring_bounds_in_board_space(_left_earring))
+	if _right_earring:
+		rect = rect.merge(_earring_bounds_in_board_space(_right_earring))
+	return rect
+
+
+## Local-space rect of just the main triangle (pegs + buckets), no earrings.
+func main_board_bounds() -> Rect2:
 	var top := vertical_spacing + 0.5
 	var bottom := -vertical_spacing * num_rows + (vertical_spacing / 3) - 0.5
 	var half_width := (num_rows / 2.0) * space_between_pegs + 0.5
 	return Rect2(-half_width, bottom, half_width * 2.0, top - bottom)
 
+
+## An earring's own bounds re-expressed in this board's local space.
+func _earring_bounds_in_board_space(earring: EarringBoard) -> Rect2:
+	var b := earring.get_local_bounds()
+	return Rect2(b.position + Vector2(earring.position.x, earring.position.y), b.size)
+
+
+## Both earrings together, with a small margin so the punch-in doesn't crop them.
+func _earrings_combined_bounds() -> Rect2:
+	return _earring_bounds_in_board_space(_left_earring) \
+		.merge(_earring_bounds_in_board_space(_right_earring)).grow(0.5)
+
+
+## Flips the camera between "frame the whole board" and "punch in on the
+## earrings". Returns the new state so the caller can refit the camera.
+func toggle_earring_zoom() -> bool:
+	_zoom_to_earrings = not _zoom_to_earrings
+	return _zoom_to_earrings
+
 # ── Upgrades + juice ──────────────────────────────────────────────────────────
 
 ## `animated` false is for challenge setup, which builds rows before the player
 ## has seen the board — the glissando + camera sweep must not fire there.
+##
+## Sizing goes through EarringGeometry.grow, which is the same formula
+## apply_saved_state uses — the two paths cannot drift. It is deliberately NOT
+## driven off the live ADD_ROW level: challenge setup grows boards by looping
+## this without buying anything, so the level would stay 0.
 func add_two_rows(animated: bool = true) -> void:
+	var grown: Vector2i = next_size()
+	if grown.x == num_rows:
+		# Main triangle is full — this purchase grows the earrings instead.
+		# Branch out BEFORE _shift_voided_columns and the row bump, both of
+		# which are wrong here, and before row_upgrade_starting: emitting that
+		# without a following row_upgrade_sweep_started latches BoardManager's
+		# camera-suppress flag on forever.
+		_grow_earrings(grown.y)
+		return
 	# Voided columns are bucket-indexed; adding two rows adds one bucket on
 	# each side, shifting every existing bucket's index by +1. Shift before
 	# build_board so _reapply_voided_pegs sees the new numbering.
 	_shift_voided_columns(1)
 	if not animated:
-		num_rows += 2
+		num_rows = grown.x
 		build_board()
 		return
 	# Snapshot the old row count + container Y before the rebuild — the scheduler
@@ -2197,9 +2531,20 @@ func add_two_rows(animated: bool = true) -> void:
 	var old_num_rows := num_rows
 	var old_container_y := buckets_container.position.y
 	row_upgrade_starting.emit()
-	num_rows += 2
+	num_rows = grown.x
 	build_board()                       # rebuilds geometry at NEW positions; emits board_rebuilt
 	_play_row_upgrade_glissando(old_num_rows, old_container_y)
+
+
+## Grows both earrings by one purchase and rebuilds. No glissando and no
+## row_upgrade_* signals: that choreography is main-board bucket-row
+## choreography (it lifts and drops the bucket row), and BoardManager's normal
+## board_rebuilt fit-tween re-frames the now-taller board for free.
+func _grow_earrings(new_earring_rows: int) -> void:
+	if new_earring_rows == _earring_rows:
+		return  # already at the hard cap
+	_earring_rows = new_earring_rows
+	build_board()
 
 
 ## Shifts every voided bucket index by `delta`. Called from add_two_rows so
@@ -2266,7 +2611,9 @@ func _play_bucket_value_upgrade_ripple() -> void:
 			distance_groups[distance] = []
 
 		var is_adv: bool = _is_advanced_at_distance(distance)
-		var new_value: int = _bucket_value_for_distance(distance)
+		# Gateways stay at 0 — the ripple must not resurrect a value on a bucket
+		# that pays nothing (build_board zeroes them for the same reason).
+		var new_value: int = 0 if _is_gateway_bucket(i) else _bucket_value_for_distance(distance)
 
 		distance_groups[distance].append({
 			"bucket": bucket,
@@ -2775,7 +3122,11 @@ func set_drop_main_text(button_id: StringName, autodropper_count: int, autodropp
 ## Permanent challenge bonuses are added on top of player-bought upgrade levels.
 func apply_saved_state(upgrade_state: Dictionary) -> void:
 	var add_row_level: int = upgrade_state.get("ADD_ROW", 0)
-	num_rows = 2 + add_row_level * 2
+	# Same two functions add_two_rows grows through, so a loaded board and a
+	# board grown click-by-click to the same level are identical.
+	var size: Vector2i = size_for_add_row_level(add_row_level)
+	num_rows = size.x
+	_earring_rows = size.y
 
 	var perm_bv: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.BUCKET_VALUE)
 	bucket_value_multiplier = 1 + upgrade_state.get("BUCKET_VALUE", 0) + perm_bv

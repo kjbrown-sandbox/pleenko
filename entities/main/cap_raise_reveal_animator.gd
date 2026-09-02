@@ -87,7 +87,7 @@ func _on_cap_raise_coin_landed(coin: Coin, predicted_bucket: Bucket) -> void:
 		return
 	if not is_instance_valid(coin) or not is_instance_valid(predicted_bucket):
 		return
-	var board: PlinkoBoard = coin.board
+	var board: PlinkoBoard = coin.board as PlinkoBoard
 	if not is_instance_valid(board) or board != _board_manager.get_active_board():
 		# Player navigated away mid-air — let the buttons appear normally.
 		return
