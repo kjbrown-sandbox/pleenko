@@ -712,3 +712,52 @@ func pulse_node3d(node: Node3D, material: StandardMaterial3D = null) -> void:
 		var color_tween := node.create_tween()
 		color_tween.tween_property(material, "albedo_color", rest_color, bucket_pulse_duration) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+
+# ── Space Board VFX ──────────────────────────────────────────────────
+# Appended at EOF on purpose: new @export values with defaults need no .tres
+# edits, and appending keeps existing preset diffs empty.
+@export_group("Space Board VFX")
+
+## Seconds for a transported coin's lob from a colour board's transporter up to
+## the space board's apex peg.
+@export var space_arrival_arc_duration := 1.6
+## Seconds per lattice row on the way down.
+@export var space_bounce_duration := 0.42
+## Hop apex above the straight line between two lattice cells, as a multiple of
+## vertical_spacing.
+@export var space_bounce_height_mult := 0.55
+
+## Padding (world units) added around the space board when the camera parks on
+## it, so the top peg and the bucket row are never clipped.
+@export var space_camera_padding := 6.0
+## Seconds for the camera to travel between the colour board row and space.
+@export var space_camera_tween_duration := 1.2
+
+## Activation cinematic — the money shot. Camera pushes in on the landed coin,
+## the coin sinks into the empty circle, the circle fills, a coin-coloured
+## shockwave fires as the camera pulls back out.
+@export var space_activation_zoom_in_duration := 0.9
+@export var space_activation_sink_duration := 0.7
+@export var space_activation_fill_duration := 0.5
+@export var space_activation_zoom_out_duration := 1.1
+## Orthographic size while zoomed on the coin.
+@export var space_activation_zoom_size := 4.0
+## Engine.time_scale held during the cinematic. Slight, not a prestige freeze.
+@export var space_activation_slow_mo_scale := 0.45
+
+## How strongly the shockwave ring takes the activated colour. 0 = the legacy
+## pure-distortion ring every other caller gets.
+@export var space_shockwave_color_strength := 0.55
+@export var space_shockwave_duration := 1.2
+
+## The empty circle beneath each bucket: outer radius, ring thickness, and how
+## far below the bucket it sits (all in board-local units — the board is
+## uniformly scaled in main.tscn).
+@export var space_underlay_radius := 0.42
+@export var space_underlay_ring_thickness := 0.07
+@export var space_underlay_drop := 1.1
+## Colour of an unfilled circle. Filled circles take the bucket's own colour.
+@export var space_underlay_empty_color_source: Palette = Palette.BG_3
+var space_underlay_empty_color: Color:
+	get: return resolve(space_underlay_empty_color_source)

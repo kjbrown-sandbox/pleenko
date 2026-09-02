@@ -132,7 +132,12 @@ func switch_board(index: int) -> void:
 	_boards[_active_index].set_coins_visible(true)
 
 	AudioManager.set_active_board(_boards[_active_index].board_type)
-	_tween_camera_to_active_board()
+	# Don't yank the camera while a cinematic holds it (viewing the space board,
+	# a cap-raise reveal). A board switch can arrive from a level reward while
+	# the player is parked elsewhere entirely; the camera re-fits when the
+	# borrow is returned. Same guard _on_board_rebuilt already applies.
+	if not _cinematic_camera_active:
+		_tween_camera_to_active_board()
 	_update_deflector_editors()
 	board_switched.emit(_boards[_active_index])
 
@@ -372,6 +377,12 @@ func begin_cinematic_camera() -> void:
 	if _camera_tween and _camera_tween.is_valid():
 		_camera_tween.kill()
 	_cinematic_camera_active = true
+
+
+## True while a transient cinematic owns the camera. Other camera owners check
+## this before starting so they can't fight over it.
+func is_cinematic_camera_active() -> bool:
+	return _cinematic_camera_active
 
 
 ## Return the camera after a cinematic, easing it back to frame the active board.

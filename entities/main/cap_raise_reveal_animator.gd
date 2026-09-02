@@ -81,6 +81,10 @@ func _on_cap_raise_coin_landed(coin: Coin, predicted_bucket: Bucket) -> void:
 	# Prestige owns the camera + time_scale — never run the two concurrently.
 	if PrestigeManager.current_phase != PrestigeManager.PrestigePhase.NONE:
 		return
+	# Same rule for any other cinematic holding the camera (e.g. the player is
+	# parked on the space board while autodroppers keep running down here).
+	if _board_manager.is_cinematic_camera_active():
+		return
 	if not is_instance_valid(coin) or not is_instance_valid(predicted_bucket):
 		return
 	var board: PlinkoBoard = coin.board

@@ -10,38 +10,52 @@ class_name VfxUtils
 ##   ring_count: int          (default prestige_ring_count)
 ##   ring_stagger: float      (default prestige_ring_stagger)
 ##   duration: float          (default prestige_ring_duration)
+##   color: Color             (default Color.WHITE — only visible above strength 0)
+##   color_strength: float    (default 0.0 = the legacy untinted refraction ring)
 ##
 ## Usage:
 ##   VfxUtils.spawn_shockwave(self, uv_center)
 ##   VfxUtils.spawn_shockwave(self, uv_center, { "ring_count": 1, "duration": 1.5 })
 static func spawn_shockwave(caller: Node, uv_center: Vector2, opts: Dictionary = {}) -> void:
-	var t: VisualTheme = ThemeProvider.theme
-
-	var ring_width: float = opts.get("ring_width", 0.06)
-	var distortion_strength: float = opts.get("distortion_strength", 0.008)
-	var ring_count: int = opts.get("ring_count", t.prestige_ring_count)
-	var ring_stagger: float = opts.get("ring_stagger", t.prestige_ring_stagger)
-	var duration: float = opts.get("duration", t.prestige_ring_duration)
-
+	var params := _ring_params(opts)
+	var ring_count: int = params["ring_count"]
+	var ring_stagger: float = params["ring_stagger"]
 	for i in ring_count:
-		_spawn_single_ring(caller, uv_center, ring_width, distortion_strength, duration, i * ring_stagger)
+		_spawn_single_ring(caller, uv_center, params, i * ring_stagger)
+
+
+## Resolves an opts dictionary against the VisualTheme defaults. Pure — no
+## SceneTree, no node allocation — so a test can assert that the default opts
+## still yield the legacy parameter set (tint strength 0).
+static func _ring_params(opts: Dictionary) -> Dictionary:
+	var t: VisualTheme = ThemeProvider.theme
+	return {
+		"ring_width": float(opts.get("ring_width", 0.06)),
+		"distortion_strength": float(opts.get("distortion_strength", 0.008)),
+		"ring_count": int(opts.get("ring_count", t.prestige_ring_count)),
+		"ring_stagger": float(opts.get("ring_stagger", t.prestige_ring_stagger)),
+		"duration": float(opts.get("duration", t.prestige_ring_duration)),
+		"color": opts.get("color", Color.WHITE) as Color,
+		"color_strength": float(opts.get("color_strength", 0.0)),
+	}
 
 
 static func _spawn_single_ring(
 	caller: Node,
 	uv_center: Vector2,
-	ring_width: float,
-	distortion_strength: float,
-	duration: float,
+	params: Dictionary,
 	delay: float,
 ) -> void:
+	var duration: float = params["duration"]
 	var shockwave_shader: Shader = preload("res://entities/prestige_vfx/shockwave.gdshader")
 	var mat := ShaderMaterial.new()
 	mat.shader = shockwave_shader
 	mat.set_shader_parameter("center", uv_center)
 	mat.set_shader_parameter("radius", 0.0)
-	mat.set_shader_parameter("ring_width", ring_width)
-	mat.set_shader_parameter("distortion_strength", distortion_strength)
+	mat.set_shader_parameter("ring_width", params["ring_width"])
+	mat.set_shader_parameter("distortion_strength", params["distortion_strength"])
+	mat.set_shader_parameter("ring_color", params["color"])
+	mat.set_shader_parameter("color_strength", params["color_strength"])
 
 	var canvas := CanvasLayer.new()
 	canvas.layer = 90

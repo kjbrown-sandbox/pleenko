@@ -21,6 +21,9 @@ var is_prestige_bucket: bool = false
 var _base_material: StandardMaterial3D
 var _is_hit: bool = false
 var _is_singing: bool = false
+## Permanent full-colour state, owned by the space board. Unlike singing (which
+## self-times out) this changes what the bucket's RESTING colour is.
+var _is_activated: bool = false
 var _sing_timer: float = 0.0
 var _color_tween: Tween
 var _press_tween: Tween
@@ -150,10 +153,14 @@ func _stop_singing() -> void:
 	_color_tween.tween_property(self, "scale", Vector3.ONE, SING_FADE_DURATION) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	if not _is_hit:
-		var faded: Color = ThemeProvider.theme.get_bucket_color_faded(currency_type)
-		_color_tween.tween_property(_base_material, "albedo_color", faded, SING_FADE_DURATION) \
+		# _resolve_default_color(), NOT get_bucket_color_faded(): an activated
+		# bucket's resting colour is FULL, and this is the one place that used
+		# to hardcode faded — a singing activated bucket would have tweened
+		# back to faded and stayed there.
+		var rest: Color = _resolve_default_color()
+		_color_tween.tween_property(_base_material, "albedo_color", rest, SING_FADE_DURATION) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		_color_tween.tween_property(_label, "modulate", faded, SING_FADE_DURATION) \
+		_color_tween.tween_property(_label, "modulate", rest, SING_FADE_DURATION) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	stopped_singing.emit()
 
@@ -312,7 +319,27 @@ func stop_gameplay_target() -> void:
 	_apply_color(_resolve_default_color())
 
 
+## Permanent full-colour activation, used by the space board. Deliberately NOT
+## mark_singing(): singing self-times out after SING_DURATION and drives
+## Bucket._process, neither of which suits a state that must survive a save.
+## Routing it through _resolve_default_color() means every path that restores
+## the resting colour (setup, mark_unhit, unmark_bomb, stop_gameplay_target,
+## start_gameplay_target_fade, _stop_singing) restores FULL colour for free.
+func mark_activated(on: bool) -> void:
+	_is_activated = on
+	if _is_hit:
+		return
+	_kill_color_tween()
+	_apply_color(_resolve_default_color())
+
+
+func is_activated() -> bool:
+	return _is_activated
+
+
 func _resolve_default_color() -> Color:
+	if _is_activated:
+		return ThemeProvider.theme.get_bucket_color(currency_type)
 	return ThemeProvider.theme.get_bucket_color_faded(currency_type)
 
 
