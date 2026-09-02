@@ -88,8 +88,42 @@ func get_cost(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> i
 	return _state[board_type][upgrade_type].cost
 
 
+## Effective ceiling on an upgrade's level. 0 means uncapped.
+##
+## This is `current_cap` folded together with any HARD cap. current_cap can be
+## RAISED by the cap-raise system, so a hard ceiling expressed only as
+## BaseUpgradeData.max_level would evaporate after enough cap raises. Every
+## purchasability gate (can_buy, can_buy_cap_raise, force_apply, UpgradeRow)
+## reads this one function so they cannot disagree.
 func get_max_level(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> int:
-	return _state[board_type][upgrade_type].current_cap
+	var cap: int = _state[board_type][upgrade_type].current_cap
+	var hard: int = _hard_cap(upgrade_type)
+	if hard < 0:
+		return cap
+	if cap <= 0:
+		return hard
+	return mini(cap, hard)
+
+
+## Hard ceiling for an upgrade type, or -1 when it has none.
+##
+## ADD_ROW is the only one: once a board's earrings meet at the centre there is
+## nothing left for the upgrade to grow. Only applies when earrings are enabled
+## — an uncapped challenge board keeps today's unbounded cap-raise behaviour.
+func _hard_cap(upgrade_type: Enums.UpgradeType) -> int:
+	if upgrade_type != Enums.UpgradeType.ADD_ROW:
+		return -1
+	if not ChallengeManager.boards_grow_earrings():
+		return -1
+	return EarringGeometry.max_add_row_level()
+
+
+## True when this upgrade's current cap has already reached its hard ceiling, so
+## buying a cap raise would raise a cap that can never be spent — a wasted-spend
+## soft-lock if left enabled.
+func is_at_hard_cap(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
+	var hard: int = _hard_cap(upgrade_type)
+	return hard >= 0 and _state[board_type][upgrade_type].current_cap >= hard
 
 
 func get_state(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> UpgradeState:
@@ -119,8 +153,9 @@ func can_buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bo
 
 	var state: UpgradeState = _state[board_type][upgrade_type]
 
-	# current_cap of 0 means uncapped
-	if state.current_cap > 0 and state.level >= state.current_cap:
+	# get_max_level of 0 means uncapped
+	var max_level: int = get_max_level(board_type, upgrade_type)
+	if max_level > 0 and state.level >= max_level:
 		return false
 
 	var currency := TierRegistry.primary_currency(board_type)
@@ -143,8 +178,14 @@ func buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
 	return true
 
 
+## Grants a level with no cost and no unlock check (StartingUpgrades, prestige
+## rewards). Still honours the hard cap — past it the level would be unbuildable
+## geometry, not just an unaffordable purchase.
 func force_apply(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
 	var state: UpgradeState = _state[board_type][upgrade_type]
+	var hard: int = _hard_cap(upgrade_type)
+	if hard >= 0 and state.level >= hard:
+		return
 	state.level += 1
 	_advance_cost(board_type, upgrade_type)
 	upgrade_purchased.emit(upgrade_type, board_type, state.level)
@@ -182,6 +223,10 @@ func can_buy_cap_raise(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeT
 	var state: UpgradeState = _state[board_type][upgrade_type]
 	# Can't raise cap on uncapped upgrades
 	if state.base_cap == 0:
+		return false
+	# Nor past a hard ceiling — the raise would buy a level that can never be
+	# purchased, spending higher-tier currency for nothing.
+	if is_at_hard_cap(board_type, upgrade_type):
 		return false
 	var currency: int = TierRegistry.cap_raise_currency(board_type)
 	if currency == -1:

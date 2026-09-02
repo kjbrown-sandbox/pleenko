@@ -37,6 +37,7 @@ const VolumeOffTexture := preload("res://assets/icons/volume-off.png")
 @onready var _cap_raise_reveal_animator: CapRaiseRevealAnimator = $CapRaiseRevealAnimator
 @onready var _forbidden_bucket_reveal_animator: ForbiddenBucketRevealAnimator = $ForbiddenBucketRevealAnimator
 @onready var _parallax_backdrop: ParallaxBackdrop = $ParallaxBackdrop
+@onready var space_board: SpaceBoard = $SpaceBoard
 
 var _deflector_intro_animator: DeflectorIntroAnimator
 var _options_dialog: CanvasLayer
@@ -56,6 +57,30 @@ var _loading_from_save: bool = false
 # Dev tool (KEY_7): how long the add-rows preview holds before auto-reverting.
 const _ADD_ROWS_PREVIEW_HOLD := 4.0
 var _add_rows_preview_active: bool = false
+
+# ── Space board ──────────────────────────────────────────────────────
+# Viewing space is a CAMERA DESTINATION, not a third ModeManager mode.
+# ModeManager (MAIN | CHALLENGES) is threaded through save, audio, challenge
+# gating and nav; a third value would ripple far outside this feature.
+var _viewing_space: bool = false
+var _space_camera_held: bool = false
+var _space_camera_tween: Tween
+var _space_win_overlay: SpaceWinOverlay
+## Mirrors the latest apply_input_lock() call so exiting space restores the
+## right state instead of blindly re-enabling navigation.
+var _nav_input_locked: bool = false
+
+## Dev hotkey (KEY_8) cycles through the six board colours.
+const _DEV_SPACE_COIN_COLORS: Array[Enums.CurrencyType] = [
+	Enums.CurrencyType.GOLD_COIN,
+	Enums.CurrencyType.ORANGE_COIN,
+	Enums.CurrencyType.RED_COIN,
+	Enums.CurrencyType.VIOLET_COIN,
+	Enums.CurrencyType.BLUE_COIN,
+	Enums.CurrencyType.GREEN_COIN,
+]
+var _dev_space_coin_index: int = 0
+
 
 func _ready() -> void:
 	# Ship safety: any exported build (e.g. the itch upload) MUST run demo-locked,
@@ -123,7 +148,10 @@ func _ready() -> void:
 
 func _setup_normal() -> void:
 	challenge_hud.visible = false
-	SaveManager.setup(board_manager, true)
+	_setup_space_board()
+	# Space board injected here: it is a node in main.tscn, unreachable from an
+	# autoload, and it must not call back into SaveManager.
+	SaveManager.setup(board_manager, true, space_board)
 
 	if SaveManager.has_save():
 		_loading_from_save = true
@@ -143,6 +171,136 @@ func _setup_normal() -> void:
 	_deflector_intro_animator = DeflectorIntroAnimator.new()
 	add_child(_deflector_intro_animator)
 	_deflector_intro_animator.setup(board_manager, coin_values, $CanvasLayer)
+
+
+## Normal mode only — challenges never reach space. Wired BEFORE
+## SaveManager.setup so the load can restore activation state.
+func _setup_space_board() -> void:
+	space_board.setup(camera)
+	space_board.apply_input_lock_fn = apply_input_lock
+	space_board.should_play_cinematic_fn = is_viewing_space
+	space_board.bucket_activated.connect(_on_space_bucket_activated)
+	space_board.won.connect(_on_space_won)
+	for board in board_manager.get_boards():
+		_connect_space_board(board)
+
+
+## Wire a board's transporter to the space board. The defensive, merge-safe
+## connect lives on SpaceBoard so it can be unit-tested against a stub node;
+## see SpaceBoard.connect_transporter for why it must use the string API.
+func _connect_space_board(board: Node) -> void:
+	SpaceBoard.connect_transporter(board, _on_coin_transported)
+
+
+## `board_type` rides along on the signal so the space board never needs a
+## currency -> board reverse lookup (TierRegistry only maps board -> currency);
+## nothing here needs it yet.
+func _on_coin_transported(_board_type: Enums.BoardType,
+		currency_type: Enums.CurrencyType, world_pos: Vector3) -> void:
+	if is_instance_valid(space_board):
+		space_board.receive_coin(currency_type, world_pos)
+
+
+func _on_space_bucket_activated(_bucket_index: int) -> void:
+	SaveManager.save_game()
+
+
+func _on_space_won() -> void:
+	_show_space_win_overlay()
+
+
+## Re-created per trigger so the win beat stays re-triggerable for filming.
+func _show_space_win_overlay() -> void:
+	if is_instance_valid(_space_win_overlay):
+		return
+	_space_win_overlay = SpaceWinOverlay.new()
+	_space_win_overlay.dismissed.connect(_on_space_win_dismissed)
+	add_child(_space_win_overlay)
+
+
+func _on_space_win_dismissed() -> void:
+	_space_win_overlay = null
+
+
+# ── Space view (a camera destination, above the board row) ────────────
+
+## Read DOWN by the space board: the activation cinematic borrows the shared
+## camera and Engine.time_scale, so it may only play while the player is
+## actually up there.
+func is_viewing_space() -> bool:
+	return _viewing_space
+
+
+func _can_enter_space() -> bool:
+	return not ChallengeManager.is_active_challenge and is_instance_valid(space_board)
+
+
+## Takes ONE camera borrow for the whole space-viewing session.
+## BoardManager.begin/end_cinematic_camera is a bool, not a counter, so a nested
+## end() would yank the camera back to the colour board while the player is
+## still parked up here — the activation cinematic therefore writes the camera
+## directly rather than borrowing again.
+func _enter_space_view() -> void:
+	if _viewing_space or not _can_enter_space():
+		return
+	# Peek and prestige own the camera outright.
+	if _is_peek_active() or PrestigeManager.current_phase != PrestigeManager.PrestigePhase.NONE:
+		return
+	_viewing_space = true
+	board_manager.begin_cinematic_camera()
+	_space_camera_held = true
+	# Lateral nav is suppressed for the whole session: BoardManager._input
+	# would otherwise switch boards out from under the player.
+	board_manager.set_process_input(false)
+	board_manager.set_active_board_ui_visible(false)
+	coin_values.visible = false
+	level_section.visible = false
+	game_timer.visible = false
+	challenges_down_icon.visible = true
+	_update_nav_arrows()
+	_update_lockdown_overlay()
+	_tween_camera_to_space()
+
+
+## `return_camera` false releases the borrow WITHOUT easing the camera back onto
+## the active board — used by the prestige path, which is about to drive the
+## camera itself. Two writers on one camera otherwise fight for a full tween.
+func _exit_space_view(return_camera: bool = true) -> void:
+	if not _viewing_space:
+		return
+	_viewing_space = false
+	space_board.abort_cinematic()
+	if _space_camera_tween and _space_camera_tween.is_valid():
+		_space_camera_tween.kill()
+	board_manager.set_process_input(not _nav_input_locked)
+	board_manager.set_active_board_ui_visible(true)
+	coin_values.visible = true
+	level_section.visible = true
+	game_timer.visible = true
+	challenges_down_icon.visible = ModeManager.are_challenges_unlocked()
+	if _space_camera_held:
+		_space_camera_held = false
+		if return_camera:
+			# Returns the borrow AND eases the camera back onto the active board.
+			board_manager.end_cinematic_camera()
+		else:
+			# Release the borrow only; the caller owns the camera from here.
+			board_manager.release_cinematic_camera()
+	_update_nav_arrows()
+	_update_lockdown_overlay()
+
+
+func _tween_camera_to_space() -> void:
+	if _space_camera_tween and _space_camera_tween.is_valid():
+		_space_camera_tween.kill()
+	var t: VisualTheme = ThemeProvider.theme
+	var target: Vector3 = space_board.get_camera_target(camera.position.z)
+	_space_camera_tween = create_tween()
+	_space_camera_tween.tween_property(camera, "position", target, t.space_camera_tween_duration) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
+	_space_camera_tween.parallel().tween_property(camera, "size",
+			space_board.get_camera_size(), t.space_camera_tween_duration) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
 
 
 func _setup_peek_animator() -> void:
@@ -172,8 +330,11 @@ func is_loading_from_save() -> bool:
 ## own _input, and the four nav arrow buttons. Called by PeekAnimator on
 ## peek/prestige state changes.
 func apply_input_lock(locked: bool) -> void:
+	_nav_input_locked = locked
 	if is_instance_valid(board_manager):
-		board_manager.set_process_input(not locked)
+		# While parked in space, lateral board nav stays off even after a
+		# transient lock (e.g. the activation cinematic) is released.
+		board_manager.set_process_input(not locked and not _viewing_space)
 	if is_instance_valid(challenge_grouping_manager):
 		challenge_grouping_manager.set_process_input(not locked)
 	set_process_input(not locked)
@@ -305,10 +466,18 @@ func _input(event: InputEvent) -> void:
 		return
 	if ChallengeManager.is_active_challenge:
 		return
-	if event.is_action_pressed("challenges_down") and ModeManager.is_main():
+	# Vertical nav is a three-storey stack: space above, the board row in the
+	# middle, challenges below. Down and up-again both leave space.
+	if event.is_action_pressed("challenges_down") and _viewing_space:
+		_exit_space_view()
+	elif event.is_action_pressed("challenges_up") and _viewing_space:
+		_exit_space_view()
+	elif event.is_action_pressed("challenges_down") and ModeManager.is_main():
 		ModeManager.switch_to_challenges()
 	elif event.is_action_pressed("challenges_up") and ModeManager.is_challenges():
 		ModeManager.switch_to_main()
+	elif event.is_action_pressed("challenges_up") and ModeManager.is_main():
+		_enter_space_view()
 	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_P:
 		_debug_test_prestige()
 	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_O:
@@ -324,6 +493,27 @@ func _input(event: InputEvent) -> void:
 		var active_b := board_manager.get_active_board()
 		if active_b and not ChallengeManager.is_active_challenge:
 			_preview_add_rows(active_b)
+	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_8:
+		_dev_send_space_coin()
+	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_9:
+		space_board.dev_activate_next_bucket()
+	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_0:
+		space_board.dev_activate_all()
+	elif not demo_mode and event is InputEventKey and event.pressed and event.keycode == KEY_E:
+		# Dev tool: punch the camera in on the active board's earrings, and back.
+		var zoom_board := board_manager.get_active_board()
+		if zoom_board:
+			zoom_board.toggle_earring_zoom()
+			board_manager._tween_camera_to_active_board()
+
+
+## Dev tool (KEY_8): send one coin to the space board, cycling colour on each
+## press so every bucket is reachable. The coin takes the real arrival arc and
+## an honest 10-row fall — the lattice odds are never biased (locked decision 8).
+func _dev_send_space_coin() -> void:
+	var currency: Enums.CurrencyType = _DEV_SPACE_COIN_COLORS[_dev_space_coin_index]
+	_dev_space_coin_index = (_dev_space_coin_index + 1) % _DEV_SPACE_COIN_COLORS.size()
+	space_board.dev_send_coin(currency)
 
 
 func _debug_test_prestige() -> void:
@@ -361,14 +551,16 @@ func _preview_add_rows(board: PlinkoBoard) -> void:
 	if _add_rows_preview_active:
 		return
 	_add_rows_preview_active = true
+	# Capture BOTH halves of the size: past the main-board cap add_two_rows
+	# grows the earrings instead, and reverting only num_rows would strand them.
 	var original_rows: int = board.num_rows
+	var original_earring_rows: int = board.get_earring_rows()
 	board.add_two_rows()  # animated=true by default, runs the full glissando
 
 	await get_tree().create_timer(_ADD_ROWS_PREVIEW_HOLD).timeout
 
 	if is_instance_valid(board):
-		board.num_rows = original_rows
-		board.build_board()  # silent rebuild — no glissando, no camera sweep
+		board.restore_size(original_rows, original_earring_rows)  # silent rebuild
 	_add_rows_preview_active = false
 
 
@@ -490,7 +682,9 @@ func _update_lockdown_overlay() -> void:
 		_coming_soon_overlay.visible = false
 		return
 	var should_show := false
-	if ModeManager.is_main():
+	if _viewing_space:
+		should_show = false
+	elif ModeManager.is_main():
 		var board := board_manager.get_active_board()
 		if board and board.board_type == Enums.BoardType.RED:
 			should_show = true
@@ -544,7 +738,9 @@ func _on_mode_changed(new_mode: ModeManager.Mode) -> void:
 		challenge_info_panel.visible = false
 		_update_nav_arrows()
 		_update_lockdown_overlay()
-		_go_back_to_board()
+		# The space camera owns the framing while parked up there — don't race it.
+		if not _viewing_space:
+			_go_back_to_board()
 
 
 func _setup_prestige_animator() -> void:
@@ -562,6 +758,10 @@ func _setup_cap_raise_reveal_animator() -> void:
 
 
 func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
+	# Prestige owns the camera and time_scale outright, and it ends in a scene
+	# reload — nothing would return the player to the board row otherwise.
+	if phase != PrestigeManager.PrestigePhase.NONE and _viewing_space:
+		_exit_space_view(false)
 	if phase == PrestigeManager.PrestigePhase.SLOW_MO:
 		# Hide all HUD elements when the coin touches the bucket
 		coin_values.visible = false
@@ -602,6 +802,12 @@ func _on_board_unlocked(board_type: Enums.BoardType) -> void:
 				_forbidden_bucket_reveal_animator.connect_board(board)
 			else:
 				_cap_raise_reveal_animator.connect_board(board)
+			# Normal mode only: _setup_space_board() never ran in a challenge, so
+			# should_play_cinematic_fn is unset and _should_play_cinematic()
+			# defaults to true — a challenge board wired here would steal the
+			# camera and Engine.time_scale mid-challenge.
+			if not ChallengeManager.is_active_challenge:
+				_connect_space_board(board)
 			break
 	if not _loading_from_save:
 		_boards_with_unseen_upgrades[board_type] = true
@@ -622,13 +828,28 @@ func _on_upgrade_unlocked_for_nav(_upgrade_type: Enums.UpgradeType, board_type: 
 
 
 func _update_nav_arrows() -> void:
-	if ModeManager.is_main():
+	if _viewing_space:
+		# Nothing to the left or right of space — and switch_board() would
+		# steal the camera back down to the board row.
+		board_left_icon.visible = false
+		board_right_icon.visible = false
+	elif ModeManager.is_main():
 		board_left_icon.visible = board_manager._active_index > 0
 		board_right_icon.visible = board_manager._active_index + 1 < board_manager._boards.size()
 	elif ModeManager.is_challenges():
 		board_left_icon.visible = challenge_grouping_manager.has_prev_group()
 		board_right_icon.visible = challenge_grouping_manager.has_next_group()
+	_update_space_nav_arrow()
 	_update_nav_arrow_blinks()
+
+
+## The up arrow is a tri-state. In challenges mode it means "back to the boards"
+## and is owned by _on_mode_changed; on the board row it means "up to space";
+## in space it is hidden, because down is the way out.
+func _update_space_nav_arrow() -> void:
+	if ModeManager.is_challenges():
+		return
+	challenges_up_icon.visible = _can_enter_space() and not _viewing_space
 
 
 func _update_nav_arrow_blinks() -> void:
@@ -669,6 +890,8 @@ func _set_arrow_blink(arrow: Control, should_blink: bool) -> void:
 
 
 func _on_left_arrow_pressed() -> void:
+	if _viewing_space:
+		return
 	if ModeManager.is_main():
 		board_manager.switch_board(board_manager._active_index - 1)
 	elif ModeManager.is_challenges():
@@ -676,6 +899,8 @@ func _on_left_arrow_pressed() -> void:
 
 
 func _on_right_arrow_pressed() -> void:
+	if _viewing_space:
+		return
 	if ModeManager.is_main():
 		board_manager.switch_board(board_manager._active_index + 1)
 	elif ModeManager.is_challenges():
@@ -707,7 +932,15 @@ func _setup_nav_icons() -> void:
 
 
 func _on_challenges_down_pressed() -> void:
+	if _viewing_space:
+		_exit_space_view()
+		return
 	ModeManager.switch_to_challenges()
 
 func _on_challenges_up_pressed() -> void:
-	ModeManager.switch_to_main()
+	if _viewing_space:
+		_exit_space_view()
+	elif ModeManager.is_main():
+		_enter_space_view()
+	else:
+		ModeManager.switch_to_main()

@@ -7,6 +7,6 @@ script = ExtResource("1")
 display_name = "Add rows"
 description = "Add more rows to the board"
 base_cost = 6
-max_level = 6
+max_level = 2
 cost_type = 2
 cost_multiplier = 10.0

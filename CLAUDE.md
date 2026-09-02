@@ -198,7 +198,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 **PlinkoBoard** — `entities/plinko_board/plinko_board.gd`
 
 - Per-board gameplay: bucket rendering, coin spawning, drop queue, drop timer, per-board upgrade multipliers, bucket marking API for challenges. Peg rendering (`PegField`), coin instancing (`CoinPool`), particle sprays (`BurstField`) and deflector state (`DeflectorModel`) are delegated — the board keeps the lattice, the public API and the gameplay decisions.
-- Emits: `coin_dropped`, `coin_landed(board_type, bucket_index, currency_type, amount, multiplier)`, `board_rebuilt`, `autodropper_adjust_requested`, `prestige_coin_landed`, `cap_raise_coin_landed(coin, predicted_bucket)` (final-bounce start of the coin that first earns a raw currency post-prestige — `CapRaiseRevealAnimator` listens; mutually exclusive with `prestige_coin_landed` via `_will_reveal_cap_raise` / `_will_trigger_prestige`), `autodrop_failed(board_type)`, `row_upgrade_starting`, `row_upgrade_sweep_started(start_local_x, end_local_x, focus_local_y, sweep_duration)`, `bomb_spawned(board_type, bucket_index, seconds)` / `bomb_defused(board_type, bucket_index, multiplier)` / `bomb_detonated(board_type, bucket_index)` / `column_voided(board_type, bucket_index)` (bomb-hazard lifecycle; BombHazardRuntime listens to itself via its own state machine, audio + future VFX can subscribe externally).
+- Emits: `coin_dropped`, `coin_landed(board_type, bucket_index, currency_type, amount, multiplier)` (**only `ChallengeTracker` listens at runtime** — not BoardManager, not AnalyticsManager; earring and transporter landings deliberately do NOT emit it, since their indices would alias main-board bucket indices), `coin_transported(board_type, currency_type, world_pos)`, `board_rebuilt`, `autodropper_adjust_requested`, `prestige_coin_landed`, `cap_raise_coin_landed(coin, predicted_bucket)` (final-bounce start of the coin that first earns a raw currency post-prestige — `CapRaiseRevealAnimator` listens; mutually exclusive with `prestige_coin_landed` via `_will_reveal_cap_raise` / `_will_trigger_prestige`), `autodrop_failed(board_type)`, `row_upgrade_starting`, `row_upgrade_sweep_started(start_local_x, end_local_x, focus_local_y, sweep_duration)`, `bomb_spawned(board_type, bucket_index, seconds)` / `bomb_defused(board_type, bucket_index, multiplier)` / `bomb_detonated(board_type, bucket_index)` / `column_voided(board_type, bucket_index)` (bomb-hazard lifecycle; BombHazardRuntime listens to itself via its own state machine, audio + future VFX can subscribe externally).
 - Owns `_voided_columns: PackedInt32Array` (bucket indices whose strict vertical was destroyed by `void_column(idx)`) and `_active_bomb_multipliers: Dictionary` (bucket_index → defuse multiplier set by `mark_bucket_bomb(idx, multiplier)`, consumed in `finalize_coin_landing` next to the gameplay-target multiplier path). `_voided_columns` is cleared in `build_board()` — voids are per-challenge runtime state, not persistent.
 - Add-rows juice: `add_two_rows(animated := true)` is the player-purchase entry point (UpgradeSection passes default `true`; `ChallengeManager._apply_starting_conditions` passes `false` so challenge setup just rebuilds with no animation). The animated path emits `row_upgrade_starting` *before* `build_board()` so BoardManager can suppress the default fit-tween in time, then runs `_play_row_upgrade_glissando`: the pure scheduler `_compute_row_upgrade_schedule` returns per-column drop times + new-peg reveal indices; the cascade lifts every bucket up by `2*vertical_spacing` (the OLD row height) and snap-hides the two new edge buckets at indices 0 and `num_buckets-1` (positions that didn't exist on the previous row); each column step then plunges + bounces (`Bucket.fall_to_rest`), sings (`Bucket.mark_singing`), fires `AudioManager.force_play_bucket` with `degree = column index` for an ascending diatonic glissando, reveals that column's new pegs (MultiMesh per-instance transform restore), and (for the two edges only) calls `Bucket.fade_in`. Reuses `_upgrade_animating` + `_upgrade_ripple_tween` shared with the bucket-value ripple, so `build_board()`'s kill-on-rebuild handles re-trigger mid-animation for free. All tunables live in `VisualTheme` under the VFX group (`row_upgrade_*`).
 - Listens: `AudioManager.chord_changed` — fades all buckets to faded color on every chord advance. `coin_queue.count_changed` — rescales the active drop timer proportionally and refreshes the bonus label.
@@ -211,6 +211,68 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Per frame, `_update_queue_bonus_label_position` projects `coin_queue.global_position + coin_queue.start_position` to viewport space (using a cached `Camera3D`) and tells `DropSection` where to anchor its bonus label. Skipped when `drop_section.visible` is false.
 - Lattice math (`position_x_for`, `cell_to_world`, `next_lattice_cell`, and the `vertical_spacing = space*√3/2` derivation) forwards to the shared pure `Lattice` module (`scripts/lattice.gd`) — single source of truth shared with `Coin` and the decorative `MenuBoard`, so they can't drift. Public signatures unchanged; `cell_to_world` passes the stored `vertical_spacing`/`COIN_ROW_Y_OFFSET` in (not recomputed). `style_lab.gd`'s editor-only re-derivations are deliberately deferred (`# TODO(Lattice)`).
 - Deflectors: `_deflectors` is a `DeflectorModel` (see below); the board keeps the `ClickAction` / `DeflectorOutcome` vocabulary and the lattice→peg_index mapping, and forwards every public deflector method to the model.
+
+**SpaceBoard** — `entities/space_board/space_board.{gd,tscn}` (`class_name SpaceBoard`)
+
+- The endgame board: a fixed 10-row / 55-peg lattice with 11 buckets in a symmetric currency
+  rainbow (green-blue-violet-red-orange-**gold**-orange-red-violet-blue-green — gold dead
+  centre is the only single-bucket colour). Permanent child of `main.tscn` at world x=50,
+  the exact horizontal centre of the six boards (they sit at `i * board_spacing`, spacing 20).
+- **Not a `PlinkoBoard`.** No currency, no upgrades, no drop queue, no rewards; `BoardManager`
+  does not know it exists. It has no `BoardType`. Coin motion is hand-rolled and analytic —
+  it does not use `Coin` or `CoinSurface`, which is what kept it decoupled from the earrings work.
+- Emits: `bucket_activated(bucket_index)`, `won()`. Owns `_activated: Array[bool]`, persisted.
+- Inputs: `receive_coin(currency_type, world_pos)`, called DOWN by `Main` off a board's
+  `coin_transported`; plus editor-only dev hotkeys (KEY_8/9/0) in `Main`.
+- **Invariants:** activation state lives in `_activated` on the board, never on the 11 `Bucket`
+  children (which only exist after `_ready`), so it is unit-testable on a bare instance. The
+  lattice fall is an honest unbiased 50/50 — odds are never nudged. Landings QUEUE
+  (`_landing_queue` / `_drain_landings`) rather than dropping, because six boards can transport
+  at once. `_teardown_cinematic()` is idempotent, always COMMITS the activation, and restores
+  `Engine.time_scale` **only when `PrestigeManager.current_phase == NONE`** — prestige sets the
+  scale before emitting its phase change, so an unconditional reset would stomp it.
+- A coin arriving while the player is not viewing the space board activates its bucket
+  silently with no cinematic — running one would steal the shared camera for an invisible shot.
+- **The win is currently unreachable in normal play** (green can never grow earrings — see
+  `EarringGeometry`), which is known and deliberate.
+
+**EarringBoard** — `entities/earring_board/earring_board.{gd,tscn}` (`class_name EarringBoard`)
+
+- One triangular sub-board hanging beneath a main board's edge bucket. Extends `CoinSurface`,
+  so `Coin` drives it through exactly the same contract as `PlinkoBoard`. Owns its own
+  `PegField` and buckets; plain 50/50 bounce, no deflectors, no hazards, no voided columns.
+- **Invariant:** the coin stays parented to the `PlinkoBoard` across the handoff — `CoinPool`
+  writes into a MultiMesh parented to the board, so reparenting would render every coin in the
+  wrong place. `cell_to_world` therefore returns board-local coords via `transform * ...`.
+
+**CoinSurface** — `scripts/coin_surface.gd` (`class_name CoinSurface extends Node3D`, `@abstract`)
+
+- The explicit contract `Coin` consumes, replacing the old duck-typing. Both `PlinkoBoard` and
+  `EarringBoard` extend it, so `Coin.board` is statically typed and a missing override is a
+  parse error rather than a runtime surprise.
+
+**EarringGeometry** — `scripts/earring_geometry.gd` (`class_name EarringGeometry`, pure static)
+
+- Single source of truth for board sizing and earring placement, all derived from `Lattice`.
+  Replaces the two independent row calculations (the save/reload path and the runtime path)
+  that previously agreed only by luck.
+- The growth table: main board caps at 8 rows / 9 buckets, then each `ADD_ROW` grows both
+  earrings by 2 rows until they meet at dead centre (level 7). `add_row.tres` `max_level` is 2,
+  so the base game stops at 7 buckets and everything beyond needs cap raises.
+- **`earrings_meet` tests the geometry (`is_zero_approx`), never `rows == 8`.**
+- **Known gap:** `TierRegistry.cap_raise_currency` returns -1 for the last tier, so the GREEN
+  board can never reach the hard cap, never grows earrings, and never gets a transporter.
+
+> **Earrings (on `PlinkoBoard`).** Past 9 buckets, `ADD_ROW` grows two `EarringBoard`
+> children instead of the main triangle. The two edge buckets become **gateways**: they stop
+> paying currency entirely and coins fall through them into the earring below. When the
+> earrings meet, a single shared **transporter** bucket appears at board-local x=0 — it pays
+> nothing and emits `coin_transported` instead. It is parented to its own `Transporter` node,
+> NEVER to `buckets_container` (which `build_board` frees wholesale, and whose child order is
+> assumed 1:1 with bucket index). Earring landings must not resolve through `get_nearest_bucket`,
+> because the transporter's x=0 collides with the main board's centre bucket.
+> Challenges opt in per challenge via `ChallengeData.grows_earrings` (default `false`);
+> a challenge board is uncapped so `StartingBoards` can still author boards past 9 buckets.
 
 **PegField** — `entities/plinko_board/peg_field.gd` (`class_name PegField`, script on `PlinkoBoard`'s `Pegs` node)
 

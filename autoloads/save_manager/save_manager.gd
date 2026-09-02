@@ -1,18 +1,24 @@
 extends Node
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 7
+const SAVE_VERSION := 8
 const AUTO_SAVE_INTERVAL := 30.0
 
 var _auto_save_timer: Timer
 var _board_manager: BoardManager
+## Injected by Main. The space board is a node in main.tscn, unreachable from an
+## autoload, and it must never call back into SaveManager (that would be a
+## cycle) — so it is handed down here instead.
+var _space_board: SpaceBoard
 ## Offline earnings from the last load_game() call. Keyed by CurrencyType string
 ## name -> amount earned. Empty if no offline time elapsed. Cleared after reading.
 var last_offline_earnings: Dictionary = {}
 
 
-func setup(board_manager: BoardManager, should_autosave: bool) -> void:
+func setup(board_manager: BoardManager, should_autosave: bool,
+		space_board: SpaceBoard = null) -> void:
 	_board_manager = board_manager
+	_space_board = space_board
 
 	# Clean up any existing timer from a previous scene
 	if _auto_save_timer:
@@ -53,6 +59,11 @@ func save_game() -> void:
 		"max_fps": PerformanceSettings.get_max_fps(),
 		"window_mode": PerformanceSettings.get_window_mode(),
 	}
+	# Space last: it reads nothing and emits nothing the economy listens to, so
+	# it has no ordering constraint, and last keeps it clear of the gold
+	# soft-lock failsafe on the load side.
+	if is_instance_valid(_space_board):
+		data["space"] = _space_board.serialize()
 
 	var json_string := JSON.stringify(data, "\t")
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -121,6 +132,9 @@ func load_game() -> bool:
 		AudioManager.set_vfx_override(key, bool(data["vfx_settings"][key]))
 	PerformanceSettings.set_max_fps(int(data.get("max_fps", PerformanceSettings.DEFAULT_MAX_FPS)))
 	PerformanceSettings.set_window_mode(int(data.get("window_mode", PerformanceSettings.DEFAULT_WINDOW_MODE)))
+	# Space board last, mirroring the save order.
+	if is_instance_valid(_space_board):
+		_space_board.deserialize(data.get("space", {}))
 
 	# Failsafe: reconcile state with the level table.
 	# Heals saves where current_level was saved ahead of claim_rewards().
@@ -203,7 +217,31 @@ func _persistent_progress_blocks() -> Dictionary:
 		"prestige": PrestigeManager.serialize(),
 		"challenges": ChallengeProgressManager.serialize(),
 		"onboarding": OnboardingProgress.serialize(),
+		# Endgame progress. reset_game fires on EVERY prestige; wiping 11
+		# buckets that took six boards to light would make the win unreachable
+		# in practice. full_reset() passes no blocks at all, so a true fresh
+		# start still clears it.
+		"space": _space_state_block(),
 	}
+
+
+## The space board's state, from the live node when main.tscn is up and from
+## the save file otherwise (reset_game_without_reload runs from the prestige
+## screen, where the node does not exist).
+func _space_state_block() -> Dictionary:
+	if is_instance_valid(_space_board):
+		return _space_board.serialize()
+	if not FileAccess.file_exists(SAVE_PATH):
+		return {}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if not file:
+		return {}
+	var json := JSON.new()
+	var parsed := json.parse(file.get_as_text())
+	file.close()
+	if parsed != OK or typeof(json.data) != TYPE_DICTIONARY:
+		return {}
+	return json.data.get("space", {})
 
 
 ## Deletes the save, rewrites a minimal save (version + device prefs + any
@@ -272,6 +310,7 @@ func reset_state() -> void:
 	CurrencyManager.notify_all()
 	toggle_auto_save(false)
 	_board_manager = null
+	_space_board = null
 	print("[SaveManager] Runtime state reset (currency/level/upgrades).")
 
 func _migrate(data: Dictionary, version: int) -> Dictionary:
@@ -326,6 +365,10 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 		onboarding["revealed_milestone_tiers"] = revealed_tiers
 		data["onboarding"] = onboarding
 		print("[SaveManager] Migrated save v%d -> v7 (milestone tiers seeded)" % version)
+	if version < 8:
+		# No-op: the new "space" block is absent from older saves, and
+		# SpaceBoard.deserialize({}) already means "nothing activated, not won".
+		print("[SaveManager] Migrated save v%d -> v8 (space board)" % version)
 	data["version"] = SAVE_VERSION
 	return data
 

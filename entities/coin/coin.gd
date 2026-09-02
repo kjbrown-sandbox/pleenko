@@ -8,7 +8,10 @@ signal final_bounce_started(coin: Coin, predicted_bucket: Bucket)
 
 enum FillState { FULL, FILLING }
 
-var board: PlinkoBoard
+## The surface this coin is currently falling down. Typed as CoinSurface, not
+## PlinkoBoard, because a coin handed off to an earring keeps bouncing against
+## an EarringBoard instead (see PlinkoBoard._handoff_to_earring).
+var board: CoinSurface
 var coin_type: Enums.CurrencyType = Enums.CurrencyType.GOLD_COIN:
 	set(value):
 		coin_type = value
@@ -127,6 +130,13 @@ func start(target: Vector3) -> void:
 		.set_ease(Tween.EASE_IN) \
 		.set_trans(Tween.TRANS_QUAD)
 	tween.tween_callback(_bounce_or_despawn)
+
+
+## The coin's current integer lattice cell. Read by EarringBoard.bucket_for_coin
+## to resolve the landing bucket by column rather than by nearest-x (the
+## transporter shares an x with the main board's centre bucket).
+func get_lattice_cell() -> Vector2i:
+	return Vector2i(_row, _col)
 
 
 func kill_tweens() -> void:
