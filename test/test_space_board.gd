@@ -68,6 +68,8 @@ func _run_tests() -> void:
 
 	await test_interrupted_cinematic_still_commits()
 	await test_concurrent_arrivals_queue_and_never_compound_time_scale()
+	await test_teardown_leaves_a_prestige_time_scale_alone()
+	await test_teardown_while_exiting_never_restarts_a_cinematic()
 	await test_coin_for_activated_bucket_is_freed()
 	test_offcamera_arrival_commits_without_a_cinematic()
 
@@ -538,6 +540,70 @@ func test_concurrent_arrivals_queue_and_never_compound_time_scale() -> void:
 	assert_near(Engine.time_scale, 1.0, 0.0001, "time scale restored once the queue empties")
 
 	sb.free()
+
+
+## Regression: PrestigeManager.enter_phase sets Engine.time_scale and THEN emits
+## prestige_phase_changed, which reaches us as an abort. Teardown used to force
+## 1.0 unconditionally, wiping prestige's slow-mo one line after it was set —
+## reachable any time a prestige fired while the player was parked in space.
+func test_teardown_leaves_a_prestige_time_scale_alone() -> void:
+	print("test_teardown_leaves_a_prestige_time_scale_alone")
+	var sb := _make_board()
+	var coin := MeshInstance3D.new()
+	sb._enqueue_landing(coin, GOLD, GOLD_INDEX)
+	assert_true(sb._cinematic != SpaceBoard.Cinematic.OFF, "cinematic is running")
+
+	# Stand in for enter_phase(SLOW_MO): the scale is already prestige's when the
+	# abort arrives. Set directly so no autoload signal handlers run.
+	var prestige_scale := 0.15
+	PrestigeManager.current_phase = PrestigeManager.PrestigePhase.SLOW_MO
+	Engine.time_scale = prestige_scale
+
+	sb.abort_cinematic()
+	assert_equal(sb._cinematic, SpaceBoard.Cinematic.OFF, "cinematic still tears down")
+	assert_true(sb.is_activated(GOLD_INDEX), "and still commits the activation")
+	assert_near(Engine.time_scale, prestige_scale, 0.0001,
+		"prestige owns the clock — teardown must not reset it to 1.0")
+
+	PrestigeManager.current_phase = PrestigeManager.PrestigePhase.NONE
+	Engine.time_scale = 1.0
+	if is_instance_valid(coin):
+		coin.queue_free()
+	sb.free()
+	await get_tree().process_frame
+
+
+## Regression: teardown ends by draining the landing queue, and a drained landing
+## can START a new cinematic (slowing the clock and clearing _torn_down). Doing
+## that from _exit_tree left the next scene running at the slow-mo rate forever.
+func test_teardown_while_exiting_never_restarts_a_cinematic() -> void:
+	print("test_teardown_while_exiting_never_restarts_a_cinematic")
+	var sb := _make_board()
+	var coin_a := MeshInstance3D.new()
+	var coin_b := MeshInstance3D.new()
+	sb._enqueue_landing(coin_a, GOLD, GOLD_INDEX)
+	sb._enqueue_landing(coin_b, ORANGE, 4)
+	assert_equal(sb._landing_queue.size(), 1, "second arrival is waiting")
+
+	sb._exiting = true
+	sb.abort_cinematic()
+
+	assert_equal(sb._cinematic, SpaceBoard.Cinematic.OFF,
+		"no new cinematic starts on a node that is leaving the tree")
+	assert_near(Engine.time_scale, 1.0, 0.0001,
+		"the clock is left at normal speed, not the slow-mo rate")
+	assert_true(sb.is_activated(GOLD_INDEX), "the in-flight activation still commits")
+	assert_equal(sb._landing_queue.size(), 1, "the queue is left undrained")
+
+	# Engine.time_scale is global and shared across suites: reset it explicitly so
+	# a failure here can never leak a slowed clock into the next test.
+	Engine.time_scale = 1.0
+	if is_instance_valid(coin_a):
+		coin_a.queue_free()
+	if is_instance_valid(coin_b):
+		coin_b.queue_free()
+	sb.free()
+	await get_tree().process_frame
 	await get_tree().process_frame
 
 

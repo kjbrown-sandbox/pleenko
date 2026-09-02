@@ -379,6 +379,15 @@ func begin_cinematic_camera() -> void:
 	_cinematic_camera_active = true
 
 
+## Drop the borrow WITHOUT re-framing the active board, for a caller that is
+## taking the camera over rather than handing it back (prestige). end_cinematic_camera
+## is the normal path; this one exists so two owners can't tween the same camera.
+func release_cinematic_camera() -> void:
+	if _camera_tween and _camera_tween.is_valid():
+		_camera_tween.kill()
+	_cinematic_camera_active = false
+
+
 ## True while a transient cinematic owns the camera. Other camera owners check
 ## this before starting so they can't fight over it.
 func is_cinematic_camera_active() -> bool:

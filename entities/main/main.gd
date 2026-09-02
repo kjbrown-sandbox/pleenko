@@ -262,7 +262,10 @@ func _enter_space_view() -> void:
 	_tween_camera_to_space()
 
 
-func _exit_space_view() -> void:
+## `return_camera` false releases the borrow WITHOUT easing the camera back onto
+## the active board — used by the prestige path, which is about to drive the
+## camera itself. Two writers on one camera otherwise fight for a full tween.
+func _exit_space_view(return_camera: bool = true) -> void:
 	if not _viewing_space:
 		return
 	_viewing_space = false
@@ -277,8 +280,12 @@ func _exit_space_view() -> void:
 	challenges_down_icon.visible = ModeManager.are_challenges_unlocked()
 	if _space_camera_held:
 		_space_camera_held = false
-		# Returns the borrow AND eases the camera back onto the active board.
-		board_manager.end_cinematic_camera()
+		if return_camera:
+			# Returns the borrow AND eases the camera back onto the active board.
+			board_manager.end_cinematic_camera()
+		else:
+			# Release the borrow only; the caller owns the camera from here.
+			board_manager.release_cinematic_camera()
 	_update_nav_arrows()
 	_update_lockdown_overlay()
 
@@ -754,7 +761,7 @@ func _on_prestige_phase_changed(phase: PrestigeManager.PrestigePhase) -> void:
 	# Prestige owns the camera and time_scale outright, and it ends in a scene
 	# reload — nothing would return the player to the board row otherwise.
 	if phase != PrestigeManager.PrestigePhase.NONE and _viewing_space:
-		_exit_space_view()
+		_exit_space_view(false)
 	if phase == PrestigeManager.PrestigePhase.SLOW_MO:
 		# Hide all HUD elements when the coin touches the bucket
 		coin_values.visible = false
@@ -795,7 +802,12 @@ func _on_board_unlocked(board_type: Enums.BoardType) -> void:
 				_forbidden_bucket_reveal_animator.connect_board(board)
 			else:
 				_cap_raise_reveal_animator.connect_board(board)
-			_connect_space_board(board)
+			# Normal mode only: _setup_space_board() never ran in a challenge, so
+			# should_play_cinematic_fn is unset and _should_play_cinematic()
+			# defaults to true — a challenge board wired here would steal the
+			# camera and Engine.time_scale mid-challenge.
+			if not ChallengeManager.is_active_challenge:
+				_connect_space_board(board)
 			break
 	if not _loading_from_save:
 		_boards_with_unseen_upgrades[board_type] = true

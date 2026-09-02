@@ -12,6 +12,14 @@ extends Node3D
 ## Landing a coin in the bucket that matches the coin's own colour activates
 ## that bucket permanently. All 11 activated = the player wins.
 ##
+## KNOWN AND DELIBERATE: the win is currently UNREACHABLE in normal play. Coins
+## only arrive here from a board's transporter, which needs that board's earrings
+## to meet, which needs ADD_ROW cap raises — and TierRegistry.cap_raise_currency
+## returns -1 for the last tier, so the GREEN board can never get there. Its two
+## edge buckets therefore cannot be activated except via the dev hotkeys in Main.
+## This is a known gap the player-facing fix for lives outside this system; do
+## NOT "fix" it by special-casing green or shrinking the bucket layout.
+##
 ## Bucket layout (fixed, never rebuilt — gold dead centre, everything else
 ## mirrored, green at the edges):
 ##   idx  0     1    2      3   4      5    6      7   8      9    10
@@ -120,6 +128,8 @@ var _cam_start_size: float = 0.0
 var _cam_rest_pos: Vector3 = Vector3.ZERO
 var _cam_rest_size: float = 0.0
 var _input_locked: bool = false
+## Set in _exit_tree so teardown skips work that only makes sense in-tree.
+var _exiting := false
 var _torn_down: bool = true
 
 # ── Contact shake (mirrors PrestigeVFX.start_shake) ──────────────────
@@ -161,6 +171,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_exiting = true
 	_teardown_cinematic()
 
 
@@ -666,7 +677,12 @@ func _teardown_cinematic() -> void:
 	var index: int = _cinematic_bucket_index
 	_cinematic = Cinematic.OFF
 	_cinematic_elapsed = 0.0
-	Engine.time_scale = 1.0
+	# Only restore the scale if we still OWN it. PrestigeManager.enter_phase sets
+	# Engine.time_scale and THEN emits prestige_phase_changed, which reaches us via
+	# Main._on_prestige_phase_changed -> abort_cinematic(). An unconditional 1.0
+	# here would overwrite prestige's slow-mo one line after it was set.
+	if PrestigeManager.current_phase == PrestigeManager.PrestigePhase.NONE:
+		Engine.time_scale = 1.0
 	if index >= 0:
 		_set_underlay_fill(index, 1.0)
 		_mark_bucket_activated(index)
@@ -684,7 +700,12 @@ func _teardown_cinematic() -> void:
 			_camera.size = _cam_rest_size
 	_set_input_lock(false)
 	_flush_win()
-	_drain_landings()
+	# Never drain while leaving the tree: _drain_landings can start a NEW cinematic
+	# (setting Engine.time_scale to the slow-mo value and clearing _torn_down) on a
+	# node that is about to be freed, and nothing would ever restore it — the next
+	# scene would run at the slow-mo rate permanently.
+	if not _exiting:
+		_drain_landings()
 	_update_processing()
 
 
