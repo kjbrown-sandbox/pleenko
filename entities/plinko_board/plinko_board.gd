@@ -55,6 +55,7 @@ const TRANSPORTER_BUCKET_SCALE := 1.3
 @onready var upgrade_section = $UpgradeSection
 @onready var drop_section: DropSection = $DropSection
 @onready var coin_queue: CoinQueue = $CoinQueue
+@onready var _tilt_slider: TiltSlider = $TiltSlider
 @onready var _drop_main_column: VBoxContainer = $DropSection/DropButtons/DropMainColumn
 @onready var _drop_main = $DropSection/DropButtons/DropMainColumn/DropMain
 @onready var _drop_main_tooltip: Tooltip = $DropSection/DropMainTooltip
@@ -108,7 +109,6 @@ var _gameplay_target_fading: bool = false
 var _deflectors := DeflectorModel.new()
 var _deflector_editor: DeflectorEditor
 ## Per-board tilt slider, hidden until blue's signature upgrade is unlocked.
-var _tilt_slider: TiltSlider
 ## Whether this board is the active one — the slider needs both this AND the
 ## upgrade unlocked, so it can't be derived from either alone.
 var _board_ui_visible: bool = true
@@ -228,9 +228,6 @@ signal coin_transported(board_type: Enums.BoardType, currency_type: Enums.Curren
 ## "Dud chute" section for why the two can never both fire.
 signal dud_chute_opened(board_type: Enums.BoardType, multiplier: float)
 
-## The player moved this board's tilt slider. Signals UP so the slider UI and the
-## save layer can react without the board reaching out to either.
-signal tilt_changed(board_type: Enums.BoardType, notch: int)
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
@@ -386,11 +383,10 @@ func setup(type: Enums.BoardType) -> void:
 	_deflector_editor.deflector_change_requested.connect(_on_deflector_change_requested)
 	_deflector_editor.set_capacity(get_deflector_cap())
 
-	# Tilt slider (pure view+input child; this board owns the notch). Present
-	# from setup but hidden until the upgrade is owned, so a later purchase
-	# doesn't have to build scene nodes mid-game.
-	_tilt_slider = preload("res://entities/tilt_slider/tilt_slider.tscn").instantiate()
-	add_child(_tilt_slider)
+	# Tilt slider (pure view+input child; this board owns the notch). Authored in
+	# plinko_board.tscn so it gets real anchors like DropSection — a Control
+	# parented to a Node3D resolves its anchors against the VIEWPORT, so an
+	# unanchored one lands at the top-left corner rather than under the buckets.
 	_tilt_slider.setup(self)
 	_tilt_slider.notch_changed.connect(set_tilt_notch)
 	_refresh_tilt_slider_visibility()
@@ -2223,14 +2219,14 @@ func resolve_bounce_direction(row: int, col: int, roll: float) -> int:
 	var idx: int = peg_index(row, col)
 	# A deflector is a deliberate player placement on a specific peg, so it wins
 	# over the board-wide tilt rather than the two fighting over one roll.
-	if _deflectors.has(idx):
-		return _deflectors.resolve_bounce(idx, roll)
-	# 0 means "no opinion" — an untilted board, an unowned upgrade, or a coin
-	# already dead-centre. Falling through keeps the legacy 50/50 bit-identical,
-	# which the trajectory tests pin.
-	var tilted: int = BoardTilt.direction_for(row, col, _tilt_notch, current_tilt_level(), roll)
-	if tilted != 0:
-		return tilted
+	if not _deflectors.has(idx):
+		# 0 means "no opinion" — an untilted board, an unowned upgrade, or a coin
+		# already dead-centre. Falling through keeps the legacy 50/50
+		# bit-identical, which the trajectory tests pin.
+		var tilted: int = BoardTilt.direction_for(
+			row, col, _tilt_notch, current_tilt_level(), roll)
+		if tilted != 0:
+			return tilted
 	return _deflectors.resolve_bounce(idx, roll)
 
 
@@ -2266,12 +2262,25 @@ func get_tilt_notch() -> int:
 ## earring stays a leaf that knows nothing about its parent, and re-pushed on
 ## every change because an earring built earlier would otherwise keep a stale
 ## notch until the next rebuild.
+##
+## NOTE an earring's "centre" is its OWN middle column, not the main board's — it
+## builds a standard Lattice triangle with its apex at earring-local (0, 0). Once
+## the earrings meet, the shared transporter sits at each one's INNERMOST bottom
+## column, so pulling the slider toward Centre pushes coins AWAY from the
+## transporter and Edges pushes them toward it. That inverts what the label
+## suggests, and the transporter is the SpaceBoard win path, so it matters.
 func _push_tilt_to_earrings() -> void:
-	var level: int = current_tilt_level()
-	for earring in [_left_earring, _right_earring]:
-		if is_instance_valid(earring):
-			earring.tilt_notch = _tilt_notch
-			earring.tilt_level = level
+	for earring: EarringBoard in [_left_earring, _right_earring]:
+		_apply_tilt_to(earring)
+
+
+## Copies this board's tilt onto one earring. Split out so _spawn_earring can
+## seed the instance it is building, before the fields are assigned.
+func _apply_tilt_to(earring: EarringBoard) -> void:
+	if not is_instance_valid(earring):
+		return
+	earring.tilt_notch = _tilt_notch
+	earring.tilt_level = current_tilt_level()
 
 
 ## Called DOWN by the slider UI. Clamped here rather than trusting the caller,
@@ -2282,7 +2291,12 @@ func set_tilt_notch(notch: int) -> void:
 		return
 	_tilt_notch = clamped
 	_push_tilt_to_earrings()
-	tilt_changed.emit(board_type, _tilt_notch)
+	# Calls DOWN to the view rather than emitting up: the slider is this board's
+	# own child, and this setter is also the restore path, so a save with a
+	# tilted board would otherwise show a centred handle reading "No tilt".
+	# refresh() assigns without re-emitting, so there is no loop back here.
+	if _tilt_slider:
+		_tilt_slider.refresh()
 
 
 ## Odds the tilt currently gives its favoured direction, as a percentage, for the
@@ -2440,8 +2454,9 @@ func _refresh_tilt_slider_visibility() -> void:
 ## One entry point because the panels have DIFFERENT rules: upgrade_section and
 ## drop_section follow the active board exactly, while the tilt slider is also
 ## gated on its upgrade being unlocked. Callers toggling `.visible` on each panel
-## by hand is how the slider would end up drawn for all six boards at once —
-## they are Controls under a Node3D, so they all render in the same screen space.
+## by hand is how the slider would end up drawn for all six boards at once — the
+## Controls among them resolve their anchors against the viewport, so every
+## board's copy occupies the same screen slot.
 func set_board_ui_visible(vis: bool) -> void:
 	_board_ui_visible = vis
 	upgrade_section.visible = vis
@@ -2694,7 +2709,10 @@ func _spawn_earring(side: int, apex_local: Vector3, transporter_col: int) -> Ear
 	if transporter_col >= 0 and _transporter_bucket:
 		earring.set_transporter(transporter_col, _transporter_bucket)
 	earring.setup(_earring_rows, side, space_between_pegs, board_type)
-	_push_tilt_to_earrings()
+	# Seed the instance in hand, not _left_earring/_right_earring — the caller
+	# assigns those AFTER this returns, so pushing to the fields here would miss
+	# whichever earring is still null and leave the pair silently asymmetric.
+	_apply_tilt_to(earring)
 	return earring
 
 

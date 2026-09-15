@@ -237,7 +237,7 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 
 ## Inject the tooltip middle-block provider for upgrade types that need one.
 ## Autodropper rows list per-board assignments; deflector and dud chute show
-## odds; the lucky peg shows its per-board count.
+## odds; the lucky peg shows its per-board count; the tilter its full-tilt odds.
 func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeType) -> void:
 	match upgrade_type:
 		Enums.UpgradeType.AUTODROPPER:

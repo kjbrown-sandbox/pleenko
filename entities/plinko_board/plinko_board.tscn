@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://dwssqmgrhvooe" path="res://entities/plinko_board/upgrade_section.tscn" id="2_upgrade"]
 [ext_resource type="Script" uid="uid://6isft3gag7vp" path="res://entities/coin_queue/coin_queue.gd" id="3_coinqueue"]
 [ext_resource type="PackedScene" uid="uid://h4rwxjeyfqx" path="res://entities/drop_section/drop_section.tscn" id="4_drop"]
+[ext_resource type="PackedScene" path="res://entities/tilt_slider/tilt_slider.tscn" id="6_tilt"]
 
 [node name="PlinkoBoard" type="Node3D" unique_id=812938818]
 script = ExtResource("1_wje3v")
@@ -25,4 +26,12 @@ anchor_left = 0.5
 anchor_right = 0.5
 offset_top = 147.0
 offset_bottom = 147.0
+grow_horizontal = 2
+
+[node name="TiltSlider" parent="." unique_id=40893428 instance=ExtResource("6_tilt")]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_top = 232.0
+offset_bottom = 232.0
 grow_horizontal = 2

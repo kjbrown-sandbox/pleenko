@@ -21,9 +21,9 @@ func _run_tests() -> void:
 	test_extreme_bias_is_capped()
 	test_half_notches_apply_half_the_strength()
 	test_default_notch_is_always_fair()
-	test_toward_centre_depends_on_which_side()
-	test_toward_centre_is_exact_at_dead_centre()
-	test_centre_setting_pulls_both_sides_inward()
+	test_toward_center_depends_on_which_side()
+	test_toward_center_is_exact_at_dead_centre()
+	test_center_setting_pulls_both_sides_inward()
 	test_edges_setting_pushes_both_sides_outward()
 	test_roll_boundary_follows_the_bias()
 	test_no_opinion_when_untilted_or_unowned()
@@ -32,6 +32,9 @@ func _run_tests() -> void:
 	test_deflector_wins_over_tilt()
 	test_labels_name_only_the_ends()
 	test_tres_description_matches_the_constants()
+	test_both_earrings_inherit_the_tilt()
+	test_an_inheriting_earring_actually_biases()
+	test_restoring_a_notch_reaches_the_slider()
 
 	print("\n=== Done ===\n")
 
@@ -42,7 +45,7 @@ func test_unowned_upgrade_is_a_fair_coin() -> void:
 	print("test_unowned_upgrade_is_a_fair_coin")
 	assert_near(BoardTilt.bias_at_extreme(0), 0.5, 0.0001,
 		"level 0 is a fair coin even at a full slider")
-	assert_near(BoardTilt.bias_for(0, BoardTilt.NOTCH_CENTRE), 0.5, 0.0001,
+	assert_near(BoardTilt.bias_for(0, BoardTilt.NOTCH_CENTER), 0.5, 0.0001,
 		"and the slider can't bias what isn't owned")
 
 
@@ -74,7 +77,7 @@ func test_half_notches_apply_half_the_strength() -> void:
 	# fair to the extreme — level 1 is 0.55 at the end, so 0.525 here.
 	assert_near(BoardTilt.bias_for(1, -1), 0.525, 0.0001, "one notch toward centre")
 	assert_near(BoardTilt.bias_for(1, 1), 0.525, 0.0001, "one notch toward edges")
-	assert_near(BoardTilt.bias_for(1, BoardTilt.NOTCH_CENTRE), 0.55, 0.0001,
+	assert_near(BoardTilt.bias_for(1, BoardTilt.NOTCH_CENTER), 0.55, 0.0001,
 		"and the full notch gets the full strength")
 
 
@@ -87,33 +90,33 @@ func test_default_notch_is_always_fair() -> void:
 
 # --- Which way is inward ---
 
-func test_toward_centre_depends_on_which_side() -> void:
-	print("test_toward_centre_depends_on_which_side")
+func test_toward_center_depends_on_which_side() -> void:
+	print("test_toward_center_depends_on_which_side")
 	# THE property that makes this a centre-seeking tilt rather than a fixed
 	# left/right bias: the same setting pulls opposite sides opposite ways.
 	# Row 4, col 0 is the far left of that row; col 4 is the far right.
-	assert_equal(BoardTilt.toward_centre(4, 0), int(Enums.Direction.RIGHT),
+	assert_equal(BoardTilt.toward_center(4, 0), int(Enums.Direction.RIGHT),
 		"a coin left of centre goes RIGHT to come inward")
-	assert_equal(BoardTilt.toward_centre(4, 4), int(Enums.Direction.LEFT),
+	assert_equal(BoardTilt.toward_center(4, 4), int(Enums.Direction.LEFT),
 		"a coin right of centre goes LEFT to come inward")
 
 
-func test_toward_centre_is_exact_at_dead_centre() -> void:
-	print("test_toward_centre_is_exact_at_dead_centre")
+func test_toward_center_is_exact_at_dead_centre() -> void:
+	print("test_toward_center_is_exact_at_dead_centre")
 	# Compared as integers (2*col - row) rather than against a float x, so dead
 	# centre is exact instead of an epsilon away from it.
-	assert_equal(BoardTilt.toward_centre(4, 2), 0, "row 4 col 2 is dead centre")
-	assert_equal(BoardTilt.toward_centre(0, 0), 0, "the apex peg is dead centre")
+	assert_equal(BoardTilt.toward_center(4, 2), 0, "row 4 col 2 is dead centre")
+	assert_equal(BoardTilt.toward_center(0, 0), 0, "the apex peg is dead centre")
 	# Odd rows have no dead-centre cell at all — every column is on one side.
-	assert_true(BoardTilt.toward_centre(3, 1) != 0, "odd rows have no centre cell")
-	assert_true(BoardTilt.toward_centre(3, 2) != 0, "and neither column is neutral")
+	assert_true(BoardTilt.toward_center(3, 1) != 0, "odd rows have no centre cell")
+	assert_true(BoardTilt.toward_center(3, 2) != 0, "and neither column is neutral")
 
 
-func test_centre_setting_pulls_both_sides_inward() -> void:
-	print("test_centre_setting_pulls_both_sides_inward")
-	assert_equal(BoardTilt.favoured_direction(4, 0, BoardTilt.NOTCH_CENTRE),
+func test_center_setting_pulls_both_sides_inward() -> void:
+	print("test_center_setting_pulls_both_sides_inward")
+	assert_equal(BoardTilt.favoured_direction(4, 0, BoardTilt.NOTCH_CENTER),
 		int(Enums.Direction.RIGHT), "left side is pulled right")
-	assert_equal(BoardTilt.favoured_direction(4, 4, BoardTilt.NOTCH_CENTRE),
+	assert_equal(BoardTilt.favoured_direction(4, 4, BoardTilt.NOTCH_CENTER),
 		int(Enums.Direction.LEFT), "right side is pulled left")
 
 
@@ -131,11 +134,11 @@ func test_roll_boundary_follows_the_bias() -> void:
 	print("test_roll_boundary_follows_the_bias")
 	# Level 1 at a full centre notch is 0.55, so rolls under that go inward.
 	var inward: int = int(Enums.Direction.RIGHT)  # row 4 col 0 is left of centre
-	assert_equal(BoardTilt.direction_for(4, 0, BoardTilt.NOTCH_CENTRE, 1, 0.54), inward,
+	assert_equal(BoardTilt.direction_for(4, 0, BoardTilt.NOTCH_CENTER, 1, 0.54), inward,
 		"a roll under the bias goes the favoured way")
-	assert_equal(BoardTilt.direction_for(4, 0, BoardTilt.NOTCH_CENTRE, 1, 0.56), -inward,
+	assert_equal(BoardTilt.direction_for(4, 0, BoardTilt.NOTCH_CENTER, 1, 0.56), -inward,
 		"a roll over it goes the other way")
-	assert_equal(BoardTilt.direction_for(4, 0, BoardTilt.NOTCH_CENTRE, 1, 0.55), -inward,
+	assert_equal(BoardTilt.direction_for(4, 0, BoardTilt.NOTCH_CENTER, 1, 0.55), -inward,
 		"the boundary itself is exclusive, matching the deflector's convention")
 
 
@@ -145,9 +148,9 @@ func test_no_opinion_when_untilted_or_unowned() -> void:
 	# why returning a coin flip here would be wrong.
 	assert_equal(BoardTilt.direction_for(4, 0, BoardTilt.NOTCH_DEFAULT, 5, 0.1), 0,
 		"a default slider has no opinion")
-	assert_equal(BoardTilt.direction_for(4, 0, BoardTilt.NOTCH_CENTRE, 0, 0.1), 0,
+	assert_equal(BoardTilt.direction_for(4, 0, BoardTilt.NOTCH_CENTER, 0, 0.1), 0,
 		"an unowned upgrade has no opinion")
-	assert_equal(BoardTilt.direction_for(4, 2, BoardTilt.NOTCH_CENTRE, 5, 0.1), 0,
+	assert_equal(BoardTilt.direction_for(4, 2, BoardTilt.NOTCH_CENTER, 5, 0.1), 0,
 		"a dead-centre coin has no inward direction to favour")
 
 
@@ -155,7 +158,7 @@ func test_notch_is_clamped() -> void:
 	print("test_notch_is_clamped")
 	# Saves are the untrusted source: a corrupt notch must not scale the bias
 	# past the extreme.
-	assert_equal(BoardTilt.clamp_notch(-99), BoardTilt.NOTCH_CENTRE, "clamps low")
+	assert_equal(BoardTilt.clamp_notch(-99), BoardTilt.NOTCH_CENTER, "clamps low")
 	assert_equal(BoardTilt.clamp_notch(99), BoardTilt.NOTCH_EDGES, "clamps high")
 	assert_near(BoardTilt.bias_for(1, 99), BoardTilt.bias_for(1, BoardTilt.NOTCH_EDGES),
 		0.0001, "an out-of-range notch is no stronger than the real extreme")
@@ -202,7 +205,7 @@ func test_deflector_wins_over_tilt() -> void:
 	UpgradeManager.get_state(PlinkoBoard.DEFLECTOR_BOARD,
 		Enums.UpgradeType.PEG_DEFLECTOR).level = 1
 	var board := _make_board()
-	board.set_tilt_notch(BoardTilt.NOTCH_CENTRE)
+	board.set_tilt_notch(BoardTilt.NOTCH_CENTER)
 	# Row 4 col 0 is left of centre, so the tilt favours RIGHT. Point a deflector
 	# LEFT there and the deflector's direction must win on a following roll.
 	board.place_deflector(board.peg_index(4, 0), Enums.Direction.LEFT)
@@ -219,7 +222,7 @@ func test_labels_name_only_the_ends() -> void:
 	print("test_labels_name_only_the_ends")
 	# The middle is the neutral default and the half stops are deliberately
 	# unlabelled, so the slider reads as a spectrum rather than five states.
-	assert_equal(BoardTilt.notch_label(BoardTilt.NOTCH_CENTRE), "Centre", "left end")
+	assert_equal(BoardTilt.notch_label(BoardTilt.NOTCH_CENTER), "Centre", "left end")
 	assert_equal(BoardTilt.notch_label(BoardTilt.NOTCH_EDGES), "Edges", "right end")
 	assert_equal(BoardTilt.notch_label(BoardTilt.NOTCH_DEFAULT), "", "the middle is unlabelled")
 	assert_equal(BoardTilt.notch_label(-1), "", "and so are the half stops")
@@ -239,3 +242,84 @@ func test_tres_description_matches_the_constants() -> void:
 		var first: int = roundi(BoardTilt.LEVEL_1_EXTREME_BIAS * 100.0)
 		assert_true(data.description.contains("%d/%d" % [first, 100 - first]),
 			"description quotes the live level-1 split (%d/%d)" % [first, 100 - first])
+
+
+# --- Wiring (both bugs below shipped and were caught in review, not by test) ---
+
+## BOTH earrings must inherit the tilt. The first version pushed from inside
+## _spawn_earring, before the caller assigned _left_earring/_right_earring — so
+## the right earring silently kept notch 0 forever while the left was tilted.
+## An asymmetric board is precisely what this upgrade exists to prevent.
+func test_both_earrings_inherit_the_tilt() -> void:
+	print("test_both_earrings_inherit_the_tilt")
+	UpgradeManager.reset()
+	UpgradeManager.get_state(PlinkoBoard.BOARD_TILT_BOARD,
+		Enums.UpgradeType.BOARD_TILT).level = 3
+	var board := _make_board()
+	var left := EarringBoard.new()
+	var right := EarringBoard.new()
+	board._left_earring = left
+	board._right_earring = right
+
+	board.set_tilt_notch(BoardTilt.NOTCH_CENTER)
+
+	for pair in [["left", left], ["right", right]]:
+		var name: String = pair[0]
+		var earring: EarringBoard = pair[1]
+		assert_equal(earring.tilt_notch, BoardTilt.NOTCH_CENTER,
+			"the %s earring inherits the notch" % name)
+		assert_equal(earring.tilt_level, 3,
+			"the %s earring inherits the level" % name)
+
+	left.free()
+	right.free()
+	board.free()
+	UpgradeManager.reset()
+
+
+## A seeded earring biases its bounces; an unseeded one does not. Guards the
+## inheritance at the level that actually matters — the trajectory — rather than
+## only at the field assignment.
+func test_an_inheriting_earring_actually_biases() -> void:
+	print("test_an_inheriting_earring_actually_biases")
+	var earring := EarringBoard.new()
+	# Untilted: the legacy 50/50 mapping, roll < 0.5 -> RIGHT.
+	assert_equal(earring.resolve_bounce_direction(4, 4, 0.52), int(Enums.Direction.LEFT),
+		"an untilted earring uses the plain 50/50")
+	earring.tilt_notch = BoardTilt.NOTCH_CENTER
+	earring.tilt_level = 5
+	# Row 4 col 4 is right of the earring's centre, so Centre pulls it LEFT and
+	# a roll of 0.52 now follows the bias rather than the fair coin.
+	assert_equal(earring.resolve_bounce_direction(4, 4, 0.52), int(Enums.Direction.LEFT),
+		"a tilted earring follows its inherited bias")
+	assert_equal(earring.resolve_bounce_direction(4, 0, 0.52), int(Enums.Direction.RIGHT),
+		"and pulls the opposite side the opposite way")
+	earring.free()
+
+
+## Restoring a save goes through set_tilt_notch, and the slider has to be told.
+## The first version left the handle centred reading "No tilt" on a board whose
+## coins were actually biased — the UI lying about live gameplay state.
+func test_restoring_a_notch_reaches_the_slider() -> void:
+	print("test_restoring_a_notch_reaches_the_slider")
+	UpgradeManager.reset()
+	UpgradeManager.get_state(PlinkoBoard.BOARD_TILT_BOARD,
+		Enums.UpgradeType.BOARD_TILT).level = 2
+	var board: PlinkoBoard = preload("res://entities/plinko_board/plinko_board.tscn").instantiate()
+	add_child(board)
+	board.setup(Enums.BoardType.BLUE)
+
+	board.set_tilt_notch(BoardTilt.NOTCH_EDGES)
+
+	var slider: Control = board.get_node("TiltSlider")
+	assert_equal(int(slider.get_node("VBox/Slider").value), BoardTilt.NOTCH_EDGES,
+		"the handle follows the board")
+	assert_true(slider.get_node("VBox/OddsLabel").text.contains("edges"),
+		"and the readout names the direction it is actually biasing")
+
+	board.set_tilt_notch(BoardTilt.NOTCH_DEFAULT)
+	assert_equal(slider.get_node("VBox/OddsLabel").text, "No tilt",
+		"returning to the default stop reads as untilted, not 50%")
+
+	board.queue_free()
+	UpgradeManager.reset()

@@ -16,7 +16,7 @@ class_name BoardTilt
 
 ## Slider positions. NOTCH_DEFAULT is the untilted middle; the labelled ends are
 ## the extremes, and the two unlabelled stops apply half the strength.
-const NOTCH_CENTRE := -2
+const NOTCH_CENTER := -2
 const NOTCH_DEFAULT := 0
 const NOTCH_EDGES := 2
 
@@ -36,7 +36,7 @@ const MAX_EXTREME_BIAS := 0.75
 
 ## Clamps a notch into the slider's range. Saves are the untrusted source here.
 static func clamp_notch(notch: int) -> int:
-	return clampi(notch, NOTCH_CENTRE, NOTCH_EDGES)
+	return clampi(notch, NOTCH_CENTER, NOTCH_EDGES)
 
 
 ## Strength at a fully-pushed slider, for this upgrade level. Level 0 (unowned)
@@ -61,7 +61,7 @@ static func bias_for(level: int, notch: int) -> float:
 ## Lattice.x_for is `space * (col - row/2)`, so the sign of `2*col - row` is the
 ## side the coin is on — compared as integers so a dead-centre cell is exact
 ## rather than a float epsilon away from it.
-static func toward_centre(row: int, col: int) -> int:
+static func toward_center(row: int, col: int) -> int:
 	var side: int = 2 * col - row
 	if side < 0:
 		return Enums.Direction.RIGHT
@@ -75,7 +75,7 @@ static func favoured_direction(row: int, col: int, notch: int) -> int:
 	var clamped: int = clamp_notch(notch)
 	if clamped == NOTCH_DEFAULT:
 		return 0
-	var inward: int = toward_centre(row, col)
+	var inward: int = toward_center(row, col)
 	if inward == 0:
 		return 0
 	return inward if clamped < NOTCH_DEFAULT else -inward
@@ -100,7 +100,7 @@ static func direction_for(row: int, col: int, notch: int, level: int, roll: floa
 ## neutral default and the two half stops are deliberately unlabelled.
 static func notch_label(notch: int) -> String:
 	match clamp_notch(notch):
-		NOTCH_CENTRE:
+		NOTCH_CENTER:
 			return "Centre"
 		NOTCH_EDGES:
 			return "Edges"

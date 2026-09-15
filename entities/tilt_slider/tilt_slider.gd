@@ -9,13 +9,15 @@ extends Control
 ## board state itself — the board owns the notch, and the slider only proposes.
 ##
 ## Its own node rather than part of DropSection: the drop buttons are always
-## present, while this appears only once the upgrade is owned, and it anchors to
-## the buckets rather than the bottom of the screen.
+## present, while this appears only once the upgrade is owned.
+##
+## Positioned by an anchor override on the instance in plinko_board.tscn, like
+## DropSection — a fixed screen slot below the drop buttons, NOT tracked to the
+## bucket row. Tracking the board would need per-frame unproject_position (see
+## PlinkoBoard._update_drop_rate_label_position); a fixed slot is what the drop
+## buttons already do, and the slider reads as part of that cluster.
 
 signal notch_changed(notch: int)
-
-## Matches BoardTilt's slider range; the middle stop is the neutral default.
-const NOTCH_COUNT := 5
 
 @onready var _slider: HSlider = $VBox/Slider
 @onready var _left_label: Label = $VBox/Labels/LeftLabel
@@ -27,7 +29,7 @@ var _board: PlinkoBoard
 
 func setup(board: PlinkoBoard) -> void:
 	_board = board
-	_slider.min_value = BoardTilt.NOTCH_CENTRE
+	_slider.min_value = BoardTilt.NOTCH_CENTER
 	_slider.max_value = BoardTilt.NOTCH_EDGES
 	_slider.step = 1
 	_slider.value = board.get_tilt_notch()
@@ -69,9 +71,12 @@ func _update_odds() -> void:
 		]
 
 
-func _apply_theme(_kind: int = 0) -> void:
+func _apply_theme() -> void:
 	var t: VisualTheme = ThemeProvider.theme
-	for label in [_left_label, _right_label, _odds_label]:
+	for label: Label in [_left_label, _right_label, _odds_label]:
 		label.add_theme_color_override("font_color", t.normal_text_color)
-	_left_label.text = BoardTilt.notch_label(BoardTilt.NOTCH_CENTRE)
+	# The grabber and track would otherwise render in stock Godot grey next to
+	# fully-themed buttons. Palette-sourced so theme swaps propagate.
+	_slider.modulate = t.normal_text_color
+	_left_label.text = BoardTilt.notch_label(BoardTilt.NOTCH_CENTER)
 	_right_label.text = BoardTilt.notch_label(BoardTilt.NOTCH_EDGES)
