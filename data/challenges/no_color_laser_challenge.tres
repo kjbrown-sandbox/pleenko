@@ -1,0 +1,59 @@
+[gd_resource type="Resource" script_class="ChallengeData" format=3]
+
+[ext_resource type="Script" uid="uid://co7w0klc1bfgq" path="res://autoloads/challenge_manager/challenge_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://u0aimm0ql1ts" path="res://autoloads/challenge_manager/objectives/coin_goal.gd" id="2_obj"]
+[ext_resource type="Script" uid="uid://df4ssyucgjrol" path="res://autoloads/challenge_manager/challenge_objective.gd" id="2_obj_base"]
+[ext_resource type="Script" uid="uid://ciptbsg00j2ay" path="res://autoloads/challenge_manager/challenge_reward_data.gd" id="3_reward"]
+[ext_resource type="Script" uid="uid://ch0vykvuiod5h" path="res://autoloads/challenge_manager/challenge_starting_condition.gd" id="6_start_base"]
+[ext_resource type="Script" uid="uid://ck6ikghmwasmr" path="res://autoloads/challenge_manager/starting_conditions/starting_boards.gd" id="7_start_board"]
+[ext_resource type="Script" uid="uid://b6uhmhq6a211h" path="res://autoloads/challenge_manager/starting_conditions/starting_coins.gd" id="8_start_coins"]
+[ext_resource type="Script" uid="uid://jgy103i1yua6" path="res://autoloads/challenge_manager/starting_conditions/starting_drop_delay.gd" id="9_start_delay"]
+[ext_resource type="Script" uid="uid://l8dbur8qgyhb" path="res://autoloads/challenge_manager/starting_conditions/starting_cap.gd" id="10_start_cap"]
+[ext_resource type="Script" uid="uid://bd6xgc6vor27l" path="res://autoloads/challenge_manager/challenge_hazard.gd" id="11_hzd_base"]
+[ext_resource type="Script" uid="uid://brhls2wcpq44m" path="res://autoloads/challenge_manager/hazards/bomb_hazard.gd" id="12_bomb"]
+
+[sub_resource type="Resource" id="hazard_1"]
+script = ExtResource("12_bomb")
+board_type = 0
+bomb_count = 3
+timer_seconds = 8.0
+defuse_multiplier = 2.0
+
+[sub_resource type="Resource" id="objective_1"]
+script = ExtResource("2_obj")
+amount = 2000
+
+[sub_resource type="Resource" id="starting_1"]
+script = ExtResource("7_start_board")
+board_type = 0
+rows = 16
+
+[sub_resource type="Resource" id="starting_2"]
+script = ExtResource("8_start_coins")
+amount = 10
+
+[sub_resource type="Resource" id="starting_3"]
+script = ExtResource("9_start_delay")
+board_type = 0
+drop_delay = 0.5
+
+[sub_resource type="Resource" id="starting_4"]
+script = ExtResource("10_start_cap")
+cap = 100000
+
+[sub_resource type="Resource" id="reward_1"]
+script = ExtResource("3_reward")
+type = 1
+modifier_type = 7
+
+[resource]
+script = ExtResource("1_data")
+id = "no_color_laser_challenge"
+display_name = "Laser Storm"
+time_limit_seconds = 120.0
+failure_hint = "Three bombs wander the board. Land a coin in a bomb's bucket to defuse it before its countdown reaches zero."
+grows_earrings = false
+objectives = Array[ExtResource("2_obj_base")]([SubResource("objective_1")])
+starting_conditions = Array[ExtResource("6_start_base")]([SubResource("starting_1"), SubResource("starting_2"), SubResource("starting_3"), SubResource("starting_4")])
+hazards = Array[ExtResource("11_hzd_base")]([SubResource("hazard_1")])
+rewards = Array[ExtResource("3_reward")]([SubResource("reward_1")])
