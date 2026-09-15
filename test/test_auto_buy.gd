@@ -33,6 +33,9 @@ func _run_tests() -> void:
 	test_save_round_trip()
 	test_old_save_loads_with_no_locks()
 	test_tres_description_matches_the_slot_slope()
+	test_restore_rejects_out_of_range_ordinals()
+	await test_auto_bought_upgrade_reaches_the_board()
+	await test_manual_purchase_applies_exactly_once()
 
 	print("\n=== Done ===\n")
 
@@ -244,16 +247,36 @@ func test_drain_is_bounded_per_pass() -> void:
 	# An enormous balance must not stall a frame buying thousands of levels.
 	# Whatever is left is picked up by the next currency_changed.
 	_arm(1, Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
-	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, 999999999)
+	# Three things could bound this drain and only ONE of them is under test, so
+	# neutralise the other two explicitly:
+	#   - the .tres caps BUCKET_VALUE at 7, below the ceiling, so 7 <= 32 would
+	#     pass with the ceiling deleted entirely;
+	#   - cost escalates, and CurrencyManager.add clamps to the currency CAP, so
+	#     "add a billion" does not actually buy a billion's worth.
+	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(
+		Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+	state.current_cap = UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN * 4
+	state.cost = 1
+	state.delta = 0
+	# delta re-escalates from the RESOURCE on every buy, so zeroing the state's
+	# delta alone is not enough — costs would climb 1, 11, 31, 61... and run the
+	# balance dry long before the ceiling. Flatten the curve for this test and
+	# put it back, since the resource is shared with every other suite.
+	var data: BaseUpgradeData = UpgradeManager.get_upgrade(Enums.UpgradeType.BUCKET_VALUE)
+	var real_escalation: int = data.delta_escalation
+	data.delta_escalation = 0
+	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN,
+		UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN * 4)
+	assert_true(CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN)
+			> UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN,
+		"funded past the ceiling, so cost is not what bounds the drain")
 
 	UpgradeManager.toggle_auto_buy(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
 
-	var level: int = UpgradeManager.get_level(
-		Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
-	assert_true(level > 0, "it bought something")
-	assert_true(level <= UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN,
-		"but no more than the per-drain ceiling (%d), got %d"
-			% [UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN, level])
+	assert_equal(state.level, UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN,
+		"one drain buys exactly the ceiling and stops")
+
+	data.delta_escalation = real_escalation
 	UpgradeManager.reset()
 	CurrencyManager.reset()
 
@@ -313,5 +336,89 @@ func test_tres_description_matches_the_slot_slope() -> void:
 	var data: BaseUpgradeData = UpgradeManager.get_upgrade(Enums.UpgradeType.AUTO_BUY)
 	assert_true(data != null, "the auto-buy upgrade resource is registered")
 	if data:
-		assert_true(data.description.contains("+1 auto-buy slot"),
-			"description states one slot per level")
+		# Derived from the live slope, not a copy of the string being checked —
+		# the sibling suites all pin descriptions this way.
+		UpgradeManager.get_state(UpgradeManager.AUTO_BUY_BOARD,
+			Enums.UpgradeType.AUTO_BUY).level = 1
+		var slope: int = UpgradeManager.current_auto_buy_slots()
+		assert_equal(slope, 1, "one slot per level is the live slope")
+		assert_true(data.description.contains("+%d auto-buy slot" % slope),
+			"description quotes the live slope (+%d)" % slope)
+		UpgradeManager.reset()
+
+
+# --- The bug that shipped ---
+
+## Auto-buy originally called UpgradeManager.buy() directly, but the BOARD effect
+## of a per-board upgrade lived only in UpgradeSection's click handler — so an
+## auto-bought upgrade took the currency, raised the level, and changed nothing
+## about the board. Every upgrade the player can lock was affected.
+##
+## The effect now rides upgrade_purchased, so it happens whoever triggered the
+## buy. Asserted on the BOARD, not on get_level(), because the level was always
+## the part that already worked.
+func test_auto_bought_upgrade_reaches_the_board() -> void:
+	print("test_auto_bought_upgrade_reaches_the_board")
+	_arm(1, Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+
+	var board: PlinkoBoard = preload("res://entities/plinko_board/plinko_board.tscn").instantiate()
+	add_child(board)
+	board.setup(Enums.BoardType.GOLD)
+	var rows_before: int = board.num_rows
+
+	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN,
+		UpgradeManager.get_cost(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW))
+	UpgradeManager.toggle_auto_buy(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+
+	assert_equal(UpgradeManager.get_level(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW), 1,
+		"the level went up")
+	# The effect is deferred out of the landing it may have been triggered from.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_true(board.num_rows > rows_before,
+		"and the board actually grew (%d -> %d)" % [rows_before, board.num_rows])
+
+	board.queue_free()
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+
+
+## A manual click must not double-apply now that the effect rides the signal —
+## the click handler was reduced to a bare buy() for exactly this reason.
+func test_manual_purchase_applies_exactly_once() -> void:
+	print("test_manual_purchase_applies_exactly_once")
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+	UpgradeManager.unlock(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+
+	var board: PlinkoBoard = preload("res://entities/plinko_board/plinko_board.tscn").instantiate()
+	add_child(board)
+	board.setup(Enums.BoardType.GOLD)
+	var rows_before: int = board.num_rows
+
+	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN,
+		UpgradeManager.get_cost(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW))
+	board.upgrade_section._buy_upgrade(Enums.UpgradeType.ADD_ROW)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	# add_two_rows adds exactly two; four would mean both paths fired.
+	assert_equal(board.num_rows, rows_before + 2,
+		"a click grows the board once, not twice")
+
+	board.queue_free()
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+
+
+## An out-of-range ordinal in a hand-edited save must never reach the drain: it
+## would raise on _state[99] mid-loop and, with no `finally` in GDScript, leave
+## the re-entrancy flag latched and auto-buy dead for the session.
+func test_restore_rejects_out_of_range_ordinals() -> void:
+	print("test_restore_rejects_out_of_range_ordinals")
+	var locks := _make_locks(5)
+	locks.restore(["99:3", "0:99", "-1:0", "0:-1",
+		AutoBuyLocks.key_for(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)])
+	assert_equal(locks.count(), 1, "only the in-range pair is restored")
+	assert_true(locks.is_locked(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW),
+		"and it is the right one")

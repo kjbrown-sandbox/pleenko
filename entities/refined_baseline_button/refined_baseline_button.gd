@@ -70,9 +70,10 @@ func _bar_tint() -> Color:
 enum Mode { WITH_BOTH, WITH_PLUS, NEITHER }
 
 ## Default NEITHER — side buttons hidden until setup_plus / setup_minus
-## elevate to WITH_PLUS / WITH_BOTH. Don't change this without auditing
-## `*.plus_button.visible` reads in coin_values.gd + upgrade_section.gd,
-## which use it as a "wired?" signal.
+## elevate to WITH_PLUS / WITH_BOTH. Note this is a VISIBILITY state and not a
+## "wired?" signal: wiring the left cap promotes to WITH_BOTH, which shows the
+## right cap too. Ask has_plus_wired() when you mean "does pressing it do
+## anything".
 @export var mode: Mode = Mode.NEITHER:
 	set(value):
 		if mode == value: return
@@ -573,6 +574,22 @@ func set_main_disabled(v: bool) -> void:
 
 func apply_fill_colors(_is_disabled: bool, at_max: bool = false) -> void:
 	demo_main_disabled = at_max
+
+## Whether the RIGHT cap has a callback behind it.
+##
+## NOT interchangeable with `plus_button.visible`. During a cap-raise reveal the
+## button is wired AND hidden, which is precisely the state the reveal's
+## pending-target queries look for — those must keep asking about visibility.
+## Ask this one only when you mean "has setup_plus already run".
+##
+## Callers used to read `plus_button.visible` as this signal, which broke the
+## moment anything wired the LEFT cap: show_minus_button promotes mode to
+## WITH_BOTH, which makes the plus visible whether or not it was ever set up.
+## Ask about the callback instead — it is the thing that actually decides
+## whether pressing the button does anything.
+func has_plus_wired() -> bool:
+	return _plus_callback.is_valid()
+
 
 func setup_plus(on_pressed: Callable, on_hover: Callable = Callable(), on_update: Callable = Callable()) -> void:
 	_plus_callback = on_pressed

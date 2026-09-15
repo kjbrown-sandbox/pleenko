@@ -17,8 +17,13 @@ extends RefCounted
 ## refuses everything rather than silently allowing unlimited locks.
 var capacity_fn: Callable = func() -> int: return 0
 
-## "<BoardType>:<UpgradeType>" -> true. A Dictionary rather than an Array so
-## membership is O(1) on the per-frame drain path.
+## "<BoardType>:<UpgradeType>" -> {board_type, upgrade_type}.
+##
+## The VALUE is the already-decoded pair, not just `true`: pairs() is read on
+## every currency change (i.e. every coin landing), and re-splitting the key
+## string there would allocate per lock per landing to undo an encoding we
+## control. The string stays the KEY because that is what gets serialized —
+## JSON-safe, and stable across an enum rename.
 var _locked: Dictionary = {}
 
 
@@ -64,25 +69,16 @@ func toggle(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> boo
 		return false
 	if count() >= capacity():
 		return false
-	_locked[key] = true
+	_locked[key] = {"board_type": board_type, "upgrade_type": upgrade_type}
 	return true
 
 
-func unlock(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
-	_locked.erase(key_for(board_type, upgrade_type))
 
-
-## Every locked pair as {board_type, upgrade_type}, for the drain loop.
+## Every locked pair as {board_type, upgrade_type}, for the drain loop. A fresh
+## Array each call, so a caller may mutate the lock set while iterating.
 func pairs() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for key: String in _locked:
-		var parts: PackedStringArray = key.split(":")
-		if parts.size() != 2:
-			continue
-		out.append({
-			"board_type": int(parts[0]) as Enums.BoardType,
-			"upgrade_type": int(parts[1]) as Enums.UpgradeType,
-		})
+	out.assign(_locked.values())
 	return out
 
 
@@ -98,6 +94,11 @@ func serialize() -> Array:
 ## Capacity can shrink between sessions (a prestige wipes upgrade levels), and
 ## silently running more auto-buys than the player owns slots for would be a
 ## quiet cheat rather than a visible one.
+##
+## Ordinals are range-checked, not just parsed: an out-of-range board would reach
+## UpgradeManager as _state[99] and raise mid-drain, which in GDScript (no
+## `finally`) would leave the drain's re-entrancy flag latched and silently kill
+## auto-buy for the rest of the session.
 func restore(raw: Array) -> void:
 	_locked.clear()
 	var slots: int = capacity()
@@ -107,6 +108,12 @@ func restore(raw: Array) -> void:
 		var parts: PackedStringArray = (entry as String).split(":")
 		if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
 			continue
+		var board_type: int = int(parts[0])
+		var upgrade_type: int = int(parts[1])
+		if not Enums.BoardType.values().has(board_type):
+			continue
+		if not Enums.UpgradeType.values().has(upgrade_type):
+			continue
 		if _locked.size() >= slots:
 			break
-		_locked[entry] = true
+		_locked[entry] = {"board_type": board_type, "upgrade_type": upgrade_type}

@@ -304,12 +304,17 @@ func buy_cap_raise(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType)
 # which emits currency_changed, which lands back here. Without _draining that is
 # unbounded recursion on the very first affordable purchase, not a subtle bug.
 
-## The upgrade is universal (one shared level, every board); see UniversalUpgrades.
+## Booked under RED. Unlike the other signature upgrades this has no board
+## mechanic, so the constant lives with the manager rather than on PlinkoBoard —
+## and it defers to UniversalUpgrades, which is the single source of truth for
+## every signature upgrade's nominated board.
 const AUTO_BUY_BOARD := Enums.BoardType.RED
 
 ## Ceiling on purchases per drain, so one enormous balance can't stall a frame.
-## Anything left over is picked up by the next currency_changed, which a purchase
-## itself triggers — so a big backlog drains over several passes rather than one.
+##
+## Leftovers wait for the next EXTERNAL currency change — the next coin landing,
+## typically. The currency_changed a purchase itself emits is deliberately
+## swallowed by _draining, so it cannot continue the backlog.
 const MAX_AUTO_BUYS_PER_DRAIN := 32
 
 var auto_buy_locks := AutoBuyLocks.new()
@@ -343,12 +348,15 @@ func _drain_auto_buys() -> void:
 	_draining = true
 	var bought: int = 0
 	var progressed: bool = true
-	# Repeat while anything was bought: one purchase can leave another affordable
-	# only if it was already affordable, but a pass is cheap and this keeps the
-	# loop honest if that ever stops being true.
+	# The inner loop buys each locked pair AT MOST once, so repeated levels of the
+	# same pair need repeat passes. That is what this outer loop is for — not
+	# cascading affordability, which a purchase can only ever reduce.
 	while progressed and bought < MAX_AUTO_BUYS_PER_DRAIN:
 		progressed = false
-		for pair in auto_buy_locks.pairs():
+		# pairs() is a snapshot on purpose: buy() emits upgrade_purchased to many
+		# listeners mid-loop, and iterating the live set would break if one of
+		# them ever mutated it.
+		for pair: Dictionary in auto_buy_locks.pairs():
 			if bought >= MAX_AUTO_BUYS_PER_DRAIN:
 				break
 			var board_type: Enums.BoardType = pair["board_type"]
@@ -482,6 +490,10 @@ func deserialize(data: Dictionary) -> void:
 
 	# After levels are restored, so capacity() sees the real slot count — restore
 	# drops any locks beyond it rather than honouring more than the player owns.
+	# Deliberately LAST. CurrencyManager deserializes before this manager and ends
+	# with notify_all(), which fires currency_changed for every currency — so the
+	# lock set must still be empty at that point, or a load would auto-buy against
+	# boards BoardManager has not configured yet. Moving this earlier breaks that.
 	auto_buy_locks.restore(data.get("auto_buy_locks", []))
 
 

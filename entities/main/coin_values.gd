@@ -205,7 +205,7 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(board_type, upgrade_type)
 	if state.base_cap <= 0 or not UpgradeManager.is_cap_raise_available(board_type):
 		return
-	if row.bar.plus_button.visible:
+	if row.bar.has_plus_wired():
 		return
 
 	var bt := board_type
@@ -495,6 +495,19 @@ func end_cap_raise_reveal() -> void:
 	# the cinematic was interrupted before reaching them.
 	reveal_delayed_currency_bar()
 	_on_cap_raise_unlocked(board)
+	# Force-show explicitly rather than relying on re-wiring to un-hide as a side
+	# effect — see UpgradeSection.end_cap_raise_reveal for why that stopped
+	# working once the "already set up?" guard became a real wired-check.
+	for currency_type in _bars:
+		var bar = _bars[currency_type]
+		if bar.has_plus_wired():
+			bar.show_plus_button(true)
+			bar.update_plus()
+	for upgrade_type: Enums.UpgradeType in _upgrade_rows:
+		var row: UpgradeRow = _upgrade_rows[upgrade_type]
+		if row.bar.has_plus_wired():
+			row.bar.show_plus_button(true)
+			row.bar.update_plus()
 
 
 func _is_cap_reveal_suppressed(board: int) -> bool:

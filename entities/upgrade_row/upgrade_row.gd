@@ -106,7 +106,6 @@ func setup_plus(on_pressed: Callable, on_hover: Callable = Callable(), on_update
 func setup_auto_buy_toggle(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
 	var bt := board_type
 	var ut := upgrade_type
-	var r: UpgradeRow = self
 
 	setup_minus(
 		func() -> void:
@@ -114,7 +113,7 @@ func setup_auto_buy_toggle(board_type: Enums.BoardType, upgrade_type: Enums.Upgr
 		func() -> String:
 			var locked: bool = UpgradeManager.auto_buy_locks.is_locked(bt, ut)
 			if locked:
-				return "Auto-buy ON — click to release this slot"
+				return "Auto-buy ON — click to turn it off"
 			var free: int = UpgradeManager.auto_buy_locks.free_slots()
 			if free <= 0:
 				return "No auto-buy slots free (%d/%d used)" % [
@@ -123,13 +122,16 @@ func setup_auto_buy_toggle(board_type: Enums.BoardType, upgrade_type: Enums.Upgr
 			return "Auto-buy this upgrade (%d slot%s free)" % [free, "" if free == 1 else "s"],
 		func() -> void:
 			var locked: bool = UpgradeManager.auto_buy_locks.is_locked(bt, ut)
-			r.bar.set_minus_filled(locked)
+			bar.set_minus_filled(locked)
 			# Disabled only when locking is impossible — an already-locked row
 			# must stay clickable so the player can free the slot again.
-			r.bar.set_minus_disabled(not UpgradeManager.auto_buy_locks.can_lock(bt, ut)),
+			bar.set_minus_disabled(not UpgradeManager.auto_buy_locks.can_lock(bt, ut)),
 	)
 	bar.set_minus_symbol(AUTO_BUY_SYMBOL)
-	UpgradeManager.auto_buy_changed.connect(_on_any_auto_buy_changed)
+	# Idempotent: the row's host may re-wire an existing row (a mid-session
+	# auto-buy unlock retrofits every row already on screen).
+	if not UpgradeManager.auto_buy_changed.is_connected(_on_any_auto_buy_changed):
+		UpgradeManager.auto_buy_changed.connect(_on_any_auto_buy_changed)
 	bar.update_minus()
 
 
