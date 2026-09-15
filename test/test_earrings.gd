@@ -638,6 +638,7 @@ func test_coin_surface_conformance() -> void:
 		"is_terminal_cell", "cell_to_world", "next_lattice_cell", "predicted_bucket_index",
 		"resolve_bounce_direction", "is_lattice_cell_voided", "get_bucket",
 		"flash_nearest_peg", "notify_deflector_resolved", "eject_coin_from_multimesh",
+		"try_lucky_split",
 	]
 	var board := _make_board(4)
 	var earring := _make_earring(4, EarringGeometry.SIDE_LEFT)

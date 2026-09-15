@@ -19,6 +19,25 @@ static func vertical_spacing(space: float) -> float:
 	return space * sqrt(3.0) / 2.0
 
 
+## Flat peg index for (row, col), matching the row-major order build_board fills
+## pegs in: the count of pegs in the rows above, plus the column.
+##
+## The triangular-number formula was hand-inlined at eight sites before this
+## existed; every one of them is the same expression, and a lucky peg indexing
+## one peg while the MultiMesh paints another is the failure that follows from
+## letting them drift.
+static func peg_index(row: int, col: int) -> int:
+	@warning_ignore("integer_division")
+	return row * (row + 1) / 2 + col
+
+
+## Total pegs on a lattice of `num_rows` rows — the triangular number, and the
+## exclusive upper bound on any valid peg index.
+static func peg_count(num_rows: int) -> int:
+	@warning_ignore("integer_division")
+	return num_rows * (num_rows + 1) / 2
+
+
 ## Local x of lattice cell (row, col) for horizontal peg spacing `space`.
 static func x_for(row: int, col: int, space: float) -> float:
 	return -row * space / 2.0 + col * space

@@ -236,7 +236,8 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 
 
 ## Inject the tooltip middle-block provider for upgrade types that need one.
-## Autodropper rows list per-board assignments; deflector and dud chute show odds.
+## Autodropper rows list per-board assignments; deflector and dud chute show
+## odds; the lucky peg shows its per-board count.
 func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeType) -> void:
 	match upgrade_type:
 		Enums.UpgradeType.AUTODROPPER:
@@ -271,11 +272,10 @@ func _dud_chute_odds_text() -> String:
 	return "Current odds: %d%%" % odds
 
 
-## How many lucky pegs each board is currently wandering.
+## How many lucky pegs each board is currently wandering. Reads the same helper
+## the boards run on, so the number shown can't drift from the number in play.
 func _lucky_peg_count_text() -> String:
-	var count: int = PlinkoBoard.lucky_peg_count_for_level(
-		UpgradeManager.get_level(PlinkoBoard.LUCKY_PEG_BOARD, Enums.UpgradeType.LUCKY_PEG))
-	return "%d per board" % count
+	return "%d per board" % PlinkoBoard.current_lucky_peg_count()
 
 
 func _deflector_odds_text() -> String:

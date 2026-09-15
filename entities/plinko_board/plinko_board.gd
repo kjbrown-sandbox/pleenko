@@ -338,6 +338,7 @@ func setup(type: Enums.BoardType) -> void:
 		earring_credit_fn = CurrencyManager.add
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
 	_queue_rate_bonus_per_coin = _queue_rate_bonus_for_board(board_type)
+	_init_lucky_pegs()
 
 	drop_delay = TierRegistry.get_base_drop_delay(board_type)
 	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
@@ -705,15 +706,23 @@ func _spend(costs: Array) -> void:
 		CurrencyManager.spend(cost[0], cost[1])
 
 
-func _launch_coin(coin: Coin) -> void:
+## Parents a coin to this board, gives it its own render-order Z slot and wires
+## its lifecycle signals. Shared by the top-of-board launch and the lucky-peg
+## split; the caller supplies x/y, and neither the descent kickoff nor the
+## drop-gate/audio side effects belong here.
+func _attach_coin(coin: Coin, local_pos: Vector3) -> void:
 	coin.board = self
 	_coin_z_counter += 1
-	coin.position = Vector3(0, vertical_spacing + 0.2, _coin_z_counter * 0.001)
+	coin.position = Vector3(local_pos.x, local_pos.y, _coin_z_counter * 0.001)
 	add_child(coin)
 	_coin_pool.acquire(coin)
 	coin.tree_exiting.connect(_on_coin_tree_exiting.bind(coin), CONNECT_ONE_SHOT)
 	coin.landed.connect(on_coin_landed)
 	coin.final_bounce_started.connect(_on_final_bounce_started)
+
+
+func _launch_coin(coin: Coin) -> void:
+	_attach_coin(coin, Vector3(0, vertical_spacing + 0.2, 0))
 	coin.start(Vector3(0, 0.2, 0))
 	if is_instance_valid(_drop_gate):
 		_drop_gate.close()
@@ -972,207 +981,143 @@ func _update_drop_fill() -> void:
 # every peg it strikes. That also means a lucky peg inherits the lattice's own
 # rules for free — it can never sit on a cell a bomb has voided.
 #
-# PERFORMANCE NOTE. Splits compound — a coin crossing N lucky pegs becomes 2^N
-# coins — and there is deliberately NO cap. That is safe because a lucky peg is
-# CONSUMED by the first coin to hit it, so one descent can cross at most
-# min(level, num_rows) of them, and the expected number is far lower: a coin
-# visits one peg per row, so with L pegs spread over P = R(R+1)/2 it expects
-# L*R/P crossings, which SHRINKS as the board grows (P is quadratic in R).
+# Timing and selection live in LuckyPegModel (pure, injectable, headless); this
+# board owns the visuals, the coin spawning and the CoinSurface contract.
 #
-# Worked out at max level (5): ~2.2 coins per drop on an 8-row board falling to
-# ~1.25 on a 30-row one, worst case 32, and a sustained 28-60 coins in flight
-# across all six boards with autodroppers running. Nowhere near the budget.
-#
-# The consume rule is load-bearing for this, not just for payout correctness: a
-# peg that split EVERY coin touching it would be genuinely explosive. If that
-# ever changes, _split_coin is the single chokepoint where a ceiling goes.
+# WHY UNCAPPED SPLITTING IS SAFE. Not the tempting argument: "a peg is consumed,
+# so one descent crosses at most `level` pegs" is FALSE, because retiring a peg
+# queues a respawn and a multi-second descent outlives that gap many times over.
+# The true bound is a RATE — every split consumes a peg, and pegs only return at
+# respawn_delay, so a board can produce at most level/respawn_delay splits per
+# second (10/s at max level, 60/s across six boards) no matter how large the
+# board or how deep the split tree. See LuckyPegModel.max_splits_per_second.
 
 ## The upgrade is universal (one shared level, every board); see UniversalUpgrades.
 const LUCKY_PEG_BOARD := Enums.BoardType.GREEN
 
-## Seconds a lucky peg stays live before giving up and moving elsewhere. Matches
-## the wandering golden bucket so the two read as the same kind of opportunity.
-const LUCKY_PEG_DURATION := GAMEPLAY_TARGET_DURATION
-
-## Begin fading with this long left, same as the golden bucket's tell.
-const LUCKY_PEG_FADE_START := GAMEPLAY_TARGET_FADE_START
-
-## Gap between a lucky peg being consumed and the next one appearing.
-const LUCKY_PEG_RESPAWN_DELAY := 0.5
-
-## peg_index -> seconds remaining. One entry per live lucky peg; size is capped
-## by the upgrade level via _lucky_peg_target_count.
-var _lucky_pegs: Dictionary = {}
-
-## Countdown timers for pegs consumed or expired and awaiting a respawn. Plain
-## floats — which peg comes next is decided when the timer fires, not now.
-var _lucky_peg_respawns: Array[float] = []
-
-## Roll seam: (max_exclusive) -> int. Injectable for deterministic tests.
-var lucky_peg_rng_fn: Callable = func(n: int) -> int: return randi() % maxi(1, n)
+var _lucky_pegs := LuckyPegModel.new()
 
 
-## How many lucky pegs this board should be running, i.e. the upgrade level.
-## Static so the level -> count contract is testable without a board.
-static func lucky_peg_count_for_level(level: int) -> int:
-	return maxi(0, level)
-
-
-func _lucky_peg_target_count() -> int:
-	return lucky_peg_count_for_level(
+## Live count for gameplay AND for the HUD text. One derivation, so the number
+## shown can never drift from the number the board runs on.
+static func current_lucky_peg_count() -> int:
+	if ChallengeManager.is_active_challenge:
+		# Challenges reset UpgradeManager, so this is already 0 today. Stating it
+		# makes the exclusion a decision rather than an emergent consequence of
+		# reset order — and it holds if a challenge ever authors
+		# StartingUpgrades(GREEN, LUCKY_PEG), which would otherwise let split
+		# coins inflate ChallengeTracker's per-board landing counts.
+		return 0
+	return LuckyPegModel.count_for_level(
 		UpgradeManager.get_level(LUCKY_PEG_BOARD, Enums.UpgradeType.LUCKY_PEG))
 
 
-## Peg indices a lucky peg may occupy: every peg on the lattice except those in a
-## voided column and those already holding one. Pure over the two injected
-## predicates so it can be tested without a board or a bomb.
-static func lucky_peg_candidates(num_rows: int, taken: Array,
-		is_voided_fn: Callable) -> PackedInt32Array:
-	var out: PackedInt32Array = PackedInt32Array()
-	for row in num_rows:
-		for col in row + 1:
-			if is_voided_fn.call(row, col):
-				continue
-			@warning_ignore("integer_division")
-			var idx: int = row * (row + 1) / 2 + col
-			if idx in taken:
-				continue
-			out.append(idx)
-	return out
-
-
-## Lattice cell (row, col) for a flat peg index — the inverse of peg_index().
-## Returns (-1, -1) when the index is off the board.
-static func lattice_cell_for_peg(idx: int, num_rows: int) -> Vector2i:
-	if idx < 0:
-		return Vector2i(-1, -1)
-	var row: int = 0
-	var remaining: int = idx
-	while row < num_rows:
-		if remaining <= row:
-			return Vector2i(row, remaining)
-		remaining -= row + 1
-		row += 1
-	return Vector2i(-1, -1)
+func _init_lucky_pegs() -> void:
+	# Wander timing is aliased from the golden bucket so the two read as the same
+	# kind of opportunity and can't drift apart.
+	_lucky_pegs.duration = GAMEPLAY_TARGET_DURATION
+	_lucky_pegs.fade_start = GAMEPLAY_TARGET_FADE_START
+	_lucky_pegs.target_count_fn = current_lucky_peg_count
+	_lucky_pegs.is_voided_fn = is_lattice_cell_voided
 
 
 func _lucky_peg_color() -> Color:
 	return ThemeProvider.theme.lucky_peg_color
 
 
-## Lights a new lucky peg somewhere legal. No-op when nothing is available.
-func _spawn_lucky_peg() -> void:
-	var candidates: PackedInt32Array = lucky_peg_candidates(
-		num_rows, _lucky_pegs.keys(), is_lattice_cell_voided)
-	if candidates.is_empty():
-		return
-	var roll: int = lucky_peg_rng_fn.call(candidates.size())
-	var idx: int = candidates[clampi(roll, 0, candidates.size() - 1)]
-	_lucky_pegs[idx] = LUCKY_PEG_DURATION
-	if peg_field:
-		peg_field.set_rest_color(idx, _lucky_peg_color())
+## The colour a live lucky peg should rest at right now: full marker colour
+## normally, lerping back toward the ordinary peg colour as it expires so
+## "about to move" is legible. PegField.base_color is the same value peg_color
+## resolves to, and is what clear_rest_color restores, so read it from there
+## rather than re-resolving the theme.
+func _lucky_peg_rest_color(peg_idx: int) -> Color:
+	if not peg_field:
+		return _lucky_peg_color()
+	return _lucky_peg_color().lerp(peg_field.base_color, _lucky_pegs.fade_progress(peg_idx))
 
 
-## Releases a lucky peg and queues its replacement.
-func _retire_lucky_peg(idx: int) -> void:
-	_lucky_pegs.erase(idx)
-	if peg_field:
-		peg_field.clear_rest_color(idx)
-	_lucky_peg_respawns.append(LUCKY_PEG_RESPAWN_DELAY)
-
-
-## Per-frame wander. Mirrors the golden bucket: count down, fade near the end,
-## retire at zero, and top back up to the level's count after the respawn gap.
+## Per-frame wander. The model owns timing; this repaints what changed and keeps
+## fading pegs current.
 func _tick_lucky_pegs(delta: float) -> void:
-	var target: int = _lucky_peg_target_count()
-	if target <= 0:
-		if not _lucky_pegs.is_empty():
-			for idx in _lucky_pegs.keys():
-				if peg_field:
-					peg_field.clear_rest_color(idx)
-			_lucky_pegs.clear()
-			_lucky_peg_respawns.clear()
+	var events: Dictionary = _lucky_pegs.tick(delta, num_rows)
+	if not peg_field:
 		return
-
-	for idx in _lucky_pegs.keys():
-		var remaining: float = _lucky_pegs[idx] - delta
-		_lucky_pegs[idx] = remaining
-		if remaining <= 0.0:
-			_retire_lucky_peg(idx)
-		elif remaining <= LUCKY_PEG_FADE_START and peg_field:
-			# Fade toward the resting peg colour so "about to move" is legible.
-			var k: float = clampf(remaining / LUCKY_PEG_FADE_START, 0.0, 1.0)
-			peg_field.set_rest_color(idx, ThemeProvider.theme.peg_color.lerp(_lucky_peg_color(), k))
-
-	var i: int = _lucky_peg_respawns.size() - 1
-	while i >= 0:
-		_lucky_peg_respawns[i] -= delta
-		if _lucky_peg_respawns[i] <= 0.0:
-			_lucky_peg_respawns.remove_at(i)
-		i -= 1
-
-	# Top up whatever the level allows that isn't live or waiting out a gap.
-	var wanted: int = target - _lucky_pegs.size() - _lucky_peg_respawns.size()
-	for _n in maxi(0, wanted):
-		_spawn_lucky_peg()
+	for peg_idx: int in events["retired"]:
+		peg_field.clear_rest_color(peg_idx)
+	for peg_idx: int in events["spawned"]:
+		peg_field.set_rest_color(peg_idx, _lucky_peg_color())
+	for peg_idx: int in _lucky_pegs.live():
+		var fade: float = _lucky_pegs.fade_progress(peg_idx)
+		if fade > 0.0:
+			peg_field.set_rest_color(peg_idx, _lucky_peg_rest_color(peg_idx))
 
 
-## True when the peg at this lattice cell was lucky — and consumes it. Called by
-## Coin at the moment of contact, so the peg can only ever pay out once.
-func try_consume_lucky_peg(row: int, col: int) -> bool:
-	if _lucky_pegs.is_empty():
-		return false
-	var idx: int = peg_index(row, col)
-	if not _lucky_pegs.has(idx):
-		return false
-	_retire_lucky_peg(idx)
-	return true
+## Re-paints live lucky pegs after a board rebuild, discarding any the new
+## lattice no longer has room for.
+func _reapply_lucky_pegs() -> void:
+	var dropped: Array[int] = _lucky_pegs.drop_pegs_beyond(num_rows)
+	if not peg_field:
+		return
+	for peg_idx in dropped:
+		peg_field.clear_rest_color(peg_idx)
+	for peg_idx: int in _lucky_pegs.live():
+		peg_field.set_rest_color(peg_idx, _lucky_peg_rest_color(peg_idx))
+
+
+## Releases any lucky peg sitting on a peg a bomb just destroyed. The spawn
+## filter already refuses voided cells; this is the symmetric half.
+func _release_lucky_pegs_on(peg_indices: PackedInt32Array) -> void:
+	for peg_idx in _lucky_pegs.release_pegs(peg_indices):
+		if peg_field:
+			peg_field.clear_rest_color(peg_idx)
+
+
+## Splits the coin striking (row, col) if that peg is lucky, consuming the peg.
+##
+## Returns the direction the ORIGINAL should take, or 0 for "no split — keep the
+## direction you already resolved". One call rather than a consume/resolve pair:
+## the pair could be invoked out of order and spawn a coin without consuming a
+## peg, which is the one way the rate bound above could be broken.
+func try_lucky_split(origin: Coin, row: int, col: int) -> int:
+	# PrestigeAnimator owns a prestige coin's whole lifecycle and its cinematic
+	# assumes a single coin; splitting one would leave a stray twin mid-sequence.
+	if origin.is_prestige_coin:
+		return 0
+	# Same gate as request_drop: once a challenge is marked failed, drops stop,
+	# and an in-flight coin must not mint new ones behind them.
+	if drop_blocked.is_valid() and drop_blocked.call():
+		return 0
+	if not _lucky_pegs.try_consume(Lattice.peg_index(row, col)):
+		return 0
+	if peg_field:
+		peg_field.clear_rest_color(Lattice.peg_index(row, col))
+	# One each way rather than two random picks: guaranteed divergence reads as a
+	# split, and the two coins can never overlap into looking like one.
+	_spawn_split_twin(origin, Enums.Direction.LEFT, row, col)
+	return Enums.Direction.RIGHT
 
 
 ## Spawns the twin half of a lucky-peg split: a full-value copy of `origin`
 ## resuming from the same peg in the opposite direction.
 ##
-## THE chokepoint for split volume — see the performance note above.
-func _split_coin(origin: Coin, direction: int, row: int, col: int) -> Coin:
+## The single site a split coin is created — if a ceiling is ever wanted, it
+## goes here.
+func _spawn_split_twin(origin: Coin, direction: int, row: int, col: int) -> void:
 	var twin: Coin = CoinScene.instantiate()
+	# Every field that makes two halves of one split look alike must be copied
+	# BEFORE add_child, because _ready -> _apply_visuals is what consumes them.
+	# coin_type and multiplier drive payout; color_override keeps a frenzy coin's
+	# tint (without it the twin renders in the plain currency colour).
 	twin.coin_type = origin.coin_type
 	twin.multiplier = origin.multiplier
-	_coin_z_counter += 1
-	twin.position = origin.position + Vector3(0, 0, _coin_z_counter * 0.001)
-	twin.board = self
-	add_child(twin)
-	_coin_pool.acquire(twin)
-	twin.tree_exiting.connect(_on_coin_tree_exiting.bind(twin), CONNECT_ONE_SHOT)
-	twin.landed.connect(on_coin_landed)
-	twin.final_bounce_started.connect(_on_final_bounce_started)
-	# Deliberately NOT _launch_coin: that starts a descent from the top, emits
-	# coin_dropped and closes the drop gate. A split resumes mid-flight.
+	twin.color_override = origin.color_override
+	# Absolute Z like every other coin. Adding to origin.position.z would
+	# compound across a split chain, since that z is already a render slot.
+	_attach_coin(twin, Vector3(origin.position.x, origin.position.y, 0.0))
+	# Deliberately NOT _launch_coin: that starts a descent from the top of the
+	# board, emits coin_dropped and closes the drop gate. A split resumes
+	# mid-flight, so it must do none of those.
 	twin.resume_from(row, col, direction)
-	return twin
-
-
-## Re-paints live lucky pegs after a board rebuild, discarding any that fall off
-## the end of the new lattice.
-func _reapply_lucky_pegs() -> void:
-	if _lucky_pegs.is_empty():
-		return
-	@warning_ignore("integer_division")
-	var total_pegs: int = num_rows * (num_rows + 1) / 2
-	for idx in _lucky_pegs.keys():
-		if idx >= total_pegs:
-			_lucky_pegs.erase(idx)
-			_lucky_peg_respawns.append(LUCKY_PEG_RESPAWN_DELAY)
-		elif peg_field:
-			peg_field.set_rest_color(idx, _lucky_peg_color())
-
-
-## Called DOWN by Coin when it strikes a lucky peg. Returns the direction the
-## striking coin should take; the twin takes the other.
-func resolve_lucky_split(origin: Coin, row: int, col: int) -> int:
-	# One each way rather than two random picks: guaranteed divergence reads as
-	# a split, and two coins can never overlap into looking like one.
-	_split_coin(origin, Enums.Direction.LEFT, row, col)
-	return Enums.Direction.RIGHT
 
 
 # ── Dud chute ─────────────────────────────────────────────────────────────────
@@ -1760,8 +1705,7 @@ func position_x_for(row: int, col: int) -> float:
 ## Flat peg index for (row, col), matching build_board()'s row-major fill order
 ## (sum of pegs in the rows above, plus col). Used as the _deflectors key.
 func peg_index(row: int, col: int) -> int:
-	@warning_ignore("integer_division")
-	return row * (row + 1) / 2 + col
+	return Lattice.peg_index(row, col)
 
 
 ## Local-space target a coin tweens to when it reaches lattice cell (row, col).
@@ -1954,6 +1898,7 @@ func void_column(bucket_index: int) -> void:
 	_animate_falling_pegs(peg_indices)
 	if peg_field:
 		peg_field.hide_pegs(peg_indices)
+	_release_lucky_pegs_on(peg_indices)
 	_animate_falling_buckets(truly_new)
 	_vaporise_coins_in_cut(bucket_index, side)
 	_play_column_detonation_vfx(bucket_index)
@@ -2147,6 +2092,7 @@ func detonate_radius(bucket_index: int, radius: float) -> void:
 	if not peg_indices.is_empty():
 		_animate_falling_pegs(peg_indices)
 		peg_field.hide_pegs(peg_indices)
+		_release_lucky_pegs_on(peg_indices)
 	if not bucket_indices.is_empty():
 		_animate_falling_buckets(bucket_indices)
 	_vaporise_coins_in_radius(center, radius)

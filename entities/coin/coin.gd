@@ -121,8 +121,7 @@ func start(target: Vector3) -> void:
 	_row = 0
 	_col = 0
 	var t: VisualTheme = ThemeProvider.theme
-	if coin_type == Enums.CurrencyType.GOLD_COIN:
-		_fall_speed_multiplier = 1.0 + ChallengeProgressManager.get_gold_coin_speed_boost_count() * COIN_SPEED_BOOST_PER_UNLOCK
+	_cache_fall_speed()
 	var tween: Tween = create_tween()
 	_active_tweens.append(tween)
 	tween.tween_property(self, "position", target, t.coin_fall_time / _fall_speed_multiplier) \
@@ -191,16 +190,20 @@ func _bounce_or_despawn() -> void:
 
 	# Deflector (if placed at this peg) forces the direction; else 50/50.
 	var direction: int = board.resolve_bounce_direction(_row, _col, randf())
-	# Drive the deflector reaction VFX while _row/_col still point at the peg we
-	# just bounced off (they're reassigned below). Pure view, no gameplay effect.
-	board.notify_deflector_resolved(_row, _col, direction)
 
 	# Lucky peg: this coin and a fresh twin leave the peg in opposite directions,
-	# both at full value. Consuming the peg is what stops a second coin arriving
-	# mid-split from claiming the same payout. Overrides any deflector above —
-	# a split has to go both ways to be a split.
-	if board.try_consume_lucky_peg(_row, _col):
-		direction = board.resolve_lucky_split(self, _row, _col)
+	# both at full value. Overrides any deflector — a split has to go both ways
+	# to be a split, which also means the deflector's direction is necessarily
+	# covered by one of the halves.
+	var split_direction: int = board.try_lucky_split(self, _row, _col)
+	if split_direction != 0:
+		direction = split_direction
+	else:
+		# Deflector reaction VFX, while _row/_col still point at the peg just
+		# struck (they're reassigned below). Skipped on a split: the arrow would
+		# report a MISS for a bounce a split actually covered, and the split is
+		# its own visual event. Pure view, no gameplay effect.
+		board.notify_deflector_resolved(_row, _col, direction)
 
 	_advance(direction)
 
@@ -261,8 +264,21 @@ func _advance(direction: int) -> void:
 func resume_from(row: int, col: int, direction: int) -> void:
 	_row = row
 	_col = col
-	_apply_visuals()
+	# Visuals are already correct: _split_twin sets coin_type/color_override
+	# BEFORE add_child, so _ready -> _apply_visuals ran with the right values.
+	# Re-running it here would allocate a second mesh, material and halo per
+	# split — on the one path designed to compound.
+	_cache_fall_speed()
 	_advance(direction)
+
+
+## Per-coin fall-speed cache. BOTH descent entry points (start and resume_from)
+## must run this: a twin that skips it keeps the 1.0 default and visibly falls
+## slower than the coin it split from on a gold board with speed-boost grants.
+func _cache_fall_speed() -> void:
+	if coin_type == Enums.CurrencyType.GOLD_COIN:
+		_fall_speed_multiplier = 1.0 + ChallengeProgressManager.get_gold_coin_speed_boost_count() \
+			* COIN_SPEED_BOOST_PER_UNLOCK
 
 
 ## Switches the coin into "fall through a voided column" mode. The coin keeps
