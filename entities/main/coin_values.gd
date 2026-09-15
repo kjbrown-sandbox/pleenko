@@ -170,9 +170,8 @@ func _update_currencies() -> void:
 
 		add_child(_create_section_label("Universal upgrades"))
 
-		_try_spawn_upgrade_row(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD)
-		_try_spawn_upgrade_row(Enums.UpgradeType.PEG_DEFLECTOR, Enums.BoardType.ORANGE)
-		_try_spawn_upgrade_row(Enums.UpgradeType.DUD_CHUTE, PlinkoBoard.DUD_CHUTE_BOARD)
+		for upgrade_type: Enums.UpgradeType in UniversalUpgrades.types():
+			_try_spawn_upgrade_row(upgrade_type, UniversalUpgrades.board_for(upgrade_type))
 
 	# Hover tooltip — must be last child so it renders below everything
 	_hover_tooltip = TooltipScene.instantiate()
@@ -185,9 +184,7 @@ func _update_currencies() -> void:
 
 
 func _has_any_universal_upgrade() -> bool:
-	return UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER) \
-		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.PEG_DEFLECTOR) \
-		or UpgradeManager.is_unlocked(PlinkoBoard.DUD_CHUTE_BOARD, Enums.UpgradeType.DUD_CHUTE)
+	return UniversalUpgrades.any_unlocked()
 
 
 func _try_spawn_upgrade_row(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
@@ -292,10 +289,8 @@ func _on_upgrade_hover_changed(text: String) -> void:
 
 
 func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
-	# Only care about autodropper-type upgrades
-	if upgrade_type != Enums.UpgradeType.AUTODROPPER \
-			and upgrade_type != Enums.UpgradeType.PEG_DEFLECTOR \
-			and upgrade_type != Enums.UpgradeType.DUD_CHUTE:
+	# Only the signature upgrades live in this HUD section.
+	if not UniversalUpgrades.is_universal(upgrade_type):
 		return
 	if upgrade_type in _upgrade_rows:
 		return
@@ -380,11 +375,7 @@ func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:
 
 
 func _get_board_for_upgrade(upgrade_type: Enums.UpgradeType) -> Enums.BoardType:
-	if upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
-		return Enums.BoardType.ORANGE
-	if upgrade_type == Enums.UpgradeType.DUD_CHUTE:
-		return PlinkoBoard.DUD_CHUTE_BOARD
-	return Enums.BoardType.GOLD
+	return UniversalUpgrades.board_for(upgrade_type)
 
 
 # ── Cap-raise reveal handshake (called down by CapRaiseRevealAnimator) ────────

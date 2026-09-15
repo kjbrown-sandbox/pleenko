@@ -33,6 +33,9 @@ func _run_tests() -> void:
 	test_emit_compounds_the_coins_existing_multiplier()
 	test_no_emit_when_chute_stays_shut()
 	test_tres_description_matches_the_multiplier()
+	test_board_constants_match_the_universal_table()
+	test_every_universal_upgrade_is_registered()
+	test_universal_and_per_board_are_disjoint()
 
 	print("\n=== Done ===\n")
 
@@ -290,3 +293,47 @@ func test_tres_description_matches_the_multiplier() -> void:
 		var per_level: String = "%d%%" % int(PlinkoBoard.DUD_CHUTE_CHANCE_PER_LEVEL * 100.0)
 		assert_true(data.description.contains(per_level),
 			"description states the per-level chance (%s)" % per_level)
+
+
+# --- Universal-upgrade table ---
+
+## UniversalUpgrades.BOARDS is the single source of truth for which board each
+## signature upgrade is booked under. PlinkoBoard keeps named constants for its
+## own lookups; if the two drifted, the HUD row and the gameplay roll would read
+## different state and the upgrade would look unbought.
+func test_board_constants_match_the_universal_table() -> void:
+	print("test_board_constants_match_the_universal_table")
+	assert_equal(int(UniversalUpgrades.board_for(Enums.UpgradeType.DUD_CHUTE)),
+		int(PlinkoBoard.DUD_CHUTE_BOARD),
+		"DUD_CHUTE_BOARD agrees with the universal table")
+	assert_equal(int(UniversalUpgrades.board_for(Enums.UpgradeType.PEG_DEFLECTOR)),
+		int(PlinkoBoard.DEFLECTOR_BOARD),
+		"DEFLECTOR_BOARD agrees with the universal table")
+
+
+## Every entry must be a real upgrade with a registered .tres, or the HUD would
+## try to build a row for an upgrade UpgradeManager has no state for.
+func test_every_universal_upgrade_is_registered() -> void:
+	print("test_every_universal_upgrade_is_registered")
+	for upgrade_type: Enums.UpgradeType in UniversalUpgrades.types():
+		assert_true(UpgradeManager.get_upgrade(upgrade_type) != null,
+			"%s has a registered .tres" % upgrade_type)
+		assert_false(UpgradeManager.is_retired(upgrade_type),
+			"%s is not a retired upgrade" % upgrade_type)
+
+
+## The per-board UpgradeSection and the HUD must partition the upgrade types
+## between them — an upgrade in neither place is unbuyable, one in both renders
+## twice.
+func test_universal_and_per_board_are_disjoint() -> void:
+	print("test_universal_and_per_board_are_disjoint")
+	var per_board: Array[Enums.UpgradeType] = [
+		Enums.UpgradeType.ADD_ROW, Enums.UpgradeType.BUCKET_VALUE,
+		Enums.UpgradeType.DROP_RATE, Enums.UpgradeType.QUEUE,
+	]
+	for upgrade_type: Enums.UpgradeType in per_board:
+		assert_false(UniversalUpgrades.is_universal(upgrade_type),
+			"%s is a per-board upgrade, not universal" % upgrade_type)
+	for upgrade_type: Enums.UpgradeType in UniversalUpgrades.types():
+		assert_false(upgrade_type in per_board,
+			"%s is universal, so it must not also be per-board" % upgrade_type)
