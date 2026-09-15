@@ -34,7 +34,8 @@ enum UpgradeType {
 	## it and silently repoints peg_deflector.tres (`type = 6`) at the wrong slot.
 	ADVANCED_AUTODROPPER,
 	PEG_DEFLECTOR,
-	DUD_CHUTE,  ## Always append last — .tres files and saves store `type` as an int.
+	DUD_CHUTE,
+	LUCKY_PEG,  ## Always append last — .tres files and saves store `type` as an int.
 }
 
 ## Left/right bounce convention. +1 = right (+x): moving RIGHT off lattice cell

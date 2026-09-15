@@ -104,6 +104,10 @@ enum Palette {
 @export var ambient_light_source: Palette = Palette.BG_5
 @export var directional_light_source: Palette = Palette.BG_6
 @export var peg_color_source: Palette = Palette.BG_6
+## Marker colour for a wandering lucky peg (green board's signature upgrade).
+## Gold by default so it reads as "prize" against the neutral peg field, the same
+## language the wandering golden bucket uses.
+@export var lucky_peg_color_source: Palette = Palette.GOLD_MAIN
 @export var high_multiplier_source: Palette = Palette.RED_MAIN
 @export var hit_bucket_source: Palette = Palette.BG_6            # color for hit/target/forbidden buckets
 @export var normal_text_source: Palette = Palette.BG_6
@@ -486,6 +490,9 @@ var directional_light_color: Color:
 	get: return resolve(directional_light_source)
 var peg_color: Color:
 	get: return resolve(peg_color_source)
+
+var lucky_peg_color: Color:
+	get: return resolve(lucky_peg_color_source)
 var deflector_hit_color: Color:
 	get: return resolve(deflector_hit_color_source)
 var deflector_miss_color: Color:

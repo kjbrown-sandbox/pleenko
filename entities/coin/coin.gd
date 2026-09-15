@@ -194,6 +194,22 @@ func _bounce_or_despawn() -> void:
 	# Drive the deflector reaction VFX while _row/_col still point at the peg we
 	# just bounced off (they're reassigned below). Pure view, no gameplay effect.
 	board.notify_deflector_resolved(_row, _col, direction)
+
+	# Lucky peg: this coin and a fresh twin leave the peg in opposite directions,
+	# both at full value. Consuming the peg is what stops a second coin arriving
+	# mid-split from claiming the same payout. Overrides any deflector above —
+	# a split has to go both ways to be a split.
+	if board.try_consume_lucky_peg(_row, _col):
+		direction = board.resolve_lucky_split(self, _row, _col)
+
+	_advance(direction)
+
+
+## The second half of a bounce: walk to the next lattice cell and tween there.
+## Split out from _bounce_or_despawn so a lucky-peg twin can join the descent
+## mid-flight without replaying the contact effects the original already ran.
+func _advance(direction: int) -> void:
+	var t: VisualTheme = ThemeProvider.theme
 	var next_cell: Vector2i = board.next_lattice_cell(_row, _col, direction)
 
 	# Voided column: the destination peg has been destroyed by a bomb
@@ -236,6 +252,17 @@ func _bounce_or_despawn() -> void:
 	y_tween.tween_property(self, "position:y", next_y, fall_time * 2 / 3) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	y_tween.tween_callback(_bounce_or_despawn)
+
+
+## Joins a descent already in progress, from the peg at (row, col) heading
+## `direction`. Used only for the twin half of a lucky-peg split: it is already
+## positioned at the peg, so it must NOT run start() (which falls in from the top
+## of the board and would restart the descent).
+func resume_from(row: int, col: int, direction: int) -> void:
+	_row = row
+	_col = col
+	_apply_visuals()
+	_advance(direction)
 
 
 ## Switches the coin into "fall through a voided column" mode. The coin keeps
