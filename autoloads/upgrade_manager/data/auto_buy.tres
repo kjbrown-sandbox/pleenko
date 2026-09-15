@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="BaseUpgradeData" format=3 uid="uid://ctm9v4xz6pqwh"]
+
+[ext_resource type="Script" uid="uid://c571lcduobww" path="res://autoloads/upgrade_manager/base_upgrade_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+type = 10
+display_name = "Auto-buy"
+description = "+1 auto-buy slot per level.\n\nLock an upgrade to a slot and it buys itself the moment you can afford it. Each board's copy of an upgrade takes its own slot."
+base_cost = 50
+max_level = 5
+cost_type = 1
+cost_delta = 100
+delta_escalation = 50

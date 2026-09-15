@@ -608,6 +608,12 @@ func show_minus_button(show: bool) -> void:
 	elif mode == Mode.WITH_BOTH:
 		mode = Mode.WITH_PLUS
 
+## The left cap's glyph. Authored as "−" for the autodropper controls; auto-buy
+## repurposes the same cap and needs its own symbol.
+func set_minus_symbol(symbol: String) -> void:
+	minus_button.text = symbol
+
+
 func set_minus_disabled(v: bool) -> void:
 	minus_button.disabled = v
 

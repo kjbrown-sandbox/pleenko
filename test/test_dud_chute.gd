@@ -315,6 +315,9 @@ func test_board_constants_match_the_universal_table() -> void:
 	assert_equal(int(UniversalUpgrades.board_for(Enums.UpgradeType.BOARD_TILT)),
 		int(PlinkoBoard.BOARD_TILT_BOARD),
 		"BOARD_TILT_BOARD agrees with the universal table")
+	assert_equal(int(UniversalUpgrades.board_for(Enums.UpgradeType.AUTO_BUY)),
+		int(UpgradeManager.AUTO_BUY_BOARD),
+		"AUTO_BUY_BOARD agrees with the universal table")
 
 
 ## Every entry must be a real upgrade with a registered .tres, or the HUD would

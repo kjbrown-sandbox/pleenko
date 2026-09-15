@@ -17,6 +17,10 @@ var _needs_attention := false
 ## Empty return = no extra block. PeekAnimator seam precedent.
 var _hover_extra_provider: Callable
 
+## Glyph for the auto-buy cap. An infinity sign rather than a lock: the slot is
+## about the purchase repeating, not about the upgrade being unavailable.
+const AUTO_BUY_SYMBOL := "∞"
+
 func setup(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, on_upgrade: Callable) -> void:
 	_board_type = board_type
 	_upgrade_type = upgrade_type
@@ -91,6 +95,46 @@ func _animate_clip_reveal(container: Control, wrapper: Control, clip: Control) -
 
 func setup_plus(on_pressed: Callable, on_hover: Callable = Callable(), on_update: Callable = Callable()) -> void:
 	bar.setup_plus(on_pressed, on_hover, on_update)
+
+
+## Wires this row's LEFT cap as an auto-buy toggle. The right cap stays the
+## cap-raise "+", so the two share a bar without competing for the same slot.
+##
+## Every row re-evaluates on any lock change, not just the row that changed:
+## spending the last slot has to grey out the toggle on every other row, and
+## freeing one has to light them back up.
+func setup_auto_buy_toggle(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
+	var bt := board_type
+	var ut := upgrade_type
+	var r: UpgradeRow = self
+
+	setup_minus(
+		func() -> void:
+			UpgradeManager.toggle_auto_buy(bt, ut),
+		func() -> String:
+			var locked: bool = UpgradeManager.auto_buy_locks.is_locked(bt, ut)
+			if locked:
+				return "Auto-buy ON — click to release this slot"
+			var free: int = UpgradeManager.auto_buy_locks.free_slots()
+			if free <= 0:
+				return "No auto-buy slots free (%d/%d used)" % [
+					UpgradeManager.auto_buy_locks.count(),
+					UpgradeManager.auto_buy_locks.capacity()]
+			return "Auto-buy this upgrade (%d slot%s free)" % [free, "" if free == 1 else "s"],
+		func() -> void:
+			var locked: bool = UpgradeManager.auto_buy_locks.is_locked(bt, ut)
+			r.bar.set_minus_filled(locked)
+			# Disabled only when locking is impossible — an already-locked row
+			# must stay clickable so the player can free the slot again.
+			r.bar.set_minus_disabled(not UpgradeManager.auto_buy_locks.can_lock(bt, ut)),
+	)
+	bar.set_minus_symbol(AUTO_BUY_SYMBOL)
+	UpgradeManager.auto_buy_changed.connect(_on_any_auto_buy_changed)
+	bar.update_minus()
+
+
+func _on_any_auto_buy_changed(_bt: Enums.BoardType, _ut: Enums.UpgradeType, _locked: bool) -> void:
+	bar.update_minus()
 
 
 func setup_minus(on_pressed: Callable, on_hover: Callable = Callable(), on_update: Callable = Callable()) -> void:

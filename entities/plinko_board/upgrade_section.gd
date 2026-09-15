@@ -34,6 +34,8 @@ func setup(board: PlinkoBoard, board_type: Enums.BoardType) -> void:
 	if not _rows.is_empty():
 		_add_section_label()
 
+	_setup_auto_buy_toggles()
+
 	# Listen for future unlocks and cap raise availability
 	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked)
 	UpgradeManager.cap_raise_unlocked.connect(_on_cap_raise_unlocked)
@@ -54,6 +56,9 @@ func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.Boa
 	if upgrade_type in _rows:
 		return
 	_spawn_row(upgrade_type)
+	if upgrade_type == Enums.UpgradeType.AUTO_BUY:
+		# Unlocking auto-buy itself has to retrofit every row already on screen.
+		_setup_auto_buy_toggles()
 	if _initial_setup_complete:
 		if _section_label:
 			# Title already shown — just materialize the row
@@ -87,6 +92,19 @@ func _spawn_row(upgrade_type: Enums.UpgradeType) -> void:
 	upgrades_container.add_child(row)
 	_rows[upgrade_type] = row
 	_setup_cap_raise_if_needed(row, upgrade_type)
+	if UpgradeManager.is_unlocked(
+			UpgradeManager.AUTO_BUY_BOARD, Enums.UpgradeType.AUTO_BUY):
+		row.setup_auto_buy_toggle(_board_type, upgrade_type)
+
+
+## Auto-buy locks are per (board, upgrade) pair, so every row on every board
+## gets its own toggle once the upgrade is unlocked anywhere.
+func _setup_auto_buy_toggles() -> void:
+	if not UpgradeManager.is_unlocked(
+			UpgradeManager.AUTO_BUY_BOARD, Enums.UpgradeType.AUTO_BUY):
+		return
+	for upgrade_type: Enums.UpgradeType in _rows:
+		_rows[upgrade_type].setup_auto_buy_toggle(_board_type, upgrade_type)
 
 
 func _setup_cap_raise_if_needed(row, upgrade_type: Enums.UpgradeType) -> void:
