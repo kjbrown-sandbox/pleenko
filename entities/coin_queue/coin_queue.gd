@@ -59,11 +59,9 @@ func has_queue() -> bool:
 	return _capacity > 0
 
 
-func enqueue(coin: Coin, is_advanced: bool = false) -> void:
+func enqueue(coin: Coin) -> void:
 	if is_full():
 		return
-
-	coin.is_advanced = is_advanced
 
 	# FULL coins go before FILLING coins (FIFO within each group).
 	var insert_idx: int
@@ -116,12 +114,12 @@ func dequeue_full() -> Coin:
 	return null
 
 
-## Complete the first FILLING coin of the given type: transition it to FULL,
-## remove it from the queue, and return it. Returns null if none found.
-func complete_first_filling(is_advanced: bool) -> Coin:
+## Complete the first FILLING coin: transition it to FULL, remove it from the
+## queue, and return it. Returns null if none found.
+func complete_first_filling() -> Coin:
 	for i in _coins.size():
 		var c: Coin = _coins[i]
-		if c.fill_state == Coin.FillState.FILLING and c.is_advanced == is_advanced:
+		if c.fill_state == Coin.FillState.FILLING:
 			c.complete_fill()
 			_coins.remove_at(i)
 			remove_child(c)
@@ -135,11 +133,11 @@ func complete_first_filling(is_advanced: bool) -> Coin:
 ## Atomically: complete first FILLING coin → move it to the FULL section →
 ## add a replacement FILLING coin. Single slide pass at the end so no
 ## overlapping tweens. Returns the completed coin, or null if none found.
-func complete_and_requeue_filling(is_advanced: bool) -> Coin:
+func complete_and_requeue_filling() -> Coin:
 	var fill_idx: int = -1
 	for i in _coins.size():
 		var c: Coin = _coins[i]
-		if c.fill_state == Coin.FillState.FILLING and c.is_advanced == is_advanced:
+		if c.fill_state == Coin.FillState.FILLING:
 			fill_idx = i
 			break
 	if fill_idx < 0:
@@ -160,7 +158,6 @@ func complete_and_requeue_filling(is_advanced: bool) -> Coin:
 		var replacement: Coin = CoinScene.instantiate()
 		replacement.coin_type = coin.coin_type
 		replacement.multiplier = coin.multiplier
-		replacement.is_advanced = is_advanced
 		replacement.fill_state = Coin.FillState.FILLING
 		replacement.fill_progress = 0.0
 		var rep_idx: int = _coins.size()
@@ -188,7 +185,7 @@ func get_overflow_position() -> Vector3:
 
 
 ## Create and enqueue a FILLING coin for autodrop visual.
-func add_filling_coin(coin_type: Enums.CurrencyType, is_advanced: bool, coin_multiplier: float = 1.0) -> Coin:
+func add_filling_coin(coin_type: Enums.CurrencyType, coin_multiplier: float = 1.0) -> Coin:
 	if is_full():
 		return null
 	var coin: Coin = CoinScene.instantiate()
@@ -196,19 +193,19 @@ func add_filling_coin(coin_type: Enums.CurrencyType, is_advanced: bool, coin_mul
 	coin.multiplier = coin_multiplier
 	coin.fill_state = Coin.FillState.FILLING
 	coin.fill_progress = 0.0
-	enqueue(coin, is_advanced)
+	enqueue(coin)
 	return coin
 
 
-## Remove FILLING coins of the given type. If max_remove <= 0, removes all.
-func remove_filling_coins_of_type(is_advanced: bool, max_remove: int = 0) -> void:
+## Remove FILLING coins. If max_remove <= 0, removes all.
+func remove_filling_coins_of_type(max_remove: int = 0) -> void:
 	var removed: int = 0
 	var i: int = _coins.size() - 1
 	while i >= 0:
 		if max_remove > 0 and removed >= max_remove:
 			break
 		var coin: Coin = _coins[i]
-		if coin.fill_state == Coin.FillState.FILLING and coin.is_advanced == is_advanced:
+		if coin.fill_state == Coin.FillState.FILLING:
 			_coins.remove_at(i)
 			remove_child(coin)
 			coin.queue_free()
@@ -218,11 +215,11 @@ func remove_filling_coins_of_type(is_advanced: bool, max_remove: int = 0) -> voi
 	_emit_count_if_changed()
 
 
-## Count FILLING coins of a given type.
-func get_filling_count(is_advanced: bool) -> int:
+## Count FILLING coins.
+func get_filling_count() -> int:
 	var n: int = 0
 	for coin in _coins:
-		if coin.fill_state == Coin.FillState.FILLING and coin.is_advanced == is_advanced:
+		if coin.fill_state == Coin.FillState.FILLING:
 			n += 1
 	return n
 

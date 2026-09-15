@@ -71,25 +71,7 @@ layout_mode = 2
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="DropAdvancedColumn" type="VBoxContainer" parent="DropButtons" unique_id=120865361]
-custom_minimum_size = Vector2(360, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="DropAdvanced" parent="DropButtons/DropAdvancedColumn" unique_id=1659889309 instance=ExtResource("1_ddiwm")]
-layout_mode = 2
-
-[node name="DropAdvancedLabel" type="Label" parent="DropButtons/DropAdvancedColumn" unique_id=72592550]
-layout_mode = 2
-horizontal_alignment = 1
-vertical_alignment = 1
-
 [node name="DropMainTooltip" parent="." unique_id=183251445 instance=ExtResource("2_tooltip")]
 use_parent_signals = false
 anchor_node_path = NodePath("../DropButtons/DropMainColumn")
-horizontal_alignment = 0
-
-[node name="DropAdvancedTooltip" parent="." unique_id=183251446 instance=ExtResource("2_tooltip")]
-use_parent_signals = false
-anchor_node_path = NodePath("../DropButtons/DropAdvancedColumn")
 horizontal_alignment = 0

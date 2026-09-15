@@ -12,7 +12,6 @@ signal upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Boar
 signal upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType)
 signal cap_raise_unlocked(board_type: Enums.BoardType)
 signal autodropper_unlocked
-signal advanced_autodropper_unlocked
 
 ## Populate this array in the Inspector with .tres BaseUpgradeData resources.
 @export var upgrades: Array[BaseUpgradeData] = []
@@ -134,7 +133,24 @@ func is_unlocked(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -
 	return _unlocked[board_type][upgrade_type]
 
 
+## RETIRED upgrades can never be unlocked, by save restore or by reward. Their
+## enum value and .tres registration stay put — deserialize() indexes
+## _state[board][type] directly for every Enums.UpgradeType, so unregistering one
+## would crash any save that recorded it. Refusing the unlock is what actually
+## makes it unreachable, and it retroactively clears saves that already had it.
+const RETIRED_UPGRADES: Array[Enums.UpgradeType] = [
+	Enums.UpgradeType.ADVANCED_AUTODROPPER,
+]
+
+
+func is_retired(upgrade_type: Enums.UpgradeType) -> bool:
+	return upgrade_type in RETIRED_UPGRADES
+
+
 func unlock(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
+	if is_retired(upgrade_type):
+		_unlocked[board_type][upgrade_type] = false
+		return
 	if _unlocked[board_type][upgrade_type]:
 		return
 	_unlocked[board_type][upgrade_type] = true
@@ -199,8 +215,6 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 			unlock(reward.board_type, reward.upgrade_type)
 		elif reward.type == RewardData.RewardType.UNLOCK_AUTODROPPER:
 			autodropper_unlocked.emit()
-		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER:
-			advanced_autodropper_unlocked.emit()
 
 
 func _on_reconcile_reward(reward: RewardData) -> void:

@@ -89,7 +89,6 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 		# pre-earrings saves, where 0 reproduces the old layout exactly.
 		var earring_rows: int = bs.get("earring_rows", 0)
 		var bucket_value_multiplier: int = bs.get("bucket_value_multiplier", 1)
-		var advanced_coin_multiplier: float = bs.get("advanced_coin_multiplier", 2.0)
 		var distance_for_advanced: int = bs.get("distance_for_advanced_buckets", 3)
 		var multi_drop: int = bs.get("multi_drop_count", 1)
 		var show_advanced: bool = advanced_buckets.get(board_str, false)
@@ -99,17 +98,15 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 			num_rows, bucket_value_multiplier, distance_for_advanced,
 			show_advanced, board_type, earring_rows)
 
-		for assignment_type in ["NORMAL", "ADVANCED"]:
+		# One autodropper pool since the advanced autodropper was removed, so the
+		# only assignment key a board can carry is "<BOARD>_NORMAL".
+		for assignment_type in ["NORMAL"]:
 			var assignment_key := "%s_%s" % [board_str, assignment_type]
 			var autodropper_count: int = assignments.get(assignment_key, 0)
 			if autodropper_count <= 0:
 				continue
 
-			var adv_currency_key := _advanced_currency_key(board_type)
-			if assignment_type == "ADVANCED" and adv_currency_key == "":
-				continue
-
-			var coin_multiplier: float = advanced_coin_multiplier if assignment_type == "ADVANCED" else 1.0
+			var coin_multiplier: float = 1.0
 			var costs: Array = _get_drop_costs(board_type, assignment_type)
 
 			var earnings_per_drop: Dictionary = {}

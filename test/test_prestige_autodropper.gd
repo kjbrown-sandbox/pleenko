@@ -18,7 +18,7 @@ func _run_tests() -> void:
 	test_first_purchase_no_auto_assign_when_intro_not_seen()
 	test_second_purchase_does_not_auto_assign_to_gold()
 	test_normal_autodropper_purchase_pools_without_assigning()
-	test_advanced_autodropper_purchase_pools_without_assigning()
+	test_stale_advanced_assignments_are_dropped_on_load()
 	test_prestige_reward_text_includes_autodropper()
 
 
@@ -174,21 +174,27 @@ func test_normal_autodropper_purchase_pools_without_assigning() -> void:
 	bm.queue_free()
 
 
-func test_advanced_autodropper_purchase_pools_without_assigning() -> void:
-	print("test_advanced_autodropper_purchase_pools_without_assigning")
-	_reset()
-	var bm := _make_board_manager()
-	bm._advanced_autodroppers_unlocked = true
-	bm._advanced_pool = 1
+## Saves written before the advanced autodropper was removed can still carry
+## "<BOARD>_ADVANCED" assignment keys. Those buttons no longer exist, so keeping
+## the keys would silently consume slots out of the single free pool.
+func test_stale_advanced_assignments_are_dropped_on_load() -> void:
+	print("test_stale_advanced_assignments_are_dropped_on_load")
+	var restored: Dictionary = BoardManager.restorable_assignments({
+		"GOLD_NORMAL": 1, "ORANGE_NORMAL": 2, "GOLD_ADVANCED": 3, "ORANGE_ADVANCED": 4,
+	})
 
-	# Simulate purchasing a 2nd advanced autodropper
-	bm._on_upgrade_purchased(Enums.UpgradeType.ADVANCED_AUTODROPPER, Enums.BoardType.ORANGE, 2)
+	assert_false(restored.has(StringName("GOLD_ADVANCED")),
+		"stale gold advanced assignment key is discarded")
+	assert_false(restored.has(StringName("ORANGE_ADVANCED")),
+		"stale orange advanced assignment key is discarded")
+	assert_equal(restored.get(StringName("GOLD_NORMAL"), 0), 1,
+		"gold normal assignment survives")
+	assert_equal(restored.get(StringName("ORANGE_NORMAL"), 0), 2,
+		"orange normal assignment survives")
+	assert_equal(restored.size(), 2, "only the two normal keys survive")
 
-	assert_equal(bm._advanced_pool, 2,
-		"advanced pool should be 2 after second purchase")
-	assert_equal(bm._assignments.get(StringName("GOLD_ADVANCED"), 0), 0,
-		"purchased advanced autodroppers must never be assigned to gold")
-	bm.queue_free()
+	assert_equal(BoardManager.restorable_assignments({}).size(), 0,
+		"an empty save restores no assignments")
 
 
 func test_prestige_reward_text_includes_autodropper() -> void:

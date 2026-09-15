@@ -57,19 +57,13 @@ const TRANSPORTER_BUCKET_SCALE := 1.3
 @onready var coin_queue: CoinQueue = $CoinQueue
 @onready var _drop_main_column: VBoxContainer = $DropSection/DropButtons/DropMainColumn
 @onready var _drop_main = $DropSection/DropButtons/DropMainColumn/DropMain
-@onready var _drop_advanced_column: VBoxContainer = $DropSection/DropButtons/DropAdvancedColumn
-@onready var _drop_advanced = $DropSection/DropButtons/DropAdvancedColumn/DropAdvanced
 @onready var _drop_main_tooltip: Tooltip = $DropSection/DropMainTooltip
-@onready var _drop_advanced_tooltip: Tooltip = $DropSection/DropAdvancedTooltip
 
 var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
-var advanced_coin_multiplier: float = 2.0
 var should_show_advanced_buckets: bool = false
-var _has_advanced_drop: bool = false
 var _normal_autodroppers_visible: bool = false
-var _advanced_autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
 var _no_room_label: Label3D
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
@@ -87,12 +81,10 @@ var _coin_z_counter: int = 0  # Increments per coin so later coins render in fro
 # suppressed in favor of the regular cost tooltip during hover. Tracked per
 # button so hovering one never suppresses the other's "Needs X" message.
 var _drop_main_hovered: bool = false
-var _drop_advanced_hovered: bool = false
 # Set while the autodropper +/- cap of a drop button is hovered, so the per-frame
 # "Needs X" refresh doesn't clobber the "Add/Remove autodropper" hover tooltip
 # (those caps aren't the main button, so _drop_*_hovered stays false on them).
 var _drop_main_side_hovered: bool = false
-var _drop_advanced_side_hovered: bool = false
 
 ## Optional gate: () -> bool. Returns true if drops should be blocked.
 ## Set externally (e.g. by BoardManager during challenges).
@@ -330,9 +322,6 @@ func setup(type: Enums.BoardType) -> void:
 	earrings_enabled = ChallengeManager.boards_grow_earrings()
 	if not earring_credit_fn.is_valid():
 		earring_credit_fn = CurrencyManager.add
-	# advanced_coin_multiplier is legacy (raw/advanced coins removed). Kept as a
-	# plain base for force-dropped bonus coins; no longer boosted by challenges.
-	advanced_coin_multiplier = 2.0
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
 	_queue_rate_bonus_per_coin = _queue_rate_bonus_for_board(board_type)
 
@@ -384,7 +373,6 @@ func _setup_drop_bars() -> void:
 
 	# Add spacing in the column to accommodate subtext labels above buttons
 	_drop_main_column.add_theme_constant_override("separation", 2)
-	_drop_advanced_column.add_theme_constant_override("separation", 2)
 
 	# Single-currency model: every board drops its own primary currency.
 	_drop_main.setup(coin_color, coin_color_dark)
@@ -405,41 +393,30 @@ func _setup_drop_bars() -> void:
 	var normal_id := StringName("%s_NORMAL" % Enums.BoardType.keys()[board_type])
 	_drop_buttons[normal_id] = _drop_main
 
-	# Advanced drop bar — hidden until earned
-	_drop_advanced_column.visible = false
 
-
-func update_queue_fill(progress: float, num_advanced: int, num_normal: int) -> void:
+func update_queue_fill(progress: float, num_autodroppers: int) -> void:
 	# Hide overflow indicator if queue has room now
 	if not coin_queue.is_full():
 		_hide_no_room()
-	# Ensure the right number of FILLING coins exist for each type
-	_sync_filling_coins(num_advanced, true)
-	_sync_filling_coins(num_normal, false)
+	# Ensure the right number of FILLING coins exist
+	_sync_filling_coins(num_autodroppers)
 	# Update fill progress on all FILLING coins
 	coin_queue.update_filling_progress(progress)
 
 
-func _sync_filling_coins(wanted: int, is_advanced: bool) -> void:
-	var current: int = coin_queue.get_filling_count(is_advanced)
+func _sync_filling_coins(wanted: int) -> void:
+	var current: int = coin_queue.get_filling_count()
 	if current < wanted:
-		# Add more filling coins
-		var coin_type: Enums.CurrencyType
-		var mult: float = 1.0
-		if is_advanced:
-			coin_type = advanced_bucket_type
-			mult = advanced_coin_multiplier
-		else:
-			coin_type = TierRegistry.primary_currency(board_type)
+		var coin_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
 		for i in wanted - current:
 			if coin_queue.is_full():
 				if coin_queue.has_queue():
 					_show_no_room()
 				break
-			coin_queue.add_filling_coin(coin_type, is_advanced, mult)
+			coin_queue.add_filling_coin(coin_type)
 	elif current > wanted:
 		# Remove only the excess filling coins
-		coin_queue.remove_filling_coins_of_type(is_advanced, current - wanted)
+		coin_queue.remove_filling_coins_of_type(current - wanted)
 
 
 func _show_no_room() -> void:
@@ -512,11 +489,6 @@ func _on_drop_main_hover() -> void:
 	_drop_main_tooltip.update_and_show("Cost: %s\nHotkey: SPACE" % _format_cost_text(_get_drop_costs()))
 
 
-func _on_drop_advanced_hover() -> void:
-	_drop_advanced_hovered = true
-	_drop_advanced_tooltip.update_and_show("Cost: %s\nHotkey: B" % _format_cost_text(_get_advanced_drop_costs()))
-
-
 func _on_drop_main_hover_exit() -> void:
 	_drop_main_hovered = false
 	_drop_main_tooltip.hide_tooltip()
@@ -524,28 +496,15 @@ func _on_drop_main_hover_exit() -> void:
 	_refresh_needs_tooltips()
 
 
-func _on_drop_advanced_hover_exit() -> void:
-	_drop_advanced_hovered = false
-	_drop_advanced_tooltip.hide_tooltip()
-	_refresh_needs_tooltips()
-
-
 ## Side-button (autodropper +/-) hover. The tooltip is bound per drop column at
 ## connection time. Empty text means the hover ended — restore the "Needs X"
 ## messages instead of leaving the tooltip blank.
 func _on_drop_side_hover(text: String, tooltip: Tooltip) -> void:
-	var is_advanced := tooltip == _drop_advanced_tooltip
 	if text.is_empty():
-		if is_advanced:
-			_drop_advanced_side_hovered = false
-		else:
-			_drop_main_side_hovered = false
+		_drop_main_side_hovered = false
 		_refresh_needs_tooltips()
 	else:
-		if is_advanced:
-			_drop_advanced_side_hovered = true
-		else:
-			_drop_main_side_hovered = true
+		_drop_main_side_hovered = true
 		tooltip.update_and_show(text)
 
 
@@ -572,13 +531,10 @@ func _needs_tooltip_action(affordable: bool, hovered: bool) -> NeedsTooltipActio
 	return NeedsTooltipAction.HIDE if affordable else NeedsTooltipAction.SHOW
 
 
-## Refreshes the persistent "Needs X" tooltip for both drop buttons. Each message
-## is anchored above its own button; the advanced button is skipped until its
-## column is visible.
+## Refreshes the persistent "Needs X" tooltip for the drop button, anchored
+## above it.
 func _refresh_needs_tooltips() -> void:
 	_apply_needs_tooltip(_drop_main_tooltip, _get_drop_costs(), _drop_main_hovered or _drop_main_side_hovered)
-	if _drop_advanced_column.visible:
-		_apply_needs_tooltip(_drop_advanced_tooltip, _get_advanced_drop_costs(), _drop_advanced_hovered or _drop_advanced_side_hovered)
 
 
 ## Applies the computed action to a single drop button's "Needs X" tooltip.
@@ -602,19 +558,12 @@ func _process(delta: float) -> void:
 
 	# Hold-to-drop runs independently of the drop timer so the queue fills
 	# at HOLD_DROP_INTERVAL while the drop timer drains it at its own rate.
-	var hold_advanced: bool = _is_hold_to_drop_advanced_active()
-	var hold_normal: bool = not hold_advanced and _is_hold_to_drop_active()
-	if _tick_hold_drop_accumulator(delta, hold_advanced or hold_normal):
-		if hold_advanced:
-			request_drop(_get_advanced_drop_costs(), advanced_bucket_type)
-		else:
-			request_drop()
+	if _tick_hold_drop_accumulator(delta, _is_hold_to_drop_active()):
+		request_drop()
 
 	# A held drop hotkey reads as a pressed button for as long as it's down
 	# (mouse-hold is already handled by the button's own press tracking).
 	_drop_main.set_force_pressed(Input.is_action_pressed("drop_coin") and drop_section.visible)
-	_drop_advanced.set_force_pressed(Input.is_action_pressed("drop_unrefined") \
-		and drop_section.visible and _drop_advanced_column.visible)
 
 	_update_drop_rate_label_position()
 
@@ -652,11 +601,6 @@ func _is_hold_to_drop_active() -> bool:
 	return (Input.is_action_pressed("drop_coin") or _drop_main.is_held()) \
 		and drop_section.visible
 
-
-func _is_hold_to_drop_advanced_active() -> bool:
-	return (Input.is_action_pressed("drop_unrefined") or _drop_advanced.is_held()) \
-		and drop_section.visible \
-		and _drop_advanced_column.visible
 
 # ── Coin rendering ────────────────────────────────────────────────────────────
 
@@ -697,12 +641,9 @@ func request_drop(costs: Array = [], coin_type: int = -1, is_manual: bool = true
 
 	var coin: Coin = CoinScene.instantiate()
 	coin.coin_type = drop_coin_type
-	if drop_coin_type == advanced_bucket_type:
-		coin.multiplier = advanced_coin_multiplier
-
 	if coin_queue.has_queue() and not coin_queue.is_full():
 		_spend(costs)
-		coin_queue.enqueue(coin, drop_coin_type == advanced_bucket_type)
+		coin_queue.enqueue(coin)
 		if not is_waiting:
 			_drop_from_queue()
 	elif not is_waiting:
@@ -735,11 +676,6 @@ func _get_drop_costs() -> Array:
 		for cost in costs:
 			cost[1] = maxi(1, cost[1] - reduction)
 	return costs
-
-
-## Returns the cost to drop an advanced coin (1 raw currency of the next tier).
-func _get_advanced_drop_costs() -> Array:
-	return [[advanced_bucket_type, 1]]
 
 
 func _can_afford(costs: Array) -> bool:
@@ -1008,13 +944,6 @@ func _update_drop_fill() -> void:
 	var can_drop_normal: bool = _can_afford(_get_drop_costs()) and not show_cooldown
 	_drop_main.set_main_disabled(not can_drop_normal)
 	_drop_main.apply_fill_colors(not can_drop_normal)
-
-	# Advanced drop bar
-	if _drop_advanced_column.visible:
-		_drop_advanced.set_fill(fill_pct)
-		var can_drop_advanced: bool = _can_afford(_get_advanced_drop_costs()) and not show_cooldown
-		_drop_advanced.set_main_disabled(not can_drop_advanced)
-		_drop_advanced.apply_fill_colors(not can_drop_advanced)
 
 	_refresh_needs_tooltips()
 
@@ -1445,39 +1374,6 @@ func _on_reconcile_reward(reward: RewardData) -> void:
 			and not should_show_advanced_buckets:
 		should_show_advanced_buckets = true
 		build_board()
-
-
-func _show_advanced_drop_bar() -> void:
-	# Single-currency model: advanced drops are removed. No-op so the column never
-	# appears (including for old saves that recorded has_advanced_drop = true).
-	return
-	@warning_ignore("unreachable_code")
-	if _has_advanced_drop:
-		return
-	_has_advanced_drop = true
-	var t: VisualTheme = ThemeProvider.theme
-	var adv_color: Color = t.get_coin_color(advanced_bucket_type)
-	var adv_color_dark: Color = t.get_coin_color_faded(advanced_bucket_type)
-	_drop_advanced.setup(adv_color, adv_color_dark)
-	_drop_advanced.update_text("Drop %s" % FormatUtils.currency_name(advanced_bucket_type, false))
-	_drop_advanced.main_pressed.connect(func(): request_drop(_get_advanced_drop_costs(), advanced_bucket_type))
-	_drop_advanced.main_mouse_entered.connect(_on_drop_advanced_hover)
-	_drop_advanced.main_mouse_exited.connect(_on_drop_advanced_hover_exit)
-	_drop_advanced.side_button_hover.connect(_on_drop_side_hover.bind(_drop_advanced_tooltip))
-
-	# B key shortcut for advanced drop
-	var adv_shortcut := Shortcut.new()
-	var adv_key := InputEventAction.new()
-	adv_key.action = "drop_unrefined"
-	adv_shortcut.events = [adv_key]
-	_drop_advanced.main_button.shortcut = adv_shortcut
-	_drop_advanced.main_button.shortcut_in_tooltip = false
-
-	_drop_advanced_column.visible = true
-	var adv_id := StringName("%s_ADVANCED" % Enums.BoardType.keys()[board_type])
-	_drop_buttons[adv_id] = _drop_advanced
-	if _advanced_autodroppers_visible:
-		_setup_autodropper_buttons(adv_id)
 
 
 # ── Lattice geometry + deflector vocabulary ───────────────────────────────────
@@ -3011,18 +2907,18 @@ func _on_queue_unlock_done() -> void:
 
 # ── Autodroppers ──────────────────────────────────────────────────────────────
 
-func try_autodrop(is_advanced: bool) -> void:
+func try_autodrop() -> void:
 	# Same gate as request_drop — once a challenge is marked failed, drop_blocked
 	# returns true and autodroppers stop too (no-op outside challenges).
 	if drop_blocked.is_valid() and drop_blocked.call():
 		return
-	var costs: Array = _get_advanced_drop_costs() if is_advanced else _get_drop_costs()
+	var costs: Array = _get_drop_costs()
 	if not _can_afford(costs):
 		autodrop_failed.emit(board_type)
 		return
 	# Atomically: complete FILLING → move to FULL section → add replacement FILLING.
 	# Single slide pass avoids overlapping tweens that caused position glitches.
-	var coin: Coin = coin_queue.complete_and_requeue_filling(is_advanced)
+	var coin: Coin = coin_queue.complete_and_requeue_filling()
 	if coin:
 		_spend(costs)
 		# Trigger a drop if the board isn't on cooldown
@@ -3030,31 +2926,20 @@ func try_autodrop(is_advanced: bool) -> void:
 			_drop_from_queue()
 	else:
 		# No FILLING coin found — fallback to normal request_drop
-		var coin_type: int = advanced_bucket_type if is_advanced else -1
-		request_drop(costs, coin_type, false)
+		request_drop(costs, -1, false)
 
 
 func set_normal_autodroppers_visible(vis: bool) -> void:
 	_normal_autodroppers_visible = vis
 	if vis:
 		for bid in _drop_buttons:
-			if not (bid as String).ends_with("_ADVANCED"):
-				_setup_autodropper_buttons(bid)
-
-
-func set_advanced_autodroppers_visible(vis: bool) -> void:
-	_advanced_autodroppers_visible = vis
-	if vis:
-		for bid in _drop_buttons:
-			if (bid as String).ends_with("_ADVANCED"):
-				_setup_autodropper_buttons(bid)
+			_setup_autodropper_buttons(bid)
 
 
 func _setup_autodropper_buttons(bid: StringName) -> void:
 	var bar = _drop_buttons[bid]
 	var captured_bid: StringName = bid
-	var is_adv: bool = (bid as String).ends_with("_ADVANCED")
-	var label: String = "advanced autodropper" if is_adv else "autodropper"
+	var label: String = "autodropper"
 
 	bar.setup_minus(
 		func(): autodropper_adjust_requested.emit(captured_bid, -1),
@@ -3073,14 +2958,13 @@ func _is_challenge_locked_board() -> bool:
 	return ChallengeManager.is_active_challenge and board_type == ChallengeManager.get_survive_board_type()
 
 
-func update_autodropper_buttons(assignments: Dictionary, normal_free: int, advanced_free: int) -> void:
+func update_autodropper_buttons(assignments: Dictionary, free: int) -> void:
 	# The Survive board's autodroppers are challenge-controlled: force both +/-
 	# disabled regardless of pool/assignment (hover explains via the callback).
 	var challenge_locked: bool = _is_challenge_locked_board()
 	for bid in _drop_buttons:
 		var bar = _drop_buttons[bid]
 		var assigned: int = assignments.get(bid, 0)
-		var free: int = advanced_free if (bid as String).ends_with("_ADVANCED") else normal_free
 		bar.set_minus_disabled(challenge_locked or assigned <= 0)
 		bar.set_minus_filled(assigned > 0)
 		bar.set_plus_disabled(challenge_locked or free <= 0)
@@ -3108,9 +2992,7 @@ func set_drop_main_text(button_id: StringName, autodropper_count: int, autodropp
 	var bar: HBoxContainer = _drop_buttons.get(button_id)
 	if not bar:
 		return
-	var is_adv: bool = (button_id as String).ends_with("_ADVANCED")
-	var currency_type: Enums.CurrencyType = advanced_bucket_type if is_adv else TierRegistry.primary_currency(board_type)
-	var coin_name: String = FormatUtils.currency_name(currency_type, false)
+	var coin_name: String = FormatUtils.currency_name(TierRegistry.primary_currency(board_type), false)
 	if autodroppers_unlocked:
 		bar.update_text("Drop %s • %d auto" % [coin_name, autodropper_count])
 	else:
@@ -3131,8 +3013,6 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 	var perm_bv: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.BUCKET_VALUE)
 	bucket_value_multiplier = 1 + upgrade_state.get("BUCKET_VALUE", 0) + perm_bv
 
-	advanced_coin_multiplier = upgrade_state.get("advanced_coin_multiplier", 2.0)
-
 	var drop_rate_level: int = upgrade_state.get("DROP_RATE", 0)
 	var perm_dr: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.DROP_RATE)
 	for i in drop_rate_level + perm_dr:
@@ -3144,8 +3024,6 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 
 	if upgrade_state.get("show_advanced_buckets", false):
 		should_show_advanced_buckets = true
-	if upgrade_state.get("has_advanced_drop", false):
-		_show_advanced_drop_bar()
 
 	build_board()
 

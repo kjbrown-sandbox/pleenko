@@ -17,7 +17,7 @@ func _run_tests() -> void:
 	test_gold_unlocks_autodropper_before_queue()
 	test_set_queue_slot_helper()
 	test_autodropper_cost_curve()
-	test_advanced_autodropper_cost_curve()
+	test_advanced_autodropper_is_retired()
 	test_queue_cost_curve_and_cap()
 	test_all_upgrades_have_descriptions()
 
@@ -63,11 +63,20 @@ func test_autodropper_cost_curve() -> void:
 	_assert_cost_curve(Enums.UpgradeType.AUTODROPPER, [50, 100, 175, 275, 400], "autodropper")
 
 
-func test_advanced_autodropper_cost_curve() -> void:
-	print("test_advanced_autodropper_cost_curve")
-	# Advanced is bought with the ORANGE board's currency, same curve as normal.
-	_assert_cost_curve_for(Enums.BoardType.ORANGE, Enums.UpgradeType.ADVANCED_AUTODROPPER,
-		[50, 100, 175, 275, 400], "advanced autodropper")
+## ADVANCED_AUTODROPPER is retired: its enum value and .tres stay registered
+## (UpgradeManager.deserialize indexes _state[board][type] for every enum value,
+## so unregistering would crash old saves), but it can never be unlocked again.
+func test_advanced_autodropper_is_retired() -> void:
+	print("test_advanced_autodropper_is_retired")
+	assert_true(UpgradeManager.is_retired(Enums.UpgradeType.ADVANCED_AUTODROPPER),
+		"ADVANCED_AUTODROPPER is listed as retired")
+	for board_type in Enums.BoardType.values():
+		assert_true(UpgradeManager.get_state(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER) != null,
+			"state still exists so deserialize can't crash on an old save")
+		UpgradeManager.unlock(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER)
+		assert_false(UpgradeManager.is_unlocked(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER),
+			"unlock() refuses a retired upgrade")
+	UpgradeManager.reset()
 
 
 func test_queue_cost_curve_and_cap() -> void:

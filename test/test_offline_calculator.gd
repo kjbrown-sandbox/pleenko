@@ -15,10 +15,10 @@ func _run_tests() -> void:
 	test_orange_board_depletes_gold()
 	test_cross_board_processing_order()
 	test_insufficient_currency_limits_drops()
-	test_advanced_drops_earn_advanced_currency()
+	test_stale_advanced_assignment_earns_nothing_offline()
 	test_input_not_mutated()
 	test_multiple_autodroppers_scale_throughput()
-	test_normal_and_advanced_on_same_board()
+	test_stale_advanced_key_does_not_change_normal_earnings()
 	test_normal_drops_earn_advanced_currency()
 	test_long_offline_capped_by_currency_cap()
 	test_zero_balance_cannot_afford_drops()
@@ -268,28 +268,12 @@ func test_insufficient_currency_limits_drops() -> void:
 	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 3, "raw_orange untouched (no raw cost)")
 
 
-func test_advanced_drops_earn_advanced_currency() -> void:
-	print("test_advanced_drops_earn_advanced_currency")
-	# GOLD_ADVANCED, 8 rows, advanced buckets visible, coin multiplier = 2
-	# 9 buckets, distances [4,3,2,1,0,1,2,3,4], advanced_distance=3
-	# Bucket layout: [2 RAW_O, 1 RAW_O, 3 GOLD, 2 GOLD, 1 GOLD, 2 GOLD, 3 GOLD, 1 RAW_O, 2 RAW_O]
-	# Pascal row 8: [1, 8, 28, 56, 70, 56, 28, 8, 1] / 256
-	#
-	# Per-bucket RAW_ORANGE earnings (x2 coin mult):
-	#   b0: (1/256)*2*2=0.01563, b1: (8/256)*1*2=0.0625
-	#   b7: (8/256)*1*2=0.0625, b8: (1/256)*2*2=0.01563
-	#   Total RAW_ORANGE per drop = 0.15625
-	#
-	# Per-bucket GOLD_COIN earnings (x2 coin mult):
-	#   b2: (28/256)*3*2=0.65625, b3: (56/256)*2*2=0.875, b4: (70/256)*1*2=0.546875
-	#   b5: (56/256)*2*2=0.875, b6: (28/256)*3*2=0.65625
-	#   Total GOLD_COIN per drop = 3.609375
-	#
-	# Cost: 1 RAW_ORANGE per drop (gross). drop_delay=2.0, 1 autodropper, 60s
-	# Batched (10s each, 5 drops/batch): each batch spends up to 5 RAW_ORANGE.
-	# Over 5 batches: 5+5+5+5+3 = 23 total drops (RAW_O runs out in batch 5).
-	# RAW_ORANGE: 20 spent → 0
-	# GOLD: 100 + earnings from 23 advanced drops = 183
+## The advanced autodropper is gone, so a "<BOARD>_ADVANCED" assignment key can
+## only come from a save written before its removal. BoardManager strips those
+## on load; offline earnings must agree and treat them as inert, or a returning
+## player would be credited for autodroppers they no longer own.
+func test_stale_advanced_assignment_earns_nothing_offline() -> void:
+	print("test_stale_advanced_assignment_earns_nothing_offline")
 	var state := _make_state({
 		"currency": {
 			"RAW_ORANGE": {"balance": 20, "cap": 50, "cap_raise_level": 0},
@@ -301,12 +285,14 @@ func test_advanced_drops_earn_advanced_currency() -> void:
 				"GOLD": _default_board_state("GOLD", {"num_rows": 8}),
 			},
 		},
-		# Advanced buckets on gold earn RAW_ORANGE — gated by orange prestige.
 		"prestige": {"ORANGE": 1},
 	})
+	var before_gold: int = state["currency"]["GOLD_COIN"]["balance"]
 	var result := OfflineCalculator.calculate(state, 60.0)
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 0, "raw_orange spent")
-	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 183, "gold earned from advanced")
+	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 20,
+		"a stale advanced assignment spends nothing")
+	assert_equal(result["currency"]["GOLD_COIN"]["balance"], before_gold,
+		"a stale advanced assignment earns nothing")
 
 
 func test_input_not_mutated() -> void:
@@ -333,34 +319,45 @@ func test_multiple_autodroppers_scale_throughput() -> void:
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 145, "gold with 3 autodroppers")
 
 
-func test_normal_and_advanced_on_same_board() -> void:
-	print("test_normal_and_advanced_on_same_board")
-	# Gold board, 8 rows, advanced buckets visible
-	# 9 buckets, distances [4,3,2,1,0,1,2,3,4], advanced_distance=3
-	# Layout: [2 RAW_O, 1 RAW_O, 3 GOLD, 2 GOLD, 1 GOLD, 2 GOLD, 3 GOLD, 1 RAW_O, 2 RAW_O]
-	# Pascal row 8: [1, 8, 28, 56, 70, 56, 28, 8, 1] / 256
-	#
-	# Both NORMAL and ADVANCED interleave per batch (10s each, 6 batches).
-	# NORMAL: coin_mult=1, cost 1 GOLD. ADVANCED: coin_mult=2, cost 1 RAW_ORANGE.
-	# NORMAL earns RAW_O at 0.078125/drop, giving ADVANCED fuel in later batches.
-	# After all batches: GOLD=131, RAW_ORANGE=0
-	var state := _make_state({
-		"currency": {
-			"RAW_ORANGE": {"balance": 0, "cap": 50, "cap_raise_level": 0},
+## A stale advanced key alongside a real one must not change the outcome.
+## Asserted by computing both states rather than hardcoding a total, so the
+## equivalence keeps holding if the offline economy is retuned.
+func test_stale_advanced_key_does_not_change_normal_earnings() -> void:
+	print("test_stale_advanced_key_does_not_change_normal_earnings")
+	var boards := {
+		"advanced_buckets": {"GOLD": true, "ORANGE": false, "RED": false},
+		"board_state": {
+			"GOLD": _default_board_state("GOLD", {"num_rows": 8}),
 		},
-		"boards": {
-			"assignments": {"GOLD_NORMAL": 1, "GOLD_ADVANCED": 1},
-			"advanced_buckets": {"GOLD": true, "ORANGE": false, "RED": false},
-			"board_state": {
-				"GOLD": _default_board_state("GOLD", {"num_rows": 8}),
-			},
-		},
-		# Advanced buckets on gold earn RAW_ORANGE — gated by orange prestige.
+	}
+	var normal_only := _make_state({
+		"currency": {"RAW_ORANGE": {"balance": 0, "cap": 50, "cap_raise_level": 0}},
+		"boards": _with_assignments(boards, {"GOLD_NORMAL": 1}),
 		"prestige": {"ORANGE": 1},
 	})
-	var result := OfflineCalculator.calculate(state, 60.0)
-	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 131, "gold from both normal+advanced")
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 0, "raw_orange spent by advanced")
+	var with_stale := _make_state({
+		"currency": {"RAW_ORANGE": {"balance": 0, "cap": 50, "cap_raise_level": 0}},
+		"boards": _with_assignments(boards, {"GOLD_NORMAL": 1, "GOLD_ADVANCED": 1}),
+		"prestige": {"ORANGE": 1},
+	})
+
+	var expected := OfflineCalculator.calculate(normal_only, 60.0)
+	var actual := OfflineCalculator.calculate(with_stale, 60.0)
+
+	assert_equal(actual["currency"]["GOLD_COIN"]["balance"],
+		expected["currency"]["GOLD_COIN"]["balance"],
+		"stale advanced key does not change gold earned")
+	assert_equal(actual["currency"]["RAW_ORANGE"]["balance"],
+		expected["currency"]["RAW_ORANGE"]["balance"],
+		"stale advanced key does not change raw orange earned")
+
+
+## Shallow copy of a boards blob with a specific assignments dictionary, so two
+## states can differ by assignments alone.
+func _with_assignments(boards: Dictionary, assignments: Dictionary) -> Dictionary:
+	var out: Dictionary = boards.duplicate(true)
+	out["assignments"] = assignments
+	return out
 
 
 func test_normal_drops_earn_advanced_currency() -> void:

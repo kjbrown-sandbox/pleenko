@@ -919,8 +919,6 @@ func _milestone_title(level_data: LevelData) -> String:
 			return s[0].to_upper() + s.substr(1) if not s.is_empty() else s
 		RewardData.RewardType.UNLOCK_AUTODROPPER:
 			return "Autodropper"
-		RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER:
-			return "Advanced autodropper"
 		RewardData.RewardType.UNLOCK_ADVANCED_BUCKET:
 			# Advanced buckets show the next-tier name. But if landing in
 			# one would trigger prestige (the next tier hasn't been
@@ -951,8 +949,6 @@ func _get_reward_targets(rewards: Array[RewardData]) -> Array[Vector2]:
 				return [_get_upgrade_section_target(reward.upgrade_type)]
 			RewardData.RewardType.UNLOCK_AUTODROPPER:
 				return [_get_hud_upgrade_target(Enums.UpgradeType.AUTODROPPER)]
-			RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER:
-				return [_get_hud_upgrade_target(Enums.UpgradeType.ADVANCED_AUTODROPPER)]
 			RewardData.RewardType.UNLOCK_ADVANCED_BUCKET:
 				return _get_advanced_bucket_targets(reward.target_board)
 	return []
