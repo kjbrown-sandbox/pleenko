@@ -144,15 +144,17 @@ func _set_special_slot(data: LevelData, board_type: Enums.BoardType, _next_tier:
 		data.rewards = [_unlock_autodropper(), _unlock_upgrade(Enums.UpgradeType.AUTODROPPER, board_type)]
 	elif board_type == Enums.BoardType.ORANGE:
 		# Deflector is the orange board's signature upgrade. (Advanced Autodropper
-		# moved to red — see below. Existing saves keep whatever they already
-		# unlocked on orange; this table only drives NEW unlock events.)
+		# once shared this slot; it is retired — see UpgradeManager.RETIRED_UPGRADES.
+		# Existing saves keep whatever they already unlocked on orange; this table
+		# only drives NEW unlock events.)
 		data.message = "You have unlocked the Deflector."
 		data.rewards = [_unlock_upgrade(Enums.UpgradeType.PEG_DEFLECTOR, board_type)]
 	else:
 		# Red's signature upgrade slot is reserved for Auto-buy; violet/blue/green
-		# for their own specials. Until those land, the slot pays a coin frenzy so
-		# the milestone still rewards. (Advanced Autodropper used to live on red —
-		# removed with the raw/advanced coin economy it depended on.)
+		# for their own specials (see agent-logs/unique-upgrades.md). Until those
+		# land, the slot pays a coin frenzy so the milestone still rewards.
+		# (Advanced Autodropper used to live on red — removed with the
+		# raw/advanced coin economy it depended on.)
 		_set_coin_frenzy(data, board_type)
 
 

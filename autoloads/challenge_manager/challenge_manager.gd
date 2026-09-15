@@ -167,8 +167,9 @@ func _apply_starting_conditions() -> void:
 				board.drop_delay = condition.drop_delay
 
 	# Apply STARTING_MODIFIER rewards earned from previously-completed challenges.
-	# Other modifier types (MULTI_DROP, ADVANCED_COIN_MULTIPLIER, BUCKET_VALUE_PERCENT)
-	# are consumed directly by the board on setup via the ChallengeProgressManager getters.
+	# MULTI_DROP and BUCKET_VALUE_PERCENT are consumed directly by the board on
+	# setup via the ChallengeProgressManager getters. ADVANCED_COIN_MULTIPLIER is
+	# dormant — the board field it fed went with the advanced autodropper.
 	for mod in ChallengeProgressManager.get_starting_modifiers():
 		if mod.modifier_type == ChallengeRewardData.ModifierType.STARTING_COINS:
 			CurrencyManager.add(mod.currency_type, int(mod.modifier_amount))

@@ -50,9 +50,9 @@ func test_no_autodropper_without_prestige() -> void:
 
 	bm._apply_prestige_rewards()
 
-	assert_false(bm._normal_autodroppers_unlocked,
+	assert_false(bm._autodroppers_unlocked,
 		"autodroppers should NOT be unlocked without gold prestige")
-	assert_equal(bm._normal_pool, 0,
+	assert_equal(bm._autodropper_pool, 0,
 		"pool should remain 0 without gold prestige")
 	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 0,
 		"no assignment without gold prestige")
@@ -70,9 +70,9 @@ func test_gold_prestige_grants_autodropper() -> void:
 
 	bm._apply_prestige_rewards()
 
-	assert_true(bm._normal_autodroppers_unlocked,
+	assert_true(bm._autodroppers_unlocked,
 		"autodroppers should be unlocked after gold prestige")
-	assert_equal(bm._normal_pool, 1,
+	assert_equal(bm._autodropper_pool, 1,
 		"pool should be 1 after gold prestige")
 	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 1,
 		"1 autodropper should be assigned to GOLD_NORMAL")
@@ -85,13 +85,13 @@ func test_prestige_reward_does_not_overwrite_existing_pool() -> void:
 	PrestigeManager.claim_prestige(Enums.BoardType.ORANGE)
 
 	var bm := _make_board_manager()
-	bm._normal_autodroppers_unlocked = true
-	bm._normal_pool = 5
+	bm._autodroppers_unlocked = true
+	bm._autodropper_pool = 5
 	bm._assignments[StringName("GOLD_NORMAL")] = 3
 
 	bm._apply_prestige_rewards()
 
-	assert_equal(bm._normal_pool, 5,
+	assert_equal(bm._autodropper_pool, 5,
 		"pool should stay at 5 (not reduced to 1)")
 	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 3,
 		"assignment should stay at 3 (not reduced to 1)")
@@ -104,8 +104,8 @@ func test_prestige_reward_does_not_overwrite_existing_assignment() -> void:
 	PrestigeManager.claim_prestige(Enums.BoardType.ORANGE)
 
 	var bm := _make_board_manager()
-	bm._normal_autodroppers_unlocked = true
-	bm._normal_pool = 2
+	bm._autodroppers_unlocked = true
+	bm._autodropper_pool = 2
 	# Autodroppers assigned elsewhere, none on gold
 	bm._assignments[StringName("ORANGE_NORMAL")] = 2
 
@@ -124,15 +124,15 @@ func test_first_purchase_no_auto_assign_when_intro_not_seen() -> void:
 	OnboardingProgress.reset()
 	# Intro not seen yet (fresh OnboardingProgress) and autodroppers not yet unlocked.
 	var bm := _make_board_manager()
-	assert_false(bm._normal_autodroppers_unlocked, "should start unlocked=false")
+	assert_false(bm._autodroppers_unlocked, "should start unlocked=false")
 
 	var signal_count := [0]  # Array used so closure captures by reference
 	bm.first_autodropper_purchased.connect(func(): signal_count[0] += 1, CONNECT_ONE_SHOT)
 
 	bm._on_upgrade_purchased(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD, 1)
 
-	assert_equal(bm._normal_pool, 1, "pool should increment")
-	assert_true(bm._normal_autodroppers_unlocked, "should be marked unlocked")
+	assert_equal(bm._autodropper_pool, 1, "pool should increment")
+	assert_true(bm._autodroppers_unlocked, "should be marked unlocked")
 	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 0,
 		"first purchase must NOT auto-assign (intro animation handles it)")
 	assert_equal(signal_count[0], 1, "first_autodropper_purchased signal must fire exactly once")
@@ -145,12 +145,12 @@ func test_second_purchase_does_not_auto_assign_to_gold() -> void:
 	_reset()
 	var bm := _make_board_manager()
 	# Simulate already-unlocked state (intro already seen / second purchase).
-	bm._normal_autodroppers_unlocked = true
-	bm._normal_pool = 1
+	bm._autodroppers_unlocked = true
+	bm._autodropper_pool = 1
 
 	bm._on_upgrade_purchased(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD, 2)
 
-	assert_equal(bm._normal_pool, 2, "pool should increment to 2")
+	assert_equal(bm._autodropper_pool, 2, "pool should increment to 2")
 	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 0,
 		"second purchase must NOT auto-assign to gold (stays in free pool)")
 	bm.queue_free()
@@ -161,13 +161,13 @@ func test_normal_autodropper_purchase_pools_without_assigning() -> void:
 	_reset()
 	var bm := _make_board_manager()
 	# Pre-set unlocked=true so this exercises the post-intro (second+) purchase path.
-	bm._normal_autodroppers_unlocked = true
-	bm._normal_pool = 2
+	bm._autodroppers_unlocked = true
+	bm._autodropper_pool = 2
 
 	# Simulate purchasing a 3rd autodropper
 	bm._on_upgrade_purchased(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD, 3)
 
-	assert_equal(bm._normal_pool, 3,
+	assert_equal(bm._autodropper_pool, 3,
 		"pool should be 3 after third purchase")
 	assert_equal(bm._assignments.get(StringName("GOLD_NORMAL"), 0), 0,
 		"purchased normal autodroppers must never be assigned to gold")
@@ -179,7 +179,7 @@ func test_normal_autodropper_purchase_pools_without_assigning() -> void:
 ## the keys would silently consume slots out of the single free pool.
 func test_stale_advanced_assignments_are_dropped_on_load() -> void:
 	print("test_stale_advanced_assignments_are_dropped_on_load")
-	var restored: Dictionary = BoardManager.restorable_assignments({
+	var restored: Dictionary = BoardManager.live_assignments({
 		"GOLD_NORMAL": 1, "ORANGE_NORMAL": 2, "GOLD_ADVANCED": 3, "ORANGE_ADVANCED": 4,
 	})
 
@@ -193,7 +193,7 @@ func test_stale_advanced_assignments_are_dropped_on_load() -> void:
 		"orange normal assignment survives")
 	assert_equal(restored.size(), 2, "only the two normal keys survive")
 
-	assert_equal(BoardManager.restorable_assignments({}).size(), 0,
+	assert_equal(BoardManager.live_assignments({}).size(), 0,
 		"an empty save restores no assignments")
 
 

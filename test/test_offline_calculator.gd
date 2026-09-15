@@ -46,13 +46,20 @@ func _default_board_state(board_type: String, overrides: Dictionary = {}) -> Dic
 		"num_rows": 2,
 		"drop_delay": base_delay,
 		"bucket_value_multiplier": 1,
-		"advanced_coin_multiplier": 2,
 		"distance_for_advanced_buckets": 3,
 		"multi_drop_count": 1,
 	}
 	for key in overrides:
 		bs[key] = overrides[key]
 	return bs
+
+
+## Deep copy of a boards blob with a specific assignments dictionary, so two
+## states can be made to differ by assignments alone.
+func _with_assignments(boards: Dictionary, assignments: Dictionary) -> Dictionary:
+	var out: Dictionary = boards.duplicate(true)
+	out["assignments"] = assignments
+	return out
 
 
 func _make_state(overrides: Dictionary = {}) -> Dictionary:
@@ -352,14 +359,6 @@ func test_stale_advanced_key_does_not_change_normal_earnings() -> void:
 		"stale advanced key does not change raw orange earned")
 
 
-## Shallow copy of a boards blob with a specific assignments dictionary, so two
-## states can differ by assignments alone.
-func _with_assignments(boards: Dictionary, assignments: Dictionary) -> Dictionary:
-	var out: Dictionary = boards.duplicate(true)
-	out["assignments"] = assignments
-	return out
-
-
 func test_normal_drops_earn_advanced_currency() -> void:
 	print("test_normal_drops_earn_advanced_currency")
 	# GOLD_NORMAL on gold board with 8 rows and advanced buckets visible
@@ -596,7 +595,7 @@ func test_no_raw_red_credited_before_red_prestige() -> void:
 		},
 		"boards": {
 			"board_types": [0, 1],
-			"assignments": {"ORANGE_ADVANCED": 1},
+			"assignments": {"ORANGE_NORMAL": 1},
 			"advanced_buckets": {"GOLD": false, "ORANGE": true, "RED": false},
 			"board_state": {
 				"GOLD": _default_board_state("GOLD"),
@@ -607,3 +606,8 @@ func test_no_raw_red_credited_before_red_prestige() -> void:
 	})
 	var result := OfflineCalculator.calculate(state, 600.0)
 	assert_equal(result["currency"]["RAW_RED"]["balance"], 0, "no raw_red before red prestige")
+	# Liveness. Without this, the gate assertion above also passes when NO drops
+	# are simulated at all — which is exactly how this test silently stopped
+	# testing anything once its old "ORANGE_ADVANCED" key became inert.
+	assert_true(result["currency"]["ORANGE_COIN"]["balance"] > 0,
+		"orange still accrues, so the gate above is genuinely exercised")

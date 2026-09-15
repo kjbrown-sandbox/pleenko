@@ -63,7 +63,7 @@ var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
 var should_show_advanced_buckets: bool = false
-var _normal_autodroppers_visible: bool = false
+var _autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
 var _no_room_label: Label3D
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
@@ -77,13 +77,12 @@ var _upgrade_ripple_tween: Tween
 var multi_drop_count: int = -1
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 # True while the mouse is hovering the respective drop button — used by the
-# tooltip refresh logic so that button's persistent "Needs X" message is
-# suppressed in favor of the regular cost tooltip during hover. Tracked per
-# button so hovering one never suppresses the other's "Needs X" message.
+# tooltip refresh logic so the persistent "Needs X" message is suppressed in
+# favor of the regular cost tooltip during hover.
 var _drop_main_hovered: bool = false
-# Set while the autodropper +/- cap of a drop button is hovered, so the per-frame
-# "Needs X" refresh doesn't clobber the "Add/Remove autodropper" hover tooltip
-# (those caps aren't the main button, so _drop_*_hovered stays false on them).
+# Set while the autodropper +/- cap of the drop button is hovered, so the
+# per-frame "Needs X" refresh doesn't clobber the "Add/Remove autodropper" hover
+# tooltip (the caps aren't the main button, so _drop_main_hovered stays false).
 var _drop_main_side_hovered: bool = false
 
 ## Optional gate: () -> bool. Returns true if drops should be blocked.
@@ -416,7 +415,7 @@ func _sync_filling_coins(wanted: int) -> void:
 			coin_queue.add_filling_coin(coin_type)
 	elif current > wanted:
 		# Remove only the excess filling coins
-		coin_queue.remove_filling_coins_of_type(current - wanted)
+		coin_queue.remove_filling_coins(current - wanted)
 
 
 func _show_no_room() -> void:
@@ -493,16 +492,15 @@ func _on_drop_main_hover_exit() -> void:
 	_drop_main_hovered = false
 	_drop_main_tooltip.hide_tooltip()
 	# Re-evaluate the persistent needs message after the hover ends.
-	_refresh_needs_tooltips()
+	_refresh_needs_tooltip()
 
 
-## Side-button (autodropper +/-) hover. The tooltip is bound per drop column at
-## connection time. Empty text means the hover ended — restore the "Needs X"
-## messages instead of leaving the tooltip blank.
+## Side-button (autodropper +/-) hover. Empty text means the hover ended —
+## restore the "Needs X" message instead of leaving the tooltip blank.
 func _on_drop_side_hover(text: String, tooltip: Tooltip) -> void:
 	if text.is_empty():
 		_drop_main_side_hovered = false
-		_refresh_needs_tooltips()
+		_refresh_needs_tooltip()
 	else:
 		_drop_main_side_hovered = true
 		tooltip.update_and_show(text)
@@ -533,7 +531,7 @@ func _needs_tooltip_action(affordable: bool, hovered: bool) -> NeedsTooltipActio
 
 ## Refreshes the persistent "Needs X" tooltip for the drop button, anchored
 ## above it.
-func _refresh_needs_tooltips() -> void:
+func _refresh_needs_tooltip() -> void:
 	_apply_needs_tooltip(_drop_main_tooltip, _get_drop_costs(), _drop_main_hovered or _drop_main_side_hovered)
 
 
@@ -941,11 +939,11 @@ func _update_drop_fill() -> void:
 
 	# Normal drop bar
 	_drop_main.set_fill(fill_pct)
-	var can_drop_normal: bool = _can_afford(_get_drop_costs()) and not show_cooldown
-	_drop_main.set_main_disabled(not can_drop_normal)
-	_drop_main.apply_fill_colors(not can_drop_normal)
+	var can_drop: bool = _can_afford(_get_drop_costs()) and not show_cooldown
+	_drop_main.set_main_disabled(not can_drop)
+	_drop_main.apply_fill_colors(not can_drop)
 
-	_refresh_needs_tooltips()
+	_refresh_needs_tooltip()
 
 # ── Landing ───────────────────────────────────────────────────────────────────
 
@@ -2929,8 +2927,8 @@ func try_autodrop() -> void:
 		request_drop(costs, -1, false)
 
 
-func set_normal_autodroppers_visible(vis: bool) -> void:
-	_normal_autodroppers_visible = vis
+func set_autodroppers_visible(vis: bool) -> void:
+	_autodroppers_visible = vis
 	if vis:
 		for bid in _drop_buttons:
 			_setup_autodropper_buttons(bid)
@@ -2939,16 +2937,15 @@ func set_normal_autodroppers_visible(vis: bool) -> void:
 func _setup_autodropper_buttons(bid: StringName) -> void:
 	var bar = _drop_buttons[bid]
 	var captured_bid: StringName = bid
-	var label: String = "autodropper"
 
 	bar.setup_minus(
 		func(): autodropper_adjust_requested.emit(captured_bid, -1),
-		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Remove %s" % label,
+		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Remove autodropper",
 	)
 
 	bar.setup_plus(
 		func(): autodropper_adjust_requested.emit(captured_bid, 1),
-		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Add %s" % label,
+		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Add autodropper",
 	)
 
 

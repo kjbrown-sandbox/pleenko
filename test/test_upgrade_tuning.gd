@@ -76,6 +76,29 @@ func test_advanced_autodropper_is_retired() -> void:
 		UpgradeManager.unlock(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER)
 		assert_false(UpgradeManager.is_unlocked(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER),
 			"unlock() refuses a retired upgrade")
+
+	# The OTHER half of the retirement contract, and the dangerous one: UpgradeType
+	# ordinals are persisted as ints by .tres files and by ChallengeProgressManager.
+	# Deleting the retired value would renumber everything after it and silently
+	# repoint peg_deflector.tres (which hardcodes `type = 6`) at the wrong upgrade.
+	# That corrupts data rather than crashing, so guard the ordinals explicitly.
+	assert_equal(int(Enums.UpgradeType.ADVANCED_AUTODROPPER), 5,
+		"retired upgrade keeps ordinal 5")
+	assert_equal(int(Enums.UpgradeType.PEG_DEFLECTOR), 6,
+		"PEG_DEFLECTOR keeps ordinal 6 — peg_deflector.tres hardcodes type = 6")
+	var deflector_data: BaseUpgradeData = UpgradeManager.get_upgrade(Enums.UpgradeType.PEG_DEFLECTOR)
+	assert_true(deflector_data != null,
+		"the .tres ordinal still resolves to the deflector upgrade")
+
+	UpgradeManager.reset()
+
+	# An old save that recorded purchased levels for the retired upgrade must not
+	# leave them behind — BoardManager's legacy pool fallback derives a pool from
+	# upgrade levels, so a stale level could resurrect it.
+	UpgradeManager.get_state(Enums.BoardType.RED, Enums.UpgradeType.ADVANCED_AUTODROPPER).level = 3
+	UpgradeManager.deserialize({})
+	assert_equal(UpgradeManager.get_level(Enums.BoardType.RED, Enums.UpgradeType.ADVANCED_AUTODROPPER), 0,
+		"deserialize clears a retired upgrade's stored level")
 	UpgradeManager.reset()
 
 

@@ -98,16 +98,12 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 			num_rows, bucket_value_multiplier, distance_for_advanced,
 			show_advanced, board_type, earring_rows)
 
-		# One autodropper pool since the advanced autodropper was removed, so the
-		# only assignment key a board can carry is "<BOARD>_NORMAL".
-		for assignment_type in ["NORMAL"]:
-			var assignment_key := "%s_%s" % [board_str, assignment_type]
-			var autodropper_count: int = assignments.get(assignment_key, 0)
-			if autodropper_count <= 0:
-				continue
-
-			var coin_multiplier: float = 1.0
-			var costs: Array = _get_drop_costs(board_type, assignment_type)
+		# One autodropper pool since the advanced autodropper was removed, so
+		# "<BOARD>_NORMAL" is the only assignment key a board can carry.
+		var assignment_key: String = "%s_NORMAL" % board_str
+		var autodropper_count: int = assignments.get(assignment_key, 0)
+		if autodropper_count > 0:
+			var costs: Array = _get_drop_costs(board_type)
 
 			var earnings_per_drop: Dictionary = {}
 			for i in probabilities.size():
@@ -116,7 +112,7 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 				if not _is_currency_ever_earned(c_key, prestige_data):
 					continue
 				var value: int = bucket["value"]
-				var earning: float = probabilities[i] * value * coin_multiplier * multi_drop
+				var earning: float = probabilities[i] * value * multi_drop
 				earnings_per_drop[c_key] = earnings_per_drop.get(c_key, 0.0) + earning
 
 			var drop_rate: float = float(autodropper_count) / drop_delay
@@ -237,10 +233,7 @@ static func _get_bucket_layout(num_rows: int, bucket_value_multiplier: int, dist
 	return layout
 
 
-static func _get_drop_costs(board_type: Enums.BoardType, assignment_type: String) -> Array:
-	if assignment_type == "ADVANCED":
-		return [[_advanced_currency_key(board_type), 1]]
-
+static func _get_drop_costs(board_type: Enums.BoardType) -> Array:
 	var costs: Array = TierRegistry.get_drop_costs(board_type)
 	var result: Array = []
 	for cost in costs:

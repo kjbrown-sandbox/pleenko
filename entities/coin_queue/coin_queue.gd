@@ -114,22 +114,6 @@ func dequeue_full() -> Coin:
 	return null
 
 
-## Complete the first FILLING coin: transition it to FULL, remove it from the
-## queue, and return it. Returns null if none found.
-func complete_first_filling() -> Coin:
-	for i in _coins.size():
-		var c: Coin = _coins[i]
-		if c.fill_state == Coin.FillState.FILLING:
-			c.complete_fill()
-			_coins.remove_at(i)
-			remove_child(c)
-			_slide_all_forward()
-			coin_dequeued.emit()
-			_emit_count_if_changed()
-			return c
-	return null
-
-
 ## Atomically: complete first FILLING coin → move it to the FULL section →
 ## add a replacement FILLING coin. Single slide pass at the end so no
 ## overlapping tweens. Returns the completed coin, or null if none found.
@@ -198,7 +182,7 @@ func add_filling_coin(coin_type: Enums.CurrencyType, coin_multiplier: float = 1.
 
 
 ## Remove FILLING coins. If max_remove <= 0, removes all.
-func remove_filling_coins_of_type(max_remove: int = 0) -> void:
+func remove_filling_coins(max_remove: int = 0) -> void:
 	var removed: int = 0
 	var i: int = _coins.size() - 1
 	while i >= 0:
