@@ -149,9 +149,12 @@ func _set_special_slot(data: LevelData, board_type: Enums.BoardType, _next_tier:
 		# only drives NEW unlock events.)
 		data.message = "You have unlocked the Deflector."
 		data.rewards = [_unlock_upgrade(Enums.UpgradeType.PEG_DEFLECTOR, board_type)]
+	elif board_type == Enums.BoardType.VIOLET:
+		data.message = "You have unlocked the Dud Chute."
+		data.rewards = [_unlock_upgrade(Enums.UpgradeType.DUD_CHUTE, board_type)]
 	else:
-		# Red's signature upgrade slot is reserved for Auto-buy; violet/blue/green
-		# for their own specials (see agent-logs/unique-upgrades.md). Until those
+		# Red's signature upgrade slot is reserved for Auto-buy; blue/green for
+		# their own specials (see agent-logs/unique-upgrades.md). Until those
 		# land, the slot pays a coin frenzy so the milestone still rewards.
 		# (Advanced Autodropper used to live on red — removed with the
 		# raw/advanced coin economy it depended on.)

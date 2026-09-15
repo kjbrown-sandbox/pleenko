@@ -86,6 +86,8 @@ func test_advanced_autodropper_is_retired() -> void:
 		"retired upgrade keeps ordinal 5")
 	assert_equal(int(Enums.UpgradeType.PEG_DEFLECTOR), 6,
 		"PEG_DEFLECTOR keeps ordinal 6 — peg_deflector.tres hardcodes type = 6")
+	assert_equal(int(Enums.UpgradeType.DUD_CHUTE), 7,
+		"DUD_CHUTE keeps ordinal 7 — dud_chute.tres hardcodes type = 7")
 	var deflector_data: BaseUpgradeData = UpgradeManager.get_upgrade(Enums.UpgradeType.PEG_DEFLECTOR)
 	assert_true(deflector_data != null,
 		"the .tres ordinal still resolves to the deflector upgrade")

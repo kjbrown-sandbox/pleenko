@@ -171,6 +171,7 @@ func _spawn_board(type: Enums.BoardType) -> void:
 	board.row_upgrade_starting.connect(_on_row_upgrade_starting.bind(board))
 	board.row_upgrade_sweep_started.connect(_on_row_upgrade_sweep_started.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
+	board.dud_chute_opened.connect(_on_dud_chute_opened)
 	if _autodroppers_unlocked:
 		board.set_autodroppers_visible(true)
 	_update_deflector_editors()
@@ -181,6 +182,31 @@ func _spawn_board(type: Enums.BoardType) -> void:
 func _update_deflector_editors() -> void:
 	for i in _boards.size():
 		_boards[i].set_deflector_input_active(i == _active_index)
+
+
+## The board one tier BELOW `type`, or null when there is none (gold, or the
+## lower board simply isn't spawned). _boards is kept in tier order by
+## _spawn_board, so "behind" is the preceding entry.
+func get_board_behind(type: Enums.BoardType) -> PlinkoBoard:
+	for i in _boards.size():
+		if _boards[i].board_type == type:
+			return _boards[i - 1] if i > 0 else null
+	return null
+
+
+## A coin fell through a board's dead-centre bucket. Route it DOWN onto the board
+## behind, carrying the compounded multiplier — PlinkoBoard deliberately does not
+## look up its siblings itself (signals up, calls down).
+##
+## Gold has nothing behind it, so a gold centre landing simply ends there. Landing
+## in the destination's centre can open that board's chute in turn, which is what
+## lets a chain run backwards tier by tier with the multiplier compounding.
+func _on_dud_chute_opened(board_type: Enums.BoardType, coin_type: Enums.CurrencyType,
+		multiplier: float, _world_pos: Vector3) -> void:
+	var target: PlinkoBoard = get_board_behind(board_type)
+	if not target:
+		return
+	target.force_drop_coin(coin_type, multiplier, true)
 
 
 ## Total deflectors placed across every board (the universal slot pool is

@@ -172,6 +172,7 @@ func _update_currencies() -> void:
 
 		_try_spawn_upgrade_row(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD)
 		_try_spawn_upgrade_row(Enums.UpgradeType.PEG_DEFLECTOR, Enums.BoardType.ORANGE)
+		_try_spawn_upgrade_row(Enums.UpgradeType.DUD_CHUTE, Enums.BoardType.VIOLET)
 
 	# Hover tooltip — must be last child so it renders below everything
 	_hover_tooltip = TooltipScene.instantiate()
@@ -185,7 +186,8 @@ func _update_currencies() -> void:
 
 func _has_any_universal_upgrade() -> bool:
 	return UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER) \
-		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.PEG_DEFLECTOR)
+		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.PEG_DEFLECTOR) \
+		or UpgradeManager.is_unlocked(Enums.BoardType.VIOLET, Enums.UpgradeType.DUD_CHUTE)
 
 
 func _try_spawn_upgrade_row(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
@@ -244,6 +246,8 @@ func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeT
 			row.set_hover_extra_provider(_autodropper_assignment_text)
 		Enums.UpgradeType.PEG_DEFLECTOR:
 			row.set_hover_extra_provider(_deflector_odds_text)
+		Enums.UpgradeType.DUD_CHUTE:
+			row.set_hover_extra_provider(_dud_chute_odds_text)
 
 
 ## One line per unlocked board (including zeros) of how many autodroppers are
@@ -258,6 +262,12 @@ func _autodropper_assignment_text() -> String:
 		lines.append("%d assigned to %s board" % [
 			_board_manager.get_assigned_count_for_board(bt), FormatUtils.board_name(bt, false)])
 	return "\n".join(lines)
+
+
+## Current chance a dead-centre landing falls through to the board behind.
+func _dud_chute_odds_text() -> String:
+	return "Current chance: %.0f%%" % (PlinkoBoard.dud_chute_chance_for_level(
+		UpgradeManager.get_level(PlinkoBoard.DUD_CHUTE_BOARD, Enums.UpgradeType.DUD_CHUTE)) * 100.0)
 
 
 func _deflector_odds_text() -> String:
@@ -282,7 +292,8 @@ func _on_upgrade_hover_changed(text: String) -> void:
 func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
 	# Only care about autodropper-type upgrades
 	if upgrade_type != Enums.UpgradeType.AUTODROPPER \
-			and upgrade_type != Enums.UpgradeType.PEG_DEFLECTOR:
+			and upgrade_type != Enums.UpgradeType.PEG_DEFLECTOR \
+			and upgrade_type != Enums.UpgradeType.DUD_CHUTE:
 		return
 	if upgrade_type in _upgrade_rows:
 		return
@@ -369,6 +380,8 @@ func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:
 func _get_board_for_upgrade(upgrade_type: Enums.UpgradeType) -> Enums.BoardType:
 	if upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
 		return Enums.BoardType.ORANGE
+	if upgrade_type == Enums.UpgradeType.DUD_CHUTE:
+		return PlinkoBoard.DUD_CHUTE_BOARD
 	return Enums.BoardType.GOLD
 
 

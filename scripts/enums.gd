@@ -33,7 +33,8 @@ enum UpgradeType {
 	## ordinals are persisted as ints, so removing it renumbers every value after
 	## it and silently repoints peg_deflector.tres (`type = 6`) at the wrong slot.
 	ADVANCED_AUTODROPPER,
-	PEG_DEFLECTOR,  ## Always append last — .tres files and saves store `type` as an int.
+	PEG_DEFLECTOR,
+	DUD_CHUTE,  ## Always append last — .tres files and saves store `type` as an int.
 }
 
 ## Left/right bounce convention. +1 = right (+x): moving RIGHT off lattice cell
