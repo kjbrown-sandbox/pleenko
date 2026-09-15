@@ -206,15 +206,22 @@ signal forbidden_bucket_detonated(board_type: Enums.BoardType, bucket_index: int
 ## global. Emitted just before the coin despawns; the transporter pays no
 ## currency, sending the coin onward IS the reward. Nothing on this branch
 ## listens — the space board (built in parallel) connects to it defensively.
+##
+## Distinct from dud_chute_opened despite sharing board-local x = 0: this
+## migrates the same Coin and pays nothing; the chute despawns its coin and asks
+## for a new one on the board below.
 signal coin_transported(board_type: Enums.BoardType, currency_type: Enums.CurrencyType, world_pos: Vector3)
 
 ## A coin landed in this board's dead-centre bucket and the dud chute opened
-## under it. Signals UP; BoardManager owns board-to-board routing and drops the
-## coin onto the PREVIOUS tier's board with `multiplier` already compounded.
-## `world_pos` is global, for the chute VFX. Deliberately NOT called
-## "transporter" — that word already belongs to the earring/SpaceBoard bucket,
-## which sits at the same board-local x = 0.
-signal dud_chute_opened(board_type: Enums.BoardType, coin_type: Enums.CurrencyType, multiplier: float, world_pos: Vector3)
+## under it. Signals UP; BoardManager owns board-to-board relationships and
+## SPAWNS A FRESH COIN on the previous tier's board carrying `multiplier`,
+## already compounded. The landing coin itself despawns here as usual — unlike
+## the earring handoff, which migrates the same Coin object onward.
+##
+## Deliberately NOT called "transporter": that word already belongs to the
+## earring/SpaceBoard bucket, which sits at the same board-local x = 0. See the
+## "Dud chute" section for why the two can never both fire.
+signal dud_chute_opened(board_type: Enums.BoardType, multiplier: float)
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
@@ -953,6 +960,118 @@ func _update_drop_fill() -> void:
 
 	_refresh_needs_tooltip()
 
+# ── Dud chute ─────────────────────────────────────────────────────────────────
+# The centre bucket is every board's dud: _bucket_value_for_distance pins
+# distance 0 to value 1 and the bucket-value upgrade never scales it. The chute
+# turns that dead end into a lottery — the coin falls through to the board
+# behind, worth DUD_CHUTE_MULTIPLIER times whatever it lands in there, and can
+# chain backwards tier by tier with the multiplier compounding each hop.
+#
+# NOT to be confused with the earring/SpaceBoard transporter, which also sits at
+# board-local x = 0. That one migrates the SAME coin onward and pays nothing;
+# this one despawns its coin and asks BoardManager to spawn a fresh one below.
+# The two can never both fire: gateway landings hand off to an earring in
+# on_coin_landed BEFORE finalize_coin_landing, and the transporter is parented
+# outside buckets_container so get_nearest_bucket can't even reach it.
+
+## The upgrade is universal (one shared level, every board), so its level is read
+## from one nominated board the way PEG_DEFLECTOR reads from DEFLECTOR_BOARD.
+const DUD_CHUTE_BOARD := Enums.BoardType.VIOLET
+
+## Payout multiplier applied per hop. Fixed by design — the upgrade raises the
+## CHANCE only, so a long chain is what makes a payout big, not a high level.
+## Keep dud_chute.tres's description in sync with this value; it is quoted there
+## verbatim (test_dud_chute asserts they agree).
+const DUD_CHUTE_MULTIPLIER := 10.0
+
+## Chance added per upgrade level. Level 1 = 2%, level 5 = 10%.
+const DUD_CHUTE_CHANCE_PER_LEVEL := 0.02
+
+## Roll seam: () -> float in [0, 1). Injectable so the chute is testable without
+## the RNG (DeflectorModel.cap_fn precedent).
+var dud_chute_roll_fn: Callable = func() -> float: return randf()
+
+
+## Chance a centre landing opens the chute, from the upgrade level. Level 0 (not
+## owned) is 0.0. Pure + static so it can be tested without a board.
+static func dud_chute_chance_for_level(level: int) -> float:
+	return clampf(level * DUD_CHUTE_CHANCE_PER_LEVEL, 0.0, 1.0)
+
+
+## The live chance, for gameplay AND for the HUD odds text. Single source of
+## truth on purpose: deriving it twice is how a tooltip starts quietly lying.
+static func current_dud_chute_chance() -> float:
+	return dud_chute_chance_for_level(
+		UpgradeManager.get_level(DUD_CHUTE_BOARD, Enums.UpgradeType.DUD_CHUTE))
+
+
+## Index of the single dead-centre bucket. Bucket counts are always odd — boards
+## start at EarringGeometry.STARTING_ROWS (2, an even row count) and ADD_ROW only
+## ever adds two, so num_buckets = num_rows + 1 is always odd. Both halves of
+## that are load-bearing; there is never a tie to resolve.
+static func center_bucket_index(num_buckets: int) -> int:
+	@warning_ignore("integer_division")
+	return num_buckets / 2
+
+
+## Derived from num_rows rather than the live bucket nodes: build_board treats
+## num_rows as authoritative (num_buckets = num_rows + 1), and reading it keeps
+## this callable on a bare board with no scene tree. (_is_gateway_bucket above
+## prefers the live children because it is also called mid-rebuild.)
+func is_center_bucket(bucket_idx: int) -> bool:
+	return bucket_idx == center_bucket_index(num_rows + 1)
+
+
+## Whether a landing should open the chute.
+##
+## Takes is_prestige_coin and roll as parameters rather than reading them off the
+## coin so the decision stands alone in tests; the production call site in
+## _try_dud_chute supplies both.
+func should_open_dud_chute(bucket_idx: int, is_prestige_coin: bool, roll: float) -> bool:
+	# Prestige coins belong to PrestigeAnimator, which owns their lifecycle —
+	# spawning a follow-up elsewhere would strand that cinematic.
+	if is_prestige_coin:
+		return false
+	# Challenges reset UpgradeManager, so the level is already 0 today and this
+	# is belt-and-braces — but it makes the exclusion explicit rather than an
+	# emergent consequence of reset order, and it holds if a challenge ever
+	# authors StartingUpgrades(VIOLET, DUD_CHUTE). A chute coin would otherwise
+	# inflate ChallengeTracker's drop count and bucket hits on the wrong board.
+	if ChallengeManager.is_active_challenge:
+		return false
+	# Honour the same gate as request_drop: once a challenge is marked failed,
+	# drops stop, and an in-flight coin must not seed a new one behind them.
+	if drop_blocked.is_valid() and drop_blocked.call():
+		return false
+	if not is_center_bucket(bucket_idx):
+		return false
+	# A gateway pays nothing and falls into an earring instead. on_coin_landed
+	# hands those off before finalize_coin_landing ever runs, so this is
+	# unreachable in production — kept as a cheap guard on a payout path.
+	if _is_gateway_bucket(bucket_idx):
+		return false
+	return roll < current_dud_chute_chance()
+
+
+## Rolls the dud chute for a landing that already paid out normally. Returns
+## whether the chute opened; the caller ignores it, tests read it.
+##
+## The coin does NOT travel: it despawns here as usual, and BoardManager spawns a
+## fresh one on the board behind. Only the compounded multiplier carries over —
+## the golden-bucket and bomb-defuse factors deliberately do not, matching
+## coin_landed's convention of reporting the coin's own multiplier.
+func _try_dud_chute(coin: Coin, bucket_idx: int) -> bool:
+	# Cheap index checks before the roll: the chance is tiny and the vast
+	# majority of landings are not the centre bucket, so rolling first would
+	# burn a Callable frame on every landing on every board.
+	if coin.is_prestige_coin or not is_center_bucket(bucket_idx):
+		return false
+	if not should_open_dud_chute(bucket_idx, coin.is_prestige_coin, dud_chute_roll_fn.call()):
+		return false
+	dud_chute_opened.emit(board_type, coin.multiplier * DUD_CHUTE_MULTIPLIER)
+	return true
+
+
 # ── Landing ───────────────────────────────────────────────────────────────────
 
 func on_coin_landed(coin: Coin) -> void:
@@ -1068,7 +1187,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
 	bucket.pulse()
 	var num_buckets: int = buckets_container.get_child_count()
-	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
+	var bucket_distance: int = absi(bucket_idx - center_bucket_index(num_buckets))
 	var is_advanced: bool = coin.coin_type == advanced_bucket_type
 	# The ripple owns the arpeggio, so bucket audio is suppressed while it runs.
 	# Visual singing is gated on the audio request being accepted — otherwise a
@@ -1086,7 +1205,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	if not coin.is_prestige_coin:
 		# Dud chute: rolled AFTER the payout above, so a centre landing always
 		# pays its 1 and the chute is a bonus life rather than a replacement.
-		# Emits UP; BoardManager routes the coin to the board behind this one.
+		# Emits UP; BoardManager spawns the follow-up coin on the board behind.
 		_try_dud_chute(coin, bucket_idx)
 
 		# Downward burst in the coin's own color, then despawn. Prestige coins
@@ -1357,7 +1476,14 @@ func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0, show_burst: bo
 	var coin = CoinScene.instantiate()
 	coin.coin_type = type
 	coin.multiplier = mult
+	# _launch_coin closes the drop gate, which only _on_drop_timer_done reopens.
+	# Every other caller rides a real drop that started the timer; a dud-chute
+	# coin can arrive on a board sitting idle-ready, so remember that and restore
+	# it rather than leaving the gate shut with nothing to open it.
+	var was_idle_ready: bool = not is_waiting
 	_launch_coin(coin)
+	if was_idle_ready and is_instance_valid(_drop_gate):
+		_drop_gate.open()
 	if show_burst:
 		_try_emit_drop_burst(type)
 
@@ -1409,88 +1535,6 @@ enum DeflectorOutcome { NONE, FOLLOWED, MISSED }
 ## Deflector is a UNIVERSAL upgrade: its level (the global slot pool) is stored
 ## under one canonical board, and deflectors may be placed on ANY board's pegs.
 const DEFLECTOR_BOARD := Enums.BoardType.ORANGE
-
-# ── Dud chute ─────────────────────────────────────────────────────────────────
-# The centre bucket is every board's dud: _bucket_value_for_distance pins
-# distance 0 to value 1 and the bucket-value upgrade never scales it. The chute
-# turns that dead end into a lottery — the coin falls through to the board
-# behind, worth DUD_CHUTE_MULTIPLIER times whatever it lands in there, and can
-# chain backwards tier by tier with the multiplier compounding each hop.
-
-## The upgrade is universal (one shared level, every board), so its level is read
-## from one board the way PEG_DEFLECTOR reads from DEFLECTOR_BOARD.
-const DUD_CHUTE_BOARD := Enums.BoardType.VIOLET
-
-## Payout multiplier applied per hop. Fixed by design — the upgrade raises the
-## CHANCE only, so a longer chain is what makes a payout big, not a higher level.
-const DUD_CHUTE_MULTIPLIER := 10.0
-
-## Chance added per upgrade level. Level 1 = 2%, level 5 = 10%.
-const DUD_CHUTE_CHANCE_PER_LEVEL := 0.02
-
-## Roll seam: () -> float in [0, 1). Injectable so the chute is testable without
-## the RNG (PeekAnimator precedent).
-var dud_chute_roll_fn: Callable = func() -> float: return randf()
-
-
-## Chance a centre landing opens the chute, from the upgrade level. Level 0 (not
-## owned) is 0.0. Pure + static so it can be tested without a board.
-static func dud_chute_chance_for_level(level: int) -> float:
-	return clampf(level * DUD_CHUTE_CHANCE_PER_LEVEL, 0.0, 1.0)
-
-
-## Whether a roll opens the chute. Split out from the chance so the comparison
-## has one home and `chance <= 0` can never fire on a roll of exactly 0.0.
-static func dud_chute_fires(roll: float, chance: float) -> bool:
-	return chance > 0.0 and roll < chance
-
-
-func get_dud_chute_chance() -> float:
-	return dud_chute_chance_for_level(
-		UpgradeManager.get_level(DUD_CHUTE_BOARD, Enums.UpgradeType.DUD_CHUTE))
-
-
-## Index of the single dead-centre bucket. Bucket counts are always odd
-## (num_buckets = num_rows + 1, and rows only ever grow by two), so there is
-## exactly one — no tie to resolve.
-static func centre_bucket_index(num_buckets: int) -> int:
-	@warning_ignore("integer_division")
-	return num_buckets / 2
-
-
-## Derived from num_rows rather than the live bucket nodes: build_board treats
-## num_rows as authoritative (num_buckets = num_rows + 1), and reading it keeps
-## this callable on a bare board with no scene tree.
-func is_centre_bucket(bucket_idx: int) -> bool:
-	return bucket_idx == centre_bucket_index(num_rows + 1)
-
-
-## Whether a landing should open the chute. Kept free of emits and coin mutation
-## so it is testable on a bare board; _try_dud_chute is the side-effecting half.
-func should_open_dud_chute(bucket_idx: int, is_prestige_coin: bool, roll: float) -> bool:
-	# Prestige coins belong to PrestigeAnimator, which owns their lifecycle —
-	# re-dropping one elsewhere would strand that cinematic.
-	if is_prestige_coin:
-		return false
-	if not is_centre_bucket(bucket_idx):
-		return false
-	# A gateway pays nothing and falls into an earring instead, so it is never a
-	# landing here. Guard anyway: on a 1-bucket board index 0 is both centre and
-	# edge, and the gateway reading must win.
-	if _is_gateway_bucket(bucket_idx):
-		return false
-	return dud_chute_fires(roll, get_dud_chute_chance())
-
-
-## Rolls the dud chute for a landing that already paid out normally. Returns true
-## when the chute opened, so the caller knows the coin has a second life.
-func _try_dud_chute(coin: Coin, bucket_idx: int) -> bool:
-	if not should_open_dud_chute(bucket_idx, coin.is_prestige_coin, dud_chute_roll_fn.call()):
-		return false
-	dud_chute_opened.emit(
-		board_type, coin.coin_type, coin.multiplier * DUD_CHUTE_MULTIPLIER,
-		coin.global_position)
-	return true
 
 ## Local x of peg/coin lattice cell (row, col). Forwards to the shared Lattice
 ## module — build_board() uses this for every peg.

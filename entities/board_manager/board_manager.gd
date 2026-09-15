@@ -184,29 +184,40 @@ func _update_deflector_editors() -> void:
 		_boards[i].set_deflector_input_active(i == _active_index)
 
 
-## The board one tier BELOW `type`, or null when there is none (gold, or the
-## lower board simply isn't spawned). _boards is kept in tier order by
-## _spawn_board, so "behind" is the preceding entry.
+## The board exactly one tier BELOW `type`, or null when there is none.
+##
+## Tier-exact rather than "the previous entry in _boards": boards normally unlock
+## in tier order, but ChallengeManager._apply_starting_conditions can spawn an
+## authored, non-contiguous set (gold + violet). Returning the nearest lower
+## SPAWNED board there would drop a coin three tiers down.
 func get_board_behind(type: Enums.BoardType) -> PlinkoBoard:
-	for i in _boards.size():
-		if _boards[i].board_type == type:
-			return _boards[i - 1] if i > 0 else null
+	var wanted: int = TierRegistry.get_tier_index(type) - 1
+	if wanted < 0:
+		return null
+	for board in _boards:
+		if TierRegistry.get_tier_index(board.board_type) == wanted:
+			return board
 	return null
 
 
-## A coin fell through a board's dead-centre bucket. Route it DOWN onto the board
-## behind, carrying the compounded multiplier — PlinkoBoard deliberately does not
-## look up its siblings itself (signals up, calls down).
+## A coin fell through a board's dead-centre bucket. Spawn a fresh coin on the
+## board behind, carrying the compounded multiplier — PlinkoBoard deliberately
+## does not look up its siblings itself (signals up, calls down).
 ##
-## Gold has nothing behind it, so a gold centre landing simply ends there. Landing
-## in the destination's centre can open that board's chute in turn, which is what
-## lets a chain run backwards tier by tier with the multiplier compounding.
-func _on_dud_chute_opened(board_type: Enums.BoardType, coin_type: Enums.CurrencyType,
-		multiplier: float, _world_pos: Vector3) -> void:
+## Gold has nothing behind it, so a gold centre landing simply ends there.
+## Landing in the destination's centre can open that board's chute in turn, which
+## is what lets a chain run backwards tier by tier, compounding each hop.
+##
+## The new coin takes the DESTINATION board's currency, not the source's. Payout
+## already works that way (finalize_coin_landing credits bucket.currency_type),
+## and carrying the source currency would let the coin ride the destination's
+## earring transporter to light the SOURCE tier's SpaceBoard bucket — skipping
+## the cap raises that growing that tier's own earrings costs.
+func _on_dud_chute_opened(board_type: Enums.BoardType, multiplier: float) -> void:
 	var target: PlinkoBoard = get_board_behind(board_type)
 	if not target:
 		return
-	target.force_drop_coin(coin_type, multiplier, true)
+	target.force_drop_coin(TierRegistry.primary_currency(target.board_type), multiplier, true)
 
 
 ## Total deflectors placed across every board (the universal slot pool is

@@ -172,7 +172,7 @@ func _update_currencies() -> void:
 
 		_try_spawn_upgrade_row(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD)
 		_try_spawn_upgrade_row(Enums.UpgradeType.PEG_DEFLECTOR, Enums.BoardType.ORANGE)
-		_try_spawn_upgrade_row(Enums.UpgradeType.DUD_CHUTE, Enums.BoardType.VIOLET)
+		_try_spawn_upgrade_row(Enums.UpgradeType.DUD_CHUTE, PlinkoBoard.DUD_CHUTE_BOARD)
 
 	# Hover tooltip — must be last child so it renders below everything
 	_hover_tooltip = TooltipScene.instantiate()
@@ -187,7 +187,7 @@ func _update_currencies() -> void:
 func _has_any_universal_upgrade() -> bool:
 	return UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER) \
 		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.PEG_DEFLECTOR) \
-		or UpgradeManager.is_unlocked(Enums.BoardType.VIOLET, Enums.UpgradeType.DUD_CHUTE)
+		or UpgradeManager.is_unlocked(PlinkoBoard.DUD_CHUTE_BOARD, Enums.UpgradeType.DUD_CHUTE)
 
 
 func _try_spawn_upgrade_row(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
@@ -239,7 +239,7 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 
 
 ## Inject the tooltip middle-block provider for upgrade types that need one.
-## Autodropper rows list per-board assignments; deflector shows current odds.
+## Autodropper rows list per-board assignments; deflector and dud chute show odds.
 func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeType) -> void:
 	match upgrade_type:
 		Enums.UpgradeType.AUTODROPPER:
@@ -265,9 +265,11 @@ func _autodropper_assignment_text() -> String:
 
 
 ## Current chance a dead-centre landing falls through to the board behind.
+## Reads the same helper gameplay rolls against, so the number shown can't drift
+## from the number used.
 func _dud_chute_odds_text() -> String:
-	return "Current chance: %.0f%%" % (PlinkoBoard.dud_chute_chance_for_level(
-		UpgradeManager.get_level(PlinkoBoard.DUD_CHUTE_BOARD, Enums.UpgradeType.DUD_CHUTE)) * 100.0)
+	var odds := roundi(PlinkoBoard.current_dud_chute_chance() * 100.0)
+	return "Current odds: %d%%" % odds
 
 
 func _deflector_odds_text() -> String:

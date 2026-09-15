@@ -6,9 +6,9 @@
 script = ExtResource("1")
 type = 7
 display_name = "Dud chute"
-description = "A coin landing in a board's dead-centre bucket may fall through to the board behind it, worth 10x there."
+description = "+2% chance per level.\n\nA coin landing in a board's dead-centre bucket may fall through to the board behind it, worth 10x there — and may chain again from that board's centre, compounding."
 base_cost = 50
 max_level = 5
 cost_type = 1
-cost_delta = 50
-delta_escalation = 25
+cost_delta = 100
+delta_escalation = 50
