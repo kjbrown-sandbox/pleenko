@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="BaseUpgradeData" format=3 uid="uid://b6kx2rwq9vnda"]
+
+[ext_resource type="Script" uid="uid://c571lcduobww" path="res://autoloads/upgrade_manager/base_upgrade_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+type = 9
+display_name = "Board tilter"
+description = "+2.5% bias per level.\n\nAdds a slider under every board. Pull it toward Centre or Edges to bias which way coins bounce; level 1 gives a 55/45 split at the extremes."
+base_cost = 50
+max_level = 5
+cost_type = 1
+cost_delta = 100
+delta_escalation = 50

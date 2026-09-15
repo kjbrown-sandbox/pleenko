@@ -85,8 +85,7 @@ func _input(event: InputEvent) -> void:
 
 
 func set_active_board_ui_visible(visible: bool) -> void:
-	_boards[_active_index].upgrade_section.visible = visible
-	_boards[_active_index].drop_section.visible = visible
+	_boards[_active_index].set_board_ui_visible(visible)
 
 
 func get_active_board() -> PlinkoBoard:
@@ -120,12 +119,10 @@ func switch_board(index: int) -> void:
 		return
 
 	# Hide old board's UI + coins, show new board's UI + coins
-	_boards[_active_index].upgrade_section.visible = false
-	_boards[_active_index].drop_section.visible = false
+	_boards[_active_index].set_board_ui_visible(false)
 	_boards[_active_index].set_coins_visible(false)
 	_active_index = index
-	_boards[_active_index].upgrade_section.visible = true
-	_boards[_active_index].drop_section.visible = true
+	_boards[_active_index].set_board_ui_visible(true)
 	_boards[_active_index].set_coins_visible(true)
 
 	AudioManager.set_active_board(_boards[_active_index].board_type)
@@ -162,8 +159,7 @@ func _spawn_board(type: Enums.BoardType) -> void:
 
 	# Only the active board's UI + coins should be visible
 	if insert_at != _active_index:
-		board.upgrade_section.visible = false
-		board.drop_section.visible = false
+		board.set_board_ui_visible(false)
 		board.set_coins_visible(false)
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
@@ -702,6 +698,7 @@ func serialize() -> Dictionary:
 			"bucket_value_multiplier": board.bucket_value_multiplier,
 			"distance_for_advanced_buckets": board.distance_for_advanced_buckets,
 			"multi_drop_count": board.multi_drop_count,
+			"tilt_notch": board.get_tilt_notch(),
 			"deflectors": board.serialize_deflectors(),
 		}
 	data["board_state"] = board_state
@@ -733,6 +730,9 @@ func deserialize(data: Dictionary) -> void:
 			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
 			upgrade_state[upgrade_key] = UpgradeManager.get_level(board.board_type, upgrade_type)
 		upgrade_state["show_advanced_buckets"] = advanced_buckets.get(board_key, false)
+		# Old saves lack "tilt_notch" — 0 is the untilted default, so a pre-tilt
+		# save loads with every board neutral (graceful, no migration).
+		upgrade_state["tilt_notch"] = bs.get("tilt_notch", BoardTilt.NOTCH_DEFAULT)
 		# Old saves lack "deflectors" — defaults to none (graceful, no migration).
 		upgrade_state["deflectors"] = bs.get("deflectors", [])
 		board.apply_saved_state(upgrade_state)

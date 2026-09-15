@@ -172,7 +172,18 @@ func predicted_bucket_index(_row: int, col: int) -> int:
 
 ## Plain 50/50 — earrings carry no deflectors by design (keeps the new surface
 ## small; deflector slots stay a main-board concern).
-func resolve_bounce_direction(_row: int, _col: int, roll: float) -> int:
+## Earrings carry no deflectors, but they DO inherit the parent board's tilt:
+## they hang beneath it and the player reads the pair as one board. `tilt_notch`
+## and `tilt_level` are pushed down by PlinkoBoard when it builds the earring,
+## rather than the earring reaching back up for them.
+var tilt_notch: int = BoardTilt.NOTCH_DEFAULT
+var tilt_level: int = 0
+
+
+func resolve_bounce_direction(row: int, col: int, roll: float) -> int:
+	var tilted: int = BoardTilt.direction_for(row, col, tilt_notch, tilt_level, roll)
+	if tilted != 0:
+		return tilted
 	return DeflectorModel.random_dir(roll)
 
 

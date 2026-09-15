@@ -107,6 +107,11 @@ var _gameplay_target_fading: bool = false
 # Lives only in the BoardManager save blob — cleared on prestige reset.
 var _deflectors := DeflectorModel.new()
 var _deflector_editor: DeflectorEditor
+## Per-board tilt slider, hidden until blue's signature upgrade is unlocked.
+var _tilt_slider: TiltSlider
+## Whether this board is the active one — the slider needs both this AND the
+## upgrade unlocked, so it can't be derived from either alone.
+var _board_ui_visible: bool = true
 
 ## Purely-visual drop gate beneath the spawn (opens/closes per drop). Placement
 ## is board-local: just below the spawn point, nudged toward the camera so it
@@ -222,6 +227,10 @@ signal coin_transported(board_type: Enums.BoardType, currency_type: Enums.Curren
 ## earring/SpaceBoard bucket, which sits at the same board-local x = 0. See the
 ## "Dud chute" section for why the two can never both fire.
 signal dud_chute_opened(board_type: Enums.BoardType, multiplier: float)
+
+## The player moved this board's tilt slider. Signals UP so the slider UI and the
+## save layer can react without the board reaching out to either.
+signal tilt_changed(board_type: Enums.BoardType, notch: int)
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
@@ -376,7 +385,18 @@ func setup(type: Enums.BoardType) -> void:
 	_deflector_editor.setup(self)
 	_deflector_editor.deflector_change_requested.connect(_on_deflector_change_requested)
 	_deflector_editor.set_capacity(get_deflector_cap())
+
+	# Tilt slider (pure view+input child; this board owns the notch). Present
+	# from setup but hidden until the upgrade is owned, so a later purchase
+	# doesn't have to build scene nodes mid-game.
+	_tilt_slider = preload("res://entities/tilt_slider/tilt_slider.tscn").instantiate()
+	add_child(_tilt_slider)
+	_tilt_slider.setup(self)
+	_tilt_slider.notch_changed.connect(set_tilt_notch)
+	_refresh_tilt_slider_visibility()
+
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
+	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked_for_tilt)
 
 # ── Drop bars, labels + tooltips ──────────────────────────────────────────────
 
@@ -2200,7 +2220,75 @@ func _random_dir(roll: float) -> int:
 
 
 func resolve_bounce_direction(row: int, col: int, roll: float) -> int:
-	return _deflectors.resolve_bounce(peg_index(row, col), roll)
+	var idx: int = peg_index(row, col)
+	# A deflector is a deliberate player placement on a specific peg, so it wins
+	# over the board-wide tilt rather than the two fighting over one roll.
+	if _deflectors.has(idx):
+		return _deflectors.resolve_bounce(idx, roll)
+	# 0 means "no opinion" — an untilted board, an unowned upgrade, or a coin
+	# already dead-centre. Falling through keeps the legacy 50/50 bit-identical,
+	# which the trajectory tests pin.
+	var tilted: int = BoardTilt.direction_for(row, col, _tilt_notch, current_tilt_level(), roll)
+	if tilted != 0:
+		return tilted
+	return _deflectors.resolve_bounce(idx, roll)
+
+
+# ── Board tilt ────────────────────────────────────────────────────────────────
+# Blue's signature upgrade: a per-board slider biasing each bounce toward the
+# board's centre column or away from it. The maths lives in BoardTilt; the board
+# owns the notch (which is per-board and persisted) and the level lookup (which
+# is global, like every signature upgrade).
+
+## The upgrade is universal (one shared level, every board); see UniversalUpgrades.
+const BOARD_TILT_BOARD := Enums.BoardType.BLUE
+
+## Slider position for THIS board. Per-board on purpose — the player tunes each
+## board separately — while the strength behind it is shared.
+var _tilt_notch: int = BoardTilt.NOTCH_DEFAULT
+
+
+## Live tilt strength level, for gameplay AND for the HUD text. One derivation so
+## the number shown can't drift from the number coins are rolled against.
+static func current_tilt_level() -> int:
+	if ChallengeManager.is_active_challenge:
+		# Challenges reset UpgradeManager, so this is already 0 today; stating it
+		# makes the exclusion a decision rather than a consequence of reset order.
+		return 0
+	return UpgradeManager.get_level(BOARD_TILT_BOARD, Enums.UpgradeType.BOARD_TILT)
+
+
+func get_tilt_notch() -> int:
+	return _tilt_notch
+
+
+## Earrings inherit this board's tilt. Pushed DOWN (never pulled up) so the
+## earring stays a leaf that knows nothing about its parent, and re-pushed on
+## every change because an earring built earlier would otherwise keep a stale
+## notch until the next rebuild.
+func _push_tilt_to_earrings() -> void:
+	var level: int = current_tilt_level()
+	for earring in [_left_earring, _right_earring]:
+		if is_instance_valid(earring):
+			earring.tilt_notch = _tilt_notch
+			earring.tilt_level = level
+
+
+## Called DOWN by the slider UI. Clamped here rather than trusting the caller,
+## since the same setter restores saved values.
+func set_tilt_notch(notch: int) -> void:
+	var clamped: int = BoardTilt.clamp_notch(notch)
+	if clamped == _tilt_notch:
+		return
+	_tilt_notch = clamped
+	_push_tilt_to_earrings()
+	tilt_changed.emit(board_type, _tilt_notch)
+
+
+## Odds the tilt currently gives its favoured direction, as a percentage, for the
+## slider's readout.
+func tilt_odds_percent() -> int:
+	return roundi(BoardTilt.bias_for(current_tilt_level(), _tilt_notch) * 100.0)
 
 
 ## Did the coin follow or fight the deflector at (row, col)? Pure query — no RNG,
@@ -2326,6 +2414,39 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, _p_board_type: Enums
 	if upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
 		if _deflector_editor:
 			_deflector_editor.set_capacity(get_deflector_cap())
+	elif upgrade_type == Enums.UpgradeType.BOARD_TILT:
+		# A level change moves the odds without moving the slider, and the
+		# earrings cache the level rather than reading it per bounce.
+		_push_tilt_to_earrings()
+		if _tilt_slider:
+			_tilt_slider.refresh()
+
+
+## The slider only exists once the upgrade is unlocked; it is booked under one
+## nominated board but applies to every board, so every board listens.
+func _on_upgrade_unlocked_for_tilt(upgrade_type: Enums.UpgradeType, _p_board: Enums.BoardType) -> void:
+	if upgrade_type == Enums.UpgradeType.BOARD_TILT:
+		_refresh_tilt_slider_visibility()
+
+
+func _refresh_tilt_slider_visibility() -> void:
+	if _tilt_slider:
+		_tilt_slider.visible = _board_ui_visible and UpgradeManager.is_unlocked(
+			BOARD_TILT_BOARD, Enums.UpgradeType.BOARD_TILT)
+
+
+## Shows or hides every screen-space panel this board owns.
+##
+## One entry point because the panels have DIFFERENT rules: upgrade_section and
+## drop_section follow the active board exactly, while the tilt slider is also
+## gated on its upgrade being unlocked. Callers toggling `.visible` on each panel
+## by hand is how the slider would end up drawn for all six boards at once —
+## they are Controls under a Node3D, so they all render in the same screen space.
+func set_board_ui_visible(vis: bool) -> void:
+	_board_ui_visible = vis
+	upgrade_section.visible = vis
+	drop_section.visible = vis
+	_refresh_tilt_slider_visibility()
 
 # ── Peg queries ───────────────────────────────────────────────────────────────
 
@@ -2573,6 +2694,7 @@ func _spawn_earring(side: int, apex_local: Vector3, transporter_col: int) -> Ear
 	if transporter_col >= 0 and _transporter_bucket:
 		earring.set_transporter(transporter_col, _transporter_bucket)
 	earring.setup(_earring_rows, side, space_between_pegs, board_type)
+	_push_tilt_to_earrings()
 	return earring
 
 
@@ -3324,6 +3446,10 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 	var queue_level: int = upgrade_state.get("QUEUE", 0)
 	var perm_q: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.QUEUE)
 	coin_queue.set_capacity(_queue_capacity_for_level(queue_level + perm_q))
+
+	# Straight through the setter so a corrupt or out-of-range saved value is
+	# clamped rather than trusted.
+	set_tilt_notch(upgrade_state.get("tilt_notch", BoardTilt.NOTCH_DEFAULT))
 
 	if upgrade_state.get("show_advanced_buckets", false):
 		should_show_advanced_buckets = true

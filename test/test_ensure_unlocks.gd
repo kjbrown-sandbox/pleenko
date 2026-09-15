@@ -24,6 +24,7 @@ func _run_tests() -> void:
 	test_deflector_unlocks_on_orange_only()
 	test_dud_chute_unlocks_on_violet_only()
 	test_lucky_peg_unlocks_on_green_only()
+	test_board_tilt_unlocks_on_blue_only()
 	test_deflector_slot_unaffected_by_dud_chute()
 	test_red_special_slot_no_longer_grants_advanced_autodropper()
 
@@ -241,6 +242,25 @@ func test_lucky_peg_unlocks_on_green_only() -> void:
 	assert_true(has_peg, "green slot 4 unlocks LUCKY_PEG")
 	assert_equal(int(Enums.BoardType.GREEN), int(PlinkoBoard.LUCKY_PEG_BOARD),
 		"green is the board LUCKY_PEG_BOARD nominates")
+
+
+## Blue's signature-upgrade slot grants the Board Tilter, recorded under the same
+## board BOARD_TILT_BOARD reads from.
+func test_board_tilt_unlocks_on_blue_only() -> void:
+	print("test_board_tilt_unlocks_on_blue_only")
+	var data := LevelData.new()
+	LevelManager._set_special_slot(data, Enums.BoardType.BLUE,
+		TierRegistry.get_next_tier(Enums.BoardType.BLUE))
+	var has_tilt := false
+	for r in data.rewards:
+		if r.type == RewardData.RewardType.UNLOCK_UPGRADE \
+				and r.upgrade_type == Enums.UpgradeType.BOARD_TILT:
+			has_tilt = true
+			assert_equal(r.board_type, Enums.BoardType.BLUE,
+				"the tilt unlock targets the blue board")
+	assert_true(has_tilt, "blue slot 4 unlocks BOARD_TILT")
+	assert_equal(int(Enums.BoardType.BLUE), int(PlinkoBoard.BOARD_TILT_BOARD),
+		"blue is the board BOARD_TILT_BOARD nominates")
 
 
 ## Orange keeps the deflector — the chute must not have displaced it.

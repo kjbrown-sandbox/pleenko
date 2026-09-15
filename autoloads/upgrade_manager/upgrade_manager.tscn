@@ -11,7 +11,8 @@
 [ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/peg_deflector.tres" id="8_peg_deflector"]
 [ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/dud_chute.tres" id="9_dud_chute"]
 [ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/lucky_peg.tres" id="10_lucky_peg"]
+[ext_resource type="Resource" path="res://autoloads/upgrade_manager/data/board_tilt.tres" id="11_board_tilt"]
 
 [node name="UpgradeManager" type="Node" unique_id=10539582]
 script = ExtResource("1_bve6i")
-upgrades = Array[ExtResource("2_ro6xb")]([ExtResource("2_add_row"), ExtResource("3_bucket_value"), ExtResource("4_drop_rate"), ExtResource("5_queue"), ExtResource("6_autodropper"), ExtResource("7_adv_autodropper"), ExtResource("8_peg_deflector"), ExtResource("9_dud_chute"), ExtResource("10_lucky_peg")])
+upgrades = Array[ExtResource("2_ro6xb")]([ExtResource("2_add_row"), ExtResource("3_bucket_value"), ExtResource("4_drop_rate"), ExtResource("5_queue"), ExtResource("6_autodropper"), ExtResource("7_adv_autodropper"), ExtResource("8_peg_deflector"), ExtResource("9_dud_chute"), ExtResource("10_lucky_peg"), ExtResource("11_board_tilt")])

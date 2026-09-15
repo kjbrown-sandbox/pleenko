@@ -35,7 +35,8 @@ enum UpgradeType {
 	ADVANCED_AUTODROPPER,
 	PEG_DEFLECTOR,
 	DUD_CHUTE,
-	LUCKY_PEG,  ## Always append last — .tres files and saves store `type` as an int.
+	LUCKY_PEG,
+	BOARD_TILT,  ## Always append last — .tres files and saves store `type` as an int.
 }
 
 ## Left/right bounce convention. +1 = right (+x): moving RIGHT off lattice cell
