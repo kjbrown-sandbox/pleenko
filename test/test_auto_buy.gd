@@ -36,6 +36,10 @@ func _run_tests() -> void:
 	test_restore_rejects_out_of_range_ordinals()
 	await test_auto_bought_upgrade_reaches_the_board()
 	await test_manual_purchase_applies_exactly_once()
+	test_auto_buy_keeps_buying_while_coins_land()
+	test_catch_up_spends_offline_earnings()
+	test_catch_up_budget_exceeds_the_per_landing_one()
+	test_catch_up_is_inert_with_no_locks()
 
 	print("\n=== Done ===\n")
 
@@ -422,3 +426,88 @@ func test_restore_rejects_out_of_range_ordinals() -> void:
 	assert_equal(locks.count(), 1, "only the in-range pair is restored")
 	assert_true(locks.is_locked(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW),
 		"and it is the right one")
+
+
+# --- Idle ---
+
+## ACTIVE idle: the game is open and autodroppers are landing coins. Every
+## landing credits currency, which is the signal the drain rides — so purchases
+## keep happening with no player input at all. Simulated by crediting currency
+## repeatedly, which is exactly what a landing does.
+func test_auto_buy_keeps_buying_while_coins_land() -> void:
+	print("test_auto_buy_keeps_buying_while_coins_land")
+	_arm(1, Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+	UpgradeManager.toggle_auto_buy(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+	assert_equal(UpgradeManager.get_level(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE), 0,
+		"nothing bought yet — no currency has arrived")
+
+	var levels: Array[int] = []
+	for landing in 6:
+		# One "coin landing": credit the board's currency, which fires
+		# currency_changed exactly the way finalize_coin_landing does.
+		CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, 40)
+		levels.append(UpgradeManager.get_level(
+			Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE))
+
+	assert_true(levels[0] > 0, "the first landing that affords it buys immediately")
+	assert_true(levels[levels.size() - 1] > levels[0],
+		"and later landings keep buying (%d -> %d) with no input"
+			% [levels[0], levels[levels.size() - 1]])
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+
+
+## OFFLINE idle: earnings accrue while the game is closed, and are credited into
+## the save blob BEFORE any manager deserializes — so the currency_changed fired
+## during load arrives while the lock set is still empty and the normal drain
+## cannot see it. catch_up_auto_buys is the one-shot that spends it.
+func test_catch_up_spends_offline_earnings() -> void:
+	print("test_catch_up_spends_offline_earnings")
+	_arm(1, Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+	UpgradeManager.toggle_auto_buy(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+
+	# Stand in for a load: currency lands while nothing is watching. Done by
+	# suppressing the drain the way the real load order does — locks restored
+	# after the currency signal has already gone out.
+	var locks_blob: Array = UpgradeManager.auto_buy_locks.serialize()
+	UpgradeManager.auto_buy_locks.clear()
+	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, 400)
+	UpgradeManager.auto_buy_locks.restore(locks_blob)
+
+	assert_equal(UpgradeManager.get_level(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE), 0,
+		"precondition: the load-time credit bought nothing on its own")
+
+	UpgradeManager.catch_up_auto_buys()
+
+	assert_true(UpgradeManager.get_level(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE) > 0,
+		"the catch-up spends what accumulated while the game was closed")
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+
+
+## The catch-up is allowed a far bigger budget than a per-landing drain, since a
+## long idle is exactly when a large backlog is expected.
+func test_catch_up_budget_exceeds_the_per_landing_one() -> void:
+	print("test_catch_up_budget_exceeds_the_per_landing_one")
+	assert_true(UpgradeManager.MAX_AUTO_BUYS_ON_LOAD > UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN,
+		"a returning player is not rate-limited to the per-landing ceiling")
+	assert_true(UpgradeManager.MAX_AUTO_BUYS_ON_LOAD > 0,
+		"and the catch-up is still bounded, so a corrupt save cannot hang the load")
+
+
+## With nothing locked the catch-up is inert, so it costs a returning player
+## nothing and cannot spend currency they never assigned.
+func test_catch_up_is_inert_with_no_locks() -> void:
+	print("test_catch_up_is_inert_with_no_locks")
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+	UpgradeManager.unlock(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, 400)
+	var before: int = CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN)
+
+	UpgradeManager.catch_up_auto_buys()
+
+	assert_equal(CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN), before,
+		"nothing locked means nothing spent")
+	UpgradeManager.reset()
+	CurrencyManager.reset()

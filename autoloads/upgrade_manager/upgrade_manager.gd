@@ -317,6 +317,13 @@ const AUTO_BUY_BOARD := Enums.BoardType.RED
 ## swallowed by _draining, so it cannot continue the backlog.
 const MAX_AUTO_BUYS_PER_DRAIN := 32
 
+## Ceiling for the one-shot catch-up after a load. Far higher because returning
+## from a long idle is exactly the case where a big backlog is EXPECTED, and
+## trickling it out 32 per coin landing would leave the player watching their
+## own upgrades arrive for minutes. Still bounded so a corrupt save cannot hang
+## the load.
+const MAX_AUTO_BUYS_ON_LOAD := 2000
+
 var auto_buy_locks := AutoBuyLocks.new()
 
 ## True while _drain_auto_buys is running, so the currency_changed it provokes
@@ -340,7 +347,7 @@ static func current_auto_buy_slots() -> int:
 ## costliest-first: any priority rule would quietly decide FOR the player which
 ## of their own locked upgrades matters most, and the player already expressed
 ## that preference by choosing which pairs to lock.
-func _drain_auto_buys() -> void:
+func _drain_auto_buys(limit: int = MAX_AUTO_BUYS_PER_DRAIN) -> void:
 	if _draining:
 		return
 	if auto_buy_locks.count() == 0:
@@ -351,13 +358,13 @@ func _drain_auto_buys() -> void:
 	# The inner loop buys each locked pair AT MOST once, so repeated levels of the
 	# same pair need repeat passes. That is what this outer loop is for — not
 	# cascading affordability, which a purchase can only ever reduce.
-	while progressed and bought < MAX_AUTO_BUYS_PER_DRAIN:
+	while progressed and bought < limit:
 		progressed = false
 		# pairs() is a snapshot on purpose: buy() emits upgrade_purchased to many
 		# listeners mid-loop, and iterating the live set would break if one of
 		# them ever mutated it.
 		for pair: Dictionary in auto_buy_locks.pairs():
-			if bought >= MAX_AUTO_BUYS_PER_DRAIN:
+			if bought >= limit:
 				break
 			var board_type: Enums.BoardType = pair["board_type"]
 			var upgrade_type: Enums.UpgradeType = pair["upgrade_type"]
@@ -368,6 +375,25 @@ func _drain_auto_buys() -> void:
 				bought += 1
 				progressed = true
 	_draining = false
+
+
+## Spends whatever accumulated while the game was closed.
+##
+## Offline earnings are credited into the save blob BEFORE any manager
+## deserializes, so the currency_changed that CurrencyManager fires on load
+## arrives while the lock set is still empty — the normal drain cannot see it.
+## Without this call a player returns from a long idle to a full wallet and
+## nothing bought, then watches purchases trickle in 32 per coin landing.
+##
+## Deliberately a one-shot at the END of loading rather than a simulation
+## interleaved with offline earnings: upgrades bought here do NOT retroactively
+## boost the idle period that paid for them. That under-credits slightly, and is
+## the tradeoff for not having OfflineCalculator model a moving economy.
+##
+## Must run after BoardManager.deserialize — the board effects these purchases
+## trigger are applied against real boards.
+func catch_up_auto_buys() -> void:
+	_drain_auto_buys(MAX_AUTO_BUYS_ON_LOAD)
 
 
 ## Toggles a pair's auto-buy lock. Returns the state it ended in; false can mean

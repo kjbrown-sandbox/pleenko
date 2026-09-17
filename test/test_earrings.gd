@@ -55,6 +55,7 @@ func _run_tests() -> void:
 	test_gameplay_target_never_picks_a_gateway()
 	test_earring_bucket_credits_parent_currency()
 	test_transporter_pays_nothing_and_transports()
+	test_non_gold_transporter_does_not_reach_the_space_board()
 
 	# Coin surface
 	test_coin_surface_conformance()
@@ -587,6 +588,38 @@ func test_earring_bucket_credits_parent_currency() -> void:
 	bucket.free()
 	earring.free()
 	_free_board(board)
+
+
+## Only gold's transporter reaches the space board. Every other tier can grow its
+## earrings to meeting and still builds the shared bucket, but landing there is a
+## dead end by design — a colour reaches the space board by riding the dud chute
+## down to gold, not by exiting from its own tier. Without this, each tier could
+## light its own space bucket locally and the chute would be decorative.
+func test_non_gold_transporter_does_not_reach_the_space_board() -> void:
+	print("test_non_gold_transporter_does_not_reach_the_space_board")
+	var board := _make_board(8)
+	board.board_type = Enums.BoardType.VIOLET
+	board._earring_rows = EarringGeometry.max_earring_rows()
+	board.earring_credit_fn = func(_currency: int, _amount: int) -> void: pass
+	var transported: Array = []
+	board.coin_transported.connect(
+		func(bt: int, ct: int, pos: Vector3) -> void: transported.append([bt, ct, pos]))
+
+	var full: int = EarringGeometry.max_earring_rows()
+	var earring := _make_earring(full, EarringGeometry.SIDE_LEFT)
+	var transporter: Bucket = BucketScene.instantiate()
+	add_child(transporter)
+	transporter.currency_type = TierRegistry.primary_currency(Enums.BoardType.VIOLET)
+	transporter.value = 0
+	earring.set_transporter(
+		EarringGeometry.innermost_bottom_col(full, EarringGeometry.SIDE_LEFT), transporter)
+
+	var coin := _make_coin()
+	add_child(coin)
+	board.finalize_earring_landing(coin, earring, transporter)
+
+	assert_equal(transported.size(), 0,
+		"a violet transporter sends nothing to the space board")
 
 
 func test_transporter_pays_nothing_and_transports() -> void:

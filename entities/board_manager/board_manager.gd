@@ -209,11 +209,16 @@ func get_board_behind(type: Enums.BoardType) -> PlinkoBoard:
 ## and carrying the source currency would let the coin ride the destination's
 ## earring transporter to light the SOURCE tier's SpaceBoard bucket — skipping
 ## the cap raises that growing that tier's own earrings costs.
-func _on_dud_chute_opened(board_type: Enums.BoardType, multiplier: float) -> void:
+func _on_dud_chute_opened(board_type: Enums.BoardType, coin_type: Enums.CurrencyType,
+		multiplier: float) -> void:
 	var target: PlinkoBoard = get_board_behind(board_type)
 	if not target:
 		return
-	target.force_drop_coin(TierRegistry.primary_currency(target.board_type), multiplier, true)
+	# The coin keeps its OWN currency, so it stays visibly itself and — the whole
+	# point — still counts as its own colour if it reaches gold's transporter.
+	# It pays the destination board's currency regardless, because
+	# finalize_coin_landing credits bucket.currency_type, not the coin's.
+	target.force_drop_coin(coin_type, multiplier, true)
 
 
 ## Total deflectors placed across every board (the universal slot pool is
