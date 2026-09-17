@@ -36,6 +36,7 @@ func _run_tests() -> void:
 	test_board_constants_match_the_universal_table()
 	test_every_universal_upgrade_is_registered()
 	test_universal_and_per_board_are_disjoint()
+	test_universal_upgrades_are_listed_in_tier_order()
 
 	print("\n=== Done ===\n")
 
@@ -346,3 +347,28 @@ func test_universal_and_per_board_are_disjoint() -> void:
 	for upgrade_type: Enums.UpgradeType in UniversalUpgrades.types():
 		assert_false(upgrade_type in per_board,
 			"%s is universal, so it must not also be per-board" % upgrade_type)
+
+
+## The HUD lists signature upgrades in the order types() yields, so that order is
+## player-visible. It must follow TIER order (gold, orange, red, violet, blue,
+## green) rather than the order the features happened to be built in — a
+## Dictionary iterates by insertion, so the literal alone would decide the UI.
+func test_universal_upgrades_are_listed_in_tier_order() -> void:
+	print("test_universal_upgrades_are_listed_in_tier_order")
+	var types: Array = UniversalUpgrades.types()
+	assert_equal(types.size(), UniversalUpgrades.BOARDS.size(),
+		"every signature upgrade is listed")
+
+	var previous: int = -1
+	for upgrade_type: Enums.UpgradeType in types:
+		var tier: int = TierRegistry.get_tier_index(UniversalUpgrades.board_for(upgrade_type))
+		assert_true(tier > previous,
+			"%s's board (tier %d) comes after tier %d" % [upgrade_type, tier, previous])
+		previous = tier
+
+	# Pin the head and tail explicitly, so a resorting that merely happened to be
+	# monotonic in the wrong direction still fails.
+	assert_equal(int(UniversalUpgrades.board_for(types[0])), int(Enums.BoardType.GOLD),
+		"gold's upgrade is listed first")
+	assert_equal(int(UniversalUpgrades.board_for(types[types.size() - 1])),
+		int(Enums.BoardType.GREEN), "green's upgrade is listed last")
