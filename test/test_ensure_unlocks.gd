@@ -22,6 +22,8 @@ func _run_tests() -> void:
 	test_advanced_buckets_never_reconciled()
 	test_drop_coins_not_replayed()
 	test_deflector_unlocks_on_orange_only()
+	test_dud_chute_unlocks_on_violet_only()
+	test_deflector_slot_unaffected_by_dud_chute()
 	test_red_special_slot_no_longer_grants_advanced_autodropper()
 
 
@@ -200,6 +202,40 @@ func test_deflector_unlocks_on_orange_only() -> void:
 ## Advanced Autodropper was removed with the raw/advanced coin economy it
 ## depended on. Red's special slot is reserved for Auto-buy and pays a coin
 ## frenzy until that lands — it must never hand out the retired upgrade again.
+## Violet's signature-upgrade slot grants the Dud Chute. The level table only
+## contains a tier once it is prestige-unlocked, so drive the builder directly.
+func test_dud_chute_unlocks_on_violet_only() -> void:
+	print("test_dud_chute_unlocks_on_violet_only")
+	var data := LevelData.new()
+	LevelManager._set_special_slot(data, Enums.BoardType.VIOLET,
+		TierRegistry.get_next_tier(Enums.BoardType.VIOLET))
+	var has_chute := false
+	for r in data.rewards:
+		if r.type == RewardData.RewardType.UNLOCK_UPGRADE \
+				and r.upgrade_type == Enums.UpgradeType.DUD_CHUTE:
+			has_chute = true
+			assert_equal(r.board_type, Enums.BoardType.VIOLET,
+				"the chute unlock targets the violet board")
+	assert_true(has_chute, "violet slot 4 unlocks DUD_CHUTE")
+	# The unlock must be recorded under the same board the level is READ from,
+	# or the HUD row and the gameplay roll would look at different state.
+	assert_equal(int(Enums.BoardType.VIOLET), int(PlinkoBoard.DUD_CHUTE_BOARD),
+		"violet is the board DUD_CHUTE_BOARD nominates")
+
+
+## Orange keeps the deflector — the chute must not have displaced it.
+func test_deflector_slot_unaffected_by_dud_chute() -> void:
+	print("test_deflector_slot_unaffected_by_dud_chute")
+	var data := LevelData.new()
+	LevelManager._set_special_slot(data, Enums.BoardType.ORANGE,
+		TierRegistry.get_next_tier(Enums.BoardType.ORANGE))
+	for r in data.rewards:
+		assert_false(
+			r.type == RewardData.RewardType.UNLOCK_UPGRADE \
+				and r.upgrade_type == Enums.UpgradeType.DUD_CHUTE,
+			"orange slot 4 does not grant the chute")
+
+
 func test_red_special_slot_no_longer_grants_advanced_autodropper() -> void:
 	print("test_red_special_slot_no_longer_grants_advanced_autodropper")
 	var data := LevelData.new()

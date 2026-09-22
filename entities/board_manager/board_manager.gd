@@ -171,6 +171,7 @@ func _spawn_board(type: Enums.BoardType) -> void:
 	board.row_upgrade_starting.connect(_on_row_upgrade_starting.bind(board))
 	board.row_upgrade_sweep_started.connect(_on_row_upgrade_sweep_started.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
+	board.dud_chute_opened.connect(_on_dud_chute_opened)
 	if _autodroppers_unlocked:
 		board.set_autodroppers_visible(true)
 	_update_deflector_editors()
@@ -181,6 +182,42 @@ func _spawn_board(type: Enums.BoardType) -> void:
 func _update_deflector_editors() -> void:
 	for i in _boards.size():
 		_boards[i].set_deflector_input_active(i == _active_index)
+
+
+## The board exactly one tier BELOW `type`, or null when there is none.
+##
+## Tier-exact rather than "the previous entry in _boards": boards normally unlock
+## in tier order, but ChallengeManager._apply_starting_conditions can spawn an
+## authored, non-contiguous set (gold + violet). Returning the nearest lower
+## SPAWNED board there would drop a coin three tiers down.
+func get_board_behind(type: Enums.BoardType) -> PlinkoBoard:
+	var wanted: int = TierRegistry.get_tier_index(type) - 1
+	if wanted < 0:
+		return null
+	for board in _boards:
+		if TierRegistry.get_tier_index(board.board_type) == wanted:
+			return board
+	return null
+
+
+## A coin fell through a board's dead-centre bucket. Spawn a fresh coin on the
+## board behind, carrying the compounded multiplier — PlinkoBoard deliberately
+## does not look up its siblings itself (signals up, calls down).
+##
+## Gold has nothing behind it, so a gold centre landing simply ends there.
+## Landing in the destination's centre can open that board's chute in turn, which
+## is what lets a chain run backwards tier by tier, compounding each hop.
+##
+## The new coin takes the DESTINATION board's currency, not the source's. Payout
+## already works that way (finalize_coin_landing credits bucket.currency_type),
+## and carrying the source currency would let the coin ride the destination's
+## earring transporter to light the SOURCE tier's SpaceBoard bucket — skipping
+## the cap raises that growing that tier's own earrings costs.
+func _on_dud_chute_opened(board_type: Enums.BoardType, multiplier: float) -> void:
+	var target: PlinkoBoard = get_board_behind(board_type)
+	if not target:
+		return
+	target.force_drop_coin(TierRegistry.primary_currency(target.board_type), multiplier, true)
 
 
 ## Total deflectors placed across every board (the universal slot pool is
