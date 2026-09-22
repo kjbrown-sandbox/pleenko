@@ -19,6 +19,7 @@ const BOARDS: Dictionary = {
 	Enums.UpgradeType.AUTODROPPER: Enums.BoardType.GOLD,
 	Enums.UpgradeType.PEG_DEFLECTOR: Enums.BoardType.ORANGE,
 	Enums.UpgradeType.DUD_CHUTE: Enums.BoardType.VIOLET,
+	Enums.UpgradeType.LUCKY_PEG: Enums.BoardType.GREEN,
 }
 
 

@@ -23,6 +23,7 @@ func _run_tests() -> void:
 	test_drop_coins_not_replayed()
 	test_deflector_unlocks_on_orange_only()
 	test_dud_chute_unlocks_on_violet_only()
+	test_lucky_peg_unlocks_on_green_only()
 	test_deflector_slot_unaffected_by_dud_chute()
 	test_red_special_slot_no_longer_grants_advanced_autodropper()
 
@@ -221,6 +222,25 @@ func test_dud_chute_unlocks_on_violet_only() -> void:
 	# or the HUD row and the gameplay roll would look at different state.
 	assert_equal(int(Enums.BoardType.VIOLET), int(PlinkoBoard.DUD_CHUTE_BOARD),
 		"violet is the board DUD_CHUTE_BOARD nominates")
+
+
+## Green's signature-upgrade slot grants the Lucky Peg, recorded under the same
+## board LUCKY_PEG_BOARD reads from — drift there makes the upgrade look unbought.
+func test_lucky_peg_unlocks_on_green_only() -> void:
+	print("test_lucky_peg_unlocks_on_green_only")
+	var data := LevelData.new()
+	LevelManager._set_special_slot(data, Enums.BoardType.GREEN,
+		TierRegistry.get_next_tier(Enums.BoardType.GREEN))
+	var has_peg := false
+	for r in data.rewards:
+		if r.type == RewardData.RewardType.UNLOCK_UPGRADE \
+				and r.upgrade_type == Enums.UpgradeType.LUCKY_PEG:
+			has_peg = true
+			assert_equal(r.board_type, Enums.BoardType.GREEN,
+				"the lucky peg unlock targets the green board")
+	assert_true(has_peg, "green slot 4 unlocks LUCKY_PEG")
+	assert_equal(int(Enums.BoardType.GREEN), int(PlinkoBoard.LUCKY_PEG_BOARD),
+		"green is the board LUCKY_PEG_BOARD nominates")
 
 
 ## Orange keeps the deflector — the chute must not have displaced it.

@@ -198,6 +198,13 @@ func notify_deflector_resolved(_row: int, _col: int, _direction: int) -> void:
 	pass
 
 
+## Earrings run plain 50/50 bounces — no deflectors, no hazards, no lucky pegs.
+## The wander only ever picks pegs on the main board's lattice, so a coin that
+## has dropped through a gateway is past the point where one could apply.
+func try_lucky_split(_origin: Coin, _row: int, _col: int) -> int:
+	return 0
+
+
 ## Coins pooled by the parent PlinkoBoard are ejected there; an earring owns no
 ## pool of its own.
 func eject_coin_from_multimesh(_coin: Coin) -> void:

@@ -309,6 +309,9 @@ func test_board_constants_match_the_universal_table() -> void:
 	assert_equal(int(UniversalUpgrades.board_for(Enums.UpgradeType.PEG_DEFLECTOR)),
 		int(PlinkoBoard.DEFLECTOR_BOARD),
 		"DEFLECTOR_BOARD agrees with the universal table")
+	assert_equal(int(UniversalUpgrades.board_for(Enums.UpgradeType.LUCKY_PEG)),
+		int(PlinkoBoard.LUCKY_PEG_BOARD),
+		"LUCKY_PEG_BOARD agrees with the universal table")
 
 
 ## Every entry must be a real upgrade with a registered .tres, or the HUD would

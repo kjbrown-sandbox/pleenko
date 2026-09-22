@@ -21,6 +21,10 @@ var mesh_basis: Basis = Basis.IDENTITY
 
 var _mm_instance: MultiMeshInstance3D
 var _flashes: Dictionary = {}  # peg_index -> { start_color, elapsed, duration }
+## Per-peg override of the colour a flash decays back to. Empty for almost every
+## peg, which rests at base_color; a lucky peg sits here so a coin striking it
+## flashes and then settles back to LUCKY rather than erasing the marker.
+var _rest_colors: Dictionary = {}  # peg_index -> Color
 var _pulses: Dictionary = {}  # peg_index -> { elapsed, duration }
 
 
@@ -79,6 +83,7 @@ func clear() -> void:
 		_mm_instance = null
 	_flashes.clear()
 	_pulses.clear()
+	_rest_colors.clear()
 	set_process(false)
 
 
@@ -96,6 +101,32 @@ func nearest_to(local_pos: Vector3, max_dist: float) -> int:
 
 func position_of(idx: int) -> Vector3:
 	return positions[idx] if idx >= 0 and idx < positions.size() else Vector3.ZERO
+
+
+## The colour peg `idx` settles at once nothing is animating it.
+func rest_color(idx: int) -> Color:
+	return _rest_colors.get(idx, base_color)
+
+
+## Paints a peg and keeps it painted: the colour survives flash decay and board
+## rebuilds are handled by the caller re-applying after build(). Pass a marker
+## colour to set, call clear_rest_color to release.
+func set_rest_color(idx: int, color: Color) -> void:
+	if not _mm_instance or idx < 0 or idx >= positions.size():
+		return
+	_rest_colors[idx] = color
+	# Only snap if no flash owns the colour right now; otherwise the flash will
+	# decay into the new rest colour on its own.
+	if not _flashes.has(idx):
+		_mm_instance.multimesh.set_instance_color(idx, color)
+
+
+func clear_rest_color(idx: int) -> void:
+	if not _rest_colors.has(idx):
+		return
+	_rest_colors.erase(idx)
+	if _mm_instance and not _flashes.has(idx):
+		_mm_instance.multimesh.set_instance_color(idx, base_color)
 
 
 func flash(idx: int, color: Color, duration: float) -> void:
@@ -200,10 +231,13 @@ func _update_flashes(delta: float) -> void:
 		var f: Dictionary = _flashes[idx]
 		f.elapsed += delta
 		var k: float = clampf(f.elapsed / f.duration, 0.0, 1.0)
-		mm.set_instance_color(idx, f.start_color.lerp(base_color, k * k))  # EASE_IN quad
+		mm.set_instance_color(idx, f.start_color.lerp(rest_color(idx), k * k))  # EASE_IN quad
 		if k >= 1.0:
 			finished.append(idx)
 	for idx in finished:
+		# Land exactly on the rest colour — lerp's endpoint is approximate, and a
+		# lucky peg that settles one shade off reads as a rendering bug.
+		mm.set_instance_color(idx, rest_color(idx))
 		_flashes.erase(idx)
 
 
