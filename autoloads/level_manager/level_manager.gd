@@ -155,10 +155,13 @@ func _set_special_slot(data: LevelData, board_type: Enums.BoardType, _next_tier:
 	elif board_type == Enums.BoardType.GREEN:
 		data.message = "You have unlocked the Lucky Peg."
 		data.rewards = [_unlock_upgrade(Enums.UpgradeType.LUCKY_PEG, board_type)]
+	elif board_type == Enums.BoardType.BLUE:
+		data.message = "You have unlocked the Board Tilter."
+		data.rewards = [_unlock_upgrade(Enums.UpgradeType.BOARD_TILT, board_type)]
 	else:
-		# Red's signature upgrade slot is reserved for Auto-buy and blue's for the
-		# Board Tilter (see agent-logs/unique-upgrades.md). Until those land, the
-		# slot pays a coin frenzy so the milestone still rewards.
+		# Red's signature upgrade slot is reserved for Auto-buy (see
+		# agent-logs/unique-upgrades.md). Until it lands, the slot pays a coin
+		# frenzy so the milestone still rewards.
 		# (Advanced Autodropper used to live on red — removed with the
 		# raw/advanced coin economy it depended on.)
 		_set_coin_frenzy(data, board_type)

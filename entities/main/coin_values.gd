@@ -237,7 +237,7 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 
 ## Inject the tooltip middle-block provider for upgrade types that need one.
 ## Autodropper rows list per-board assignments; deflector and dud chute show
-## odds; the lucky peg shows its per-board count.
+## odds; the lucky peg shows its per-board count; the tilter its full-tilt odds.
 func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeType) -> void:
 	match upgrade_type:
 		Enums.UpgradeType.AUTODROPPER:
@@ -248,6 +248,8 @@ func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeT
 			row.set_hover_extra_provider(_dud_chute_odds_text)
 		Enums.UpgradeType.LUCKY_PEG:
 			row.set_hover_extra_provider(_lucky_peg_count_text)
+		Enums.UpgradeType.BOARD_TILT:
+			row.set_hover_extra_provider(_board_tilt_odds_text)
 
 
 ## One line per unlocked board (including zeros) of how many autodroppers are
@@ -276,6 +278,14 @@ func _dud_chute_odds_text() -> String:
 ## the boards run on, so the number shown can't drift from the number in play.
 func _lucky_peg_count_text() -> String:
 	return "%d per board" % PlinkoBoard.current_lucky_peg_count()
+
+
+## Strength at a fully-pushed slider. Quoted at the extreme because that is the
+## number the upgrade actually raises — a board sitting at its default stop is a
+## fair coin no matter what the level is.
+func _board_tilt_odds_text() -> String:
+	var odds := roundi(BoardTilt.bias_at_extreme(PlinkoBoard.current_tilt_level()) * 100.0)
+	return "Up to %d%% at full tilt" % odds
 
 
 func _deflector_odds_text() -> String:

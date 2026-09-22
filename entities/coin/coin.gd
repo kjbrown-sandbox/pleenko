@@ -188,7 +188,8 @@ func _bounce_or_despawn() -> void:
 	if t.coin_impact_squash_enabled:
 		impact_squash_remaining = t.coin_impact_squash_duration
 
-	# Deflector (if placed at this peg) forces the direction; else 50/50.
+	# Deflector at this peg forces the direction; otherwise the board tilt biases
+	# it, and an untilted board falls through to a plain 50/50.
 	var direction: int = board.resolve_bounce_direction(_row, _col, randf())
 
 	# Lucky peg: this coin and a fresh twin leave the peg in opposite directions,
