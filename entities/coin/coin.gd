@@ -65,10 +65,11 @@ func _ready() -> void:
 
 ## The colour this coin actually reads as: its tint when one is set, otherwise
 ## its currency's. Coins whose LOOK and whose CURRENCY differ are a real case —
-## a frenzy coin carries a milestone tint, and a dud-chute coin keeps its origin
-## board's colour while paying the destination's currency — so every visual that
-## asks "what colour is this coin" has to go through here rather than reaching
-## for coin_type and getting it right only by accident.
+## frenzy coins carry a milestone tint, and lucky-peg split twins inherit one —
+## so every visual that asks "what colour is this coin" goes through here rather
+## than reaching for coin_type and getting it right only by accident. (The
+## landing burst used to do exactly that, so a frenzy coin burst in the wrong
+## colour while its mesh and halo were correct.)
 func display_color(t: VisualTheme) -> Color:
 	return color_override if color_override.a > 0.0 else t.get_coin_color(coin_type)
 
@@ -94,7 +95,7 @@ func _apply_visuals() -> void:
 	if color_override.a > 0.0:
 		cached_color = coin_col
 	else:
-		cached_color = t.coin_silhouette_color if t.coin_silhouette else t.get_coin_color(coin_type)
+		cached_color = t.coin_silhouette_color if t.coin_silhouette else coin_col
 	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		mesh_instance.rotation = Vector3(PI / 2, 0, 0)
 	else:

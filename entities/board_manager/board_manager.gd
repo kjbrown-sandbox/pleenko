@@ -204,21 +204,20 @@ func get_board_behind(type: Enums.BoardType) -> PlinkoBoard:
 ## Landing in the destination's centre can open that board's chute in turn, which
 ## is what lets a chain run backwards tier by tier, compounding each hop.
 ##
-## The new coin takes the DESTINATION board's currency, not the source's. Payout
-## already works that way (finalize_coin_landing credits bucket.currency_type),
-## and carrying the source currency would let the coin ride the destination's
-## earring transporter to light the SOURCE tier's SpaceBoard bucket — skipping
-## the cap raises that growing that tier's own earrings costs.
-func _on_dud_chute_opened(board_type: Enums.BoardType, coin_type: Enums.CurrencyType,
+## The new coin keeps the SOURCE board's currency, and that is load-bearing
+## rather than cosmetic: only gold's transporter reaches the space board
+## (PlinkoBoard.SPACE_TRANSPORT_BOARD), so a violet coin lights VIOLET's space
+## bucket only by arriving at gold still violet. A coin that adopted each
+## destination's currency would arrive as gold and could only ever light gold's.
+##
+## Payout is unaffected either way — finalize_coin_landing credits
+## bucket.currency_type, so the coin still pays whatever board it lands on.
+func _on_dud_chute_opened(board_type: Enums.BoardType, currency_type: Enums.CurrencyType,
 		multiplier: float) -> void:
 	var target: PlinkoBoard = get_board_behind(board_type)
 	if not target:
 		return
-	# The coin keeps its OWN currency, so it stays visibly itself and — the whole
-	# point — still counts as its own colour if it reaches gold's transporter.
-	# It pays the destination board's currency regardless, because
-	# finalize_coin_landing credits bucket.currency_type, not the coin's.
-	target.force_drop_coin(coin_type, multiplier, true)
+	target.force_drop_coin(currency_type, multiplier, true)
 
 
 ## Total deflectors placed across every board (the universal slot pool is
@@ -310,11 +309,11 @@ func _on_row_upgrade_starting(board: PlinkoBoard) -> void:
 func _on_row_upgrade_sweep_started(start_local_x: float, end_local_x: float,
 		focus_local_y: float, sweep_duration: float, board: PlinkoBoard) -> void:
 	if board != _boards[_active_index]:
-		# Defensive: `_on_row_upgrade_starting` only sets the flag when the
-		# emitting board is active, so this clear should be unreachable.
-		# Keeping it for paranoia in case a future caller emits from a
-		# different board than the one currently active.
-		_row_upgrade_camera_active = false
+		# A non-active board grew (auto-buy fires on all six). Leave the flag
+		# alone: _on_row_upgrade_starting only ever sets it for the ACTIVE board,
+		# so clearing it here would release a suppression the active board's own
+		# in-flight sweep is still relying on, and the next board_rebuilt would
+		# yank the camera mid-sweep.
 		return
 	if _camera_tween and _camera_tween.is_valid():
 		_camera_tween.kill()

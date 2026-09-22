@@ -620,6 +620,14 @@ func test_non_gold_transporter_does_not_reach_the_space_board() -> void:
 
 	assert_equal(transported.size(), 0,
 		"a violet transporter sends nothing to the space board")
+	# The guard wraps only the emit — the coin must still despawn. If someone
+	# ever turns it into an early return, this is what catches the leak.
+	assert_true(coin.is_queued_for_deletion(),
+		"and the coin still despawns on the dead-end path")
+
+	transporter.free()
+	earring.free()
+	_free_board(board)
 
 
 func test_transporter_pays_nothing_and_transports() -> void:

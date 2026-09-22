@@ -425,7 +425,9 @@ func begin_cap_raise_reveal(board_type: Enums.BoardType) -> void:
 
 
 ## Cap "+" buttons on the CURRENCY bars (top of the HUD) that are wired but
-## still hidden. Each entry:
+## not yet on screen (the guard tests VISIBILITY, not wiring — a wired-but-hidden button is
+## exactly what a running reveal produces). Only BOARD rows can hold a minus, so
+## the mode-promotion hazard that upgrade_section guards against cannot reach here. Each entry:
 ## { node: Control (for explosion position), plus_button: Control, reveal: Callable }.
 func get_pending_currency_cap_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
@@ -448,7 +450,10 @@ func get_pending_currency_cap_targets() -> Array[Dictionary]:
 	return targets
 
 
-## Cap "+" buttons on the UNIVERSAL upgrade rows that are wired but still hidden.
+## Cap "+" buttons on the UNIVERSAL upgrade rows that are not yet on screen
+## (the guard tests VISIBILITY, not wiring — a wired-but-hidden button is
+## exactly what a running reveal produces). Only BOARD rows can hold a minus, so
+## the mode-promotion hazard that upgrade_section guards against cannot reach here.
 ## Same entry shape as get_pending_currency_cap_targets().
 func get_pending_universal_cap_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
@@ -495,14 +500,13 @@ func end_cap_raise_reveal() -> void:
 	# the cinematic was interrupted before reaching them.
 	reveal_delayed_currency_bar()
 	_on_cap_raise_unlocked(board)
-	# Force-show explicitly rather than relying on re-wiring to un-hide as a side
-	# effect — see UpgradeSection.end_cap_raise_reveal for why that stopped
-	# working once the "already set up?" guard became a real wired-check.
-	for currency_type in _bars:
-		var bar = _bars[currency_type]
-		if bar.has_plus_wired():
-			bar.show_plus_button(true)
-			bar.update_plus()
+	# Force-show the upgrade ROWS explicitly rather than relying on re-wiring to
+	# un-hide as a side effect — see UpgradeSection.end_cap_raise_reveal for why
+	# that stopped working once the "already set up?" guard became a real
+	# wired-check. Currency BARS need no equivalent: they are wired by the
+	# plus_pressed signal rather than setup_plus, so has_plus_wired() is never
+	# true for one, and _on_cap_raise_unlocked above already force-shows them via
+	# _update_all_cap_buttons once the reveal flag is down.
 	for upgrade_type: Enums.UpgradeType in _upgrade_rows:
 		var row: UpgradeRow = _upgrade_rows[upgrade_type]
 		if row.bar.has_plus_wired():

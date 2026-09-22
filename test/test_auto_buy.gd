@@ -40,6 +40,9 @@ func _run_tests() -> void:
 	test_catch_up_spends_offline_earnings()
 	test_catch_up_budget_exceeds_the_per_landing_one()
 	test_catch_up_is_inert_with_no_locks()
+	await test_cap_raise_does_not_grow_the_board()
+	await test_force_apply_does_not_grow_the_board()
+	test_upgrade_bought_fires_only_for_paid_levels()
 
 	print("\n=== Done ===\n")
 
@@ -494,6 +497,46 @@ func test_catch_up_budget_exceeds_the_per_landing_one() -> void:
 	assert_true(UpgradeManager.MAX_AUTO_BUYS_ON_LOAD > 0,
 		"and the catch-up is still bounded, so a corrupt save cannot hang the load")
 
+	# Constants alone would stay green if catch_up_auto_buys stopped passing the
+	# bigger limit through, so drive a real backlog past the per-landing ceiling.
+	# Same fixture as test_drain_is_bounded_per_pass: flat cost, raised cap, so
+	# neither affordability nor the .tres cap is what bounds the drain.
+	_arm(1, Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(
+		Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+	state.current_cap = UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN * 4
+	state.delta = 0
+	var data: BaseUpgradeData = UpgradeManager.get_upgrade(Enums.UpgradeType.BUCKET_VALUE)
+	var real_escalation: int = data.delta_escalation
+	data.delta_escalation = 0
+
+	# Lock it while it is genuinely unaffordable — CurrencyManager.reset leaves a
+	# starting balance, so a cheap upgrade would be bought the instant it locks
+	# and this would measure the wrong drain.
+	state.cost = 1_000_000
+	UpgradeManager.toggle_auto_buy(Enums.BoardType.GOLD, Enums.UpgradeType.BUCKET_VALUE)
+	assert_equal(state.level, 0, "precondition: nothing bought while unaffordable")
+
+	# Now make it cheap and fund it the way a load does: with the locks out of
+	# sight, so the normal drain never sees the credit.
+	state.cost = 1
+	var locks_blob: Array = UpgradeManager.auto_buy_locks.serialize()
+	UpgradeManager.auto_buy_locks.clear()
+	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN,
+		UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN * 4)
+	UpgradeManager.auto_buy_locks.restore(locks_blob)
+	assert_equal(state.level, 0, "precondition: the load-time credit bought nothing")
+
+	UpgradeManager.catch_up_auto_buys()
+
+	assert_true(state.level > UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN,
+		"the catch-up buys past the per-landing ceiling (%d), got %d"
+			% [UpgradeManager.MAX_AUTO_BUYS_PER_DRAIN, state.level])
+
+	data.delta_escalation = real_escalation
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+
 
 ## With nothing locked the catch-up is inert, so it costs a returning player
 ## nothing and cannot spend currency they never assigned.
@@ -509,5 +552,98 @@ func test_catch_up_is_inert_with_no_locks() -> void:
 
 	assert_equal(CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN), before,
 		"nothing locked means nothing spent")
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+
+
+# --- The board effect must fire ONLY for a paid level ---
+
+## A cap raise raises the CEILING, not the level — and `buy_cap_raise` emits
+## `upgrade_purchased` with the level unchanged. Hanging the board effect on that
+## broad signal granted a free add_two_rows for cap-raise money, and desynced
+## geometry from level: the rows evaporated on the next load, because
+## apply_saved_state rebuilds the board from the recorded level.
+func test_cap_raise_does_not_grow_the_board() -> void:
+	print("test_cap_raise_does_not_grow_the_board")
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+	UpgradeManager.unlock(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+	UpgradeManager.enable_cap_raise(Enums.BoardType.GOLD)
+
+	var board: PlinkoBoard = preload("res://entities/plinko_board/plinko_board.tscn").instantiate()
+	add_child(board)
+	board.setup(Enums.BoardType.GOLD)
+	var rows_before: int = board.num_rows
+	var level_before: int = UpgradeManager.get_level(
+		Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+
+	var cap_currency: int = TierRegistry.cap_raise_currency(Enums.BoardType.GOLD)
+	if cap_currency >= 0:
+		CurrencyManager.add(cap_currency,
+			UpgradeManager.get_cap_raise_cost(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW))
+		assert_true(UpgradeManager.buy_cap_raise(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW),
+			"precondition: the cap raise went through")
+		await get_tree().process_frame
+		await get_tree().process_frame
+
+		assert_equal(board.num_rows, rows_before,
+			"a cap raise does not grow the board — it only raises the ceiling")
+		assert_equal(UpgradeManager.get_level(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW),
+			level_before, "and does not advance the level")
+
+	board.queue_free()
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+
+
+## force_apply grants a level with no payment — challenge starting conditions and
+## prestige rewards. Challenge setup builds its own boards afterwards, so letting
+## the effect fire here would apply it twice.
+func test_force_apply_does_not_grow_the_board() -> void:
+	print("test_force_apply_does_not_grow_the_board")
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+	UpgradeManager.unlock(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+
+	var board: PlinkoBoard = preload("res://entities/plinko_board/plinko_board.tscn").instantiate()
+	add_child(board)
+	board.setup(Enums.BoardType.GOLD)
+	var rows_before: int = board.num_rows
+
+	UpgradeManager.force_apply(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	assert_true(UpgradeManager.get_level(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW) > 0,
+		"precondition: force_apply did grant the level")
+	assert_equal(board.num_rows, rows_before,
+		"but the board effect did not fire — board setup owns that")
+
+	board.queue_free()
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+
+
+## The narrow signal fires for a real purchase and only for a real purchase.
+func test_upgrade_bought_fires_only_for_paid_levels() -> void:
+	print("test_upgrade_bought_fires_only_for_paid_levels")
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+	UpgradeManager.unlock(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+
+	var bought: Array[int] = []
+	var handler := func(_ut: Enums.UpgradeType, _bt: Enums.BoardType, lvl: int) -> void:
+		bought.append(lvl)
+	UpgradeManager.upgrade_bought.connect(handler)
+
+	UpgradeManager.force_apply(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+	assert_equal(bought.size(), 0, "force_apply does not count as bought")
+
+	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN,
+		UpgradeManager.get_cost(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW))
+	UpgradeManager.buy(Enums.BoardType.GOLD, Enums.UpgradeType.ADD_ROW)
+	assert_equal(bought.size(), 1, "a paid level does")
+
+	UpgradeManager.upgrade_bought.disconnect(handler)
 	UpgradeManager.reset()
 	CurrencyManager.reset()

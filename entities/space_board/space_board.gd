@@ -12,13 +12,19 @@ extends Node3D
 ## Landing a coin in the bucket that matches the coin's own colour activates
 ## that bucket permanently. All 11 activated = the player wins.
 ##
-## KNOWN AND DELIBERATE: the win is currently UNREACHABLE in normal play. Coins
-## only arrive here from a board's transporter, which needs that board's earrings
-## to meet, which needs ADD_ROW cap raises — and TierRegistry.cap_raise_currency
-## returns -1 for the last tier, so the GREEN board can never get there. Its two
-## edge buckets therefore cannot be activated except via the dev hotkeys in Main.
-## This is a known gap the player-facing fix for lives outside this system; do
-## NOT "fix" it by special-casing green or shrinking the bucket layout.
+## HOW A COIN GETS HERE: from GOLD's transporter, and only gold's
+## (PlinkoBoard.SPACE_TRANSPORT_BOARD). Every board can grow earrings and build
+## the meeting bucket, but on any other tier it is an inert dead end.
+##
+## A non-gold colour arrives by riding the DUD CHUTE down tier by tier — each hop
+## keeps the coin's own currency — until it lands in gold's transporter still
+## carrying its colour. That is why green can be activated at all despite never
+## growing earrings (TierRegistry.cap_raise_currency returns -1 for the last
+## tier, so green never reaches the hard cap). It needs five chute hops at 2%
+## each: vanishingly rare, but reachable, and NOT a gap to paper over.
+##
+## So: do NOT "fix" green by special-casing it or shrinking the bucket layout.
+## The route exists; it is meant to be the hardest thing in the game.
 ##
 ## Bucket layout (fixed, never rebuilt — gold dead centre, everything else
 ## mirrored, green at the edges):

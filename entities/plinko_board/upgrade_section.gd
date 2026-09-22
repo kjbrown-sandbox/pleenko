@@ -34,11 +34,9 @@ func setup(board: PlinkoBoard, board_type: Enums.BoardType) -> void:
 	if not _rows.is_empty():
 		_add_section_label()
 
-	_setup_auto_buy_toggles()
-
 	# Listen for future unlocks and cap raise availability
 	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked)
-	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
+	UpgradeManager.upgrade_bought.connect(_on_upgrade_bought)
 	UpgradeManager.cap_raise_unlocked.connect(_on_cap_raise_unlocked)
 	# Defer so save loading (which also runs during init) finishes first.
 	# Upgrades restored from save should not get the materialize animation.
@@ -96,9 +94,13 @@ func _spawn_row(upgrade_type: Enums.UpgradeType) -> void:
 	upgrades_container.add_child(row)
 	_rows[upgrade_type] = row
 	_setup_cap_raise_if_needed(row, upgrade_type)
-	# Auto-buy toggles are wired through _setup_auto_buy_toggles (the single
-	# entry point), which self-guards against double-connecting.
-	_setup_auto_buy_toggles()
+	# Only the row just made. Re-running the whole sweep here would call
+	# setup_minus on every existing row, and show_minus_button promotes the bar
+	# to WITH_BOTH unconditionally — un-hiding a "+" that a running cap-raise
+	# reveal had deliberately parked.
+	if UpgradeManager.is_unlocked(
+			UpgradeManager.AUTO_BUY_BOARD, Enums.UpgradeType.AUTO_BUY):
+		row.setup_auto_buy_toggle(_board_type, upgrade_type)
 
 
 ## Auto-buy locks are per (board, upgrade) pair, so every row on every board
@@ -155,7 +157,10 @@ func begin_cap_raise_reveal() -> void:
 	_cap_raise_reveal_active = true
 
 
-## This board's cap "+" buttons that are wired but still hidden, in row order
+## This board's cap "+" buttons that are not yet on screen, in row order
+## (the guard tests VISIBILITY, not wiring — a wired-but-hidden button is
+## exactly what a running reveal produces, and since the auto-buy toggle a row
+## can also hold a visible-but-UNWIRED plus; see RefinedBaselineButton.has_plus_wired)
 ## (top-to-bottom). Each entry:
 ## { node: Control (for explosion position), plus_button: Control, reveal: Callable }.
 func get_pending_cap_raise_targets() -> Array[Dictionary]:
@@ -164,7 +169,11 @@ func get_pending_cap_raise_targets() -> Array[Dictionary]:
 		return targets
 	for upgrade_type in _rows:
 		var row: UpgradeRow = _rows[upgrade_type]
-		if row.bar.plus_button.visible:
+		# Board rows can hold a minus (the auto-buy toggle), and wiring one
+		# promotes the bar to WITH_BOTH — which flips plus_button.visible true
+		# even for a plus this reveal parked. Ask both questions so a promoted
+		# row is still offered as a target.
+		if row.bar.has_plus_wired() and row.bar.plus_button.visible:
 			continue
 		var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(_board_type, upgrade_type)
 		if state.base_cap <= 0:
@@ -214,8 +223,12 @@ func _buy_upgrade(upgrade_type: Enums.UpgradeType) -> void:
 	UpgradeManager.buy(_board_type, upgrade_type)
 
 
-## Applies this board's half of a purchase, whatever triggered it: a click here,
-## an auto-buy drain, or anything else that reaches UpgradeManager.buy().
+## Applies this board's half of a purchase, whatever triggered it: a click here
+## or an auto-buy drain.
+##
+## Rides upgrade_bought, NOT upgrade_purchased. The broad signal also fires for
+## cap raises (which leave the level untouched — hanging the effect there bought
+## free rows) and for force_apply (challenge setup, which builds its own boards).
 ##
 ## UpgradeManager owns levels and currency and deliberately knows nothing about
 ## board mechanics, so the effect has to live on this side of the signal.
@@ -225,7 +238,7 @@ func _buy_upgrade(upgrade_type: Enums.UpgradeType) -> void:
 ## it then keeps using the `bucket` it just credited for another twenty lines.
 ## add_two_rows -> build_board frees every bucket, so applying the effect inline
 ## would orphan the node underneath the landing that paid for it.
-func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType,
+func _on_upgrade_bought(upgrade_type: Enums.UpgradeType,
 		board_type: Enums.BoardType, _new_level: int) -> void:
 	if board_type != _board_type:
 		return
@@ -233,14 +246,22 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType,
 
 
 func _apply_upgrade_effect(upgrade_type: Enums.UpgradeType) -> void:
+	# A frame has passed since the purchase, so the board may be gone — a scene
+	# reload or challenge teardown between the buy and the apply.
 	if not is_instance_valid(_board):
 		return
 
+	# Animate only what the player can actually watch. Auto-buy fires on all six
+	# boards, so without this a background board sings an eight-note glissando at
+	# you out of nowhere; and the load-time catch-up would flush every backlogged
+	# purchase's animation into one frame, where only the last is ever seen.
+	var animated: bool = _board.is_board_ui_visible() and not UpgradeManager.is_catching_up()
+
 	match upgrade_type:
 		Enums.UpgradeType.ADD_ROW:
-			_board.add_two_rows()
+			_board.add_two_rows(animated)
 		Enums.UpgradeType.BUCKET_VALUE:
-			_board.increase_bucket_values()
+			_board.increase_bucket_values(animated)
 		Enums.UpgradeType.DROP_RATE:
 			_board.decrease_drop_delay()
 		Enums.UpgradeType.QUEUE:
@@ -250,7 +271,7 @@ func _apply_upgrade_effect(upgrade_type: Enums.UpgradeType) -> void:
 			# ELSE reaching this arm is a per-board upgrade that forgot its case,
 			# which would otherwise be bought for currency and do nothing.
 			assert(UniversalUpgrades.is_universal(upgrade_type),
-				"per-board upgrade %s has no _buy_upgrade arm" % upgrade_type)
+				"per-board upgrade %s has no _apply_upgrade_effect arm" % upgrade_type)
 
 
 func _is_universal_upgrade(upgrade_type: Enums.UpgradeType) -> bool:

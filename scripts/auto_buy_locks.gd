@@ -116,4 +116,10 @@ func restore(raw: Array) -> void:
 			continue
 		if _locked.size() >= slots:
 			break
-		_locked[entry] = {"board_type": board_type, "upgrade_type": upgrade_type}
+		# Re-encode rather than reusing `entry`: a save could carry a key that
+		# parses fine but is not byte-identical to what key_for produces ("01:2",
+		# "+1:2"), and storing THAT would consume a slot is_locked() can never
+		# match — a lock the player owns but can never see or release.
+		_locked[key_for(board_type, upgrade_type)] = {
+			"board_type": board_type, "upgrade_type": upgrade_type,
+		}

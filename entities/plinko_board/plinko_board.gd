@@ -33,6 +33,14 @@ const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
 const EarringBoardScene: PackedScene = preload("res://entities/earring_board/earring_board.tscn")
 
+## The only board whose transporter reaches the space board. Other tiers grow
+## earrings and build the meeting bucket, but it is inert there — a colour gets
+## to the space board by riding the dud chute down to gold, not by exiting from
+## its own tier. NOT one of the "which board nominates this universal upgrade"
+## constants, despite the shape.
+const SPACE_TRANSPORT_BOARD := Enums.BoardType.GOLD
+
+
 # ── Earrings ──────────────────────────────────────────────────────────────────
 # Once the main triangle is full, ADD_ROW purchases grow two sub-boards hanging
 # beneath its edge buckets instead. Sizing lives in EarringGeometry; this board
@@ -232,7 +240,7 @@ signal coin_transported(board_type: Enums.BoardType, currency_type: Enums.Curren
 ## Deliberately NOT called "transporter": that word already belongs to the
 ## earring/SpaceBoard bucket, which sits at the same board-local x = 0. See the
 ## "Dud chute" section for why the two can never both fire.
-signal dud_chute_opened(board_type: Enums.BoardType, coin_type: Enums.CurrencyType, multiplier: float)
+signal dud_chute_opened(board_type: Enums.BoardType, currency_type: Enums.CurrencyType, multiplier: float)
 
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
@@ -1160,12 +1168,6 @@ func _spawn_split_twin(origin: Coin, direction: int, row: int, col: int) -> void
 ## from one nominated board the way PEG_DEFLECTOR reads from DEFLECTOR_BOARD.
 const DUD_CHUTE_BOARD := Enums.BoardType.VIOLET
 
-## The only board whose transporter reaches the space board. Other tiers grow
-## earrings and build the meeting bucket, but it is inert there — a colour gets
-## to the space board by riding the dud chute down to gold, not by exiting from
-## its own tier.
-const SPACE_TRANSPORT_BOARD := Enums.BoardType.GOLD
-
 ## Payout multiplier applied per hop. Fixed by design — the upgrade raises the
 ## CHANCE only, so a long chain is what makes a payout big, not a high level.
 ## Keep dud_chute.tres's description in sync with this value; it is quoted there
@@ -1669,14 +1671,10 @@ func _init_gameplay_target() -> void:
 	set_gameplay_target_enabled(not ChallengeManager.is_active_challenge)
 
 
-## `tint` (alpha > 0) makes the coin LOOK like something other than the currency
-## it pays — used by coin frenzy, whose coins carry a milestone colour.
-func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0, show_burst: bool = false,
-		tint: Color = Color(0, 0, 0, 0)) -> void:
+func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0, show_burst: bool = false) -> void:
 	var coin = CoinScene.instantiate()
 	coin.coin_type = type
 	coin.multiplier = mult
-	coin.color_override = tint
 	# _launch_coin closes the drop gate, which only _on_drop_timer_done reopens.
 	# Every other caller rides a real drop that started the timer; a dud-chute
 	# coin can arrive on a board sitting idle-ready, so remember that and restore
@@ -2474,6 +2472,12 @@ func _refresh_tilt_slider_visibility() -> void:
 			BOARD_TILT_BOARD, Enums.UpgradeType.BOARD_TILT)
 
 
+## Whether this board is the one on screen. Read by UpgradeSection to decide
+## whether a purchase is worth animating.
+func is_board_ui_visible() -> bool:
+	return _board_ui_visible
+
+
 ## Shows or hides every screen-space panel this board owns.
 ##
 ## One entry point because the panels have DIFFERENT rules: upgrade_section and
@@ -2948,9 +2952,12 @@ func _bucket_value_for_distance(distance: int) -> int:
 	return val
 
 
-func increase_bucket_values() -> void:
+func increase_bucket_values(animated: bool = true) -> void:
 	bucket_value_multiplier += 1
-	_play_bucket_value_upgrade_ripple()
+	if animated:
+		_play_bucket_value_upgrade_ripple()
+	else:
+		build_board()
 
 
 ## Animates bucket value changes as a center-outward ripple with split pulse,

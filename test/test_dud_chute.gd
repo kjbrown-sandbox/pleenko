@@ -447,26 +447,21 @@ func test_display_color_prefers_the_tint() -> void:
 	var t: VisualTheme = ThemeProvider.theme
 	var coin := Coin.new()
 	coin.coin_type = Enums.CurrencyType.GOLD_COIN
-	assert_true(coin.display_color(t).is_equal_approx(t.get_coin_color(Enums.CurrencyType.GOLD_COIN)),
+	assert_equal(coin.display_color(t), t.get_coin_color(Enums.CurrencyType.GOLD_COIN),
 		"an untinted coin reads as its own currency")
 
 	var violet: Color = t.get_coin_color(Enums.CurrencyType.VIOLET_COIN)
 	coin.color_override = violet
-	assert_true(coin.display_color(t).is_equal_approx(violet),
+	assert_equal(coin.display_color(t), violet,
 		"a tinted coin reads as its tint even though it still pays gold")
 	coin.free()
 
 
-## Only gold's transporter reaches the space board. Every other tier can grow
-## earrings and build the meeting bucket, but landing there is a dead end —
-## otherwise each tier could light its own space bucket locally and the dud
-## chute would not be the route to the space board at all.
+## Pins WHICH board is nominated to transport. The behaviour itself — that a
+## non-gold transporter emits nothing — is guarded by
+## test_earrings.test_non_gold_transporter_does_not_reach_the_space_board; this
+## only catches the nomination being moved off gold.
 func test_only_gold_transports_to_the_space_board() -> void:
 	print("test_only_gold_transports_to_the_space_board")
 	assert_equal(int(PlinkoBoard.SPACE_TRANSPORT_BOARD), int(Enums.BoardType.GOLD),
-		"gold is the only transporting board")
-	for board_type: Enums.BoardType in Enums.BoardType.values():
-		if board_type == Enums.BoardType.GOLD:
-			continue
-		assert_true(board_type != PlinkoBoard.SPACE_TRANSPORT_BOARD,
-			"%s does not transport" % board_type)
+		"gold is the board nominated to transport")

@@ -82,14 +82,24 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Owns per-board, per-upgrade state (level, cost, delta, caps, unlocked flag).
 - `upgrade_gate: Callable` — optional gate set by `ChallengeManager` to block purchases during a challenge.
-- Emits: `upgrade_purchased`, `upgrade_unlocked`, `cap_raise_unlocked`, `autodropper_unlocked`, `auto_buy_changed`.
+- Emits: `upgrade_purchased` (broad — "something changed, repaint"; ALSO fires for cap raises
+  and `force_apply`), `upgrade_bought` (narrow — a level was PAID FOR, by click or auto-buy),
+  `upgrade_unlocked`, `cap_raise_unlocked`, `autodropper_unlocked`, `auto_buy_changed`.
 - Listens: `LevelManager.rewards_claimed` (unlock from level rewards), `CurrencyManager.currency_changed` (auto-buy drain).
 - **`buy()` only moves level + currency.** A per-board upgrade's actual effect
   (`add_two_rows`, `increase_bucket_values`, `decrease_drop_delay`,
-  `increase_queue_capacity`) is applied by `UpgradeSection` off `upgrade_purchased`, NOT by
+  `increase_queue_capacity`) is applied by `UpgradeSection` off **`upgrade_bought`**, NOT by
   the click handler — auto-buy calls `buy()` directly, and when the effect lived on the click
-  it took the currency and changed nothing. It is applied `call_deferred` because the auto-buy
-  drain runs inside `finalize_coin_landing`, which keeps using the bucket it just credited.
+  it took the currency and changed nothing.
+  It must be the NARROW signal: `buy_cap_raise` also emits `upgrade_purchased`, with the level
+  *unchanged*, so hanging the effect there bought a free `add_two_rows` for cap-raise money and
+  desynced geometry from level (the rows evaporate on the next load, since `apply_saved_state`
+  rebuilds from level). `force_apply` is excluded for the same reason — challenge starting
+  conditions call it and then build their own boards.
+  Applied `call_deferred` because the auto-buy drain runs inside `finalize_coin_landing`, which
+  keeps using the bucket it just credited; and skipped-animation when the board is off-screen
+  or `is_catching_up()`, so a background board doesn't sing at the player and a load doesn't
+  flush a backlog of glissandi into one frame.
 - **RETIRED_UPGRADES.** A retired upgrade keeps BOTH its enum value and its `.tres`, for two
   different reasons: unregistering the resource crashes any save that recorded the key, and
   deleting the enum value silently renumbers every later ordinal (`.tres` files and
@@ -257,7 +267,8 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
   gold's transporter while still carrying its own currency — which is why a chute coin keeps
   its `coin_type` rather than adopting each destination's.
 - The win is therefore reachable despite green never growing earrings (see `EarringGeometry`'s
-  known gap): a green coin needs five chute hops at 2% each. Vanishingly rare, not impossible.
+  known gap): a green coin needs five successive chute hops, each at the chute's per-hop
+  chance (`PlinkoBoard.DUD_CHUTE_CHANCE_PER_LEVEL` x level). Vanishingly rare, not impossible.
 
 **EarringBoard** — `entities/earring_board/earring_board.{gd,tscn}` (`class_name EarringBoard`)
 
@@ -343,7 +354,7 @@ grants it on, or the HUD row and the gameplay lookup read different state.
 | gold | Autodropper | `BoardManager` pool + assignments |
 | orange | Peg deflector | `DeflectorModel` |
 | red | Auto-buy | `AutoBuyLocks` + `UpgradeManager` drain |
-| violet | Dud chute | `PlinkoBoard` (constants + `try_dud_chute`) |
+| violet | Dud chute | `PlinkoBoard` (constants + `_try_dud_chute`) |
 | blue | Board tilter | `BoardTilt` + `TiltSlider` |
 | green | Lucky peg | `LuckyPegModel` |
 

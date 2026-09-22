@@ -8,7 +8,22 @@ class UpgradeState:
 	var current_cap: int = 0  ## starts at base_cap; raised by cap upgrades
 	var cap_level: int = 0    ## number of cap raises purchased
 
+## Broad "something about this upgrade changed, repaint" signal. Fires for a
+## bought level, a bought CAP RAISE (level unchanged!), and force_apply. Listen
+## to this for UI refreshes; listen to upgrade_bought for anything that should
+## happen once per paid level.
 signal upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, new_level: int)
+## A level was PAID FOR — by a click or by the auto-buy drain. Distinct from
+## upgrade_purchased, which is the broad "something about this upgrade changed,
+## repaint" signal and also fires for cap raises and for force_apply.
+##
+## UpgradeSection applies a per-board upgrade's board effect off THIS one. It has
+## to be the narrow signal: buy_cap_raise emits upgrade_purchased with the level
+## UNCHANGED, so hanging the effect there granted a free add_two_rows for
+## cap-raise money (and desynced geometry from level, since the rows evaporated
+## on the next load). force_apply is likewise excluded — challenge starting
+## conditions call it and then build their boards separately.
+signal upgrade_bought(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, new_level: int)
 signal upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType)
 signal cap_raise_unlocked(board_type: Enums.BoardType)
 signal autodropper_unlocked
@@ -227,6 +242,7 @@ func buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
 	_advance_cost(board_type, upgrade_type)
 
 	upgrade_purchased.emit(upgrade_type, board_type, state.level)
+	upgrade_bought.emit(upgrade_type, board_type, state.level)
 	return true
 
 
@@ -330,6 +346,9 @@ var auto_buy_locks := AutoBuyLocks.new()
 ## re-enters into a no-op instead of recursing.
 var _draining: bool = false
 
+## True for the duration of catch_up_auto_buys — see is_catching_up().
+var _catching_up: bool = false
+
 
 ## Slots the player owns, i.e. the upgrade's level. Static so the HUD can read it
 ## without an instance, matching the other signature upgrades' current_* helpers.
@@ -393,7 +412,17 @@ func _drain_auto_buys(limit: int = MAX_AUTO_BUYS_PER_DRAIN) -> void:
 ## Must run after BoardManager.deserialize — the board effects these purchases
 ## trigger are applied against real boards.
 func catch_up_auto_buys() -> void:
+	_catching_up = true
 	_drain_auto_buys(MAX_AUTO_BUYS_ON_LOAD)
+	_catching_up = false
+
+
+## True while the post-load catch-up is running. Read by UpgradeSection to skip
+## the celebration animations: the player has just loaded, there is nothing to
+## celebrate yet, and a backlog would queue every animation into one frame where
+## only the last is visible anyway.
+func is_catching_up() -> bool:
+	return _catching_up
 
 
 ## Toggles a pair's auto-buy lock. Returns the state it ended in; false can mean
