@@ -22,7 +22,7 @@ func _run_tests() -> void:
 	test_advanced_buckets_never_reconciled()
 	test_drop_coins_not_replayed()
 	test_deflector_unlocks_on_orange_only()
-	test_advanced_autodropper_moved_to_red()
+	test_red_special_slot_no_longer_grants_advanced_autodropper()
 
 
 func _reset_state() -> void:
@@ -194,25 +194,23 @@ func test_deflector_unlocks_on_orange_only() -> void:
 			has_deflector = true
 			assert_equal(r.board_type, Enums.BoardType.ORANGE,
 				"deflector unlock targets the orange board")
-		assert_false(
-			r.type == RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER,
-			"orange slot 4 no longer grants Advanced Autodropper")
 	assert_true(has_deflector, "orange slot 4 unlocks PEG_DEFLECTOR")
 
 
-func test_advanced_autodropper_moved_to_red() -> void:
-	print("test_advanced_autodropper_moved_to_red")
+## Advanced Autodropper was removed with the raw/advanced coin economy it
+## depended on. Red's special slot is reserved for Auto-buy and pays a coin
+## frenzy until that lands — it must never hand out the retired upgrade again.
+func test_red_special_slot_no_longer_grants_advanced_autodropper() -> void:
+	print("test_red_special_slot_no_longer_grants_advanced_autodropper")
 	var data := LevelData.new()
 	LevelManager._set_special_slot(data, Enums.BoardType.RED,
 		TierRegistry.get_next_tier(Enums.BoardType.RED))
-	var has_adv := false
 	for r in data.rewards:
-		if r.type == RewardData.RewardType.UNLOCK_UPGRADE \
-				and r.upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
-			has_adv = true
-			assert_equal(r.board_type, Enums.BoardType.RED,
-				"Advanced Autodropper unlock now targets the red board")
-	assert_true(has_adv, "red slot 4 unlocks ADVANCED_AUTODROPPER")
+		assert_false(
+			r.type == RewardData.RewardType.UNLOCK_UPGRADE \
+				and r.upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER,
+			"red slot 4 must not unlock the retired ADVANCED_AUTODROPPER")
+	assert_false(data.rewards.is_empty(), "red slot 4 still pays something")
 
 
 func test_partial_unlocks_repaired() -> void:

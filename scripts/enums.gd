@@ -29,6 +29,9 @@ enum UpgradeType {
 	DROP_RATE,
 	QUEUE,
 	AUTODROPPER,
+	## RETIRED (see UpgradeManager.RETIRED_UPGRADES). Never delete this value:
+	## ordinals are persisted as ints, so removing it renumbers every value after
+	## it and silently repoints peg_deflector.tres (`type = 6`) at the wrong slot.
 	ADVANCED_AUTODROPPER,
 	PEG_DEFLECTOR,  ## Always append last — .tres files and saves store `type` as an int.
 }

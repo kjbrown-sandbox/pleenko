@@ -186,8 +186,7 @@ func _buy_upgrade(upgrade_type: Enums.UpgradeType) -> void:
 			_board.decrease_drop_delay()
 		Enums.UpgradeType.QUEUE:
 			_board.increase_queue_capacity()
-		Enums.UpgradeType.AUTODROPPER, Enums.UpgradeType.ADVANCED_AUTODROPPER, \
-		Enums.UpgradeType.PEG_DEFLECTOR:
+		Enums.UpgradeType.AUTODROPPER, Enums.UpgradeType.PEG_DEFLECTOR:
 			pass  # Universal upgrades — bought via CoinValues, not here
 
 
@@ -195,7 +194,6 @@ func _is_universal_upgrade(upgrade_type: Enums.UpgradeType) -> bool:
 	# Per-board "unique" upgrades are all universal — they render in the
 	# CoinValues HUD (left), not in this per-board section.
 	return upgrade_type == Enums.UpgradeType.AUTODROPPER \
-		or upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER \
 		or upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR
 
 

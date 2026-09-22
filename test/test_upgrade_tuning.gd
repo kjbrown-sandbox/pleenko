@@ -17,7 +17,7 @@ func _run_tests() -> void:
 	test_gold_unlocks_autodropper_before_queue()
 	test_set_queue_slot_helper()
 	test_autodropper_cost_curve()
-	test_advanced_autodropper_cost_curve()
+	test_advanced_autodropper_is_retired()
 	test_queue_cost_curve_and_cap()
 	test_all_upgrades_have_descriptions()
 
@@ -63,11 +63,43 @@ func test_autodropper_cost_curve() -> void:
 	_assert_cost_curve(Enums.UpgradeType.AUTODROPPER, [50, 100, 175, 275, 400], "autodropper")
 
 
-func test_advanced_autodropper_cost_curve() -> void:
-	print("test_advanced_autodropper_cost_curve")
-	# Advanced is bought with the ORANGE board's currency, same curve as normal.
-	_assert_cost_curve_for(Enums.BoardType.ORANGE, Enums.UpgradeType.ADVANCED_AUTODROPPER,
-		[50, 100, 175, 275, 400], "advanced autodropper")
+## ADVANCED_AUTODROPPER is retired: its enum value and .tres stay registered
+## (UpgradeManager.deserialize indexes _state[board][type] for every enum value,
+## so unregistering would crash old saves), but it can never be unlocked again.
+func test_advanced_autodropper_is_retired() -> void:
+	print("test_advanced_autodropper_is_retired")
+	assert_true(UpgradeManager.is_retired(Enums.UpgradeType.ADVANCED_AUTODROPPER),
+		"ADVANCED_AUTODROPPER is listed as retired")
+	for board_type in Enums.BoardType.values():
+		assert_true(UpgradeManager.get_state(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER) != null,
+			"state still exists so deserialize can't crash on an old save")
+		UpgradeManager.unlock(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER)
+		assert_false(UpgradeManager.is_unlocked(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER),
+			"unlock() refuses a retired upgrade")
+
+	# The OTHER half of the retirement contract, and the dangerous one: UpgradeType
+	# ordinals are persisted as ints by .tres files and by ChallengeProgressManager.
+	# Deleting the retired value would renumber everything after it and silently
+	# repoint peg_deflector.tres (which hardcodes `type = 6`) at the wrong upgrade.
+	# That corrupts data rather than crashing, so guard the ordinals explicitly.
+	assert_equal(int(Enums.UpgradeType.ADVANCED_AUTODROPPER), 5,
+		"retired upgrade keeps ordinal 5")
+	assert_equal(int(Enums.UpgradeType.PEG_DEFLECTOR), 6,
+		"PEG_DEFLECTOR keeps ordinal 6 — peg_deflector.tres hardcodes type = 6")
+	var deflector_data: BaseUpgradeData = UpgradeManager.get_upgrade(Enums.UpgradeType.PEG_DEFLECTOR)
+	assert_true(deflector_data != null,
+		"the .tres ordinal still resolves to the deflector upgrade")
+
+	UpgradeManager.reset()
+
+	# An old save that recorded purchased levels for the retired upgrade must not
+	# leave them behind — BoardManager's legacy pool fallback derives a pool from
+	# upgrade levels, so a stale level could resurrect it.
+	UpgradeManager.get_state(Enums.BoardType.RED, Enums.UpgradeType.ADVANCED_AUTODROPPER).level = 3
+	UpgradeManager.deserialize({})
+	assert_equal(UpgradeManager.get_level(Enums.BoardType.RED, Enums.UpgradeType.ADVANCED_AUTODROPPER), 0,
+		"deserialize clears a retired upgrade's stored level")
+	UpgradeManager.reset()
 
 
 func test_queue_cost_curve_and_cap() -> void:

@@ -20,7 +20,45 @@ var _window_mode: int = DEFAULT_WINDOW_MODE
 
 
 func _ready() -> void:
+	_load_device_prefs()
 	_apply()
+	# The OS window is not fully realized while autoloads run, so the mode check
+	# in _apply() can compare against a value the window has not settled into
+	# yet — it then decides nothing needs writing and the engine's own startup
+	# sizing wins. Re-apply once a frame has been processed, when get_window()
+	# reports the real mode. Cheap, and a no-op when the first pass was correct.
+	await get_tree().process_frame
+	_apply()
+
+
+## Read the persisted display prefs straight from the save file at startup.
+##
+## These are device prefs, not game progress: SaveManager deliberately keeps
+## them in the minimal save so they survive every reset. But SaveManager only
+## pushes them into this autoload from load_game(), which runs when the GAME
+## scene loads — not at launch, and not at all if the player sits on the main
+## menu. Until then the window stayed on DEFAULT_WINDOW_MODE, so a player who
+## had configured windowed still booted fullscreen every time.
+##
+## Reading them here makes the configured value authoritative from the first
+## frame. Anything missing or malformed falls through to the setters, which snap
+## unknown values to the defaults.
+func _load_device_prefs() -> void:
+	if not FileAccess.file_exists(SaveManager.SAVE_PATH):
+		return
+	var file := FileAccess.open(SaveManager.SAVE_PATH, FileAccess.READ)
+	if file == null:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return
+	var data: Dictionary = parsed
+	if "max_fps" in data:
+		_max_fps = int(data["max_fps"]) if int(data["max_fps"]) in FPS_OPTIONS else DEFAULT_MAX_FPS
+	if "window_mode" in data:
+		var mode: int = int(data["window_mode"])
+		_window_mode = mode if mode in WINDOW_MODE_OPTIONS else DEFAULT_WINDOW_MODE
 
 
 ## Sets the frame-rate cap. `fps` is snapped to a known option (falling back to

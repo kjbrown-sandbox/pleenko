@@ -171,7 +171,6 @@ func _update_currencies() -> void:
 		add_child(_create_section_label("Universal upgrades"))
 
 		_try_spawn_upgrade_row(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD)
-		_try_spawn_upgrade_row(Enums.UpgradeType.ADVANCED_AUTODROPPER, Enums.BoardType.ORANGE)
 		_try_spawn_upgrade_row(Enums.UpgradeType.PEG_DEFLECTOR, Enums.BoardType.ORANGE)
 
 	# Hover tooltip — must be last child so it renders below everything
@@ -186,7 +185,6 @@ func _update_currencies() -> void:
 
 func _has_any_universal_upgrade() -> bool:
 	return UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER) \
-		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.ADVANCED_AUTODROPPER) \
 		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.PEG_DEFLECTOR)
 
 
@@ -243,25 +241,22 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeType) -> void:
 	match upgrade_type:
 		Enums.UpgradeType.AUTODROPPER:
-			row.set_hover_extra_provider(_autodropper_assignment_text.bind(false))
-		Enums.UpgradeType.ADVANCED_AUTODROPPER:
-			row.set_hover_extra_provider(_autodropper_assignment_text.bind(true))
+			row.set_hover_extra_provider(_autodropper_assignment_text)
 		Enums.UpgradeType.PEG_DEFLECTOR:
 			row.set_hover_extra_provider(_deflector_odds_text)
 
 
-## One line per unlocked board (including zeros) of how many autodroppers of this
-## pool (normal/advanced) are assigned there.
-func _autodropper_assignment_text(advanced: bool) -> String:
+## One line per unlocked board (including zeros) of how many autodroppers are
+## assigned there.
+func _autodropper_assignment_text() -> String:
 	if not is_instance_valid(_board_manager):
 		return ""
-	var key := "advanced" if advanced else "normal"
 	var lines: PackedStringArray = []
 	for bt in Enums.BoardType.values():
 		if not _board_manager.is_board_unlocked(bt):
 			continue
-		var counts: Dictionary = _board_manager.get_assigned_counts_for_board(bt)
-		lines.append("%d assigned to %s board" % [counts[key], FormatUtils.board_name(bt, false)])
+		lines.append("%d assigned to %s board" % [
+			_board_manager.get_assigned_count_for_board(bt), FormatUtils.board_name(bt, false)])
 	return "\n".join(lines)
 
 
@@ -287,7 +282,6 @@ func _on_upgrade_hover_changed(text: String) -> void:
 func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
 	# Only care about autodropper-type upgrades
 	if upgrade_type != Enums.UpgradeType.AUTODROPPER \
-			and upgrade_type != Enums.UpgradeType.ADVANCED_AUTODROPPER \
 			and upgrade_type != Enums.UpgradeType.PEG_DEFLECTOR:
 		return
 	if upgrade_type in _upgrade_rows:
@@ -373,8 +367,7 @@ func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:
 
 
 func _get_board_for_upgrade(upgrade_type: Enums.UpgradeType) -> Enums.BoardType:
-	if upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER \
-			or upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
+	if upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
 		return Enums.BoardType.ORANGE
 	return Enums.BoardType.GOLD
 

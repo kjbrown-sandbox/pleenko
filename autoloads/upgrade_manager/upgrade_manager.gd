@@ -12,7 +12,6 @@ signal upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Boar
 signal upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType)
 signal cap_raise_unlocked(board_type: Enums.BoardType)
 signal autodropper_unlocked
-signal advanced_autodropper_unlocked
 
 ## Populate this array in the Inspector with .tres BaseUpgradeData resources.
 @export var upgrades: Array[BaseUpgradeData] = []
@@ -134,7 +133,49 @@ func is_unlocked(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -
 	return _unlocked[board_type][upgrade_type]
 
 
+## RETIRED upgrades can never be unlocked, by save restore or by reward.
+##
+## NEITHER half of a retired upgrade may be deleted, for two DIFFERENT reasons:
+##   - Its .tres registration (data/advanced_autodropper.tres) stays because
+##     deserialize() indexes _state[board][type] for every Enums.UpgradeType.
+##     Unregistering it would CRASH any save that recorded the key.
+##   - Its enum VALUE stays because UpgradeType ordinals are persisted as ints —
+##     by .tres files (peg_deflector.tres hardcodes `type = 6`) and by
+##     ChallengeProgressManager's permanent_upgrades blob. Deleting ordinal 5
+##     would silently renumber PEG_DEFLECTOR 6 -> 5 and repoint both at the wrong
+##     upgrade. That one corrupts data instead of crashing, so it is the more
+##     dangerous of the two.
+##
+## Refusing the unlock is what actually makes a retired upgrade unreachable.
+## _clear_retired_state() then drops any level/cost an old save carried, so
+## nothing can recompute a pool from it later.
+const RETIRED_UPGRADES: Array[Enums.UpgradeType] = [
+	Enums.UpgradeType.ADVANCED_AUTODROPPER,
+]
+
+
+func is_retired(upgrade_type: Enums.UpgradeType) -> bool:
+	return upgrade_type in RETIRED_UPGRADES
+
+
+## Zeroes every board's stored state for retired upgrades. Called at the end of
+## deserialize so an old save's purchased levels can't be read back by anything
+## that derives a value from upgrade level (e.g. BoardManager's legacy
+## normal_pool fallback), and so they stop being re-serialized.
+func _clear_retired_state() -> void:
+	for upgrade_type in RETIRED_UPGRADES:
+		for board_type in Enums.BoardType.values():
+			var s: UpgradeState = _state[board_type][upgrade_type]
+			s.level = 0
+			s.cap_level = 0
+			s.current_cap = s.base_cap
+			_unlocked[board_type][upgrade_type] = false
+
+
 func unlock(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
+	if is_retired(upgrade_type):
+		_unlocked[board_type][upgrade_type] = false
+		return
 	if _unlocked[board_type][upgrade_type]:
 		return
 	_unlocked[board_type][upgrade_type] = true
@@ -199,8 +240,6 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 			unlock(reward.board_type, reward.upgrade_type)
 		elif reward.type == RewardData.RewardType.UNLOCK_AUTODROPPER:
 			autodropper_unlocked.emit()
-		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_AUTODROPPER:
-			advanced_autodropper_unlocked.emit()
 
 
 func _on_reconcile_reward(reward: RewardData) -> void:
@@ -342,6 +381,10 @@ func deserialize(data: Dictionary) -> void:
 		if board_key in cap_raise_data and cap_raise_data[board_key]:
 			_cap_raise_available[board_type] = true
 			cap_raise_unlocked.emit(board_type)
+
+	# Last: an old save may carry levels for an upgrade that has since been
+	# retired. unlock() already refused the flag; this drops the rest.
+	_clear_retired_state()
 
 
 func _advance_cost(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:
