@@ -59,7 +59,7 @@ Coins should calculate their path **row by row**, not all at once. This way if t
 
 - `autoloads/` — singleton managers. One subdirectory per autoload.
 - `entities/` — scenes (`.tscn` + `.gd` pairs). Each is self-contained.
-- `scripts/` — shared data classes, utilities (enums, reward/tier data, format utils, offline earnings, `lattice.gd` Galton-lattice geometry, `multimesh_pool.gd` pooled-instance mechanic, `vfx_utils.gd` shockwave + burst-swoop particles).
+- `scripts/` — shared data classes, utilities (enums, reward/tier data, format utils, offline earnings, `lattice.gd` Galton-lattice geometry, `multimesh_pool.gd` pooled-instance mechanic, `vfx_utils.gd` shockwave + burst-swoop particles, `universal_upgrades.gd` signature-upgrade table, `board_tilt.gd` centre-seeking bounce bias, `auto_buy_locks.gd` auto-buy slot rules).
 - `style_lab/` — `VisualTheme` resource, presets under `style_lab/presets/*.tres`, plus the in-editor style lab scene.
 - `assets/` — icons, sounds, fonts.
 
@@ -82,8 +82,26 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 - Owns per-board, per-upgrade state (level, cost, delta, caps, unlocked flag).
 - `upgrade_gate: Callable` — optional gate set by `ChallengeManager` to block purchases during a challenge.
-- Emits: `upgrade_purchased`, `upgrade_unlocked`, `cap_raise_unlocked`, `autodropper_unlocked`, `advanced_autodropper_unlocked`.
-- Listens: `LevelManager.rewards_claimed` (unlock from level rewards), `CurrencyManager.currency_changed` (flip cap-raise availability when raw currency is first earned).
+- Emits: `upgrade_purchased`, `upgrade_unlocked`, `cap_raise_unlocked`, `autodropper_unlocked`, `auto_buy_changed`.
+- Listens: `LevelManager.rewards_claimed` (unlock from level rewards), `CurrencyManager.currency_changed` (auto-buy drain).
+- **`buy()` only moves level + currency.** A per-board upgrade's actual effect
+  (`add_two_rows`, `increase_bucket_values`, `decrease_drop_delay`,
+  `increase_queue_capacity`) is applied by `UpgradeSection` off `upgrade_purchased`, NOT by
+  the click handler — auto-buy calls `buy()` directly, and when the effect lived on the click
+  it took the currency and changed nothing. It is applied `call_deferred` because the auto-buy
+  drain runs inside `finalize_coin_landing`, which keeps using the bucket it just credited.
+- **RETIRED_UPGRADES.** A retired upgrade keeps BOTH its enum value and its `.tres`, for two
+  different reasons: unregistering the resource crashes any save that recorded the key, and
+  deleting the enum value silently renumbers every later ordinal (`.tres` files and
+  `ChallengeProgressManager` persist `UpgradeType` as an int). `unlock()` refusing it is what
+  makes it unreachable; `_clear_retired_state()` drops levels an old save carried.
+  `ADVANCED_AUTODROPPER` is the only member.
+- **Auto-buy** (red's signature upgrade): `auto_buy_locks` (an `AutoBuyLocks`) holds locked
+  (board, upgrade) pairs; the drain rides `currency_changed`, so purchases continue with no
+  player input. `_draining` guards re-entrancy — `buy()` spends, spending emits
+  `currency_changed`, which is the drain's own trigger. `catch_up_auto_buys()` is the one-shot
+  `SaveManager.load_game` calls last, because offline earnings are folded into the save blob
+  before any manager deserializes and the normal drain cannot see them.
 
 **LevelManager** — `autoloads/level_manager/level_manager.gd`
 
@@ -233,8 +251,13 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
   scale before emitting its phase change, so an unconditional reset would stomp it.
 - A coin arriving while the player is not viewing the space board activates its bucket
   silently with no cinematic — running one would steal the shared camera for an invisible shot.
-- **The win is currently unreachable in normal play** (green can never grow earrings — see
-  `EarringGeometry`), which is known and deliberate.
+- **Reached ONLY from gold.** Every board can grow earrings and build the meeting bucket, but
+  only gold's transporter emits `coin_transported`; elsewhere it is an inert dead end. A
+  non-gold colour gets here by riding the **dud chute** back down to gold and landing in
+  gold's transporter while still carrying its own currency — which is why a chute coin keeps
+  its `coin_type` rather than adopting each destination's.
+- The win is therefore reachable despite green never growing earrings (see `EarringGeometry`'s
+  known gap): a green coin needs five chute hops at 2% each. Vanishingly rare, not impossible.
 
 **EarringBoard** — `entities/earring_board/earring_board.{gd,tscn}` (`class_name EarringBoard`)
 
@@ -250,6 +273,10 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - The explicit contract `Coin` consumes, replacing the old duck-typing. Both `PlinkoBoard` and
   `EarringBoard` extend it, so `Coin.board` is statically typed and a missing override is a
   parse error rather than a runtime surprise.
+- `try_lucky_split(origin, row, col) -> int` returns the direction the ORIGINAL coin takes, or
+  0 for "no split". Deliberately ONE call rather than a consume/resolve pair: a pair can be
+  invoked out of order and spawn a coin WITHOUT consuming a peg, which is the single way the
+  lucky peg's split-rate bound could be broken.
 
 **EarringGeometry** — `scripts/earring_geometry.gd` (`class_name EarringGeometry`, pure static)
 
@@ -261,13 +288,17 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
   so the base game stops at 7 buckets and everything beyond needs cap raises.
 - **`earrings_meet` tests the geometry (`is_zero_approx`), never `rows == 8`.**
 - **Known gap:** `TierRegistry.cap_raise_currency` returns -1 for the last tier, so the GREEN
-  board can never reach the hard cap, never grows earrings, and never gets a transporter.
+  board can never reach the hard cap, never grows earrings, and never gets a transporter. This
+  no longer blocks the space-board win — only gold transports anyway, and green reaches it via
+  the dud chute.
 
 > **Earrings (on `PlinkoBoard`).** Past 9 buckets, `ADD_ROW` grows two `EarringBoard`
 > children instead of the main triangle. The two edge buckets become **gateways**: they stop
 > paying currency entirely and coins fall through them into the earring below. When the
 > earrings meet, a single shared **transporter** bucket appears at board-local x=0 — it pays
-> nothing and emits `coin_transported` instead. It is parented to its own `Transporter` node,
+> nothing, and emits `coin_transported` **only on gold** (`SPACE_TRANSPORT_BOARD`); on every
+> other board it is a deliberate dead end, so the dud chute is the one route to the space
+> board. It is parented to its own `Transporter` node,
 > NEVER to `buckets_container` (which `build_board` frees wholesale, and whose child order is
 > assumed 1:1 with bucket index). Earring landings must not resolve through `get_nearest_bucket`,
 > because the transporter's x=0 collides with the main board's centre bucket.
@@ -298,6 +329,77 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - Deflector state and rules for one board: which pegs hold one, which way it points, whether another fits.
 - Pure `RefCounted` — no scene tree, no autoloads, no saving. The slot cap and the global placed-count are injected as Callables (`cap_fn`, `placed_total_fn`), so the cap stays a cross-board concern and a bare model is testable.
 - **Invariant:** `resolve_bounce` is bit-identical to the legacy 50/50 when no deflector is present — the trajectory tests depend on it. `BASE_STRENGTH = 5` → bias `(s+1)/(s+2) = 6/7` (a 1:6 split — *encourage, never force*).
+
+#### Signature upgrades (one per colour)
+
+Each tier's level-table "special slot" grants one signature upgrade. They are **universal**:
+one shared level, effect on every board, rendered in the `CoinValues` HUD rather than a
+board's own `UpgradeSection`. Because levels are stored per board, each nominates ONE board to
+be booked under — and that nomination must match the board `LevelManager._set_special_slot`
+grants it on, or the HUD row and the gameplay lookup read different state.
+
+| Board | Upgrade | Lives in |
+| --- | --- | --- |
+| gold | Autodropper | `BoardManager` pool + assignments |
+| orange | Peg deflector | `DeflectorModel` |
+| red | Auto-buy | `AutoBuyLocks` + `UpgradeManager` drain |
+| violet | Dud chute | `PlinkoBoard` (constants + `try_dud_chute`) |
+| blue | Board tilter | `BoardTilt` + `TiltSlider` |
+| green | Lucky peg | `LuckyPegModel` |
+
+**UniversalUpgrades** — `scripts/universal_upgrades.gd` (pure static)
+
+- `BOARDS` is the single source of truth for that table. It replaced the same pairing
+  hand-enumerated at six sites, one of which answered a miss with a plausible-but-wrong board
+  instead of failing; `board_for()` asserts instead.
+- `types()` sorts by tier, so the HUD lists gold → green. A Dictionary iterates by insertion,
+  so without the sort the literal's order (i.e. the order features were BUILT) would silently
+  decide the player-visible order.
+
+**BoardTilt** — `scripts/board_tilt.gd` (pure static)
+
+- Centre-seeking bounce bias: at each peg the coin is biased toward or away from board-local
+  x = 0 depending on which side it is currently on — NOT a fixed left/right bias. The side is
+  `sign(2*col - row)`, compared as integers so dead centre is exact.
+- **Invariant:** `direction_for` returns **0** for "no opinion" rather than flipping its own
+  coin. `DeflectorModel.resolve_bounce` maps `roll < 0.5` to RIGHT and the trajectory tests pin
+  that; a tilt that flipped at the default slider position would invert every left-favouring
+  cell. A deflector always beats the tilt — it is a deliberate placement on one peg.
+- The notch is per board and persisted in `board_state`; the strength is global. Earrings
+  inherit the parent's tilt, pushed DOWN. Note an earring's "centre" is its own middle column,
+  so once earrings meet, Centre pushes coins AWAY from the shared transporter.
+
+**LuckyPegModel** — `entities/plinko_board/lucky_peg_model.gd` (`class_name LuckyPegModel`)
+
+- Wander state for one board's lucky pegs: which lattice pegs are live, time left, respawn
+  gaps. Pure `RefCounted` with injected `target_count_fn` / `is_voided_fn` / `rng_fn`, so the
+  wander, the respawn gap, the rebuild trim and the bomb eviction are all testable headless.
+- A lucky peg is an EXISTING lattice peg lit up, never a new node — `PegField` already owns
+  per-peg colour/flash/pulse/halo, so it inherits void-column exclusion for free.
+- **Why uncapped splitting is safe, and it is NOT the obvious argument.** "A peg is consumed,
+  so one descent crosses at most `level` pegs" is FALSE: retiring a peg queues a respawn and a
+  multi-second descent outlives that gap. The real bound is a RATE — every split consumes a
+  peg and pegs only return after `respawn_delay`, so a board cannot exceed
+  `level / respawn_delay` splits per second (10/s at max level) regardless of board size or
+  split-tree depth. `max_splits_per_second` states it; a test pins it.
+
+**AutoBuyLocks** — `scripts/auto_buy_locks.gd` (`class_name AutoBuyLocks`)
+
+- Which (board, upgrade) PAIRS are locked to auto-buy, and the slot rule. Pure `RefCounted`
+  with an injected `capacity_fn`. Locks are per pair, so gold's Add Rows and orange's Add Rows
+  are two separate locks.
+- Keys are `"<board>:<upgrade>"` because that is what gets serialized; the decoded pair is the
+  VALUE, so the drain (which runs on every coin landing) never re-splits the string.
+- `restore()` range-checks ordinals, not just shape: an out-of-range board would raise on
+  `_state[99]` mid-drain and — GDScript having no `finally` — latch `_draining` true, killing
+  auto-buy for the session.
+
+**TiltSlider** — `entities/tilt_slider/tilt_slider.{gd,tscn}` (`class_name TiltSlider`)
+
+- Per-board 5-notch Centre↔Edges slider. Emits `notch_changed` UP; `refresh` / `setup` are
+  called DOWN. **Positioned by an anchor override on the instance in `plinko_board.tscn`**, like
+  `DropSection` — a `Control` parented to a `Node3D` anchors against the VIEWPORT, so an
+  unanchored root is a 0×0 rect at the origin and its contents land off-screen.
 
 **MultiMeshPool** — `scripts/multimesh_pool.gd` (`class_name MultiMeshPool`)
 
@@ -475,6 +577,11 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 - **Save:** `SaveManager.save_game/load_game` serializes/deserializes managers in the strict order above.
 
 ### Three-Currency Economy
+
+> **STALE.** The single-currency model removed advanced/raw edge buckets —
+> `PlinkoBoard._is_advanced_at_distance` always returns `false` and every bucket pays
+> `TierRegistry.primary_currency(board_type)`. The table below describes the old economy and
+> is kept only as history.
 
 | Currency         | Earned On                       | Used For                                          |
 | ---------------- | ------------------------------- | ------------------------------------------------- |
