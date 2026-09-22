@@ -25,6 +25,7 @@ func _run_tests() -> void:
 	test_dud_chute_unlocks_on_violet_only()
 	test_lucky_peg_unlocks_on_green_only()
 	test_board_tilt_unlocks_on_blue_only()
+	test_auto_buy_unlocks_on_red_only()
 	test_deflector_slot_unaffected_by_dud_chute()
 	test_red_special_slot_no_longer_grants_advanced_autodropper()
 
@@ -261,6 +262,28 @@ func test_board_tilt_unlocks_on_blue_only() -> void:
 	assert_true(has_tilt, "blue slot 4 unlocks BOARD_TILT")
 	assert_equal(int(Enums.BoardType.BLUE), int(PlinkoBoard.BOARD_TILT_BOARD),
 		"blue is the board BOARD_TILT_BOARD nominates")
+
+
+## Red's signature-upgrade slot grants Auto-buy, recorded under the same board
+## AUTO_BUY_BOARD reads from. Red previously granted the retired Advanced
+## Autodropper, so this also pins that the slot was genuinely reassigned.
+func test_auto_buy_unlocks_on_red_only() -> void:
+	print("test_auto_buy_unlocks_on_red_only")
+	var data := LevelData.new()
+	LevelManager._set_special_slot(data, Enums.BoardType.RED,
+		TierRegistry.get_next_tier(Enums.BoardType.RED))
+	var has_auto := false
+	for r in data.rewards:
+		if r.type == RewardData.RewardType.UNLOCK_UPGRADE \
+				and r.upgrade_type == Enums.UpgradeType.AUTO_BUY:
+			has_auto = true
+			assert_equal(r.board_type, Enums.BoardType.RED,
+				"the auto-buy unlock targets the red board")
+		assert_false(r.upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER,
+			"and the retired upgrade is still not granted")
+	assert_true(has_auto, "red slot 4 unlocks AUTO_BUY")
+	assert_equal(int(Enums.BoardType.RED), int(UpgradeManager.AUTO_BUY_BOARD),
+		"red is the board AUTO_BUY_BOARD nominates")
 
 
 ## Orange keeps the deflector — the chute must not have displaced it.

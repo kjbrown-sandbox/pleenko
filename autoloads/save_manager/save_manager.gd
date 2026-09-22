@@ -143,6 +143,12 @@ func load_game() -> bool:
 	# Failsafe: rescue from 0 gold / 0 raw orange soft-lock on load.
 	_board_manager.check_and_rescue_gold_soft_lock()
 
+	# Spend offline earnings on anything locked to auto-buy. Last, because the
+	# purchases apply board effects and the boards must already exist — and
+	# because the locks themselves are only restored partway through the
+	# deserialize order above.
+	UpgradeManager.catch_up_auto_buys()
+
 	print("[SaveManager] Game loaded.")
 	return true
 

@@ -205,7 +205,7 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(board_type, upgrade_type)
 	if state.base_cap <= 0 or not UpgradeManager.is_cap_raise_available(board_type):
 		return
-	if row.bar.plus_button.visible:
+	if row.bar.has_plus_wired():
 		return
 
 	var bt := board_type
@@ -237,7 +237,8 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 
 ## Inject the tooltip middle-block provider for upgrade types that need one.
 ## Autodropper rows list per-board assignments; deflector and dud chute show
-## odds; the lucky peg shows its per-board count; the tilter its full-tilt odds.
+## odds; the lucky peg shows its per-board count; the tilter its full-tilt odds;
+## auto-buy its slot usage.
 func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeType) -> void:
 	match upgrade_type:
 		Enums.UpgradeType.AUTODROPPER:
@@ -250,6 +251,8 @@ func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeT
 			row.set_hover_extra_provider(_lucky_peg_count_text)
 		Enums.UpgradeType.BOARD_TILT:
 			row.set_hover_extra_provider(_board_tilt_odds_text)
+		Enums.UpgradeType.AUTO_BUY:
+			row.set_hover_extra_provider(_auto_buy_slots_text)
 
 
 ## One line per unlocked board (including zeros) of how many autodroppers are
@@ -286,6 +289,13 @@ func _lucky_peg_count_text() -> String:
 func _board_tilt_odds_text() -> String:
 	var odds := roundi(BoardTilt.bias_at_extreme(PlinkoBoard.current_tilt_level()) * 100.0)
 	return "Up to %d%% at full tilt" % odds
+
+
+## Slots used against slots owned — the number that decides whether another
+## row's toggle will accept a click.
+func _auto_buy_slots_text() -> String:
+	return "%d of %d slots used" % [
+		UpgradeManager.auto_buy_locks.count(), UpgradeManager.auto_buy_locks.capacity()]
 
 
 func _deflector_odds_text() -> String:
@@ -415,7 +425,9 @@ func begin_cap_raise_reveal(board_type: Enums.BoardType) -> void:
 
 
 ## Cap "+" buttons on the CURRENCY bars (top of the HUD) that are wired but
-## still hidden. Each entry:
+## not yet on screen (the guard tests VISIBILITY, not wiring — a wired-but-hidden button is
+## exactly what a running reveal produces). Only BOARD rows can hold a minus, so
+## the mode-promotion hazard that upgrade_section guards against cannot reach here. Each entry:
 ## { node: Control (for explosion position), plus_button: Control, reveal: Callable }.
 func get_pending_currency_cap_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
@@ -438,7 +450,10 @@ func get_pending_currency_cap_targets() -> Array[Dictionary]:
 	return targets
 
 
-## Cap "+" buttons on the UNIVERSAL upgrade rows that are wired but still hidden.
+## Cap "+" buttons on the UNIVERSAL upgrade rows that are not yet on screen
+## (the guard tests VISIBILITY, not wiring — a wired-but-hidden button is
+## exactly what a running reveal produces). Only BOARD rows can hold a minus, so
+## the mode-promotion hazard that upgrade_section guards against cannot reach here.
 ## Same entry shape as get_pending_currency_cap_targets().
 func get_pending_universal_cap_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
@@ -485,6 +500,18 @@ func end_cap_raise_reveal() -> void:
 	# the cinematic was interrupted before reaching them.
 	reveal_delayed_currency_bar()
 	_on_cap_raise_unlocked(board)
+	# Force-show the upgrade ROWS explicitly rather than relying on re-wiring to
+	# un-hide as a side effect — see UpgradeSection.end_cap_raise_reveal for why
+	# that stopped working once the "already set up?" guard became a real
+	# wired-check. Currency BARS need no equivalent: they are wired by the
+	# plus_pressed signal rather than setup_plus, so has_plus_wired() is never
+	# true for one, and _on_cap_raise_unlocked above already force-shows them via
+	# _update_all_cap_buttons once the reveal flag is down.
+	for upgrade_type: Enums.UpgradeType in _upgrade_rows:
+		var row: UpgradeRow = _upgrade_rows[upgrade_type]
+		if row.bar.has_plus_wired():
+			row.bar.show_plus_button(true)
+			row.bar.update_plus()
 
 
 func _is_cap_reveal_suppressed(board: int) -> bool:

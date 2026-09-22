@@ -33,6 +33,14 @@ const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
 const EarringBoardScene: PackedScene = preload("res://entities/earring_board/earring_board.tscn")
 
+## The only board whose transporter reaches the space board. Other tiers grow
+## earrings and build the meeting bucket, but it is inert there — a colour gets
+## to the space board by riding the dud chute down to gold, not by exiting from
+## its own tier. NOT one of the "which board nominates this universal upgrade"
+## constants, despite the shape.
+const SPACE_TRANSPORT_BOARD := Enums.BoardType.GOLD
+
+
 # ── Earrings ──────────────────────────────────────────────────────────────────
 # Once the main triangle is full, ADD_ROW purchases grow two sub-boards hanging
 # beneath its edge buckets instead. Sizing lives in EarringGeometry; this board
@@ -207,10 +215,16 @@ signal bomb_defused(board_type: Enums.BoardType, bucket_index: int, multiplier: 
 signal bomb_detonated(board_type: Enums.BoardType, bucket_index: int)
 signal column_voided(board_type: Enums.BoardType, bucket_index: int)
 signal forbidden_bucket_detonated(board_type: Enums.BoardType, bucket_index: int)
-## A coin reached the transporter where the two earrings meet. `world_pos` is
-## global. Emitted just before the coin despawns; the transporter pays no
-## currency, sending the coin onward IS the reward. Nothing on this branch
-## listens — the space board (built in parallel) connects to it defensively.
+## A coin reached GOLD's transporter, where its two earrings meet. `world_pos`
+## is global. Emitted just before the coin despawns; the transporter pays no
+## currency, sending the coin onward IS the reward.
+##
+## ONLY the gold board emits this. Every other board can still grow earrings and
+## still builds the meeting bucket, but landing there does nothing — which is
+## what makes the dud chute the one route by which a non-gold colour reaches the
+## space board at all. A violet coin lights violet's space bucket by chuting
+## violet -> red -> orange -> gold and landing in GOLD's transporter while still
+## carrying violet's currency.
 ##
 ## Distinct from dud_chute_opened despite sharing board-local x = 0: this
 ## migrates the same Coin and pays nothing; the chute despawns its coin and asks
@@ -226,7 +240,7 @@ signal coin_transported(board_type: Enums.BoardType, currency_type: Enums.Curren
 ## Deliberately NOT called "transporter": that word already belongs to the
 ## earring/SpaceBoard bucket, which sits at the same board-local x = 0. See the
 ## "Dud chute" section for why the two can never both fire.
-signal dud_chute_opened(board_type: Enums.BoardType, multiplier: float)
+signal dud_chute_opened(board_type: Enums.BoardType, currency_type: Enums.CurrencyType, multiplier: float)
 
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
@@ -1244,7 +1258,12 @@ func _try_dud_chute(coin: Coin, bucket_idx: int) -> bool:
 		return false
 	if not should_open_dud_chute(bucket_idx, coin.is_prestige_coin, dud_chute_roll_fn.call()):
 		return false
-	dud_chute_opened.emit(board_type, coin.multiplier * DUD_CHUTE_MULTIPLIER)
+	# The coin keeps its OWN currency all the way down. That is load-bearing, not
+	# cosmetic: it is how a violet coin that reaches gold still lights violet's
+	# space bucket rather than gold's. Payout is unaffected — finalize_coin_landing
+	# credits bucket.currency_type, so the coin still pays whatever board it
+	# lands on.
+	dud_chute_opened.emit(board_type, coin.coin_type, coin.multiplier * DUD_CHUTE_MULTIPLIER)
 	return true
 
 
@@ -1320,9 +1339,13 @@ func finalize_earring_landing(coin: Coin, earring: EarringBoard, bucket: Bucket)
 		return
 
 	if earring.is_transporter(bucket):
-		# The transporter pays no currency — sending the coin onward is the
-		# whole reward. Emit before queue_free so listeners can read the coin.
-		coin_transported.emit(board_type, coin.coin_type, coin.global_position)
+		# The transporter pays no currency — sending the coin onward is the whole
+		# reward, and only gold sends anywhere. On every other board this bucket
+		# is a dead end by design: the space board is reached by chuting a coin
+		# back to gold, not by each tier growing its own exit.
+		# Emit before queue_free so listeners can read the coin.
+		if board_type == SPACE_TRANSPORT_BOARD:
+			coin_transported.emit(board_type, coin.coin_type, coin.global_position)
 	else:
 		var amount: int = roundi(bucket.value * coin.multiplier)
 		earring_credit_fn.call(bucket.currency_type, amount)
@@ -1332,7 +1355,7 @@ func finalize_earring_landing(coin: Coin, earring: EarringBoard, bucket: Bucket)
 	# alias onto. Earrings stay out of the bucket-harmony machinery entirely.
 	AudioManager.on_coin_landed()
 	if _coin_burst_field:
-		_coin_burst_field.spawn(coin.global_position, t.get_coin_color(coin.coin_type))
+		_coin_burst_field.spawn(coin.global_position, coin.display_color(t))
 	coin.queue_free()
 
 
@@ -1394,7 +1417,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 				# swoops up to the new cap buttons.
 				_cap_raise_intro_coin = null
 			else:
-				_coin_burst_field.spawn(coin.global_position, t.get_coin_color(coin.coin_type))
+				_coin_burst_field.spawn(coin.global_position, coin.display_color(t))
 		coin.queue_free()
 
 
@@ -2449,6 +2472,12 @@ func _refresh_tilt_slider_visibility() -> void:
 			BOARD_TILT_BOARD, Enums.UpgradeType.BOARD_TILT)
 
 
+## Whether this board is the one on screen. Read by UpgradeSection to decide
+## whether a purchase is worth animating.
+func is_board_ui_visible() -> bool:
+	return _board_ui_visible
+
+
 ## Shows or hides every screen-space panel this board owns.
 ##
 ## One entry point because the panels have DIFFERENT rules: upgrade_section and
@@ -2923,9 +2952,12 @@ func _bucket_value_for_distance(distance: int) -> int:
 	return val
 
 
-func increase_bucket_values() -> void:
+func increase_bucket_values(animated: bool = true) -> void:
 	bucket_value_multiplier += 1
-	_play_bucket_value_upgrade_ripple()
+	if animated:
+		_play_bucket_value_upgrade_ripple()
+	else:
+		build_board()
 
 
 ## Animates bucket value changes as a center-outward ripple with split pulse,

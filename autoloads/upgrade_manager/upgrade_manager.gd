@@ -8,10 +8,29 @@ class UpgradeState:
 	var current_cap: int = 0  ## starts at base_cap; raised by cap upgrades
 	var cap_level: int = 0    ## number of cap raises purchased
 
+## Broad "something about this upgrade changed, repaint" signal. Fires for a
+## bought level, a bought CAP RAISE (level unchanged!), and force_apply. Listen
+## to this for UI refreshes; listen to upgrade_bought for anything that should
+## happen once per paid level.
 signal upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, new_level: int)
+## A level was PAID FOR — by a click or by the auto-buy drain. Distinct from
+## upgrade_purchased, which is the broad "something about this upgrade changed,
+## repaint" signal and also fires for cap raises and for force_apply.
+##
+## UpgradeSection applies a per-board upgrade's board effect off THIS one. It has
+## to be the narrow signal: buy_cap_raise emits upgrade_purchased with the level
+## UNCHANGED, so hanging the effect there granted a free add_two_rows for
+## cap-raise money (and desynced geometry from level, since the rows evaporated
+## on the next load). force_apply is likewise excluded — challenge starting
+## conditions call it and then build their boards separately.
+signal upgrade_bought(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, new_level: int)
 signal upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType)
 signal cap_raise_unlocked(board_type: Enums.BoardType)
 signal autodropper_unlocked
+## A pair's auto-buy lock was toggled. UpgradeRow listens to repaint its toggle,
+## and every OTHER row listens too: spending the last slot has to grey out the
+## toggles on rows that are now unlockable.
+signal auto_buy_changed(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType, locked: bool)
 
 ## Populate this array in the Inspector with .tres BaseUpgradeData resources.
 @export var upgrades: Array[BaseUpgradeData] = []
@@ -40,6 +59,10 @@ func _ready() -> void:
 
 	_init_state()
 
+	# The slot count IS the upgrade's level, so the locks read it back through
+	# this manager rather than holding a copy that could drift after a prestige.
+	auto_buy_locks.capacity_fn = current_auto_buy_slots
+
 	# Listen for level rewards to unlock upgrades
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
 	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
@@ -63,6 +86,9 @@ func _init_state() -> void:
 
 func reset() -> void:
 	_init_state()
+	# Locks go with the levels: a prestige wipes the slots that paid for them, so
+	# keeping the locks would auto-buy on credit the player no longer owns.
+	auto_buy_locks.clear()
 
 	# Debug: print initial state
 	for board_type in _state:
@@ -216,6 +242,7 @@ func buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
 	_advance_cost(board_type, upgrade_type)
 
 	upgrade_purchased.emit(upgrade_type, board_type, state.level)
+	upgrade_bought.emit(upgrade_type, board_type, state.level)
 	return true
 
 
@@ -285,11 +312,140 @@ func buy_cap_raise(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType)
 	return true
 
 
+# ── Auto-buy ──────────────────────────────────────────────────────────────────
+# Red's signature upgrade. The player locks (board, upgrade) pairs to slots, and
+# a locked pair buys itself the instant it becomes affordable.
+#
+# The purchase path is deliberately RE-ENTRANT-GUARDED: buy() spends currency,
+# which emits currency_changed, which lands back here. Without _draining that is
+# unbounded recursion on the very first affordable purchase, not a subtle bug.
+
+## Booked under RED. Unlike the other signature upgrades this has no board
+## mechanic, so the constant lives with the manager rather than on PlinkoBoard —
+## and it defers to UniversalUpgrades, which is the single source of truth for
+## every signature upgrade's nominated board.
+const AUTO_BUY_BOARD := Enums.BoardType.RED
+
+## Ceiling on purchases per drain, so one enormous balance can't stall a frame.
+##
+## Leftovers wait for the next EXTERNAL currency change — the next coin landing,
+## typically. The currency_changed a purchase itself emits is deliberately
+## swallowed by _draining, so it cannot continue the backlog.
+const MAX_AUTO_BUYS_PER_DRAIN := 32
+
+## Ceiling for the one-shot catch-up after a load. Far higher because returning
+## from a long idle is exactly the case where a big backlog is EXPECTED, and
+## trickling it out 32 per coin landing would leave the player watching their
+## own upgrades arrive for minutes. Still bounded so a corrupt save cannot hang
+## the load.
+const MAX_AUTO_BUYS_ON_LOAD := 2000
+
+var auto_buy_locks := AutoBuyLocks.new()
+
+## True while _drain_auto_buys is running, so the currency_changed it provokes
+## re-enters into a no-op instead of recursing.
+var _draining: bool = false
+
+## True for the duration of catch_up_auto_buys — see is_catching_up().
+var _catching_up: bool = false
+
+
+## Slots the player owns, i.e. the upgrade's level. Static so the HUD can read it
+## without an instance, matching the other signature upgrades' current_* helpers.
+static func current_auto_buy_slots() -> int:
+	if ChallengeManager.is_active_challenge:
+		# Challenges reset UpgradeManager, so this is already 0 today; stating it
+		# keeps the exclusion a decision rather than a consequence of reset order.
+		return 0
+	return UpgradeManager.get_level(AUTO_BUY_BOARD, Enums.UpgradeType.AUTO_BUY)
+
+
+## Buys every locked pair the player can currently afford.
+##
+## Ordering is deliberately whatever the lock set yields rather than cheapest- or
+## costliest-first: any priority rule would quietly decide FOR the player which
+## of their own locked upgrades matters most, and the player already expressed
+## that preference by choosing which pairs to lock.
+func _drain_auto_buys(limit: int = MAX_AUTO_BUYS_PER_DRAIN) -> void:
+	if _draining:
+		return
+	if auto_buy_locks.count() == 0:
+		return
+	_draining = true
+	var bought: int = 0
+	var progressed: bool = true
+	# The inner loop buys each locked pair AT MOST once, so repeated levels of the
+	# same pair need repeat passes. That is what this outer loop is for — not
+	# cascading affordability, which a purchase can only ever reduce.
+	while progressed and bought < limit:
+		progressed = false
+		# pairs() is a snapshot on purpose: buy() emits upgrade_purchased to many
+		# listeners mid-loop, and iterating the live set would break if one of
+		# them ever mutated it.
+		for pair: Dictionary in auto_buy_locks.pairs():
+			if bought >= limit:
+				break
+			var board_type: Enums.BoardType = pair["board_type"]
+			var upgrade_type: Enums.UpgradeType = pair["upgrade_type"]
+			# can_buy covers the challenge gate, the unlock flag, the cap AND
+			# affordability, so a capped pair simply stops buying while KEEPING
+			# its lock — the player decides when to free that slot.
+			if buy(board_type, upgrade_type):
+				bought += 1
+				progressed = true
+	_draining = false
+
+
+## Spends whatever accumulated while the game was closed.
+##
+## Offline earnings are credited into the save blob BEFORE any manager
+## deserializes, so the currency_changed that CurrencyManager fires on load
+## arrives while the lock set is still empty — the normal drain cannot see it.
+## Without this call a player returns from a long idle to a full wallet and
+## nothing bought, then watches purchases trickle in 32 per coin landing.
+##
+## Deliberately a one-shot at the END of loading rather than a simulation
+## interleaved with offline earnings: upgrades bought here do NOT retroactively
+## boost the idle period that paid for them. That under-credits slightly, and is
+## the tradeoff for not having OfflineCalculator model a moving economy.
+##
+## Must run after BoardManager.deserialize — the board effects these purchases
+## trigger are applied against real boards.
+func catch_up_auto_buys() -> void:
+	_catching_up = true
+	_drain_auto_buys(MAX_AUTO_BUYS_ON_LOAD)
+	_catching_up = false
+
+
+## True while the post-load catch-up is running. Read by UpgradeSection to skip
+## the celebration animations: the player has just loaded, there is nothing to
+## celebrate yet, and a backlog would queue every animation into one frame where
+## only the last is visible anyway.
+func is_catching_up() -> bool:
+	return _catching_up
+
+
+## Toggles a pair's auto-buy lock. Returns the state it ended in; false can mean
+## either "unlocked" or "refused, no slots free", which the caller distinguishes
+## via auto_buy_locks.free_slots().
+func toggle_auto_buy(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> bool:
+	var locked: bool = auto_buy_locks.toggle(board_type, upgrade_type)
+	auto_buy_changed.emit(board_type, upgrade_type, locked)
+	if locked:
+		# Buy immediately rather than waiting for the next currency tick, so
+		# locking something already affordable does what the player just asked.
+		_drain_auto_buys()
+	return locked
+
+
 func _on_currency_changed(_type: Enums.CurrencyType, _new_balance: int, _new_cap: int) -> void:
 	# Cap raises are no longer unlocked by earning a raw currency. They are now
 	# enabled explicitly via enable_cap_raise() on the 2nd board-completion beat
 	# (see PlinkoBoard._on_final_bounce_started).
-	pass
+	#
+	# Auto-buy rides this signal so a locked upgrade is bought the instant the
+	# coin that paid for it lands, rather than on a poll the player can outrace.
+	_drain_auto_buys()
 
 
 ## Enables cap raises for a board (its caps can now be raised with the next tier's
@@ -331,6 +487,7 @@ func serialize() -> Dictionary:
 			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
 			unlocked_data[board_key][upgrade_key] = _unlocked[board_type][upgrade_type]
 	data["unlocked"] = unlocked_data
+	data["auto_buy_locks"] = auto_buy_locks.serialize()
 
 	# Serialize cap raise availability
 	var cap_raise_data := {}
@@ -385,6 +542,14 @@ func deserialize(data: Dictionary) -> void:
 	# Last: an old save may carry levels for an upgrade that has since been
 	# retired. unlock() already refused the flag; this drops the rest.
 	_clear_retired_state()
+
+	# After levels are restored, so capacity() sees the real slot count — restore
+	# drops any locks beyond it rather than honouring more than the player owns.
+	# Deliberately LAST. CurrencyManager deserializes before this manager and ends
+	# with notify_all(), which fires currency_changed for every currency — so the
+	# lock set must still be empty at that point, or a load would auto-buy against
+	# boards BoardManager has not configured yet. Moving this earlier breaks that.
+	auto_buy_locks.restore(data.get("auto_buy_locks", []))
 
 
 func _advance_cost(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> void:

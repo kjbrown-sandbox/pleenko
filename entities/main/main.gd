@@ -188,6 +188,10 @@ func _setup_space_board() -> void:
 ## Wire a board's transporter to the space board. The defensive, merge-safe
 ## connect lives on SpaceBoard so it can be unit-tested against a stub node;
 ## see SpaceBoard.connect_transporter for why it must use the string API.
+##
+## Wired for every board, but only GOLD ever emits
+## (PlinkoBoard.SPACE_TRANSPORT_BOARD) — the other five connections are inert by
+## construction, so tracing "how does a coin reach the space board" ends at gold.
 func _connect_space_board(board: Node) -> void:
 	SpaceBoard.connect_transporter(board, _on_coin_transported)
 

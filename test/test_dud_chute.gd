@@ -36,6 +36,11 @@ func _run_tests() -> void:
 	test_board_constants_match_the_universal_table()
 	test_every_universal_upgrade_is_registered()
 	test_universal_and_per_board_are_disjoint()
+	test_universal_upgrades_are_listed_in_tier_order()
+	test_chute_keeps_the_coins_own_currency()
+	test_chained_chute_keeps_the_original_currency()
+	test_display_color_prefers_the_tint()
+	test_only_gold_transports_to_the_space_board()
 
 	print("\n=== Done ===\n")
 
@@ -239,7 +244,7 @@ func test_emit_compounds_the_coins_existing_multiplier() -> void:
 	board.dud_chute_roll_fn = func() -> float: return 0.0  # always opens
 
 	var seen: Array[float] = []
-	board.dud_chute_opened.connect(func(_bt: Enums.BoardType, mult: float) -> void:
+	board.dud_chute_opened.connect(func(_bt: Enums.BoardType, _ct: Enums.CurrencyType, mult: float) -> void:
 		seen.append(mult))
 
 	# A coin already two hops deep carries 100x; the third hop must reach 1000x.
@@ -266,7 +271,7 @@ func test_no_emit_when_chute_stays_shut() -> void:
 	board.dud_chute_roll_fn = func() -> float: return 0.0
 
 	var emits: Array[float] = []
-	board.dud_chute_opened.connect(func(_bt: Enums.BoardType, mult: float) -> void:
+	board.dud_chute_opened.connect(func(_bt: Enums.BoardType, _ct: Enums.CurrencyType, mult: float) -> void:
 		emits.append(mult))
 
 	var coin := Coin.new()
@@ -315,6 +320,9 @@ func test_board_constants_match_the_universal_table() -> void:
 	assert_equal(int(UniversalUpgrades.board_for(Enums.UpgradeType.BOARD_TILT)),
 		int(PlinkoBoard.BOARD_TILT_BOARD),
 		"BOARD_TILT_BOARD agrees with the universal table")
+	assert_equal(int(UniversalUpgrades.board_for(Enums.UpgradeType.AUTO_BUY)),
+		int(UpgradeManager.AUTO_BUY_BOARD),
+		"AUTO_BUY_BOARD agrees with the universal table")
 
 
 ## Every entry must be a real upgrade with a registered .tres, or the HUD would
@@ -343,3 +351,117 @@ func test_universal_and_per_board_are_disjoint() -> void:
 	for upgrade_type: Enums.UpgradeType in UniversalUpgrades.types():
 		assert_false(upgrade_type in per_board,
 			"%s is universal, so it must not also be per-board" % upgrade_type)
+
+
+## The HUD lists signature upgrades in the order types() yields, so that order is
+## player-visible. It must follow TIER order (gold, orange, red, violet, blue,
+## green) rather than the order the features happened to be built in — a
+## Dictionary iterates by insertion, so the literal alone would decide the UI.
+func test_universal_upgrades_are_listed_in_tier_order() -> void:
+	print("test_universal_upgrades_are_listed_in_tier_order")
+	var types: Array = UniversalUpgrades.types()
+	assert_equal(types.size(), UniversalUpgrades.BOARDS.size(),
+		"every signature upgrade is listed")
+
+	var previous: int = -1
+	for upgrade_type: Enums.UpgradeType in types:
+		var tier: int = TierRegistry.get_tier_index(UniversalUpgrades.board_for(upgrade_type))
+		assert_true(tier > previous,
+			"%s's board (tier %d) comes after tier %d" % [upgrade_type, tier, previous])
+		previous = tier
+
+	# Pin the head and tail explicitly, so a resorting that merely happened to be
+	# monotonic in the wrong direction still fails.
+	assert_equal(int(UniversalUpgrades.board_for(types[0])), int(Enums.BoardType.GOLD),
+		"gold's upgrade is listed first")
+	assert_equal(int(UniversalUpgrades.board_for(types[types.size() - 1])),
+		int(Enums.BoardType.GREEN), "green's upgrade is listed last")
+
+
+# --- Currency identity is the space-board key ---
+
+## A chute coin keeps its OWN currency all the way down. This is not cosmetic:
+## only gold's transporter reaches the space board, so a violet coin lights
+## violet's space bucket by chuting down to gold and arriving there STILL
+## violet. A coin that adopted each destination's currency would arrive as gold
+## and could only ever light gold's bucket.
+func test_chute_keeps_the_coins_own_currency() -> void:
+	print("test_chute_keeps_the_coins_own_currency")
+	_set_level(5)
+	var board := _make_board(4)  # a VIOLET board
+	board.dud_chute_roll_fn = func() -> float: return 0.0
+
+	var seen: Array[int] = []
+	board.dud_chute_opened.connect(
+		func(_bt: Enums.BoardType, ct: Enums.CurrencyType, _m: float) -> void:
+			seen.append(int(ct)))
+
+	var coin := Coin.new()
+	add_child(coin)
+	coin.coin_type = TierRegistry.primary_currency(Enums.BoardType.VIOLET)
+	board._try_dud_chute(coin, 2)
+
+	assert_equal(seen.size(), 1, "the chute emitted once")
+	assert_equal(seen[0], int(TierRegistry.primary_currency(Enums.BoardType.VIOLET)),
+		"and carried violet's currency, not the destination's")
+
+	coin.queue_free()
+	board.free()
+	UpgradeManager.reset()
+
+
+## Down a chain the currency never drifts toward the boards it passes through.
+func test_chained_chute_keeps_the_original_currency() -> void:
+	print("test_chained_chute_keeps_the_original_currency")
+	_set_level(5)
+	var violet: Enums.CurrencyType = TierRegistry.primary_currency(Enums.BoardType.VIOLET)
+
+	# A violet coin already one hop down, now sitting on the RED board.
+	var board := _make_board(4)
+	board.board_type = Enums.BoardType.RED
+	board.dud_chute_roll_fn = func() -> float: return 0.0
+
+	var seen: Array[int] = []
+	board.dud_chute_opened.connect(
+		func(_bt: Enums.BoardType, ct: Enums.CurrencyType, _m: float) -> void:
+			seen.append(int(ct)))
+
+	var coin := Coin.new()
+	add_child(coin)
+	coin.coin_type = violet
+	board._try_dud_chute(coin, 2)
+
+	assert_equal(seen.size(), 1, "the second hop fired")
+	assert_equal(seen[0], int(violet), "and is still violet, not red")
+
+	coin.queue_free()
+	board.free()
+	UpgradeManager.reset()
+
+
+## display_color is the single answer to "what colour is this coin", so a tinted
+## coin's mesh, halo and landing burst can't disagree. (Coin frenzy is the live
+## user; before this the landing burst read coin_type and ignored the tint.)
+func test_display_color_prefers_the_tint() -> void:
+	print("test_display_color_prefers_the_tint")
+	var t: VisualTheme = ThemeProvider.theme
+	var coin := Coin.new()
+	coin.coin_type = Enums.CurrencyType.GOLD_COIN
+	assert_equal(coin.display_color(t), t.get_coin_color(Enums.CurrencyType.GOLD_COIN),
+		"an untinted coin reads as its own currency")
+
+	var violet: Color = t.get_coin_color(Enums.CurrencyType.VIOLET_COIN)
+	coin.color_override = violet
+	assert_equal(coin.display_color(t), violet,
+		"a tinted coin reads as its tint even though it still pays gold")
+	coin.free()
+
+
+## Pins WHICH board is nominated to transport. The behaviour itself — that a
+## non-gold transporter emits nothing — is guarded by
+## test_earrings.test_non_gold_transporter_does_not_reach_the_space_board; this
+## only catches the nomination being moved off gold.
+func test_only_gold_transports_to_the_space_board() -> void:
+	print("test_only_gold_transports_to_the_space_board")
+	assert_equal(int(PlinkoBoard.SPACE_TRANSPORT_BOARD), int(Enums.BoardType.GOLD),
+		"gold is the board nominated to transport")

@@ -63,13 +63,23 @@ func _ready() -> void:
 	_apply_visuals()
 
 
+## The colour this coin actually reads as: its tint when one is set, otherwise
+## its currency's. Coins whose LOOK and whose CURRENCY differ are a real case —
+## frenzy coins carry a milestone tint, and lucky-peg split twins inherit one —
+## so every visual that asks "what colour is this coin" goes through here rather
+## than reaching for coin_type and getting it right only by accident. (The
+## landing burst used to do exactly that, so a frenzy coin burst in the wrong
+## colour while its mesh and halo were correct.)
+func display_color(t: VisualTheme) -> Color:
+	return color_override if color_override.a > 0.0 else t.get_coin_color(coin_type)
+
+
 func _apply_visuals() -> void:
 	var mesh_instance := get_node_or_null("MeshInstance3D")
 	if not mesh_instance:
 		return
 	var t: VisualTheme = ThemeProvider.theme
-	var has_override: bool = color_override.a > 0.0
-	var coin_col: Color = color_override if has_override else t.get_coin_color(coin_type)
+	var coin_col: Color = display_color(t)
 	mesh_instance.mesh = t.make_coin_mesh()
 	if fill_state == FillState.FILLING:
 		var fill_shader: Shader = preload("res://entities/coin/coin_fill.gdshader")
@@ -80,12 +90,12 @@ func _apply_visuals() -> void:
 		mesh_instance.material_override = mat
 	else:
 		mesh_instance.material_override = t.make_coin_material(coin_type)
-	# Override wins over silhouette so frenzy coins read in their own color (the
-	# multimesh renders the visible coin from cached_color).
-	if has_override:
+	# A tint wins over the silhouette so frenzy and dud-chute coins read in their
+	# own colour (the multimesh renders the visible coin from cached_color).
+	if color_override.a > 0.0:
 		cached_color = coin_col
 	else:
-		cached_color = t.coin_silhouette_color if t.coin_silhouette else t.get_coin_color(coin_type)
+		cached_color = t.coin_silhouette_color if t.coin_silhouette else coin_col
 	if t.coin_shape == VisualTheme.CoinShape.CYLINDER:
 		mesh_instance.rotation = Vector3(PI / 2, 0, 0)
 	else:
@@ -109,7 +119,7 @@ func _apply_halo(t: VisualTheme) -> void:
 	quad.mesh = mesh
 	var mat := ShaderMaterial.new()
 	mat.shader = halo_shader
-	var halo_col: Color = color_override if color_override.a > 0.0 else t.get_coin_color(coin_type)
+	var halo_col: Color = display_color(t)
 	mat.set_shader_parameter("glow_color", halo_col)
 	mat.set_shader_parameter("opacity_mult", t.coin_halo_opacity)
 	quad.material_override = mat
