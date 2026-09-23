@@ -155,8 +155,9 @@ func test_completes_board_non_primary_bucket_false() -> void:
 	print("test_completes_board_non_primary_bucket_false")
 	_reset()
 	CurrencyManager.add(Enums.CurrencyType.GOLD_COIN, 490)
-	# Bucket earns a NON-primary currency (raw orange) — can never complete gold.
-	var pair := _make_board_and_bucket(100, Enums.CurrencyType.RAW_ORANGE)
+	# Bucket earns a NON-primary currency (white, as an earring bucket does) — can
+	# never complete gold.
+	var pair := _make_board_and_bucket(100, Enums.CurrencyType.WHITE_COIN)
 	var board: PlinkoBoard = pair[0]
 	var coin := _make_coin()
 	assert_false(board._coin_completes_board(coin, pair[1]),

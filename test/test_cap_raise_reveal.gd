@@ -162,9 +162,10 @@ func test_reveal_false_for_non_primary_bucket() -> void:
 	PrestigeManager.claim_prestige(Enums.BoardType.ORANGE)
 	_seed_near_completion()
 	var board := _make_gold_board()
-	# Bucket earns a non-primary currency → can never complete the gold board.
+	# Bucket earns a non-primary currency (white, as an earring bucket does) → can
+	# never complete the gold board.
 	var bucket := Bucket.new()
-	bucket.currency_type = Enums.CurrencyType.RAW_ORANGE
+	bucket.currency_type = Enums.CurrencyType.WHITE_COIN
 	bucket.value = 100
 	board.buckets_container.add_child(bucket)
 	assert_false(board._will_reveal_cap_raise_completion(_make_coin(), bucket),

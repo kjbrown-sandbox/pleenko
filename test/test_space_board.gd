@@ -63,7 +63,7 @@ func _run_tests() -> void:
 
 	test_v8_migration_leaves_space_empty()
 	test_v8_migration_preserves_an_existing_space_block()
-	test_save_version_is_eight()
+	test_save_version_covers_space_board()
 	await test_space_state_survives_a_prestige_reset()
 
 	await test_interrupted_cinematic_still_commits()
@@ -397,9 +397,14 @@ func test_deserialize_tolerates_short_array() -> void:
 	sb.free()
 
 
-func test_save_version_is_eight() -> void:
-	print("test_save_version_is_eight")
-	assert_equal(SaveManager.SAVE_VERSION, 8, "space board owns the 7 -> 8 bump")
+## The space board owned the 7 -> 8 bump. Asserted as ">= 8" rather than "== 8"
+## deliberately: an equality here breaks on every future bump for reasons that
+## have nothing to do with the space board (v9 retired the raw currencies and
+## tripped it). Version SEMANTICS are test_save_migration.gd's job; this only
+## guards that the space board's bump landed and was never reverted.
+func test_save_version_covers_space_board() -> void:
+	print("test_save_version_covers_space_board")
+	assert_true(SaveManager.SAVE_VERSION >= 8, "space board's 7 -> 8 bump is still in place")
 
 
 func test_v8_migration_leaves_space_empty() -> void:

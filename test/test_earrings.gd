@@ -53,7 +53,7 @@ func _run_tests() -> void:
 	test_gateway_buckets_pay_normally_before_earrings()
 	test_bucket_value_upgrade_leaves_gateways_at_zero()
 	test_gameplay_target_never_picks_a_gateway()
-	test_earring_bucket_credits_parent_currency()
+	test_earring_bucket_credits_white()
 	test_transporter_pays_nothing_and_transports()
 
 	# Coin surface
@@ -561,8 +561,8 @@ func test_gameplay_target_never_picks_a_gateway() -> void:
 	_free_board(board)
 
 
-func test_earring_bucket_credits_parent_currency() -> void:
-	print("test_earring_bucket_credits_parent_currency")
+func test_earring_bucket_credits_white() -> void:
+	print("test_earring_bucket_credits_white")
 	var board := _make_board(8)
 	board._earring_rows = 4
 	var credited: Array = []
@@ -572,17 +572,17 @@ func test_earring_bucket_credits_parent_currency() -> void:
 	var earring := _make_earring(4, EarringGeometry.SIDE_LEFT)
 	var bucket: Bucket = BucketScene.instantiate()
 	add_child(bucket)
-	bucket.currency_type = TierRegistry.primary_currency(Enums.BoardType.GOLD)
-	bucket.value = EarringBoard.EARRING_BUCKET_VALUE
+	bucket.currency_type = Enums.CurrencyType.WHITE_COIN
+	bucket.value = WhiteCurrency.bucket_value(4, 0, 0)
 	var coin := _make_coin()
 	add_child(coin)
 
 	board.finalize_earring_landing(coin, earring, bucket)
 	assert_equal(credited.size(), 1, "an earring landing credits exactly once")
-	assert_equal(credited[0][0], TierRegistry.primary_currency(Enums.BoardType.GOLD),
-		"in the PARENT board's currency (no new premium currency)")
-	assert_equal(credited[0][1], EarringBoard.EARRING_BUCKET_VALUE,
-		"every earring bucket is worth 1 for now")
+	assert_equal(credited[0][0], Enums.CurrencyType.WHITE_COIN,
+		"in WHITE, never the parent board's primary currency")
+	assert_equal(credited[0][1], WhiteCurrency.bucket_value(4, 0, 0),
+		"crediting whatever the bucket is worth, corner included")
 
 	bucket.free()
 	earring.free()
@@ -739,10 +739,15 @@ func test_earring_scene_builds_pegs_and_buckets() -> void:
 	for i in 5:
 		var bucket: Bucket = earring.get_bucket(i)
 		assert_true(bucket != null, "bucket %d exists" % i)
-		assert_equal(bucket.value, EarringBoard.EARRING_BUCKET_VALUE,
-			"bucket %d is worth 1" % i)
-		assert_equal(bucket.currency_type, TierRegistry.primary_currency(Enums.BoardType.GOLD),
-			"bucket %d pays the parent board's currency" % i)
+		assert_equal(bucket.value, WhiteCurrency.bucket_value(4, i, 0),
+			"bucket %d follows the binomial reciprocal" % i)
+		assert_equal(bucket.currency_type, Enums.CurrencyType.WHITE_COIN,
+			"bucket %d pays white, not the parent board's currency" % i)
+	# The corners must be the jackpots, not just "some number".
+	assert_equal(earring.get_bucket(0).value, 16, "4-row left corner = 2^4")
+	assert_equal(earring.get_bucket(4).value, 16, "4-row right corner = 2^4")
+	assert_true(earring.get_bucket(2).value < earring.get_bucket(0).value,
+		"the centre pays less than a corner")
 	assert_true(earring.get_bucket(-1) == null and earring.get_bucket(5) == null,
 		"out-of-range lookups are null, not an error")
 	earring.queue_free()
@@ -924,17 +929,22 @@ func test_offline_layout_treats_gateways_as_earring_payouts() -> void:
 	print("test_offline_layout_treats_gateways_as_earring_payouts")
 	var rows: int = EarringGeometry.MAIN_MAX_ROWS
 	var no_earrings: Array = OfflineCalculator._get_bucket_layout(
-		rows, 1, 3, false, Enums.BoardType.GOLD, 0)
+		rows, 1, Enums.BoardType.GOLD, 0)
 	assert_equal(no_earrings.size(), 9, "9 buckets")
 	assert_equal(no_earrings[0]["value"], 5, "without earrings the edge is the top payer")
 
+	var earring_rows: int = EarringGeometry.max_earring_rows()
 	var with_earrings: Array = OfflineCalculator._get_bucket_layout(
-		rows, 1, 3, false, Enums.BoardType.GOLD, EarringGeometry.max_earring_rows())
-	assert_equal(with_earrings[0]["value"], EarringBoard.EARRING_BUCKET_VALUE,
-		"with earrings the left gateway is worth an earring bucket, not 5")
-	assert_equal(with_earrings[8]["value"], EarringBoard.EARRING_BUCKET_VALUE,
-		"and so is the right one")
+		rows, 1, Enums.BoardType.GOLD, earring_rows)
+	# A gateway is credited the earring's EXPECTED white (bucket count x tier
+	# multiplier), which is exact because every earring bucket is EV-equal.
+	var expected: int = WhiteCurrency.expected_value_units(earring_rows)
+	assert_equal(with_earrings[0]["value"], expected,
+		"the left gateway is credited the earring's expected white, not 5")
+	assert_equal(with_earrings[8]["value"], expected, "and so is the right one")
+	assert_equal(with_earrings[0]["currency_key"], "WHITE_COIN",
+		"a gateway pays white, not the board's own currency")
 	assert_equal(with_earrings[4]["value"], no_earrings[4]["value"],
 		"interior buckets are untouched")
-	assert_equal(with_earrings[0]["currency_key"], no_earrings[0]["currency_key"],
-		"and it still pays the board's own currency")
+	assert_equal(with_earrings[4]["currency_key"], no_earrings[4]["currency_key"],
+		"and still pay the board's own currency")

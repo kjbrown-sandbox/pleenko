@@ -12,7 +12,6 @@ func _run_tests() -> void:
 
 	test_bucket_value_basic()
 	test_bucket_value_with_multiplier()
-	test_bucket_value_no_advanced_offset()
 	test_bucket_value_linear_at_all_distances()
 	test_bucket_position_key_positive()
 	test_bucket_position_key_negative()
@@ -22,10 +21,6 @@ func _run_tests() -> void:
 	test_hold_drop_first_press_fires_immediately()
 	test_hold_drop_rate_limited_to_interval()
 	test_hold_drop_release_resets_accumulator()
-	test_hold_drop_advanced_uses_same_accumulator()
-	test_reconcile_reward_ignores_wrong_type()
-	test_reconcile_reward_ignores_wrong_board()
-	test_reconcile_reward_ignores_already_set()
 	test_queue_rate_bonus_gold_zero_grants_is_base()
 	test_queue_rate_bonus_gold_applies_grant_count()
 	test_queue_rate_bonus_non_gold_stays_base()
@@ -70,8 +65,6 @@ func _make_board(overrides: Dictionary = {}) -> PlinkoBoard:
 	board.board_type = overrides.get("board_type", Enums.BoardType.GOLD)
 	board.num_rows = overrides.get("num_rows", 4)
 	board.bucket_value_multiplier = overrides.get("bucket_value_multiplier", 1)
-	board.distance_for_advanced_buckets = overrides.get("distance_for_advanced_buckets", 3)
-	board.should_show_advanced_buckets = overrides.get("should_show_advanced_buckets", false)
 	board.space_between_pegs = overrides.get("space_between_pegs", 1.0)
 	board.vertical_spacing = overrides.get("vertical_spacing", 1.0)
 	return board
@@ -97,30 +90,15 @@ func test_bucket_value_with_multiplier() -> void:
 	board.free()
 
 
-## Single-currency model: advanced (raw-currency edge) buckets are removed, so
-## there is no distance offset anymore — every bucket scales linearly with its
-## distance from centre, regardless of should_show_advanced_buckets.
-func test_bucket_value_no_advanced_offset() -> void:
-	print("test_bucket_value_no_advanced_offset")
-	# distance=4, multiplier=1 → 1 + 4*1 = 5 (no offset even with the legacy flags set)
-	var board := _make_board({
-		"distance_for_advanced_buckets": 3,
-		"should_show_advanced_buckets": true,
-	})
-	assert_equal(board._bucket_value_for_distance(4), 5,
-		"no advanced offset: 1 + 4*1 = 5")
-	board.free()
-
-
+## Bucket value is linear in distance at EVERY distance. Advanced buckets used to
+## introduce an offset past distance_for_advanced_buckets (3); that system is gone,
+## so distance 3 must not be special.
 func test_bucket_value_linear_at_all_distances() -> void:
 	print("test_bucket_value_linear_at_all_distances")
-	# Linear formula holds at every distance now that advanced buckets are gone.
-	var board := _make_board({
-		"distance_for_advanced_buckets": 3,
-		"should_show_advanced_buckets": true,
-	})
+	var board := _make_board()
 	assert_equal(board._bucket_value_for_distance(2), 3, "1 + 2*1 = 3")
 	assert_equal(board._bucket_value_for_distance(3), 4, "1 + 3*1 = 4 (was the old threshold)")
+	assert_equal(board._bucket_value_for_distance(4), 5, "1 + 4*1 = 5, no offset")
 	board.free()
 
 
@@ -208,65 +186,6 @@ func test_hold_drop_release_resets_accumulator() -> void:
 	# Release: accumulator must reset so the next press fires immediately.
 	assert_false(board._tick_hold_drop_accumulator(0.016, false), "release does not fire")
 	assert_true(board._tick_hold_drop_accumulator(0.016, true), "next press fires immediately")
-	board.free()
-
-
-func test_hold_drop_advanced_uses_same_accumulator() -> void:
-	print("test_hold_drop_advanced_uses_same_accumulator")
-	# Normal and advanced hold both pass is_pressed=true to _tick_hold_drop_accumulator.
-	# Verify the pacing is identical — no separate accumulator was introduced.
-	var board := _make_board()
-	assert_true(board._tick_hold_drop_accumulator(0.016, true), "advanced: first press fires immediately")
-	board._tick_hold_drop_accumulator(0.05, true)  # partial interval
-	assert_false(board._tick_hold_drop_accumulator(0.016, true), "advanced: mid-interval does not fire")
-	assert_true(board._tick_hold_drop_accumulator(0.035, true), "advanced: fires after 100ms total")
-	board.free()
-
-
-# --- Reconcile reward guard tests ---
-# _on_reconcile_reward must early-return for wrong type / wrong board / already-
-# set, since the happy path calls build_board() which touches @onready nodes
-# and would crash a bare-instance test. Manual integration test covers the
-# happy path on a real scene.
-
-func test_reconcile_reward_ignores_wrong_type() -> void:
-	print("test_reconcile_reward_ignores_wrong_type")
-	var board := _make_board({"board_type": Enums.BoardType.GOLD})
-	var reward := RewardData.new()
-	reward.type = RewardData.RewardType.UNLOCK_UPGRADE
-	reward.board_type = Enums.BoardType.GOLD
-	reward.target_board = Enums.BoardType.GOLD
-	board._on_reconcile_reward(reward)
-	assert_false(board.should_show_advanced_buckets,
-		"non-UNLOCK_ADVANCED_BUCKET reward must not flip the flag")
-	board.free()
-
-
-func test_reconcile_reward_ignores_wrong_board() -> void:
-	print("test_reconcile_reward_ignores_wrong_board")
-	var board := _make_board({"board_type": Enums.BoardType.GOLD})
-	var reward := RewardData.new()
-	reward.type = RewardData.RewardType.UNLOCK_ADVANCED_BUCKET
-	reward.target_board = Enums.BoardType.ORANGE  # wrong board
-	board._on_reconcile_reward(reward)
-	assert_false(board.should_show_advanced_buckets,
-		"reward targeting different board must not flip the flag")
-	board.free()
-
-
-func test_reconcile_reward_ignores_already_set() -> void:
-	print("test_reconcile_reward_ignores_already_set")
-	# If the flag is already set, the handler must early-return *before* build_board()
-	# (which would crash without @onready nodes). Reaching this assertion proves it.
-	var board := _make_board({
-		"board_type": Enums.BoardType.GOLD,
-		"should_show_advanced_buckets": true,
-	})
-	var reward := RewardData.new()
-	reward.type = RewardData.RewardType.UNLOCK_ADVANCED_BUCKET
-	reward.target_board = Enums.BoardType.GOLD
-	board._on_reconcile_reward(reward)
-	assert_true(board.should_show_advanced_buckets, "flag remains set")
 	board.free()
 
 
