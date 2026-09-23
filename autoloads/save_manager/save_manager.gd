@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 8
+const SAVE_VERSION := 9
 const AUTO_SAVE_INTERVAL := 30.0
 
 var _auto_save_timer: Timer
@@ -140,7 +140,7 @@ func load_game() -> bool:
 	# Heals saves where current_level was saved ahead of claim_rewards().
 	LevelManager.ensure_state_for_level()
 
-	# Failsafe: rescue from 0 gold / 0 raw orange soft-lock on load.
+	# Failsafe: rescue from a 0-gold soft-lock on load.
 	_board_manager.check_and_rescue_gold_soft_lock()
 
 	print("[SaveManager] Game loaded.")
@@ -369,6 +369,27 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 		# No-op: the new "space" block is absent from older saves, and
 		# SpaceBoard.deserialize({}) already means "nothing activated, not won".
 		print("[SaveManager] Migrated save v%d -> v8 (space board)" % version)
+	if version < 9:
+		# Raw currencies are retired. Their balances are DISCARDED, not converted:
+		# the advanced buckets that paid them out were already unreachable, so any
+		# banked raws are a fossil of a system no longer in the game.
+		#
+		# Balances are keyed by enum NAME, so the renumbered ordinals never reach
+		# CurrencyManager and its deserialize already ignores keys it doesn't
+		# recognise. This erase is therefore housekeeping rather than a fix: it
+		# stops dead RAW_* entries riding along in every future save file.
+		var currency: Dictionary = data.get("currency", {})
+		var dropped: int = 0
+		for key in currency.keys():
+			if str(key).begins_with("RAW_"):
+				currency.erase(key)
+				dropped += 1
+		data["currency"] = currency
+		# The advanced-bucket reveal flag goes with them; nothing reads it now.
+		var boards: Dictionary = data.get("boards", {})
+		boards.erase("advanced_buckets")
+		data["boards"] = boards
+		print("[SaveManager] Migrated save v%d -> v9 (retired %d raw currencies)" % [version, dropped])
 	data["version"] = SAVE_VERSION
 	return data
 

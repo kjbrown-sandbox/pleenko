@@ -222,10 +222,6 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 	for reward in rewards:
 		if reward.type != RewardData.RewardType.DROP_COINS:
 			continue
-		# Don't yank the camera to a different board for advanced/raw coin drops —
-		# the player should stay on whatever they're looking at.
-		if TierRegistry.is_raw_currency(reward.coin_type):
-			continue
 		if reward.target_board != _boards[_active_index].board_type:
 			_switch_to_board_type(reward.target_board)
 			return

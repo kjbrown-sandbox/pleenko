@@ -6,7 +6,6 @@ extends Node
 # Lookup tables built in _ready()
 var _by_board: Dictionary = {}        # BoardType -> TierData
 var _by_primary: Dictionary = {}      # CurrencyType -> TierData
-var _by_raw: Dictionary = {}          # CurrencyType (raw) -> TierData
 var _index_of: Dictionary = {}        # BoardType -> int
 
 const BASE_DROP_DELAY := 2.0
@@ -19,15 +18,12 @@ func _ready() -> void:
 func _rebuild_lookups() -> void:
 	_by_board.clear()
 	_by_primary.clear()
-	_by_raw.clear()
 	_index_of.clear()
 	for i in tiers.size():
 		var tier := tiers[i]
 		_by_board[tier.board_type] = tier
 		_by_primary[tier.primary_currency] = tier
 		_index_of[tier.board_type] = i
-		if tier.raw_currency >= 0:
-			_by_raw[tier.raw_currency] = tier
 
 
 # ── Tier lookups ────────────────────────────────────────────────────
@@ -79,31 +75,18 @@ func primary_currency(board_type: Enums.BoardType) -> int:
 	return tier.primary_currency if tier else -1
 
 
-func raw_currency(board_type: Enums.BoardType) -> int:
-	var tier := get_tier(board_type)
-	return tier.raw_currency if tier else -1
-
-
-func advanced_bucket_currency(board_type: Enums.BoardType) -> int:
-	var next := get_next_tier(board_type)
-	return next.raw_currency if next else -1
-
-
 func cap_raise_currency(board_type: Enums.BoardType) -> int:
 	var next := get_next_tier(board_type)
 	return next.primary_currency if next else -1
 
 
+## Null for WHITE_COIN, which is deliberately tier-less — it is minted by every
+## board's earrings and owned by none. Callers that reach for a tier to derive a
+## cap or a cap-raise price must special-case white (see CurrencyManager).
 func get_tier_for_currency(currency_type: int) -> TierData:
 	if currency_type in _by_primary:
 		return _by_primary[currency_type]
-	if currency_type in _by_raw:
-		return _by_raw[currency_type]
 	return null
-
-
-func is_raw_currency(currency_type: int) -> bool:
-	return currency_type in _by_raw
 
 
 # ── Drop costs ──────────────────────────────────────────────────────
@@ -118,11 +101,19 @@ func get_drop_costs(board_type: Enums.BoardType) -> Array:
 	if idx == 0:
 		return [[tier.primary_currency, 1]]
 
-	# Single-currency model: every later board is fueled purely by the
-	# previous tier's PRIMARY currency (e.g. orange costs 100 gold). Raw
-	# currencies are dormant — no raw component in drop costs anymore.
+	# Every later board is fueled by the previous tier's PRIMARY currency
+	# (e.g. orange costs 100 gold).
 	var prev := tiers[idx - 1]
-	return [[prev.primary_currency, tier.previous_currency_cost]]
+	var costs: Array = [[prev.primary_currency, tier.previous_currency_cost]]
+
+	# Late boards additionally cost WHITE, which only earrings mint. A player who
+	# reaches one of these boards before growing any earrings genuinely cannot
+	# drop on it yet — that is intended, not a soft-lock to rescue: the way
+	# forward is to cap the main board and grow earrings.
+	var white_cost: int = WhiteCurrency.drop_cost(idx)
+	if white_cost > 0:
+		costs.append([Enums.CurrencyType.WHITE_COIN, white_cost])
+	return costs
 
 
 # ── Timing ──────────────────────────────────────────────────────────

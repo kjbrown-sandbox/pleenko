@@ -6,5 +6,4 @@
 script = ExtResource("1")
 board_type = 2
 display_name = "Red"
-primary_currency = 4
-raw_currency = 3
+primary_currency = 2

@@ -8,16 +8,12 @@ extends Resource
 # Mirror Enums.CurrencyType values so this works in @tool context
 # without requiring Enums to be @tool.
 const GOLD_COIN := 0
-const RAW_ORANGE := 1
-const ORANGE_COIN := 2
-const RAW_RED := 3
-const RED_COIN := 4
-const RAW_VIOLET := 5
-const VIOLET_COIN := 6
-const RAW_BLUE := 7
-const BLUE_COIN := 8
-const RAW_GREEN := 9
-const GREEN_COIN := 10
+const ORANGE_COIN := 1
+const RED_COIN := 2
+const VIOLET_COIN := 3
+const BLUE_COIN := 4
+const GREEN_COIN := 5
+const WHITE_COIN := 6
 
 # ── Palette enum ─────────────────────────────────────────────────────
 # APPEND-ONLY: indices are serialized into theme .tres files as raw integers
@@ -37,6 +33,7 @@ enum Palette {
 	BG_HAZE = 23,
 	BG_HAZE_SUBTLE = 24,
 	BG_TRIANGLE_LIGHT = 25,
+	WHITE_FADED = 26, WHITE_MAIN = 27,
 }
 
 # ── Colors (master palette) ──────────────────────────────────────────
@@ -74,6 +71,16 @@ enum Palette {
 @export_group("Colors – Green")
 @export var green_main := Color(0.35, 0.52, 0.30)
 @export var green_faded := Color(0.20, 0.35, 0.18)
+
+# White is the earring currency. Deliberately NOT Color.WHITE: five of the seven
+# presets have a light (parchment-cream) background, so a literal white coin
+# would be invisible on them. It reads as "white" by being COOLER than the warm
+# backgrounds rather than lighter — the same trick that lets gold_main be an
+# olive-yellow and still read as gold. Per-preset overrides matter here more than
+# anywhere else in the palette; verify against the actual background.
+@export_group("Colors – White")
+@export var white_main := Color(0.93, 0.95, 1.0)
+@export var white_faded := Color(0.55, 0.60, 0.70)
 
 @export_group("Colors – Misc")
 ## Dark brown for pegs (lofi theme's peg_color_source points here). Raw hex
@@ -473,6 +480,8 @@ func resolve(source: Palette) -> Color:
 		Palette.BG_HAZE: return bg_haze
 		Palette.BG_HAZE_SUBTLE: return bg_haze_subtle
 		Palette.BG_TRIANGLE_LIGHT: return bg_triangle_light
+		Palette.WHITE_MAIN: return white_main
+		Palette.WHITE_FADED: return white_faded
 		_: return bg_shade_6
 
 
@@ -549,22 +558,24 @@ var frenzy_coin_color: Color:
 func get_coin_color(currency_type: int) -> Color:
 	match currency_type:
 		GOLD_COIN: return gold_main
-		RAW_ORANGE, ORANGE_COIN: return orange_main
-		RAW_RED, RED_COIN: return red_main
-		RAW_VIOLET, VIOLET_COIN: return violet_main
-		RAW_BLUE, BLUE_COIN: return blue_main
-		RAW_GREEN, GREEN_COIN: return green_main
+		ORANGE_COIN: return orange_main
+		RED_COIN: return red_main
+		VIOLET_COIN: return violet_main
+		BLUE_COIN: return blue_main
+		GREEN_COIN: return green_main
+		WHITE_COIN: return white_main
 		_: return gold_main
 
 
 func get_coin_color_faded(currency_type: int) -> Color:
 	match currency_type:
 		GOLD_COIN: return gold_faded
-		RAW_ORANGE, ORANGE_COIN: return orange_faded
-		RAW_RED, RED_COIN: return red_faded
-		RAW_VIOLET, VIOLET_COIN: return violet_faded
-		RAW_BLUE, BLUE_COIN: return blue_faded
-		RAW_GREEN, GREEN_COIN: return green_faded
+		ORANGE_COIN: return orange_faded
+		RED_COIN: return red_faded
+		VIOLET_COIN: return violet_faded
+		BLUE_COIN: return blue_faded
+		GREEN_COIN: return green_faded
+		WHITE_COIN: return white_faded
 		_: return gold_faded
 
 

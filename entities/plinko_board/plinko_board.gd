@@ -62,7 +62,14 @@ const TRANSPORTER_BUCKET_SCALE := 1.3
 @onready var _drop_main_tooltip: Tooltip = $DropSection/DropMainTooltip
 @onready var _drop_advanced_tooltip: Tooltip = $DropSection/DropAdvancedTooltip
 
-var advanced_bucket_type: Enums.CurrencyType
+## Legacy: the currency advanced buckets used to pay, which was the next tier's
+## RAW currency. Raw currencies are retired, so there is no advanced currency and
+## this stays -1 — every `coin_type == advanced_bucket_type` test is therefore
+## permanently false, which is already the runtime reality (the advanced drop bar
+## can never appear; see _show_advanced_drop_bar). Deliberately a plain int, not
+## Enums.CurrencyType, so -1 is representable. Removed with the rest of the
+## advanced-bucket scaffolding.
+var advanced_bucket_type: int = -1
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
 var advanced_coin_multiplier: float = 2.0
@@ -337,9 +344,6 @@ func setup(type: Enums.BoardType) -> void:
 	_queue_rate_bonus_per_coin = _queue_rate_bonus_for_board(board_type)
 
 	drop_delay = TierRegistry.get_base_drop_delay(board_type)
-	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
-	if adv >= 0:
-		advanced_bucket_type = adv
 
 	# Apply permanent upgrade bonuses from challenge rewards
 	bucket_value_multiplier = 1 + ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.BUCKET_VALUE)
@@ -424,13 +428,12 @@ func _sync_filling_coins(wanted: int, is_advanced: bool) -> void:
 	var current: int = coin_queue.get_filling_count(is_advanced)
 	if current < wanted:
 		# Add more filling coins
-		var coin_type: Enums.CurrencyType
-		var mult: float = 1.0
-		if is_advanced:
-			coin_type = advanced_bucket_type
-			mult = advanced_coin_multiplier
-		else:
-			coin_type = TierRegistry.primary_currency(board_type)
+		# Advanced filling coins are unreachable today (the advanced drop bar never
+		# appears, so no advanced autodropper can be assigned). Fall back to the
+		# primary currency rather than the retired advanced type, so if that path
+		# ever reopens it produces a valid coin instead of currency -1.
+		var coin_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
+		var mult: float = advanced_coin_multiplier if is_advanced else 1.0
 		for i in wanted - current:
 			if coin_queue.is_full():
 				if coin_queue.has_queue():
@@ -738,8 +741,14 @@ func _get_drop_costs() -> Array:
 
 
 ## Returns the cost to drop an advanced coin (1 raw currency of the next tier).
+## Legacy. The advanced drop cost used to be 1 of the next tier's raw currency;
+## with raws retired there is no such currency, so this returns the normal cost
+## rather than a [[-1, 1]] pair that would index CurrencyManager with -1. The
+## callers are all unreachable (the advanced drop bar never appears) — this exists
+## so that stays a no-op rather than a crash. Removed with the rest of the
+## advanced-bucket scaffolding.
 func _get_advanced_drop_costs() -> Array:
-	return [[advanced_bucket_type, 1]]
+	return _get_drop_costs()
 
 
 func _can_afford(costs: Array) -> bool:
@@ -2372,7 +2381,8 @@ func _spawn_earring(side: int, apex_local: Vector3, transporter_col: int) -> Ear
 	earring.position = apex_local
 	if transporter_col >= 0 and _transporter_bucket:
 		earring.set_transporter(transporter_col, _transporter_bucket)
-	earring.setup(_earring_rows, side, space_between_pegs, board_type)
+	earring.setup(_earring_rows, side, space_between_pegs, board_type,
+		TierRegistry.get_tier_index(board_type))
 	return earring
 
 
@@ -3108,8 +3118,10 @@ func set_drop_main_text(button_id: StringName, autodropper_count: int, autodropp
 	var bar: HBoxContainer = _drop_buttons.get(button_id)
 	if not bar:
 		return
-	var is_adv: bool = (button_id as String).ends_with("_ADVANCED")
-	var currency_type: Enums.CurrencyType = advanced_bucket_type if is_adv else TierRegistry.primary_currency(board_type)
+	# An "_ADVANCED" button id can no longer occur (the advanced bar never shows),
+	# and there is no advanced currency to name, so the primary currency labels
+	# every button.
+	var currency_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
 	var coin_name: String = FormatUtils.currency_name(currency_type, false)
 	if autodroppers_unlocked:
 		bar.update_text("Drop %s • %d auto" % [coin_name, autodropper_count])

@@ -104,9 +104,12 @@ func _currency_bars_revealed() -> bool:
 
 
 func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
-	# Raw currencies are dormant in the single-currency model — never show them.
-	if TierRegistry.is_raw_currency(coin_type):
-		return false
+	# WHITE_COIN is tier-less, so it can't gate on a board of its own. Reveal it
+	# when the first board whose drops COST white unlocks — that is the moment it
+	# starts mattering, and showing it earlier is just noise on the gold board.
+	if coin_type == Enums.CurrencyType.WHITE_COIN:
+		var gated := TierRegistry.get_tier_by_index(WhiteCurrency.FIRST_GATED_TIER_INDEX)
+		return gated != null and _board_manager.is_board_unlocked(gated.board_type)
 	var tier := TierRegistry.get_tier_for_currency(coin_type)
 	if not tier:
 		return true
