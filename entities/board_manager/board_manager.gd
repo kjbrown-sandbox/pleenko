@@ -680,16 +680,6 @@ func serialize() -> Dictionary:
 		board_types.append(board.board_type)
 	data["board_types"] = board_types
 
-	# Which boards have advanced buckets visible / advanced drop bar shown
-	var advanced_buckets := {}
-	var advanced_drops := {}
-	for board in _boards:
-		var key: String = Enums.BoardType.keys()[board.board_type]
-		advanced_buckets[key] = board.should_show_advanced_buckets
-		advanced_drops[key] = board._has_advanced_drop
-	data["advanced_buckets"] = advanced_buckets
-	data["advanced_drops"] = advanced_drops
-
 	# Per-board computed state (read by OfflineCalculator)
 	var board_state := {}
 	for board in _boards:
@@ -702,8 +692,6 @@ func serialize() -> Dictionary:
 			"earring_rows": board.get_earring_rows(),
 			"drop_delay": board.drop_delay,
 			"bucket_value_multiplier": board.bucket_value_multiplier,
-			"advanced_coin_multiplier": board.advanced_coin_multiplier,
-			"distance_for_advanced_buckets": board.distance_for_advanced_buckets,
 			"multi_drop_count": board.multi_drop_count,
 			"deflectors": board.serialize_deflectors(),
 		}
@@ -726,8 +714,6 @@ func deserialize(data: Dictionary) -> void:
 		unlock_board(board_type)
 
 	# Build per-board upgrade state for apply_saved_state
-	var advanced_buckets: Dictionary = data.get("advanced_buckets", {})
-	var advanced_drops: Dictionary = data.get("advanced_drops", {})
 	var board_state: Dictionary = data.get("board_state", {})
 	for board in _boards:
 		var board_key: String = Enums.BoardType.keys()[board.board_type]
@@ -736,13 +722,6 @@ func deserialize(data: Dictionary) -> void:
 		for upgrade_type in Enums.UpgradeType.values():
 			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
 			upgrade_state[upgrade_key] = UpgradeManager.get_level(board.board_type, upgrade_type)
-		upgrade_state["show_advanced_buckets"] = advanced_buckets.get(board_key, false)
-		# Old saves lack advanced_drops. Fall back to checking whether the player
-		# actually has the raw currency — if balance is 0 the bar shouldn't show.
-		# _on_currency_changed (fired by CurrencyManager.deserialize before this
-		# runs) already shows the bar when balance > 0, so false is safe here.
-		upgrade_state["has_advanced_drop"] = advanced_drops.get(board_key, false)
-		upgrade_state["advanced_coin_multiplier"] = bs.get("advanced_coin_multiplier", 2)
 		# Old saves lack "deflectors" — defaults to none (graceful, no migration).
 		upgrade_state["deflectors"] = bs.get("deflectors", [])
 		board.apply_saved_state(upgrade_state)

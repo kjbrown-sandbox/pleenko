@@ -566,14 +566,13 @@ func _preview_add_rows(board: PlinkoBoard) -> void:
 
 func _debug_setup_prestigeable_state() -> void:
 	var board := board_manager.get_active_board()
-	# Ensure enough rows for advanced buckets to appear (need distance_for_advanced_buckets + 1 buckets from center)
-	var min_rows: int = board.distance_for_advanced_buckets * 2 + 2
-	if board.num_rows < min_rows:
-		board.num_rows = min_rows
-	board.should_show_advanced_buckets = true
+	# Wide enough that the V-shaped bucket values span a useful range for testing.
+	const DEBUG_MIN_ROWS := 8
+	if board.num_rows < DEBUG_MIN_ROWS:
+		board.num_rows = DEBUG_MIN_ROWS
 	board.build_board()
 	board_manager._tween_camera_to_active_board()
-	print("[DEBUG] Board set to %d rows with advanced buckets visible. Press P to test prestige." % board.num_rows)
+	print("[DEBUG] Board set to %d rows. Press P to test prestige." % board.num_rows)
 
 
 func _setup_vignette() -> void:
