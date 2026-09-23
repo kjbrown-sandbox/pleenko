@@ -23,6 +23,16 @@ const TIER_MULTIPLIER := 3
 ## currency at violet.
 const FIRST_GATED_TIER_INDEX := 3
 
+## White a single drop costs on each gated board, indexed from
+## FIRST_GATED_TIER_INDEX: violet 1, blue 100, green 1000.
+##
+## Authored, NOT derived from TIER_MULTIPLIER. The jumps are far steeper than the
+## x3 mint curve on purpose: violet's own earrings out-earn its drop cost and so
+## sustain themselves, while blue and green run at a deliberate white deficit and
+## have to be funded by the whole board stack's earrings. That asymmetry is the
+## point — white is the one resource the endgame cannot farm locally.
+const DROP_COSTS: Array[int] = [1, 100, 1000]
+
 ## Cap that white starts with, and the amount each cap raise adds. White has no
 ## next tier to price a raise against, so raises are paid in white itself.
 const STARTING_CAP := 500
@@ -76,15 +86,14 @@ static func is_gated_tier(tier_index: int) -> bool:
 	return tier_index >= FIRST_GATED_TIER_INDEX
 
 
-## White a single drop costs on the board at `tier_index`, or 0 when that board
-## is not gated.
+## White a single drop costs on the board at `tier_index`, or 0 when that board is
+## not gated. Reads the authored DROP_COSTS table — the primary balance knob.
 ##
-## Scales by TIER_MULTIPLIER in step with the mint curve, so the ratio between
-## what a board's own earrings mint and what its drops cost stays constant as you
-## climb (violet 1, blue 3, green 9). This is the primary balance knob: raise it
-## to make white an ongoing throughput pressure, lower it to make white purely
-## the progression gate it is today.
+## A tier past the end of the table reuses the last entry rather than running off
+## it, so appending a seventh tier degrades to "as expensive as green" instead of
+## crashing.
 static func drop_cost(tier_index: int) -> int:
 	if not is_gated_tier(tier_index):
 		return 0
-	return int(pow(float(TIER_MULTIPLIER), float(tier_index - FIRST_GATED_TIER_INDEX)))
+	var idx: int = tier_index - FIRST_GATED_TIER_INDEX
+	return DROP_COSTS[mini(idx, DROP_COSTS.size() - 1)]
