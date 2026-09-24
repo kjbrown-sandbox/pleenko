@@ -55,30 +55,48 @@ static func binomial(n: int, k: int) -> int:
 ## White paid by one earring bucket at `col` of an `earring_rows`-row earring on
 ## a board at `tier_index`.
 ##
-## The value is the binomial reciprocal 2^rows / C(rows, col), scaled by the
-## tier multiplier. The reciprocal makes every bucket in an earring worth the
-## same in EXPECTATION — a bucket reached one time in 256 pays 256 — so the
-## payout is mathematically fair but wildly swingy. That is the entire point: an
-## earring is a lottery, not a wage. The two corners are the jackpots and the
-## middle is small change.
+## The SAME V-shape every other bucket row in the game uses — 1 at the centre,
+## +1 per step outward — scaled by the tier multiplier. An 8-row earring pays
+## 5 4 3 2 1 2 3 4 5 on gold, and exactly 3x that on orange.
 ##
-## Rounded to an int (currencies are ints) and floored at 1, so the shallow
-## middle of a large earring can never pay nothing.
+## Deliberately NOT the binomial reciprocal (2^rows / C(rows, col)), which was
+## the first pass: that made every bucket EV-equal and the corners worth 256, so
+## an earring read as a lottery with numbers unlike anything else on screen. The
+## linear V keeps earrings legible and consistent with the main board.
+##
+## The centre convention matches PlinkoBoard's: `num_buckets / 2` with integer
+## division. Earrings always grow by two rows at a time, so the bucket count is
+## always odd and that centre is a real bucket.
+##
+## No BUCKET_VALUE upgrade applies — earring payouts are deliberately outside the
+## per-board upgrade tree, which is the whole reason white is a separate currency.
 static func bucket_value(earring_rows: int, col: int, tier_index: int) -> int:
-	var ways: int = binomial(earring_rows, col)
-	if ways <= 0:
-		return 1
-	var fair: float = pow(2.0, float(earring_rows)) / float(ways)
-	var scaled: float = fair * pow(float(TIER_MULTIPLIER), float(maxi(0, tier_index)))
-	return maxi(1, roundi(scaled))
+	@warning_ignore("integer_division")
+	var centre: int = (earring_rows + 1) / 2
+	var distance: int = absi(col - centre)
+	var tier_scale: int = int(pow(float(TIER_MULTIPLIER), float(maxi(0, tier_index))))
+	return (1 + distance) * tier_scale
 
 
-## Expected white per coin that enters an earring of this size, before the tier
-## multiplier. Because every bucket is EV-equal at 1 "fair unit", the expectation
-## is just the bucket count — a handy sanity check for balance passes, and the
-## reason the curve needs no separate normalisation constant.
-static func expected_value_units(earring_rows: int) -> int:
-	return earring_rows + 1
+## Expected white per coin that enters an earring of this size on a board at
+## `tier_index` — the probability-weighted average over its buckets.
+##
+## Computed rather than looked up: under the linear V the buckets are NOT
+## EV-equal (the cheap centre is by far the most likely landing), so the
+## expectation has to weight each bucket by its binomial probability. An 8-row
+## gold earring works out at ~2.09, not the 5 a glance at the corners suggests.
+##
+## OfflineCalculator credits a gateway this, instead of simulating the earring's
+## own lattice.
+static func expected_value(earring_rows: int, tier_index: int) -> float:
+	if earring_rows <= 0:
+		return 0.0
+	var total_paths: float = pow(2.0, float(earring_rows))
+	var sum: float = 0.0
+	for col in earring_rows + 1:
+		var paths: float = float(binomial(earring_rows, col))
+		sum += (paths / total_paths) * float(bucket_value(earring_rows, col, tier_index))
+	return sum
 
 
 ## True when drops on the board at `tier_index` require white.

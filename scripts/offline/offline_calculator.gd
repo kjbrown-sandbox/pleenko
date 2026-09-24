@@ -106,7 +106,7 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 				var c_key: String = bucket["currency_key"]
 				if not _is_currency_ever_earned(c_key, prestige_data):
 					continue
-				var value: int = bucket["value"]
+				var value: float = bucket["value"]
 				var earning: float = probabilities[i] * value * coin_multiplier * multi_drop
 				earnings_per_drop[c_key] = earnings_per_drop.get(c_key, 0.0) + earning
 
@@ -202,13 +202,14 @@ static func _get_pascal_probabilities(num_rows: int) -> Array:
 ## pays WHITE. Without this the edges would be credited as the highest-value
 ## buckets on the board while awarding nothing in live play.
 ##
-## A gateway is credited the earring's EXPECTED white rather than simulating the
-## earring's own lattice. That is exact, not an approximation: every bucket in an
-## earring is EV-equal by construction (see WhiteCurrency.bucket_value), so the
-## expectation is just the bucket count times the tier multiplier. (The
-## transporter, reachable on 1 in 2^earring_rows of those landings once the
-## earrings meet, pays 0; at the meeting size that is a 0.4% over-credit and is
-## deliberately not modelled.)
+## A gateway is credited the earring's EXPECTED white (WhiteCurrency.expected_value)
+## rather than simulating the earring's own lattice. That is exact, not an
+## approximation — the expectation weights every earring bucket by its binomial
+## probability, which is the same distribution the simulation would sample. It is
+## kept as a float for that reason: rounding a ~2.09 expectation to an int would
+## quietly lose several percent of white per drop. (The transporter, reachable on
+## 1 in 2^earring_rows of those landings once the earrings meet, pays 0; at the
+## meeting size that is a 0.4% over-credit and is deliberately not modelled.)
 static func _get_bucket_layout(num_rows: int, bucket_value_multiplier: int, board_type: Enums.BoardType, earring_rows: int = 0) -> Array:
 	var num_buckets: int = num_rows + 1
 	var primary_currency: String = _primary_currency_key(board_type)
@@ -219,13 +220,14 @@ static func _get_bucket_layout(num_rows: int, bucket_value_multiplier: int, boar
 	for i in num_buckets:
 		@warning_ignore("integer_division")
 		var distance_from_center: int = int(abs(i - num_buckets / 2))
-		var value: int = 1 + distance_from_center * bucket_value_multiplier
+		# Float, because a gateway's value is an expectation rather than a bucket
+		# label — rounding it here would lose a few percent of white per drop.
+		var value: float = float(1 + distance_from_center * bucket_value_multiplier)
 		var currency_key: String = primary_currency
 
 		if EarringGeometry.is_gateway_bucket(i, num_buckets, earring_rows):
 			currency_key = white_key
-			value = WhiteCurrency.expected_value_units(earring_rows) \
-				* int(pow(float(WhiteCurrency.TIER_MULTIPLIER), float(maxi(0, tier_index))))
+			value = WhiteCurrency.expected_value(earring_rows, tier_index)
 		layout.append({"currency_key": currency_key, "value": value})
 
 	return layout

@@ -14,13 +14,14 @@ func _run_tests() -> void:
 	test_binomial_known_row()
 	test_binomial_symmetric()
 	test_binomial_out_of_range()
-	test_bucket_value_corners_are_two_to_the_rows()
-	test_bucket_value_centre_is_smallest()
-	test_bucket_value_is_ev_flat()
+	test_bucket_value_is_the_linear_v()
+	test_bucket_value_orange_is_exactly_three_times_gold()
+	test_bucket_value_centre_is_one_before_tier_scaling()
 	test_bucket_value_tier_multiplier_is_three_per_step()
-	test_bucket_value_floors_at_one()
+	test_bucket_value_never_pays_nothing()
 	test_bucket_value_symmetric()
-	test_expected_value_units_is_bucket_count()
+	test_expected_value_is_probability_weighted()
+	test_expected_value_of_no_earring_is_zero()
 	test_is_gated_tier_boundary()
 	test_drop_cost_zero_below_gate()
 	test_drop_cost_authored_table()
@@ -61,51 +62,49 @@ func test_binomial_out_of_range() -> void:
 
 # --- bucket_value ---
 
-func test_bucket_value_corners_are_two_to_the_rows() -> void:
-	print("test_bucket_value_corners_are_two_to_the_rows")
-	# A corner is reached by exactly one bounce sequence out of 2^rows, so the
-	# reciprocal pays the full 2^rows. This is the jackpot the design rests on.
-	assert_equal(WhiteCurrency.bucket_value(8, 0, 0), 256, "gold 8-row left corner = 2^8")
-	assert_equal(WhiteCurrency.bucket_value(8, 8, 0), 256, "gold 8-row right corner = 2^8")
-	assert_equal(WhiteCurrency.bucket_value(3, 0, 0), 8, "3-row corner = 2^3")
+## The locked shape, read straight off a full-size gold earring.
+func test_bucket_value_is_the_linear_v() -> void:
+	print("test_bucket_value_is_the_linear_v")
+	var expected: Array[int] = [5, 4, 3, 2, 1, 2, 3, 4, 5]
+	for col in expected.size():
+		assert_equal(WhiteCurrency.bucket_value(8, col, 0), expected[col],
+			"gold 8-row col %d" % col)
 
 
-func test_bucket_value_centre_is_smallest() -> void:
-	print("test_bucket_value_centre_is_smallest")
-	# 2^8 / C(8,4) = 256/70 = 3.657 -> 4
-	assert_equal(WhiteCurrency.bucket_value(8, 4, 0), 4, "gold 8-row centre rounds to 4")
-	var centre: int = WhiteCurrency.bucket_value(8, 4, 0)
-	for col in 9:
-		assert_true(WhiteCurrency.bucket_value(8, col, 0) >= centre,
-			"centre is the minimum (col %d)" % col)
+## Orange is exactly 3x gold, bucket for bucket — the multiplier scales the whole
+## V rather than being folded in before a rounding step.
+func test_bucket_value_orange_is_exactly_three_times_gold() -> void:
+	print("test_bucket_value_orange_is_exactly_three_times_gold")
+	var expected: Array[int] = [15, 12, 9, 6, 3, 6, 9, 12, 15]
+	for col in expected.size():
+		assert_equal(WhiteCurrency.bucket_value(8, col, 1), expected[col],
+			"orange 8-row col %d" % col)
+		assert_equal(WhiteCurrency.bucket_value(8, col, 1),
+			WhiteCurrency.bucket_value(8, col, 0) * 3, "col %d is 3x gold" % col)
 
 
-func test_bucket_value_is_ev_flat() -> void:
-	print("test_bucket_value_is_ev_flat")
-	# The whole point of the reciprocal: probability * value is the same constant
-	# for every bucket, so no bucket is a better target than any other. Compared
-	# pre-rounding, since roundi is what breaks exact equality.
-	var rows := 8
-	var total := pow(2.0, float(rows))
-	for col in rows + 1:
-		var p: float = float(WhiteCurrency.binomial(rows, col)) / total
-		var fair: float = total / float(WhiteCurrency.binomial(rows, col))
-		assert_near(p * fair, 1.0, 0.0001, "EV of col %d is 1 fair unit" % col)
+func test_bucket_value_centre_is_one_before_tier_scaling() -> void:
+	print("test_bucket_value_centre_is_one_before_tier_scaling")
+	# Every earring size bottoms out at 1 on gold, like every other bucket row.
+	for rows in [2, 4, 6, 8]:
+		@warning_ignore("integer_division")
+		var centre: int = (rows + 1) / 2
+		assert_equal(WhiteCurrency.bucket_value(rows, centre, 0), 1,
+			"%d-row centre pays 1" % rows)
 
 
 func test_bucket_value_tier_multiplier_is_three_per_step() -> void:
 	print("test_bucket_value_tier_multiplier_is_three_per_step")
 	# Gold 1x, orange 3x, red 9x, violet 27x, blue 81x, green 243x.
-	assert_equal(WhiteCurrency.bucket_value(8, 0, 0), 256, "tier 0 corner")
-	assert_equal(WhiteCurrency.bucket_value(8, 0, 1), 768, "tier 1 corner = 256*3")
-	assert_equal(WhiteCurrency.bucket_value(8, 0, 2), 2304, "tier 2 corner = 256*9")
-	assert_equal(WhiteCurrency.bucket_value(8, 0, 5), 62208, "tier 5 corner = 256*243")
+	assert_equal(WhiteCurrency.bucket_value(8, 0, 0), 5, "tier 0 corner")
+	assert_equal(WhiteCurrency.bucket_value(8, 0, 1), 15, "tier 1 corner = 5*3")
+	assert_equal(WhiteCurrency.bucket_value(8, 0, 2), 45, "tier 2 corner = 5*9")
+	assert_equal(WhiteCurrency.bucket_value(8, 0, 5), 1215, "tier 5 corner = 5*243")
 
 
-func test_bucket_value_floors_at_one() -> void:
-	print("test_bucket_value_floors_at_one")
-	# A wide enough earring's middle would round below 1 without the floor, and a
-	# bucket that pays nothing would read as a bug rather than a small prize.
+func test_bucket_value_never_pays_nothing() -> void:
+	print("test_bucket_value_never_pays_nothing")
+	# A bucket that pays 0 reads as a bug rather than a small prize.
 	for rows in range(1, 25):
 		for col in rows + 1:
 			assert_true(WhiteCurrency.bucket_value(rows, col, 0) >= 1,
@@ -114,18 +113,35 @@ func test_bucket_value_floors_at_one() -> void:
 
 func test_bucket_value_symmetric() -> void:
 	print("test_bucket_value_symmetric")
-	# Neither earring may be richer than the other.
-	for col in 9:
-		assert_equal(WhiteCurrency.bucket_value(8, col, 3),
-			WhiteCurrency.bucket_value(8, 8 - col, 3), "col %d mirrors" % col)
+	# Neither earring may be richer than the other. Earrings always grow two rows
+	# at a time, so the bucket count is odd and the centre is a real bucket.
+	for rows in [2, 4, 6, 8]:
+		for col in rows + 1:
+			assert_equal(WhiteCurrency.bucket_value(rows, col, 3),
+				WhiteCurrency.bucket_value(rows, rows - col, 3),
+				"%d-row col %d mirrors" % [rows, col])
 
 
-func test_expected_value_units_is_bucket_count() -> void:
-	print("test_expected_value_units_is_bucket_count")
-	# Every bucket is worth 1 fair unit in expectation, and there are rows+1 of
-	# them — this is what lets OfflineCalculator credit a gateway exactly.
-	assert_equal(WhiteCurrency.expected_value_units(8), 9, "8 rows -> 9 units")
-	assert_equal(WhiteCurrency.expected_value_units(1), 2, "1 row -> 2 units")
+## Under the linear V the buckets are NOT EV-equal — the cheap centre is by far
+## the likeliest landing, so the expectation sits near the bottom of the range,
+## not the middle of it. This is what OfflineCalculator credits a gateway.
+func test_expected_value_is_probability_weighted() -> void:
+	print("test_expected_value_is_probability_weighted")
+	# Pascal row 8 = [1,8,28,56,70,56,28,8,1] over 256, against [5,4,3,2,1,2,3,4,5]:
+	# (5+32+84+112+70+112+84+32+5) / 256 = 536/256 = 2.09375
+	assert_near(WhiteCurrency.expected_value(8, 0), 2.09375, 0.0001,
+		"gold 8-row earring expectation")
+	assert_near(WhiteCurrency.expected_value(8, 1), 2.09375 * 3.0, 0.001,
+		"orange is 3x the same expectation")
+	# Well below the corner value — the corners are rare.
+	assert_true(WhiteCurrency.expected_value(8, 0) < float(WhiteCurrency.bucket_value(8, 0, 0)),
+		"expectation is far under the jackpot")
+	assert_true(WhiteCurrency.expected_value(8, 0) > 1.0, "but above the centre bucket")
+
+
+func test_expected_value_of_no_earring_is_zero() -> void:
+	print("test_expected_value_of_no_earring_is_zero")
+	assert_near(WhiteCurrency.expected_value(0, 0), 0.0, 0.0001, "no earring pays nothing")
 
 
 # --- gating + drop cost ---

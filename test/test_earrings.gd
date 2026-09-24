@@ -740,14 +740,14 @@ func test_earring_scene_builds_pegs_and_buckets() -> void:
 		var bucket: Bucket = earring.get_bucket(i)
 		assert_true(bucket != null, "bucket %d exists" % i)
 		assert_equal(bucket.value, WhiteCurrency.bucket_value(4, i, 0),
-			"bucket %d follows the binomial reciprocal" % i)
+			"bucket %d follows the linear V" % i)
 		assert_equal(bucket.currency_type, Enums.CurrencyType.WHITE_COIN,
 			"bucket %d pays white, not the parent board's currency" % i)
-	# The corners must be the jackpots, not just "some number".
-	assert_equal(earring.get_bucket(0).value, 16, "4-row left corner = 2^4")
-	assert_equal(earring.get_bucket(4).value, 16, "4-row right corner = 2^4")
-	assert_true(earring.get_bucket(2).value < earring.get_bucket(0).value,
-		"the centre pays less than a corner")
+	# The V read straight off the built scene, not just "some number".
+	var values: Array[int] = []
+	for i in 5:
+		values.append(earring.get_bucket(i).value)
+	assert_equal(values, [3, 2, 1, 2, 3] as Array[int], "4-row gold earring is 3 2 1 2 3")
 	assert_true(earring.get_bucket(-1) == null and earring.get_bucket(5) == null,
 		"out-of-range lookups are null, not an error")
 	earring.queue_free()
@@ -936,12 +936,12 @@ func test_offline_layout_treats_gateways_as_earring_payouts() -> void:
 	var earring_rows: int = EarringGeometry.max_earring_rows()
 	var with_earrings: Array = OfflineCalculator._get_bucket_layout(
 		rows, 1, Enums.BoardType.GOLD, earring_rows)
-	# A gateway is credited the earring's EXPECTED white (bucket count x tier
-	# multiplier), which is exact because every earring bucket is EV-equal.
-	var expected: int = WhiteCurrency.expected_value_units(earring_rows)
-	assert_equal(with_earrings[0]["value"], expected,
+	# A gateway is credited the earring's probability-weighted EXPECTED white,
+	# rather than simulating the earring's own lattice.
+	var expected: float = WhiteCurrency.expected_value(earring_rows, 0)
+	assert_near(with_earrings[0]["value"], expected, 0.0001,
 		"the left gateway is credited the earring's expected white, not 5")
-	assert_equal(with_earrings[8]["value"], expected, "and so is the right one")
+	assert_near(with_earrings[8]["value"], expected, 0.0001, "and so is the right one")
 	assert_equal(with_earrings[0]["currency_key"], "WHITE_COIN",
 		"a gateway pays white, not the board's own currency")
 	assert_equal(with_earrings[4]["value"], no_earrings[4]["value"],
