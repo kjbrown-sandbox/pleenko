@@ -18,7 +18,7 @@ enum BoardType {
 ##
 ## The former RAW_* currencies (the "unrefined" half of each tier) were retired
 ## along with the advanced-bucket system that paid them out; the enum was
-## renumbered at the same time, so a save predating SAVE_VERSION 7 has its
+## renumbered at the same time, so a save predating SAVE_VERSION 9 has its
 ## balances dropped rather than remapped.
 enum CurrencyType {
 	GOLD_COIN,
@@ -39,8 +39,15 @@ enum UpgradeType {
 	DROP_RATE,
 	QUEUE,
 	AUTODROPPER,
+	## RETIRED (see UpgradeManager.RETIRED_UPGRADES). Never delete this value:
+	## ordinals are persisted as ints, so removing it renumbers every value after
+	## it and silently repoints peg_deflector.tres (`type = 6`) at the wrong slot.
 	ADVANCED_AUTODROPPER,
-	PEG_DEFLECTOR,  ## Always append last — .tres files and saves store `type` as an int.
+	PEG_DEFLECTOR,
+	DUD_CHUTE,
+	LUCKY_PEG,
+	BOARD_TILT,
+	AUTO_BUY,  ## Always append last — .tres files and saves store `type` as an int.
 }
 
 ## Left/right bounce convention. +1 = right (+x): moving RIGHT off lattice cell

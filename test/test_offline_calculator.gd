@@ -15,10 +15,10 @@ func _run_tests() -> void:
 	test_orange_board_depletes_gold()
 	test_cross_board_processing_order()
 	test_insufficient_currency_limits_drops()
-	test_advanced_assignment_earns_like_normal()
+	test_stale_advanced_assignment_earns_nothing_offline()
 	test_input_not_mutated()
 	test_multiple_autodroppers_scale_throughput()
-	test_normal_and_advanced_on_same_board()
+	test_stale_advanced_key_does_not_change_normal_earnings()
 	test_earring_gateways_credit_white()
 	test_white_credited_without_any_prestige()
 	test_long_offline_capped_by_currency_cap()
@@ -52,6 +52,14 @@ func _default_board_state(board_type: String, overrides: Dictionary = {}) -> Dic
 	for key in overrides:
 		bs[key] = overrides[key]
 	return bs
+
+
+## Deep copy of a boards blob with a specific assignments dictionary, so two
+## states can be made to differ by assignments alone.
+func _with_assignments(boards: Dictionary, assignments: Dictionary) -> Dictionary:
+	var out: Dictionary = boards.duplicate(true)
+	out["assignments"] = assignments
+	return out
 
 
 func _make_state(overrides: Dictionary = {}) -> Dictionary:
@@ -256,28 +264,23 @@ func test_insufficient_currency_limits_drops() -> void:
 	assert_equal(result["currency"]["ORANGE_COIN"]["balance"], 4, "orange earned")
 
 
-## An ADVANCED assignment is still read from old saves so its autodroppers aren't
-## silently dropped from the pool, but it now earns and costs exactly what a NORMAL
-## one does — the advanced currency and its x2 coin multiplier are both gone.
-func test_advanced_assignment_earns_like_normal() -> void:
-	print("test_advanced_assignment_earns_like_normal")
-	var advanced := _make_state({
+## The advanced autodropper is gone, so a "<BOARD>_ADVANCED" assignment key can
+## only come from a save written before its removal. BoardManager strips those
+## on load; offline earnings must agree and treat them as inert, or a returning
+## player would be credited for autodroppers they no longer own.
+func test_stale_advanced_assignment_earns_nothing_offline() -> void:
+	print("test_stale_advanced_assignment_earns_nothing_offline")
+	var state := _make_state({
 		"boards": {
 			"assignments": {"GOLD_ADVANCED": 1},
 			"board_state": {"GOLD": _default_board_state("GOLD", {"num_rows": 8})},
 		},
+		"prestige": {"ORANGE": 1},
 	})
-	var normal := _make_state({
-		"boards": {
-			"assignments": {"GOLD_NORMAL": 1},
-			"board_state": {"GOLD": _default_board_state("GOLD", {"num_rows": 8})},
-		},
-	})
-	var adv_result := OfflineCalculator.calculate(advanced, 60.0)
-	var norm_result := OfflineCalculator.calculate(normal, 60.0)
-	assert_equal(adv_result["currency"]["GOLD_COIN"]["balance"],
-		norm_result["currency"]["GOLD_COIN"]["balance"],
-		"an advanced autodropper earns the same as a normal one")
+	var before_gold: int = state["currency"]["GOLD_COIN"]["balance"]
+	var result := OfflineCalculator.calculate(state, 60.0)
+	assert_equal(result["currency"]["GOLD_COIN"]["balance"], before_gold,
+		"a stale advanced assignment earns nothing")
 
 
 func test_input_not_mutated() -> void:
@@ -304,27 +307,31 @@ func test_multiple_autodroppers_scale_throughput() -> void:
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 145, "gold with 3 autodroppers")
 
 
-## Two assignments on one board stack as plain throughput now that they are
-## identical — strictly more than either alone.
-func test_normal_and_advanced_on_same_board() -> void:
-	print("test_normal_and_advanced_on_same_board")
-	var both := _make_state({
-		"boards": {
-			"assignments": {"GOLD_NORMAL": 1, "GOLD_ADVANCED": 1},
-			"board_state": {"GOLD": _default_board_state("GOLD", {"num_rows": 8})},
+## A stale advanced key alongside a real one must not change the outcome.
+## Asserted by computing both states rather than hardcoding a total, so the
+## equivalence keeps holding if the offline economy is retuned.
+func test_stale_advanced_key_does_not_change_normal_earnings() -> void:
+	print("test_stale_advanced_key_does_not_change_normal_earnings")
+	var boards := {
+		"board_state": {
+			"GOLD": _default_board_state("GOLD", {"num_rows": 8}),
 		},
+	}
+	var normal_only := _make_state({
+		"boards": _with_assignments(boards, {"GOLD_NORMAL": 1}),
+		"prestige": {"ORANGE": 1},
 	})
-	var one := _make_state({
-		"boards": {
-			"assignments": {"GOLD_NORMAL": 1},
-			"board_state": {"GOLD": _default_board_state("GOLD", {"num_rows": 8})},
-		},
+	var with_stale := _make_state({
+		"boards": _with_assignments(boards, {"GOLD_NORMAL": 1, "GOLD_ADVANCED": 1}),
+		"prestige": {"ORANGE": 1},
 	})
-	var both_result := OfflineCalculator.calculate(both, 60.0)
-	var one_result := OfflineCalculator.calculate(one, 60.0)
-	assert_true(both_result["currency"]["GOLD_COIN"]["balance"]
-			> one_result["currency"]["GOLD_COIN"]["balance"],
-		"two assignments out-earn one")
+
+	var expected := OfflineCalculator.calculate(normal_only, 60.0)
+	var actual := OfflineCalculator.calculate(with_stale, 60.0)
+
+	assert_equal(actual["currency"]["GOLD_COIN"]["balance"],
+		expected["currency"]["GOLD_COIN"]["balance"],
+		"stale advanced key does not change gold earned")
 
 
 ## A board with earrings credits WHITE from its two gateways, and nothing else on
@@ -598,5 +605,8 @@ func test_no_red_credited_before_red_prestige() -> void:
 	})
 	var result := OfflineCalculator.calculate(state, 600.0)
 	assert_equal(result["currency"]["RED_COIN"]["balance"], 0, "no red before red prestige")
+	# Liveness. Without this, the gate assertion above also passes when NO drops
+	# are simulated at all — which is exactly how this test silently stopped
+	# testing anything once its old "ORANGE_ADVANCED" key became inert.
 	assert_true(result["currency"]["ORANGE_COIN"]["balance"] > 0,
-		"orange still accrues — the gate is per-currency")
+		"orange still accrues, so the gate above is genuinely exercised")

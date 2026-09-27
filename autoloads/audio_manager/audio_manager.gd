@@ -1377,7 +1377,7 @@ func play_manual_drop_drum(_board_type: Enums.BoardType) -> void:
 	pass
 
 
-func play_autodropper_drum(_board_type: Enums.BoardType, _is_advanced: bool) -> void:
+func play_autodropper_drum(_board_type: Enums.BoardType) -> void:
 	pass
 
 

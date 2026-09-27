@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="BaseUpgradeData" format=3 uid="uid://dq4vn8m2xwtb6"]
+
+[ext_resource type="Script" uid="uid://c571lcduobww" path="res://autoloads/upgrade_manager/base_upgrade_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+type = 8
+display_name = "Lucky peg"
+description = "+1 lucky peg per board.\n\nA wandering peg that splits any coin striking it into two, each worth full value. Splits can split again."
+base_cost = 50
+max_level = 5
+cost_type = 1
+cost_delta = 100
+delta_escalation = 50

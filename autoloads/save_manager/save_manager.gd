@@ -143,6 +143,12 @@ func load_game() -> bool:
 	# Failsafe: rescue from a 0-gold soft-lock on load.
 	_board_manager.check_and_rescue_gold_soft_lock()
 
+	# Spend offline earnings on anything locked to auto-buy. Last, because the
+	# purchases apply board effects and the boards must already exist — and
+	# because the locks themselves are only restored partway through the
+	# deserialize order above.
+	UpgradeManager.catch_up_auto_buys()
+
 	print("[SaveManager] Game loaded.")
 	return true
 
@@ -388,7 +394,21 @@ func _migrate(data: Dictionary, version: int) -> Dictionary:
 		# The advanced-bucket reveal flag goes with them; nothing reads it now.
 		var boards: Dictionary = data.get("boards", {})
 		boards.erase("advanced_buckets")
+		boards.erase("advanced_drops")
 		data["boards"] = boards
+		# Seed WHITE. OfflineCalculator._set_balance only writes keys that are
+		# already present, so without this the first offline pass after upgrading
+		# computes a pre-v9 player's earring white and then silently throws it
+		# away. It would self-heal on the next save, but the player would have
+		# lost that batch.
+		var currency_block: Dictionary = data.get("currency", {})
+		if not currency_block.has("WHITE_COIN"):
+			currency_block["WHITE_COIN"] = {
+				"balance": 0,
+				"cap": WhiteCurrency.STARTING_CAP,
+				"cap_raise_level": 0,
+			}
+			data["currency"] = currency_block
 		print("[SaveManager] Migrated save v%d -> v9 (retired %d raw currencies)" % [version, dropped])
 	data["version"] = SAVE_VERSION
 	return data

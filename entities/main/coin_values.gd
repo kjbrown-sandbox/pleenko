@@ -173,9 +173,8 @@ func _update_currencies() -> void:
 
 		add_child(_create_section_label("Universal upgrades"))
 
-		_try_spawn_upgrade_row(Enums.UpgradeType.AUTODROPPER, Enums.BoardType.GOLD)
-		_try_spawn_upgrade_row(Enums.UpgradeType.ADVANCED_AUTODROPPER, Enums.BoardType.ORANGE)
-		_try_spawn_upgrade_row(Enums.UpgradeType.PEG_DEFLECTOR, Enums.BoardType.ORANGE)
+		for upgrade_type: Enums.UpgradeType in UniversalUpgrades.types():
+			_try_spawn_upgrade_row(upgrade_type, UniversalUpgrades.board_for(upgrade_type))
 
 	# Hover tooltip — must be last child so it renders below everything
 	_hover_tooltip = TooltipScene.instantiate()
@@ -188,9 +187,7 @@ func _update_currencies() -> void:
 
 
 func _has_any_universal_upgrade() -> bool:
-	return UpgradeManager.is_unlocked(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER) \
-		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.ADVANCED_AUTODROPPER) \
-		or UpgradeManager.is_unlocked(Enums.BoardType.ORANGE, Enums.UpgradeType.PEG_DEFLECTOR)
+	return UniversalUpgrades.any_unlocked()
 
 
 func _try_spawn_upgrade_row(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
@@ -211,7 +208,7 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 	var state: UpgradeManager.UpgradeState = UpgradeManager.get_state(board_type, upgrade_type)
 	if state.base_cap <= 0 or not UpgradeManager.is_cap_raise_available(board_type):
 		return
-	if row.bar.plus_button.visible:
+	if row.bar.has_plus_wired():
 		return
 
 	var bt := board_type
@@ -242,30 +239,66 @@ func _setup_cap_raise_if_needed(row: UpgradeRow, board_type: Enums.BoardType, up
 
 
 ## Inject the tooltip middle-block provider for upgrade types that need one.
-## Autodropper rows list per-board assignments; deflector shows current odds.
+## Autodropper rows list per-board assignments; deflector and dud chute show
+## odds; the lucky peg shows its per-board count; the tilter its full-tilt odds;
+## auto-buy its slot usage.
 func _install_hover_extra_provider(row: UpgradeRow, upgrade_type: Enums.UpgradeType) -> void:
 	match upgrade_type:
 		Enums.UpgradeType.AUTODROPPER:
-			row.set_hover_extra_provider(_autodropper_assignment_text.bind(false))
-		Enums.UpgradeType.ADVANCED_AUTODROPPER:
-			row.set_hover_extra_provider(_autodropper_assignment_text.bind(true))
+			row.set_hover_extra_provider(_autodropper_assignment_text)
 		Enums.UpgradeType.PEG_DEFLECTOR:
 			row.set_hover_extra_provider(_deflector_odds_text)
+		Enums.UpgradeType.DUD_CHUTE:
+			row.set_hover_extra_provider(_dud_chute_odds_text)
+		Enums.UpgradeType.LUCKY_PEG:
+			row.set_hover_extra_provider(_lucky_peg_count_text)
+		Enums.UpgradeType.BOARD_TILT:
+			row.set_hover_extra_provider(_board_tilt_odds_text)
+		Enums.UpgradeType.AUTO_BUY:
+			row.set_hover_extra_provider(_auto_buy_slots_text)
 
 
-## One line per unlocked board (including zeros) of how many autodroppers of this
-## pool (normal/advanced) are assigned there.
-func _autodropper_assignment_text(advanced: bool) -> String:
+## One line per unlocked board (including zeros) of how many autodroppers are
+## assigned there.
+func _autodropper_assignment_text() -> String:
 	if not is_instance_valid(_board_manager):
 		return ""
-	var key := "advanced" if advanced else "normal"
 	var lines: PackedStringArray = []
 	for bt in Enums.BoardType.values():
 		if not _board_manager.is_board_unlocked(bt):
 			continue
-		var counts: Dictionary = _board_manager.get_assigned_counts_for_board(bt)
-		lines.append("%d assigned to %s board" % [counts[key], FormatUtils.board_name(bt, false)])
+		lines.append("%d assigned to %s board" % [
+			_board_manager.get_assigned_count_for_board(bt), FormatUtils.board_name(bt, false)])
 	return "\n".join(lines)
+
+
+## Current chance a dead-centre landing falls through to the board behind.
+## Reads the same helper gameplay rolls against, so the number shown can't drift
+## from the number used.
+func _dud_chute_odds_text() -> String:
+	var odds := roundi(PlinkoBoard.current_dud_chute_chance() * 100.0)
+	return "Current odds: %d%%" % odds
+
+
+## How many lucky pegs each board is currently wandering. Reads the same helper
+## the boards run on, so the number shown can't drift from the number in play.
+func _lucky_peg_count_text() -> String:
+	return "%d per board" % PlinkoBoard.current_lucky_peg_count()
+
+
+## Strength at a fully-pushed slider. Quoted at the extreme because that is the
+## number the upgrade actually raises — a board sitting at its default stop is a
+## fair coin no matter what the level is.
+func _board_tilt_odds_text() -> String:
+	var odds := roundi(BoardTilt.bias_at_extreme(PlinkoBoard.current_tilt_level()) * 100.0)
+	return "Up to %d%% at full tilt" % odds
+
+
+## Slots used against slots owned — the number that decides whether another
+## row's toggle will accept a click.
+func _auto_buy_slots_text() -> String:
+	return "%d of %d slots used" % [
+		UpgradeManager.auto_buy_locks.count(), UpgradeManager.auto_buy_locks.capacity()]
 
 
 func _deflector_odds_text() -> String:
@@ -288,10 +321,8 @@ func _on_upgrade_hover_changed(text: String) -> void:
 
 
 func _on_upgrade_unlocked(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType) -> void:
-	# Only care about autodropper-type upgrades
-	if upgrade_type != Enums.UpgradeType.AUTODROPPER \
-			and upgrade_type != Enums.UpgradeType.ADVANCED_AUTODROPPER \
-			and upgrade_type != Enums.UpgradeType.PEG_DEFLECTOR:
+	# Only the signature upgrades live in this HUD section.
+	if not UniversalUpgrades.is_universal(upgrade_type):
 		return
 	if upgrade_type in _upgrade_rows:
 		return
@@ -376,10 +407,7 @@ func _on_cap_raise_unlocked(board_type: Enums.BoardType) -> void:
 
 
 func _get_board_for_upgrade(upgrade_type: Enums.UpgradeType) -> Enums.BoardType:
-	if upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER \
-			or upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
-		return Enums.BoardType.ORANGE
-	return Enums.BoardType.GOLD
+	return UniversalUpgrades.board_for(upgrade_type)
 
 
 # ── Cap-raise reveal handshake (called down by CapRaiseRevealAnimator) ────────
@@ -400,7 +428,9 @@ func begin_cap_raise_reveal(board_type: Enums.BoardType) -> void:
 
 
 ## Cap "+" buttons on the CURRENCY bars (top of the HUD) that are wired but
-## still hidden. Each entry:
+## not yet on screen (the guard tests VISIBILITY, not wiring — a wired-but-hidden button is
+## exactly what a running reveal produces). Only BOARD rows can hold a minus, so
+## the mode-promotion hazard that upgrade_section guards against cannot reach here. Each entry:
 ## { node: Control (for explosion position), plus_button: Control, reveal: Callable }.
 func get_pending_currency_cap_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
@@ -423,7 +453,10 @@ func get_pending_currency_cap_targets() -> Array[Dictionary]:
 	return targets
 
 
-## Cap "+" buttons on the UNIVERSAL upgrade rows that are wired but still hidden.
+## Cap "+" buttons on the UNIVERSAL upgrade rows that are not yet on screen
+## (the guard tests VISIBILITY, not wiring — a wired-but-hidden button is
+## exactly what a running reveal produces). Only BOARD rows can hold a minus, so
+## the mode-promotion hazard that upgrade_section guards against cannot reach here.
 ## Same entry shape as get_pending_currency_cap_targets().
 func get_pending_universal_cap_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
@@ -470,6 +503,18 @@ func end_cap_raise_reveal() -> void:
 	# the cinematic was interrupted before reaching them.
 	reveal_delayed_currency_bar()
 	_on_cap_raise_unlocked(board)
+	# Force-show the upgrade ROWS explicitly rather than relying on re-wiring to
+	# un-hide as a side effect — see UpgradeSection.end_cap_raise_reveal for why
+	# that stopped working once the "already set up?" guard became a real
+	# wired-check. Currency BARS need no equivalent: they are wired by the
+	# plus_pressed signal rather than setup_plus, so has_plus_wired() is never
+	# true for one, and _on_cap_raise_unlocked above already force-shows them via
+	# _update_all_cap_buttons once the reveal flag is down.
+	for upgrade_type: Enums.UpgradeType in _upgrade_rows:
+		var row: UpgradeRow = _upgrade_rows[upgrade_type]
+		if row.bar.has_plus_wired():
+			row.bar.show_plus_button(true)
+			row.bar.update_plus()
 
 
 func _is_cap_reveal_suppressed(board: int) -> bool:
@@ -512,7 +557,16 @@ func _update_all_cap_buttons() -> void:
 	for currency_type in _bars:
 		var bar = _bars[currency_type]
 		var board: int = CurrencyManager.cap_raise_board(currency_type)
-		var show := board != -1 and UpgradeManager.is_cap_raise_available(board)
+		# WHITE is tier-less, so no board owns its cap raise and `board` is always
+		# -1. Gating on that would hide its "+" forever, freezing the white cap at
+		# STARTING_CAP — and since banking is capped, the most expensive board's
+		# drops could never become affordable. White gates on itself instead,
+		# mirroring CurrencyManager.can_buy_cap_raise.
+		var show: bool
+		if currency_type == Enums.CurrencyType.WHITE_COIN:
+			show = true
+		else:
+			show = board != -1 and UpgradeManager.is_cap_raise_available(board)
 		# Keep a not-yet-shown button hidden while its board's reveal runs; never
 		# hide one that is already visible.
 		if show and _is_cap_reveal_suppressed(board) and not bar.plus_button.visible:

@@ -88,16 +88,11 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 		var bucket_layout: Array = _get_bucket_layout(
 			num_rows, bucket_value_multiplier, board_type, earring_rows)
 
-		# ADVANCED assignments are still read from old saves so their autodroppers
-		# aren't silently dropped from the pool, but they now earn exactly what a
-		# NORMAL one does: the advanced-bucket system they were built for is gone.
-		for assignment_type in ["NORMAL", "ADVANCED"]:
-			var assignment_key := "%s_%s" % [board_str, assignment_type]
-			var autodropper_count: int = assignments.get(assignment_key, 0)
-			if autodropper_count <= 0:
-				continue
-
-			var coin_multiplier: float = 1.0
+		# One autodropper pool since the advanced autodropper was removed, so
+		# "<BOARD>_NORMAL" is the only assignment key a board can carry.
+		var assignment_key: String = "%s_NORMAL" % board_str
+		var autodropper_count: int = assignments.get(assignment_key, 0)
+		if autodropper_count > 0:
 			var costs: Array = _get_drop_costs(board_type)
 
 			var earnings_per_drop: Dictionary = {}
@@ -106,8 +101,10 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 				var c_key: String = bucket["currency_key"]
 				if not _is_currency_ever_earned(c_key, prestige_data):
 					continue
+				# Float, not int: a gateway's value is the earring's EXPECTED white
+				# (~2.09), and truncating it would quietly lose several percent.
 				var value: float = bucket["value"]
-				var earning: float = probabilities[i] * value * coin_multiplier * multi_drop
+				var earning: float = probabilities[i] * value * multi_drop
 				earnings_per_drop[c_key] = earnings_per_drop.get(c_key, 0.0) + earning
 
 			var drop_rate: float = float(autodropper_count) / drop_delay
@@ -209,7 +206,9 @@ static func _get_pascal_probabilities(num_rows: int) -> Array:
 ## kept as a float for that reason: rounding a ~2.09 expectation to an int would
 ## quietly lose several percent of white per drop. (The transporter, reachable on
 ## 1 in 2^earring_rows of those landings once the earrings meet, pays 0; at the
-## meeting size that is a 0.4% over-credit and is deliberately not modelled.)
+## meeting size that is a ~0.9% over-credit and is deliberately not modelled. It
+## is larger than the 1-in-256 landing rate suggests because the transporter
+## replaces the earring's inner CORNER, which the linear V makes its top payer.)
 static func _get_bucket_layout(num_rows: int, bucket_value_multiplier: int, board_type: Enums.BoardType, earring_rows: int = 0) -> Array:
 	var num_buckets: int = num_rows + 1
 	var primary_currency: String = _primary_currency_key(board_type)

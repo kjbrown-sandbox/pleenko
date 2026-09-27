@@ -55,6 +55,7 @@ func _run_tests() -> void:
 	test_gameplay_target_never_picks_a_gateway()
 	test_earring_bucket_credits_white()
 	test_transporter_pays_nothing_and_transports()
+	test_non_gold_transporter_does_not_reach_the_space_board()
 
 	# Coin surface
 	test_coin_surface_conformance()
@@ -589,6 +590,46 @@ func test_earring_bucket_credits_white() -> void:
 	_free_board(board)
 
 
+## Only gold's transporter reaches the space board. Every other tier can grow its
+## earrings to meeting and still builds the shared bucket, but landing there is a
+## dead end by design — a colour reaches the space board by riding the dud chute
+## down to gold, not by exiting from its own tier. Without this, each tier could
+## light its own space bucket locally and the chute would be decorative.
+func test_non_gold_transporter_does_not_reach_the_space_board() -> void:
+	print("test_non_gold_transporter_does_not_reach_the_space_board")
+	var board := _make_board(8)
+	board.board_type = Enums.BoardType.VIOLET
+	board._earring_rows = EarringGeometry.max_earring_rows()
+	board.earring_credit_fn = func(_currency: int, _amount: int) -> void: pass
+	var transported: Array = []
+	board.coin_transported.connect(
+		func(bt: int, ct: int, pos: Vector3) -> void: transported.append([bt, ct, pos]))
+
+	var full: int = EarringGeometry.max_earring_rows()
+	var earring := _make_earring(full, EarringGeometry.SIDE_LEFT)
+	var transporter: Bucket = BucketScene.instantiate()
+	add_child(transporter)
+	transporter.currency_type = TierRegistry.primary_currency(Enums.BoardType.VIOLET)
+	transporter.value = 0
+	earring.set_transporter(
+		EarringGeometry.innermost_bottom_col(full, EarringGeometry.SIDE_LEFT), transporter)
+
+	var coin := _make_coin()
+	add_child(coin)
+	board.finalize_earring_landing(coin, earring, transporter)
+
+	assert_equal(transported.size(), 0,
+		"a violet transporter sends nothing to the space board")
+	# The guard wraps only the emit — the coin must still despawn. If someone
+	# ever turns it into an early return, this is what catches the leak.
+	assert_true(coin.is_queued_for_deletion(),
+		"and the coin still despawns on the dead-end path")
+
+	transporter.free()
+	earring.free()
+	_free_board(board)
+
+
 func test_transporter_pays_nothing_and_transports() -> void:
 	print("test_transporter_pays_nothing_and_transports")
 	var board := _make_board(8)
@@ -638,6 +679,7 @@ func test_coin_surface_conformance() -> void:
 		"is_terminal_cell", "cell_to_world", "next_lattice_cell", "predicted_bucket_index",
 		"resolve_bounce_direction", "is_lattice_cell_voided", "get_bucket",
 		"flash_nearest_peg", "notify_deflector_resolved", "eject_coin_from_multimesh",
+		"try_lucky_split",
 	]
 	var board := _make_board(4)
 	var earring := _make_earring(4, EarringGeometry.SIDE_LEFT)
@@ -730,7 +772,7 @@ func test_earring_scene_builds_pegs_and_buckets() -> void:
 	print("test_earring_scene_builds_pegs_and_buckets")
 	var earring: EarringBoard = EarringScene.instantiate()
 	add_child(earring)
-	earring.setup(4, EarringGeometry.SIDE_LEFT, SPACE, Enums.BoardType.GOLD)
+	earring.setup(4, EarringGeometry.SIDE_LEFT, SPACE, Enums.BoardType.GOLD, 0)
 
 	assert_true(earring.peg_field.is_built(), "the earring builds its own PegField")
 	assert_equal(earring.peg_field.count(), 10, "4 rows -> 1+2+3+4 = 10 pegs")
@@ -765,13 +807,13 @@ func test_earring_scene_shares_the_injected_transporter() -> void:
 	add_child(left)
 	left.set_transporter(
 		EarringGeometry.innermost_bottom_col(full, EarringGeometry.SIDE_LEFT), shared)
-	left.setup(full, EarringGeometry.SIDE_LEFT, SPACE, Enums.BoardType.GOLD)
+	left.setup(full, EarringGeometry.SIDE_LEFT, SPACE, Enums.BoardType.GOLD, 0)
 
 	var right: EarringBoard = EarringScene.instantiate()
 	add_child(right)
 	right.set_transporter(
 		EarringGeometry.innermost_bottom_col(full, EarringGeometry.SIDE_RIGHT), shared)
-	right.setup(full, EarringGeometry.SIDE_RIGHT, SPACE, Enums.BoardType.GOLD)
+	right.setup(full, EarringGeometry.SIDE_RIGHT, SPACE, Enums.BoardType.GOLD, 0)
 
 	assert_equal(left.get_bucket(full), shared, "left earring's inner corner IS the transporter")
 	assert_equal(right.get_bucket(0), shared, "right earring's inner corner is the same bucket")

@@ -59,6 +59,16 @@ var space_between_pegs: float
 ## resolved and while (row, col) still points at the peg just struck.
 @abstract func notify_deflector_resolved(row: int, col: int, direction: int) -> void
 
+## Splits the striking coin if (row, col) holds a lucky peg, consuming that peg.
+## Returns the direction the ORIGINAL should take, or 0 for "no split — keep the
+## direction you already resolved". Enums.Direction is {LEFT = -1, RIGHT = 1}, so
+## 0 is an unambiguous sentinel.
+##
+## Deliberately ONE call rather than a consume/resolve pair: a pair can be
+## invoked out of order and spawn a coin without consuming a peg, which is the
+## one way the lucky peg's split-RATE bound could be broken.
+@abstract func try_lucky_split(origin: Coin, row: int, col: int) -> int
+
 ## Hands a coin back to its own mesh so it can be animated individually
 ## (the prestige handover). No-op on surfaces that don't pool coins.
 @abstract func eject_coin_from_multimesh(coin: Coin) -> void

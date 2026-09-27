@@ -53,8 +53,11 @@ var _transporter_bucket: Bucket
 
 ## Builds (or rebuilds) this earring. Called DOWN by PlinkoBoard after its own
 ## build_board(). `space` comes from the parent so both lattices stay in step.
+## `parent_tier_index` is required, deliberately: defaulting it to 0 would mean
+## "gold", so a caller that forgot it would silently mint white at 1/243rd of the
+## green board's rate with no error anywhere.
 func setup(rows: int, earring_side: int, space: float, parent_board_type: Enums.BoardType,
-		parent_tier_index: int = 0) -> void:
+		parent_tier_index: int) -> void:
 	num_rows = maxi(rows, 1)
 	side = earring_side
 	space_between_pegs = space
@@ -102,8 +105,9 @@ func _build() -> void:
 		bucket.is_prestige_bucket = false
 		buckets_container.add_child(bucket)
 		# Earrings mint WHITE, never the parent board's primary currency: they are
-		# the game's only white faucet. Value follows the binomial reciprocal, so
-		# the two corners are jackpots and the middle is small change.
+		# the game's only white faucet. Value is the same linear V the main board
+		# uses — 1 at the centre, +1 per step outward, scaled by tier. See
+		# WhiteCurrency.bucket_value, which is the authority.
 		bucket.setup(Enums.CurrencyType.WHITE_COIN,
 			Vector3(i * space_between_pegs, 0, 0),
 			WhiteCurrency.bucket_value(num_rows, i, tier_index))
@@ -177,9 +181,20 @@ func predicted_bucket_index(_row: int, col: int) -> int:
 	return col
 
 
-## Plain 50/50 — earrings carry no deflectors by design (keeps the new surface
-## small; deflector slots stay a main-board concern).
-func resolve_bounce_direction(_row: int, _col: int, roll: float) -> int:
+## The parent board's tilt, pushed down by PlinkoBoard when it builds this
+## earring rather than pulled up from here — the earring stays a leaf that knows
+## nothing about its parent. Biases toward THIS earring's middle column; see
+## PlinkoBoard._push_tilt_to_earrings for why that is not the main board's centre.
+var tilt_notch: int = BoardTilt.NOTCH_DEFAULT
+var tilt_level: int = 0
+
+
+## Earrings carry no deflectors by design (deflector slots stay a main-board
+## concern), so a bounce here is the inherited tilt or a plain 50/50.
+func resolve_bounce_direction(row: int, col: int, roll: float) -> int:
+	var tilted: int = BoardTilt.direction_for(row, col, tilt_notch, tilt_level, roll)
+	if tilted != 0:
+		return tilted
 	return DeflectorModel.random_dir(roll)
 
 
@@ -203,6 +218,13 @@ func flash_nearest_peg(_coin_pos: Vector3, _currency_type: int) -> void:
 
 func notify_deflector_resolved(_row: int, _col: int, _direction: int) -> void:
 	pass
+
+
+## Earrings run plain 50/50 bounces — no deflectors, no hazards, no lucky pegs.
+## The wander only ever picks pegs on the main board's lattice, so a coin that
+## has dropped through a gateway is past the point where one could apply.
+func try_lucky_split(_origin: Coin, _row: int, _col: int) -> int:
+	return 0
 
 
 ## Coins pooled by the parent PlinkoBoard are ejected there; an earring owns no

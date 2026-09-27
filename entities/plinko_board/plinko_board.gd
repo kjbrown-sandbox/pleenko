@@ -32,6 +32,14 @@ const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 const CoinScene := preload("res://entities/coin/coin.tscn")
 const EarringBoardScene: PackedScene = preload("res://entities/earring_board/earring_board.tscn")
 
+## The only board whose transporter reaches the space board. Other tiers grow
+## earrings and build the meeting bucket, but it is inert there — a colour gets
+## to the space board by riding the dud chute down to gold, not by exiting from
+## its own tier. NOT one of the "which board nominates this universal upgrade"
+## constants, despite the shape.
+const SPACE_TRANSPORT_BOARD := Enums.BoardType.GOLD
+
+
 # ── Earrings ──────────────────────────────────────────────────────────────────
 # Once the main triangle is full, ADD_ROW purchases grow two sub-boards hanging
 # beneath its edge buckets instead. Sizing lives in EarringGeometry; this board
@@ -54,19 +62,14 @@ const TRANSPORTER_BUCKET_SCALE := 1.3
 @onready var upgrade_section = $UpgradeSection
 @onready var drop_section: DropSection = $DropSection
 @onready var coin_queue: CoinQueue = $CoinQueue
+@onready var _tilt_slider: TiltSlider = $TiltSlider
 @onready var _drop_main_column: VBoxContainer = $DropSection/DropButtons/DropMainColumn
 @onready var _drop_main = $DropSection/DropButtons/DropMainColumn/DropMain
 @onready var _drop_main_tooltip: Tooltip = $DropSection/DropMainTooltip
 
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
-var _normal_autodroppers_visible: bool = false
-## Advanced autodroppers are still a live upgrade (LevelManager grants
-## ADVANCED_AUTODROPPER), but with the advanced drop bar gone there is no button
-## for them to attach to, so no assignment can be made and this never becomes
-## load-bearing. Kept because removing the upgrade is a progression change, not a
-## dead-code removal.
-var _advanced_autodroppers_visible: bool = false
+var _autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
 var _no_room_label: Label3D
 var _bucket_markings: Dictionary = {}  # int (bucket index) -> StringName ("hit" | "target" | "forbidden")
@@ -80,13 +83,12 @@ var _upgrade_ripple_tween: Tween
 var multi_drop_count: int = -1
 var _coin_z_counter: int = 0  # Increments per coin so later coins render in front
 # True while the mouse is hovering the respective drop button — used by the
-# tooltip refresh logic so that button's persistent "Needs X" message is
-# suppressed in favor of the regular cost tooltip during hover. Tracked per
-# button so hovering one never suppresses the other's "Needs X" message.
+# tooltip refresh logic so the persistent "Needs X" message is suppressed in
+# favor of the regular cost tooltip during hover.
 var _drop_main_hovered: bool = false
-# Set while the autodropper +/- cap of a drop button is hovered, so the per-frame
-# "Needs X" refresh doesn't clobber the "Add/Remove autodropper" hover tooltip
-# (those caps aren't the main button, so _drop_*_hovered stays false on them).
+# Set while the autodropper +/- cap of the drop button is hovered, so the
+# per-frame "Needs X" refresh doesn't clobber the "Add/Remove autodropper" hover
+# tooltip (the caps aren't the main button, so _drop_main_hovered stays false).
 var _drop_main_side_hovered: bool = false
 
 ## Optional gate: () -> bool. Returns true if drops should be blocked.
@@ -111,6 +113,10 @@ var _gameplay_target_fading: bool = false
 # Lives only in the BoardManager save blob — cleared on prestige reset.
 var _deflectors := DeflectorModel.new()
 var _deflector_editor: DeflectorEditor
+## Per-board tilt slider, hidden until blue's signature upgrade is unlocked.
+## Whether this board is the active one — the slider needs both this AND the
+## upgrade unlocked, so it can't be derived from either alone.
+var _board_ui_visible: bool = true
 
 ## Purely-visual drop gate beneath the spawn (opens/closes per drop). Placement
 ## is board-local: just below the spawn point, nudged toward the camera so it
@@ -206,11 +212,33 @@ signal bomb_defused(board_type: Enums.BoardType, bucket_index: int, multiplier: 
 signal bomb_detonated(board_type: Enums.BoardType, bucket_index: int)
 signal column_voided(board_type: Enums.BoardType, bucket_index: int)
 signal forbidden_bucket_detonated(board_type: Enums.BoardType, bucket_index: int)
-## A coin reached the transporter where the two earrings meet. `world_pos` is
-## global. Emitted just before the coin despawns; the transporter pays no
-## currency, sending the coin onward IS the reward. Nothing on this branch
-## listens — the space board (built in parallel) connects to it defensively.
+## A coin reached GOLD's transporter, where its two earrings meet. `world_pos`
+## is global. Emitted just before the coin despawns; the transporter pays no
+## currency, sending the coin onward IS the reward.
+##
+## ONLY the gold board emits this. Every other board can still grow earrings and
+## still builds the meeting bucket, but landing there does nothing — which is
+## what makes the dud chute the one route by which a non-gold colour reaches the
+## space board at all. A violet coin lights violet's space bucket by chuting
+## violet -> red -> orange -> gold and landing in GOLD's transporter while still
+## carrying violet's currency.
+##
+## Distinct from dud_chute_opened despite sharing board-local x = 0: this
+## migrates the same Coin and pays nothing; the chute despawns its coin and asks
+## for a new one on the board below.
 signal coin_transported(board_type: Enums.BoardType, currency_type: Enums.CurrencyType, world_pos: Vector3)
+
+## A coin landed in this board's dead-centre bucket and the dud chute opened
+## under it. Signals UP; BoardManager owns board-to-board relationships and
+## SPAWNS A FRESH COIN on the previous tier's board carrying `multiplier`,
+## already compounded. The landing coin itself despawns here as usual — unlike
+## the earring handoff, which migrates the same Coin object onward.
+##
+## Deliberately NOT called "transporter": that word already belongs to the
+## earring/SpaceBoard bucket, which sits at the same board-local x = 0. See the
+## "Dud chute" section for why the two can never both fire.
+signal dud_chute_opened(board_type: Enums.BoardType, currency_type: Enums.CurrencyType, multiplier: float)
+
 
 # Timestamps of recent drop bursts, used to rate-limit emissions to
 # drop_burst_max_per_second. Only the last ~1 second of entries are kept.
@@ -327,6 +355,7 @@ func setup(type: Enums.BoardType) -> void:
 		earring_credit_fn = CurrencyManager.add
 	multi_drop_count = PrestigeManager.get_multi_drop(board_type) + ChallengeProgressManager.get_bonus_multi_drop(board_type)
 	_queue_rate_bonus_per_coin = _queue_rate_bonus_for_board(board_type)
+	_init_lucky_pegs()
 
 	drop_delay = TierRegistry.get_base_drop_delay(board_type)
 
@@ -360,7 +389,17 @@ func setup(type: Enums.BoardType) -> void:
 	_deflector_editor.setup(self)
 	_deflector_editor.deflector_change_requested.connect(_on_deflector_change_requested)
 	_deflector_editor.set_capacity(get_deflector_cap())
+
+	# Tilt slider (pure view+input child; this board owns the notch). Authored in
+	# plinko_board.tscn so it gets real anchors like DropSection — a Control
+	# parented to a Node3D resolves its anchors against the VIEWPORT, so an
+	# unanchored one lands at the top-left corner rather than under the buckets.
+	_tilt_slider.setup(self)
+	_tilt_slider.notch_changed.connect(set_tilt_notch)
+	_refresh_tilt_slider_visibility()
+
 	UpgradeManager.upgrade_purchased.connect(_on_upgrade_purchased)
+	UpgradeManager.upgrade_unlocked.connect(_on_upgrade_unlocked_for_tilt)
 
 # ── Drop bars, labels + tooltips ──────────────────────────────────────────────
 
@@ -393,34 +432,29 @@ func _setup_drop_bars() -> void:
 	_drop_buttons[normal_id] = _drop_main
 
 
-func update_queue_fill(progress: float, num_advanced: int, num_normal: int) -> void:
+func update_queue_fill(progress: float, num_autodroppers: int) -> void:
 	# Hide overflow indicator if queue has room now
 	if not coin_queue.is_full():
 		_hide_no_room()
-	# Ensure the right number of FILLING coins exist for each type
-	_sync_filling_coins(num_advanced, true)
-	_sync_filling_coins(num_normal, false)
+	# Ensure the right number of FILLING coins exist
+	_sync_filling_coins(num_autodroppers)
 	# Update fill progress on all FILLING coins
 	coin_queue.update_filling_progress(progress)
 
 
-func _sync_filling_coins(wanted: int, is_advanced: bool) -> void:
-	var current: int = coin_queue.get_filling_count(is_advanced)
+func _sync_filling_coins(wanted: int) -> void:
+	var current: int = coin_queue.get_filling_count()
 	if current < wanted:
-		# Add more filling coins
-		# Every coin on a board is now its primary currency: advanced coins are gone
-		# and the `is_advanced` flag only picks which queue section to fill.
 		var coin_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
-		var mult: float = 1.0
 		for i in wanted - current:
 			if coin_queue.is_full():
 				if coin_queue.has_queue():
 					_show_no_room()
 				break
-			coin_queue.add_filling_coin(coin_type, is_advanced, mult)
+			coin_queue.add_filling_coin(coin_type)
 	elif current > wanted:
 		# Remove only the excess filling coins
-		coin_queue.remove_filling_coins_of_type(is_advanced, current - wanted)
+		coin_queue.remove_filling_coins(current - wanted)
 
 
 func _show_no_room() -> void:
@@ -497,16 +531,15 @@ func _on_drop_main_hover_exit() -> void:
 	_drop_main_hovered = false
 	_drop_main_tooltip.hide_tooltip()
 	# Re-evaluate the persistent needs message after the hover ends.
-	_refresh_needs_tooltips()
+	_refresh_needs_tooltip()
 
 
-## Side-button (autodropper +/-) hover. The tooltip is still passed in rather than
-## assumed, since it is bound per drop column at connection time — there is just
-## only one column now.
+## Side-button (autodropper +/-) hover. Empty text means the hover ended —
+## restore the "Needs X" message instead of leaving the tooltip blank.
 func _on_drop_side_hover(text: String, tooltip: Tooltip) -> void:
 	if text.is_empty():
 		_drop_main_side_hovered = false
-		_refresh_needs_tooltips()
+		_refresh_needs_tooltip()
 	else:
 		_drop_main_side_hovered = true
 		tooltip.update_and_show(text)
@@ -535,10 +568,9 @@ func _needs_tooltip_action(affordable: bool, hovered: bool) -> NeedsTooltipActio
 	return NeedsTooltipAction.HIDE if affordable else NeedsTooltipAction.SHOW
 
 
-## Refreshes the persistent "Needs X" tooltip for the drop button, anchored above
-## it. On a white-gated board the missing cost will name white, which is how the
-## player learns they need earrings.
-func _refresh_needs_tooltips() -> void:
+## Refreshes the persistent "Needs X" tooltip for the drop button, anchored
+## above it.
+func _refresh_needs_tooltip() -> void:
 	_apply_needs_tooltip(_drop_main_tooltip, _get_drop_costs(), _drop_main_hovered or _drop_main_side_hovered)
 
 
@@ -587,6 +619,8 @@ func _process(delta: float) -> void:
 				bucket.start_gameplay_target_fade(GAMEPLAY_TARGET_FADE_START)
 		if _gameplay_target_timer <= 0.0:
 			_pick_new_gameplay_target()
+
+	_tick_lucky_pegs(delta)
 
 
 ## Pacing for hold-to-drop. Returns true when a drop should fire this frame.
@@ -646,10 +680,9 @@ func request_drop(costs: Array = [], coin_type: int = -1, is_manual: bool = true
 
 	var coin: Coin = CoinScene.instantiate()
 	coin.coin_type = drop_coin_type
-
 	if coin_queue.has_queue() and not coin_queue.is_full():
 		_spend(costs)
-		coin_queue.enqueue(coin, false)
+		coin_queue.enqueue(coin)
 		if not is_waiting:
 			_drop_from_queue()
 	elif not is_waiting:
@@ -684,8 +717,6 @@ func _get_drop_costs() -> Array:
 	return costs
 
 
-
-
 func _can_afford(costs: Array) -> bool:
 	for cost in costs:
 		if not CurrencyManager.can_afford(cost[0], cost[1]):
@@ -698,15 +729,23 @@ func _spend(costs: Array) -> void:
 		CurrencyManager.spend(cost[0], cost[1])
 
 
-func _launch_coin(coin: Coin) -> void:
+## Parents a coin to this board, gives it its own render-order Z slot and wires
+## its lifecycle signals. Shared by the top-of-board launch and the lucky-peg
+## split; the caller supplies x/y, and neither the descent kickoff nor the
+## drop-gate/audio side effects belong here.
+func _attach_coin(coin: Coin, local_pos: Vector3) -> void:
 	coin.board = self
 	_coin_z_counter += 1
-	coin.position = Vector3(0, vertical_spacing + 0.2, _coin_z_counter * 0.001)
+	coin.position = Vector3(local_pos.x, local_pos.y, _coin_z_counter * 0.001)
 	add_child(coin)
 	_coin_pool.acquire(coin)
 	coin.tree_exiting.connect(_on_coin_tree_exiting.bind(coin), CONNECT_ONE_SHOT)
 	coin.landed.connect(on_coin_landed)
 	coin.final_bounce_started.connect(_on_final_bounce_started)
+
+
+func _launch_coin(coin: Coin) -> void:
+	_attach_coin(coin, Vector3(0, vertical_spacing + 0.2, 0))
 	coin.start(Vector3(0, 0.2, 0))
 	if is_instance_valid(_drop_gate):
 		_drop_gate.close()
@@ -947,12 +986,279 @@ func _update_drop_fill() -> void:
 	else:
 		fill_pct = 1.0
 
+	# Normal drop bar
 	_drop_main.set_fill(fill_pct)
-	var can_drop_normal: bool = _can_afford(_get_drop_costs()) and not show_cooldown
-	_drop_main.set_main_disabled(not can_drop_normal)
-	_drop_main.apply_fill_colors(not can_drop_normal)
+	var can_drop: bool = _can_afford(_get_drop_costs()) and not show_cooldown
+	_drop_main.set_main_disabled(not can_drop)
+	_drop_main.apply_fill_colors(not can_drop)
 
-	_refresh_needs_tooltips()
+	_refresh_needs_tooltip()
+
+# ── Lucky peg ─────────────────────────────────────────────────────────────────
+# A wandering peg that splits any coin striking it into two — one left, one
+# right — each worth full value. Split coins are ordinary coins, so they can hit
+# another lucky peg and split again.
+#
+# Deliberately an EXISTING lattice peg that lights up, not a new node: PegField
+# already owns per-peg colour, flash, pulse and halo, and Coin already reports
+# every peg it strikes. That also means a lucky peg inherits the lattice's own
+# rules for free — it can never sit on a cell a bomb has voided.
+#
+# Timing and selection live in LuckyPegModel (pure, injectable, headless); this
+# board owns the visuals, the coin spawning and the CoinSurface contract.
+#
+# WHY UNCAPPED SPLITTING IS SAFE. Not the tempting argument: "a peg is consumed,
+# so one descent crosses at most `level` pegs" is FALSE, because retiring a peg
+# queues a respawn and a multi-second descent outlives that gap many times over.
+# The true bound is a RATE — every split consumes a peg, and pegs only return at
+# respawn_delay, so a board can produce at most level/respawn_delay splits per
+# second (10/s at max level, 60/s across six boards) no matter how large the
+# board or how deep the split tree. See LuckyPegModel.max_splits_per_second.
+
+## The upgrade is universal (one shared level, every board); see UniversalUpgrades.
+const LUCKY_PEG_BOARD := Enums.BoardType.GREEN
+
+var _lucky_pegs := LuckyPegModel.new()
+
+
+## Live count for gameplay AND for the HUD text. One derivation, so the number
+## shown can never drift from the number the board runs on.
+static func current_lucky_peg_count() -> int:
+	if ChallengeManager.is_active_challenge:
+		# Challenges reset UpgradeManager, so this is already 0 today. Stating it
+		# makes the exclusion a decision rather than an emergent consequence of
+		# reset order — and it holds if a challenge ever authors
+		# StartingUpgrades(GREEN, LUCKY_PEG), which would otherwise let split
+		# coins inflate ChallengeTracker's per-board landing counts.
+		return 0
+	return LuckyPegModel.count_for_level(
+		UpgradeManager.get_level(LUCKY_PEG_BOARD, Enums.UpgradeType.LUCKY_PEG))
+
+
+func _init_lucky_pegs() -> void:
+	# Wander timing is aliased from the golden bucket so the two read as the same
+	# kind of opportunity and can't drift apart.
+	_lucky_pegs.duration = GAMEPLAY_TARGET_DURATION
+	_lucky_pegs.fade_start = GAMEPLAY_TARGET_FADE_START
+	_lucky_pegs.target_count_fn = current_lucky_peg_count
+	_lucky_pegs.is_voided_fn = is_lattice_cell_voided
+
+
+func _lucky_peg_color() -> Color:
+	return ThemeProvider.theme.lucky_peg_color
+
+
+## The colour a live lucky peg should rest at right now: full marker colour
+## normally, lerping back toward the ordinary peg colour as it expires so
+## "about to move" is legible. PegField.base_color is the same value peg_color
+## resolves to, and is what clear_rest_color restores, so read it from there
+## rather than re-resolving the theme.
+func _lucky_peg_rest_color(peg_idx: int) -> Color:
+	if not peg_field:
+		return _lucky_peg_color()
+	return _lucky_peg_color().lerp(peg_field.base_color, _lucky_pegs.fade_progress(peg_idx))
+
+
+## Per-frame wander. The model owns timing; this repaints what changed and keeps
+## fading pegs current.
+func _tick_lucky_pegs(delta: float) -> void:
+	var events: Dictionary = _lucky_pegs.tick(delta, num_rows)
+	if not peg_field:
+		return
+	for peg_idx: int in events["retired"]:
+		peg_field.clear_rest_color(peg_idx)
+	for peg_idx: int in events["spawned"]:
+		peg_field.set_rest_color(peg_idx, _lucky_peg_color())
+	for peg_idx: int in _lucky_pegs.live():
+		var fade: float = _lucky_pegs.fade_progress(peg_idx)
+		if fade > 0.0:
+			peg_field.set_rest_color(peg_idx, _lucky_peg_rest_color(peg_idx))
+
+
+## Re-paints live lucky pegs after a board rebuild, discarding any the new
+## lattice no longer has room for.
+func _reapply_lucky_pegs() -> void:
+	var dropped: Array[int] = _lucky_pegs.drop_pegs_beyond(num_rows)
+	if not peg_field:
+		return
+	for peg_idx in dropped:
+		peg_field.clear_rest_color(peg_idx)
+	for peg_idx: int in _lucky_pegs.live():
+		peg_field.set_rest_color(peg_idx, _lucky_peg_rest_color(peg_idx))
+
+
+## Releases any lucky peg sitting on a peg a bomb just destroyed. The spawn
+## filter already refuses voided cells; this is the symmetric half.
+func _release_lucky_pegs_on(peg_indices: PackedInt32Array) -> void:
+	for peg_idx in _lucky_pegs.release_pegs(peg_indices):
+		if peg_field:
+			peg_field.clear_rest_color(peg_idx)
+
+
+## Splits the coin striking (row, col) if that peg is lucky, consuming the peg.
+##
+## Returns the direction the ORIGINAL should take, or 0 for "no split — keep the
+## direction you already resolved". One call rather than a consume/resolve pair:
+## the pair could be invoked out of order and spawn a coin without consuming a
+## peg, which is the one way the rate bound above could be broken.
+func try_lucky_split(origin: Coin, row: int, col: int) -> int:
+	# PrestigeAnimator owns a prestige coin's whole lifecycle and its cinematic
+	# assumes a single coin; splitting one would leave a stray twin mid-sequence.
+	if origin.is_prestige_coin:
+		return 0
+	# Same gate as request_drop: once a challenge is marked failed, drops stop,
+	# and an in-flight coin must not mint new ones behind them.
+	if drop_blocked.is_valid() and drop_blocked.call():
+		return 0
+	if not _lucky_pegs.try_consume(Lattice.peg_index(row, col)):
+		return 0
+	if peg_field:
+		peg_field.clear_rest_color(Lattice.peg_index(row, col))
+	# One each way rather than two random picks: guaranteed divergence reads as a
+	# split, and the two coins can never overlap into looking like one.
+	_spawn_split_twin(origin, Enums.Direction.LEFT, row, col)
+	return Enums.Direction.RIGHT
+
+
+## Spawns the twin half of a lucky-peg split: a full-value copy of `origin`
+## resuming from the same peg in the opposite direction.
+##
+## The single site a split coin is created — if a ceiling is ever wanted, it
+## goes here.
+func _spawn_split_twin(origin: Coin, direction: int, row: int, col: int) -> void:
+	var twin: Coin = CoinScene.instantiate()
+	# Every field that makes two halves of one split look alike must be copied
+	# BEFORE add_child, because _ready -> _apply_visuals is what consumes them.
+	# coin_type and multiplier drive payout; color_override keeps a frenzy coin's
+	# tint (without it the twin renders in the plain currency colour).
+	twin.coin_type = origin.coin_type
+	twin.multiplier = origin.multiplier
+	twin.color_override = origin.color_override
+	# Absolute Z like every other coin. Adding to origin.position.z would
+	# compound across a split chain, since that z is already a render slot.
+	_attach_coin(twin, Vector3(origin.position.x, origin.position.y, 0.0))
+	# Deliberately NOT _launch_coin: that starts a descent from the top of the
+	# board, emits coin_dropped and closes the drop gate. A split resumes
+	# mid-flight, so it must do none of those.
+	twin.resume_from(row, col, direction)
+
+
+# ── Dud chute ─────────────────────────────────────────────────────────────────
+# The centre bucket is every board's dud: _bucket_value_for_distance pins
+# distance 0 to value 1 and the bucket-value upgrade never scales it. The chute
+# turns that dead end into a lottery — the coin falls through to the board
+# behind, worth DUD_CHUTE_MULTIPLIER times whatever it lands in there, and can
+# chain backwards tier by tier with the multiplier compounding each hop.
+#
+# NOT to be confused with the earring/SpaceBoard transporter, which also sits at
+# board-local x = 0. That one migrates the SAME coin onward and pays nothing;
+# this one despawns its coin and asks BoardManager to spawn a fresh one below.
+# The two can never both fire: gateway landings hand off to an earring in
+# on_coin_landed BEFORE finalize_coin_landing, and the transporter is parented
+# outside buckets_container so get_nearest_bucket can't even reach it.
+
+## The upgrade is universal (one shared level, every board), so its level is read
+## from one nominated board the way PEG_DEFLECTOR reads from DEFLECTOR_BOARD.
+const DUD_CHUTE_BOARD := Enums.BoardType.VIOLET
+
+## Payout multiplier applied per hop. Fixed by design — the upgrade raises the
+## CHANCE only, so a long chain is what makes a payout big, not a high level.
+## Keep dud_chute.tres's description in sync with this value; it is quoted there
+## verbatim (test_dud_chute asserts they agree).
+const DUD_CHUTE_MULTIPLIER := 10.0
+
+## Chance added per upgrade level. Level 1 = 2%, level 5 = 10%.
+const DUD_CHUTE_CHANCE_PER_LEVEL := 0.02
+
+## Roll seam: () -> float in [0, 1). Injectable so the chute is testable without
+## the RNG (DeflectorModel.cap_fn precedent).
+var dud_chute_roll_fn: Callable = func() -> float: return randf()
+
+
+## Chance a centre landing opens the chute, from the upgrade level. Level 0 (not
+## owned) is 0.0. Pure + static so it can be tested without a board.
+static func dud_chute_chance_for_level(level: int) -> float:
+	return clampf(level * DUD_CHUTE_CHANCE_PER_LEVEL, 0.0, 1.0)
+
+
+## The live chance, for gameplay AND for the HUD odds text. Single source of
+## truth on purpose: deriving it twice is how a tooltip starts quietly lying.
+static func current_dud_chute_chance() -> float:
+	return dud_chute_chance_for_level(
+		UpgradeManager.get_level(DUD_CHUTE_BOARD, Enums.UpgradeType.DUD_CHUTE))
+
+
+## Index of the single dead-centre bucket. Bucket counts are always odd — boards
+## start at EarringGeometry.STARTING_ROWS (2, an even row count) and ADD_ROW only
+## ever adds two, so num_buckets = num_rows + 1 is always odd. Both halves of
+## that are load-bearing; there is never a tie to resolve.
+static func center_bucket_index(num_buckets: int) -> int:
+	@warning_ignore("integer_division")
+	return num_buckets / 2
+
+
+## Derived from num_rows rather than the live bucket nodes: build_board treats
+## num_rows as authoritative (num_buckets = num_rows + 1), and reading it keeps
+## this callable on a bare board with no scene tree. (_is_gateway_bucket above
+## prefers the live children because it is also called mid-rebuild.)
+func is_center_bucket(bucket_idx: int) -> bool:
+	return bucket_idx == center_bucket_index(num_rows + 1)
+
+
+## Whether a landing should open the chute.
+##
+## Takes is_prestige_coin and roll as parameters rather than reading them off the
+## coin so the decision stands alone in tests; the production call site in
+## _try_dud_chute supplies both.
+func should_open_dud_chute(bucket_idx: int, is_prestige_coin: bool, roll: float) -> bool:
+	# Prestige coins belong to PrestigeAnimator, which owns their lifecycle —
+	# spawning a follow-up elsewhere would strand that cinematic.
+	if is_prestige_coin:
+		return false
+	# Challenges reset UpgradeManager, so the level is already 0 today and this
+	# is belt-and-braces — but it makes the exclusion explicit rather than an
+	# emergent consequence of reset order, and it holds if a challenge ever
+	# authors StartingUpgrades(VIOLET, DUD_CHUTE). A chute coin would otherwise
+	# inflate ChallengeTracker's drop count and bucket hits on the wrong board.
+	if ChallengeManager.is_active_challenge:
+		return false
+	# Honour the same gate as request_drop: once a challenge is marked failed,
+	# drops stop, and an in-flight coin must not seed a new one behind them.
+	if drop_blocked.is_valid() and drop_blocked.call():
+		return false
+	if not is_center_bucket(bucket_idx):
+		return false
+	# A gateway pays nothing and falls into an earring instead. on_coin_landed
+	# hands those off before finalize_coin_landing ever runs, so this is
+	# unreachable in production — kept as a cheap guard on a payout path.
+	if _is_gateway_bucket(bucket_idx):
+		return false
+	return roll < current_dud_chute_chance()
+
+
+## Rolls the dud chute for a landing that already paid out normally. Returns
+## whether the chute opened; the caller ignores it, tests read it.
+##
+## The coin does NOT travel: it despawns here as usual, and BoardManager spawns a
+## fresh one on the board behind. Only the compounded multiplier carries over —
+## the golden-bucket and bomb-defuse factors deliberately do not, matching
+## coin_landed's convention of reporting the coin's own multiplier.
+func _try_dud_chute(coin: Coin, bucket_idx: int) -> bool:
+	# Cheap index checks before the roll: the chance is tiny and the vast
+	# majority of landings are not the centre bucket, so rolling first would
+	# burn a Callable frame on every landing on every board.
+	if coin.is_prestige_coin or not is_center_bucket(bucket_idx):
+		return false
+	if not should_open_dud_chute(bucket_idx, coin.is_prestige_coin, dud_chute_roll_fn.call()):
+		return false
+	# The coin keeps its OWN currency all the way down. That is load-bearing, not
+	# cosmetic: it is how a violet coin that reaches gold still lights violet's
+	# space bucket rather than gold's. Payout is unaffected — finalize_coin_landing
+	# credits bucket.currency_type, so the coin still pays whatever board it
+	# lands on.
+	dud_chute_opened.emit(board_type, coin.coin_type, coin.multiplier * DUD_CHUTE_MULTIPLIER)
+	return true
+
 
 # ── Landing ───────────────────────────────────────────────────────────────────
 
@@ -970,8 +1276,9 @@ func on_coin_landed(coin: Coin) -> void:
 func _is_gateway_bucket(bucket_idx: int) -> bool:
 	if bucket_idx < 0:
 		return false
-	return EarringGeometry.is_gateway_bucket(bucket_idx,
-		buckets_container.get_child_count(), _earring_rows)
+	# num_rows + 1 when the buckets haven't been built yet (bare board in tests).
+	var num_buckets: int = buckets_container.get_child_count() if buckets_container else num_rows + 1
+	return EarringGeometry.is_gateway_bucket(bucket_idx, num_buckets, _earring_rows)
 
 
 ## Hands a coin off from an edge bucket into the earring beneath it.
@@ -1025,9 +1332,13 @@ func finalize_earring_landing(coin: Coin, earring: EarringBoard, bucket: Bucket)
 		return
 
 	if earring.is_transporter(bucket):
-		# The transporter pays no currency — sending the coin onward is the
-		# whole reward. Emit before queue_free so listeners can read the coin.
-		coin_transported.emit(board_type, coin.coin_type, coin.global_position)
+		# The transporter pays no currency — sending the coin onward is the whole
+		# reward, and only gold sends anywhere. On every other board this bucket
+		# is a dead end by design: the space board is reached by chuting a coin
+		# back to gold, not by each tier growing its own exit.
+		# Emit before queue_free so listeners can read the coin.
+		if board_type == SPACE_TRANSPORT_BOARD:
+			coin_transported.emit(board_type, coin.coin_type, coin.global_position)
 	else:
 		var amount: int = roundi(bucket.value * coin.multiplier)
 		earring_credit_fn.call(bucket.currency_type, amount)
@@ -1037,7 +1348,7 @@ func finalize_earring_landing(coin: Coin, earring: EarringBoard, bucket: Bucket)
 	# alias onto. Earrings stay out of the bucket-harmony machinery entirely.
 	AudioManager.on_coin_landed()
 	if _coin_burst_field:
-		_coin_burst_field.spawn(coin.global_position, t.get_coin_color(coin.coin_type))
+		_coin_burst_field.spawn(coin.global_position, coin.display_color(t))
 	coin.queue_free()
 
 
@@ -1068,14 +1379,14 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 		coin_landed.emit(board_type, bucket_idx, bucket.currency_type, amount, coin.multiplier)
 	bucket.pulse()
 	var num_buckets: int = buckets_container.get_child_count()
-	var bucket_distance: int = absi(bucket_idx - num_buckets / 2)
+	var bucket_distance: int = absi(bucket_idx - center_bucket_index(num_buckets))
 	# The ripple owns the arpeggio, so bucket audio is suppressed while it runs.
 	# Visual singing is gated on the audio request being accepted — otherwise a
 	# silenced board marks buckets that resurface on switch-back.
 	#
 	# `is_advanced` is always false now: it distinguished advanced-bucket coins for
-	# AudioManager's per-coin-type drone voice caps, and there are no advanced coins.
-	# AudioManager keeps the parameter (its cap logic is co-tuned with the
+	# AudioManager's per-coin-type drone voice caps, and there are no advanced
+	# coins. AudioManager keeps the parameter (its cap logic is co-tuned with the
 	# compressor), so the call site passes the constant rather than the concept.
 	if not _upgrade_animating:
 		var accepted: bool = AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, false, was_already_singing)
@@ -1088,6 +1399,11 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	if has_multiplier_text:
 		_show_floating_text(coin.global_position, effective_multiplier, amount)
 	if not coin.is_prestige_coin:
+		# Dud chute: rolled AFTER the payout above, so a centre landing always
+		# pays its 1 and the chute is a bonus life rather than a replacement.
+		# Emits UP; BoardManager spawns the follow-up coin on the board behind.
+		_try_dud_chute(coin, bucket_idx)
+
 		# Downward burst in the coin's own color, then despawn. Prestige coins
 		# skip both (PrestigeAnimator owns their lifecycle). The field gates
 		# itself on theme.coin_burst_enabled + its own rate limit.
@@ -1098,7 +1414,7 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 				# swoops up to the new cap buttons.
 				_cap_raise_intro_coin = null
 			else:
-				_coin_burst_field.spawn(coin.global_position, t.get_coin_color(coin.coin_type))
+				_coin_burst_field.spawn(coin.global_position, coin.display_color(t))
 		coin.queue_free()
 
 
@@ -1356,7 +1672,14 @@ func force_drop_coin(type: Enums.CurrencyType, mult: float = 1.0, show_burst: bo
 	var coin = CoinScene.instantiate()
 	coin.coin_type = type
 	coin.multiplier = mult
+	# _launch_coin closes the drop gate, which only _on_drop_timer_done reopens.
+	# Every other caller rides a real drop that started the timer; a dud-chute
+	# coin can arrive on a board sitting idle-ready, so remember that and restore
+	# it rather than leaving the gate shut with nothing to open it.
+	var was_idle_ready: bool = not is_waiting
 	_launch_coin(coin)
+	if was_idle_ready and is_instance_valid(_drop_gate):
+		_drop_gate.open()
 	if show_burst:
 		_try_emit_drop_burst(type)
 
@@ -1407,8 +1730,7 @@ func position_x_for(row: int, col: int) -> float:
 ## Flat peg index for (row, col), matching build_board()'s row-major fill order
 ## (sum of pegs in the rows above, plus col). Used as the _deflectors key.
 func peg_index(row: int, col: int) -> int:
-	@warning_ignore("integer_division")
-	return row * (row + 1) / 2 + col
+	return Lattice.peg_index(row, col)
 
 
 ## Local-space target a coin tweens to when it reaches lattice cell (row, col).
@@ -1601,6 +1923,7 @@ func void_column(bucket_index: int) -> void:
 	_animate_falling_pegs(peg_indices)
 	if peg_field:
 		peg_field.hide_pegs(peg_indices)
+	_release_lucky_pegs_on(peg_indices)
 	_animate_falling_buckets(truly_new)
 	_vaporise_coins_in_cut(bucket_index, side)
 	_play_column_detonation_vfx(bucket_index)
@@ -1794,6 +2117,7 @@ func detonate_radius(bucket_index: int, radius: float) -> void:
 	if not peg_indices.is_empty():
 		_animate_falling_pegs(peg_indices)
 		peg_field.hide_pegs(peg_indices)
+		_release_lucky_pegs_on(peg_indices)
 	if not bucket_indices.is_empty():
 		_animate_falling_buckets(bucket_indices)
 	_vaporise_coins_in_radius(center, radius)
@@ -1901,7 +2225,93 @@ func _random_dir(roll: float) -> int:
 
 
 func resolve_bounce_direction(row: int, col: int, roll: float) -> int:
-	return _deflectors.resolve_bounce(peg_index(row, col), roll)
+	var idx: int = peg_index(row, col)
+	# A deflector is a deliberate player placement on a specific peg, so it wins
+	# over the board-wide tilt rather than the two fighting over one roll.
+	if not _deflectors.has(idx):
+		# 0 means "no opinion" — an untilted board, an unowned upgrade, or a coin
+		# already dead-centre. Falling through keeps the legacy 50/50
+		# bit-identical, which the trajectory tests pin.
+		var tilted: int = BoardTilt.direction_for(
+			row, col, _tilt_notch, current_tilt_level(), roll)
+		if tilted != 0:
+			return tilted
+	return _deflectors.resolve_bounce(idx, roll)
+
+
+# ── Board tilt ────────────────────────────────────────────────────────────────
+# Blue's signature upgrade: a per-board slider biasing each bounce toward the
+# board's centre column or away from it. The maths lives in BoardTilt; the board
+# owns the notch (which is per-board and persisted) and the level lookup (which
+# is global, like every signature upgrade).
+
+## The upgrade is universal (one shared level, every board); see UniversalUpgrades.
+const BOARD_TILT_BOARD := Enums.BoardType.BLUE
+
+## Slider position for THIS board. Per-board on purpose — the player tunes each
+## board separately — while the strength behind it is shared.
+var _tilt_notch: int = BoardTilt.NOTCH_DEFAULT
+
+
+## Live tilt strength level, for gameplay AND for the HUD text. One derivation so
+## the number shown can't drift from the number coins are rolled against.
+static func current_tilt_level() -> int:
+	if ChallengeManager.is_active_challenge:
+		# Challenges reset UpgradeManager, so this is already 0 today; stating it
+		# makes the exclusion a decision rather than a consequence of reset order.
+		return 0
+	return UpgradeManager.get_level(BOARD_TILT_BOARD, Enums.UpgradeType.BOARD_TILT)
+
+
+func get_tilt_notch() -> int:
+	return _tilt_notch
+
+
+## Earrings inherit this board's tilt. Pushed DOWN (never pulled up) so the
+## earring stays a leaf that knows nothing about its parent, and re-pushed on
+## every change because an earring built earlier would otherwise keep a stale
+## notch until the next rebuild.
+##
+## NOTE an earring's "centre" is its OWN middle column, not the main board's — it
+## builds a standard Lattice triangle with its apex at earring-local (0, 0). Once
+## the earrings meet, the shared transporter sits at each one's INNERMOST bottom
+## column, so pulling the slider toward Centre pushes coins AWAY from the
+## transporter and Edges pushes them toward it. That inverts what the label
+## suggests, and the transporter is the SpaceBoard win path, so it matters.
+func _push_tilt_to_earrings() -> void:
+	for earring: EarringBoard in [_left_earring, _right_earring]:
+		_apply_tilt_to(earring)
+
+
+## Copies this board's tilt onto one earring. Split out so _spawn_earring can
+## seed the instance it is building, before the fields are assigned.
+func _apply_tilt_to(earring: EarringBoard) -> void:
+	if not is_instance_valid(earring):
+		return
+	earring.tilt_notch = _tilt_notch
+	earring.tilt_level = current_tilt_level()
+
+
+## Called DOWN by the slider UI. Clamped here rather than trusting the caller,
+## since the same setter restores saved values.
+func set_tilt_notch(notch: int) -> void:
+	var clamped: int = BoardTilt.clamp_notch(notch)
+	if clamped == _tilt_notch:
+		return
+	_tilt_notch = clamped
+	_push_tilt_to_earrings()
+	# Calls DOWN to the view rather than emitting up: the slider is this board's
+	# own child, and this setter is also the restore path, so a save with a
+	# tilted board would otherwise show a centred handle reading "No tilt".
+	# refresh() assigns without re-emitting, so there is no loop back here.
+	if _tilt_slider:
+		_tilt_slider.refresh()
+
+
+## Odds the tilt currently gives its favoured direction, as a percentage, for the
+## slider's readout.
+func tilt_odds_percent() -> int:
+	return roundi(BoardTilt.bias_for(current_tilt_level(), _tilt_notch) * 100.0)
 
 
 ## Did the coin follow or fight the deflector at (row, col)? Pure query — no RNG,
@@ -2027,6 +2437,46 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, _p_board_type: Enums
 	if upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
 		if _deflector_editor:
 			_deflector_editor.set_capacity(get_deflector_cap())
+	elif upgrade_type == Enums.UpgradeType.BOARD_TILT:
+		# A level change moves the odds without moving the slider, and the
+		# earrings cache the level rather than reading it per bounce.
+		_push_tilt_to_earrings()
+		if _tilt_slider:
+			_tilt_slider.refresh()
+
+
+## The slider only exists once the upgrade is unlocked; it is booked under one
+## nominated board but applies to every board, so every board listens.
+func _on_upgrade_unlocked_for_tilt(upgrade_type: Enums.UpgradeType, _p_board: Enums.BoardType) -> void:
+	if upgrade_type == Enums.UpgradeType.BOARD_TILT:
+		_refresh_tilt_slider_visibility()
+
+
+func _refresh_tilt_slider_visibility() -> void:
+	if _tilt_slider:
+		_tilt_slider.visible = _board_ui_visible and UpgradeManager.is_unlocked(
+			BOARD_TILT_BOARD, Enums.UpgradeType.BOARD_TILT)
+
+
+## Whether this board is the one on screen. Read by UpgradeSection to decide
+## whether a purchase is worth animating.
+func is_board_ui_visible() -> bool:
+	return _board_ui_visible
+
+
+## Shows or hides every screen-space panel this board owns.
+##
+## One entry point because the panels have DIFFERENT rules: upgrade_section and
+## drop_section follow the active board exactly, while the tilt slider is also
+## gated on its upgrade being unlocked. Callers toggling `.visible` on each panel
+## by hand is how the slider would end up drawn for all six boards at once — the
+## Controls among them resolve their anchors against the viewport, so every
+## board's copy occupies the same screen slot.
+func set_board_ui_visible(vis: bool) -> void:
+	_board_ui_visible = vis
+	upgrade_section.visible = vis
+	drop_section.visible = vis
+	_refresh_tilt_slider_visibility()
 
 # ── Peg queries ───────────────────────────────────────────────────────────────
 
@@ -2204,6 +2654,11 @@ func build_board() -> void:
 				else:
 					target_bucket.mark_gameplay_target()
 
+	# The MultiMesh is rebuilt from scratch, so per-peg colour is gone. Re-apply
+	# live lucky markers, dropping any that the new (possibly smaller) lattice no
+	# longer has room for rather than leaving them pointing at a different peg.
+	_reapply_lucky_pegs()
+
 	# Peg positions changed (row add / rebuild) — re-derive paddle positions.
 	if _deflector_editor:
 		_deflector_editor.refresh()
@@ -2270,6 +2725,10 @@ func _spawn_earring(side: int, apex_local: Vector3, transporter_col: int) -> Ear
 		earring.set_transporter(transporter_col, _transporter_bucket)
 	earring.setup(_earring_rows, side, space_between_pegs, board_type,
 		TierRegistry.get_tier_index(board_type))
+	# Seed the instance in hand, not _left_earring/_right_earring — the caller
+	# assigns those AFTER this returns, so pushing to the fields here would miss
+	# whichever earring is still null and leave the pair silently asymmetric.
+	_apply_tilt_to(earring)
 	return earring
 
 
@@ -2455,6 +2914,8 @@ func _shift_voided_columns(delta: int) -> void:
 		shifted.append(B + delta)
 	_voided_columns = shifted
 
+
+
 ## Computes the value for a bucket at a given distance from center.
 ## Used by both build_board() and the upgrade ripple to keep the formula in one place.
 func _bucket_value_for_distance(distance: int) -> int:
@@ -2470,9 +2931,12 @@ func _bucket_value_for_distance(distance: int) -> int:
 	return val
 
 
-func increase_bucket_values() -> void:
+func increase_bucket_values(animated: bool = true) -> void:
 	bucket_value_multiplier += 1
-	_play_bucket_value_upgrade_ripple()
+	if animated:
+		_play_bucket_value_upgrade_ripple()
+	else:
+		build_board()
 
 
 ## Animates bucket value changes as a center-outward ripple with split pulse,
@@ -2688,9 +3152,13 @@ func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> v
 	row_upgrade_sweep_started.emit(schedule["start_local_x"], schedule["end_local_x"],
 		buckets_container.position.y, sweep_duration)
 
-	# Normal landings index into the chord array by distance-from-center, but the
-	# glissando passes the column index as `degree` instead (ascending diatonic
-	# run), so no centre is needed here.
+	# Same V-shape center used by build_board and _bucket_value_for_distance:
+	# distance-from-center indexes into the chord array for normal landings.
+	# For the glissando we pass the column index as `degree` instead (ascending
+	# diatonic run); `center` is only used here for the is_adv classification.
+	@warning_ignore("integer_division")
+	var center: int = num_buckets / 2
+
 	_upgrade_ripple_tween = create_tween()
 	_upgrade_ripple_tween.bind_node(self)
 
@@ -2889,61 +3357,47 @@ func _on_queue_unlock_done() -> void:
 
 # ── Autodroppers ──────────────────────────────────────────────────────────────
 
-func try_autodrop(is_advanced: bool) -> void:
+func try_autodrop() -> void:
 	# Same gate as request_drop — once a challenge is marked failed, drop_blocked
 	# returns true and autodroppers stop too (no-op outside challenges).
 	if drop_blocked.is_valid() and drop_blocked.call():
 		return
-	# One cost for both assignment kinds: advanced drops had their own cost only
-	# because they spent the retired raw currency.
 	var costs: Array = _get_drop_costs()
 	if not _can_afford(costs):
 		autodrop_failed.emit(board_type)
 		return
 	# Atomically: complete FILLING → move to FULL section → add replacement FILLING.
 	# Single slide pass avoids overlapping tweens that caused position glitches.
-	var coin: Coin = coin_queue.complete_and_requeue_filling(is_advanced)
+	var coin: Coin = coin_queue.complete_and_requeue_filling()
 	if coin:
 		_spend(costs)
 		# Trigger a drop if the board isn't on cooldown
 		if not is_waiting:
 			_drop_from_queue()
 	else:
-		# No FILLING coin found — fallback to normal request_drop. -1 means "this
-		# board's primary currency", which every coin now is.
+		# No FILLING coin found — fallback to normal request_drop
 		request_drop(costs, -1, false)
 
 
-func set_normal_autodroppers_visible(vis: bool) -> void:
-	_normal_autodroppers_visible = vis
+func set_autodroppers_visible(vis: bool) -> void:
+	_autodroppers_visible = vis
 	if vis:
 		for bid in _drop_buttons:
-			if not (bid as String).ends_with("_ADVANCED"):
-				_setup_autodropper_buttons(bid)
-
-
-func set_advanced_autodroppers_visible(vis: bool) -> void:
-	_advanced_autodroppers_visible = vis
-	if vis:
-		for bid in _drop_buttons:
-			if (bid as String).ends_with("_ADVANCED"):
-				_setup_autodropper_buttons(bid)
+			_setup_autodropper_buttons(bid)
 
 
 func _setup_autodropper_buttons(bid: StringName) -> void:
 	var bar = _drop_buttons[bid]
 	var captured_bid: StringName = bid
-	var is_adv: bool = (bid as String).ends_with("_ADVANCED")
-	var label: String = "advanced autodropper" if is_adv else "autodropper"
 
 	bar.setup_minus(
 		func(): autodropper_adjust_requested.emit(captured_bid, -1),
-		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Remove %s" % label,
+		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Remove autodropper",
 	)
 
 	bar.setup_plus(
 		func(): autodropper_adjust_requested.emit(captured_bid, 1),
-		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Add %s" % label,
+		func() -> String: return "Disabled during challenge" if _is_challenge_locked_board() else "Add autodropper",
 	)
 
 
@@ -2953,14 +3407,13 @@ func _is_challenge_locked_board() -> bool:
 	return ChallengeManager.is_active_challenge and board_type == ChallengeManager.get_survive_board_type()
 
 
-func update_autodropper_buttons(assignments: Dictionary, normal_free: int, advanced_free: int) -> void:
+func update_autodropper_buttons(assignments: Dictionary, free: int) -> void:
 	# The Survive board's autodroppers are challenge-controlled: force both +/-
 	# disabled regardless of pool/assignment (hover explains via the callback).
 	var challenge_locked: bool = _is_challenge_locked_board()
 	for bid in _drop_buttons:
 		var bar = _drop_buttons[bid]
 		var assigned: int = assignments.get(bid, 0)
-		var free: int = advanced_free if (bid as String).ends_with("_ADVANCED") else normal_free
 		bar.set_minus_disabled(challenge_locked or assigned <= 0)
 		bar.set_minus_filled(assigned > 0)
 		bar.set_plus_disabled(challenge_locked or free <= 0)
@@ -2988,11 +3441,7 @@ func set_drop_main_text(button_id: StringName, autodropper_count: int, autodropp
 	var bar: HBoxContainer = _drop_buttons.get(button_id)
 	if not bar:
 		return
-	# An "_ADVANCED" button id can no longer occur (the advanced bar never shows),
-	# and there is no advanced currency to name, so the primary currency labels
-	# every button.
-	var currency_type: Enums.CurrencyType = TierRegistry.primary_currency(board_type)
-	var coin_name: String = FormatUtils.currency_name(currency_type, false)
+	var coin_name: String = FormatUtils.currency_name(TierRegistry.primary_currency(board_type), false)
 	if autodroppers_unlocked:
 		bar.update_text("Drop %s • %d auto" % [coin_name, autodropper_count])
 	else:
@@ -3022,8 +3471,12 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 	var perm_q: int = ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.QUEUE)
 	coin_queue.set_capacity(_queue_capacity_for_level(queue_level + perm_q))
 
-	# Old saves may still carry `show_advanced_buckets` / `has_advanced_drop`. Both
-	# are ignored: the systems they enabled no longer exist.
+	# Straight through the setter so a corrupt or out-of-range saved value is
+	# clamped rather than trusted.
+	set_tilt_notch(upgrade_state.get("tilt_notch", BoardTilt.NOTCH_DEFAULT))
+
+	# Old saves may still carry `show_advanced_buckets`. It is ignored: the
+	# advanced-bucket system it enabled no longer exists.
 
 	build_board()
 

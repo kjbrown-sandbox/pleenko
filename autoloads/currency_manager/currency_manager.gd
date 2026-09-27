@@ -89,6 +89,11 @@ func cap_raise_board(type: Enums.CurrencyType) -> int:
 
 
 func get_cap_raise_cost(type: Enums.CurrencyType) -> int:
+   # White is priced by its own module. The shared curve below starts at 1, which
+   # for a currency that pays for its OWN raises would mean the first +500 cap
+   # costs a single white — free, against the scarcity white exists to create.
+   if type == Enums.CurrencyType.WHITE_COIN:
+      return WhiteCurrency.cap_raise_cost(_cap_raise_levels[type])
    return 1 + 2 * _cap_raise_levels[type]
 
 

@@ -27,16 +27,42 @@ const FIRST_GATED_TIER_INDEX := 3
 ## FIRST_GATED_TIER_INDEX: violet 1, blue 100, green 1000.
 ##
 ## Authored, NOT derived from TIER_MULTIPLIER. The jumps are far steeper than the
-## x3 mint curve on purpose: violet's own earrings out-earn its drop cost and so
-## sustain themselves, while blue and green run at a deliberate white deficit and
-## have to be funded by the whole board stack's earrings. That asymmetry is the
-## point — white is the one resource the endgame cannot farm locally.
+## x3 mint curve on purpose: EVERY gated board runs at a white deficit and has to
+## be funded by the whole board stack's earrings, never by its own.
+##
+## The numbers, so a balance pass starts from fact rather than intuition. Only the
+## two edge buckets are gateways, so a coin reaches an earring with probability
+## 2/256, and a full 8-row earring is worth expected_value(8) = 2.09 before tier
+## scaling. Per drop that is 2/256 * 2.09 * 3^tier:
+##
+##     violet  0.44 white/drop  vs cost    1
+##     blue    1.32 white/drop  vs cost  100
+##     green   3.97 white/drop  vs cost 1000
+##
+## So white is the one resource the endgame cannot farm locally. Raise these to
+## tighten the squeeze, lower them to make white closer to a progression gate.
 const DROP_COSTS: Array[int] = [1, 100, 1000]
 
 ## Cap that white starts with, and the amount each cap raise adds. White has no
 ## next tier to price a raise against, so raises are paid in white itself.
-const STARTING_CAP := 500
+##
+## STARTING_CAP must stay above the largest DROP_COSTS entry, or the board that
+## costs the most becomes undroppable before the player can buy a single raise —
+## banking is capped, so an unaffordable first drop can never become affordable.
+const STARTING_CAP := 1500
 const CAP_RAISE_AMOUNT := 500
+
+## Price of the Nth white cap raise (0-based), in white.
+##
+## Deliberately NOT CurrencyManager's shared `1 + 2 * level`, which would make the
+## first raise cost 1 white for +500 cap — free, and flatly against the scarcity
+## the drop costs above are built around. Scales with the cap being bought so
+## storing more white always costs meaningful white.
+const CAP_RAISE_BASE_COST := 250
+
+
+static func cap_raise_cost(level: int) -> int:
+	return CAP_RAISE_BASE_COST * (maxi(0, level) + 1)
 
 
 ## Binomial coefficient C(n, k) — how many distinct left/right bounce sequences
@@ -48,6 +74,9 @@ static func binomial(n: int, k: int) -> int:
 	var kk: int = mini(k, n - k)
 	var result: int = 1
 	for i in kk:
+		# Exact at every step: Pascal's multiplicative recurrence guarantees the
+		# running product is always divisible by (i + 1), so nothing truncates.
+		@warning_ignore("integer_division")
 		result = result * (n - i) / (i + 1)
 	return result
 

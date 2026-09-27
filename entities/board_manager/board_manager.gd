@@ -16,10 +16,8 @@ var camera_tween_duration: float
 var _boards: Array[PlinkoBoard] = []
 var _active_index: int = 0
 var _camera: Camera3D
-var _normal_autodroppers_unlocked: bool = false
-var _advanced_autodroppers_unlocked: bool = false
-var _normal_pool: int = 0
-var _advanced_pool: int = 0
+var _autodroppers_unlocked: bool = false
+var _autodropper_pool: int = 0
 var _assignments: Dictionary = {}  # StringName -> int (button_id → assigned count)
 var _autodrop_timer: Timer
 var _last_tick_msec: float = 0.0
@@ -74,8 +72,7 @@ func _process(_delta: float) -> void:
 		return
 	var progress := get_fill_progress()
 	for board in _boards:
-		var counts := get_assigned_counts_for_board(board.board_type)
-		board.update_queue_fill(progress, counts.advanced, counts.normal)
+		board.update_queue_fill(progress, get_assigned_count_for_board(board.board_type))
 
 
 func _input(event: InputEvent) -> void:
@@ -88,8 +85,7 @@ func _input(event: InputEvent) -> void:
 
 
 func set_active_board_ui_visible(visible: bool) -> void:
-	_boards[_active_index].upgrade_section.visible = visible
-	_boards[_active_index].drop_section.visible = visible
+	_boards[_active_index].set_board_ui_visible(visible)
 
 
 func get_active_board() -> PlinkoBoard:
@@ -123,12 +119,10 @@ func switch_board(index: int) -> void:
 		return
 
 	# Hide old board's UI + coins, show new board's UI + coins
-	_boards[_active_index].upgrade_section.visible = false
-	_boards[_active_index].drop_section.visible = false
+	_boards[_active_index].set_board_ui_visible(false)
 	_boards[_active_index].set_coins_visible(false)
 	_active_index = index
-	_boards[_active_index].upgrade_section.visible = true
-	_boards[_active_index].drop_section.visible = true
+	_boards[_active_index].set_board_ui_visible(true)
 	_boards[_active_index].set_coins_visible(true)
 
 	AudioManager.set_active_board(_boards[_active_index].board_type)
@@ -165,8 +159,7 @@ func _spawn_board(type: Enums.BoardType) -> void:
 
 	# Only the active board's UI + coins should be visible
 	if insert_at != _active_index:
-		board.upgrade_section.visible = false
-		board.drop_section.visible = false
+		board.set_board_ui_visible(false)
 		board.set_coins_visible(false)
 
 	board.board_rebuilt.connect(_on_board_rebuilt.bind(board))
@@ -174,10 +167,9 @@ func _spawn_board(type: Enums.BoardType) -> void:
 	board.row_upgrade_starting.connect(_on_row_upgrade_starting.bind(board))
 	board.row_upgrade_sweep_started.connect(_on_row_upgrade_sweep_started.bind(board))
 	board.autodropper_adjust_requested.connect(_on_autodropper_adjust)
-	if _normal_autodroppers_unlocked:
-		board.set_normal_autodroppers_visible(true)
-	if _advanced_autodroppers_unlocked:
-		board.set_advanced_autodroppers_visible(true)
+	board.dud_chute_opened.connect(_on_dud_chute_opened)
+	if _autodroppers_unlocked:
+		board.set_autodroppers_visible(true)
 	_update_deflector_editors()
 
 
@@ -186,6 +178,46 @@ func _spawn_board(type: Enums.BoardType) -> void:
 func _update_deflector_editors() -> void:
 	for i in _boards.size():
 		_boards[i].set_deflector_input_active(i == _active_index)
+
+
+## The board exactly one tier BELOW `type`, or null when there is none.
+##
+## Tier-exact rather than "the previous entry in _boards": boards normally unlock
+## in tier order, but ChallengeManager._apply_starting_conditions can spawn an
+## authored, non-contiguous set (gold + violet). Returning the nearest lower
+## SPAWNED board there would drop a coin three tiers down.
+func get_board_behind(type: Enums.BoardType) -> PlinkoBoard:
+	var wanted: int = TierRegistry.get_tier_index(type) - 1
+	if wanted < 0:
+		return null
+	for board in _boards:
+		if TierRegistry.get_tier_index(board.board_type) == wanted:
+			return board
+	return null
+
+
+## A coin fell through a board's dead-centre bucket. Spawn a fresh coin on the
+## board behind, carrying the compounded multiplier — PlinkoBoard deliberately
+## does not look up its siblings itself (signals up, calls down).
+##
+## Gold has nothing behind it, so a gold centre landing simply ends there.
+## Landing in the destination's centre can open that board's chute in turn, which
+## is what lets a chain run backwards tier by tier, compounding each hop.
+##
+## The new coin keeps the SOURCE board's currency, and that is load-bearing
+## rather than cosmetic: only gold's transporter reaches the space board
+## (PlinkoBoard.SPACE_TRANSPORT_BOARD), so a violet coin lights VIOLET's space
+## bucket only by arriving at gold still violet. A coin that adopted each
+## destination's currency would arrive as gold and could only ever light gold's.
+##
+## Payout is unaffected either way — finalize_coin_landing credits
+## bucket.currency_type, so the coin still pays whatever board it lands on.
+func _on_dud_chute_opened(board_type: Enums.BoardType, currency_type: Enums.CurrencyType,
+		multiplier: float) -> void:
+	var target: PlinkoBoard = get_board_behind(board_type)
+	if not target:
+		return
+	target.force_drop_coin(currency_type, multiplier, true)
 
 
 ## Total deflectors placed across every board (the universal slot pool is
@@ -273,11 +305,11 @@ func _on_row_upgrade_starting(board: PlinkoBoard) -> void:
 func _on_row_upgrade_sweep_started(start_local_x: float, end_local_x: float,
 		focus_local_y: float, sweep_duration: float, board: PlinkoBoard) -> void:
 	if board != _boards[_active_index]:
-		# Defensive: `_on_row_upgrade_starting` only sets the flag when the
-		# emitting board is active, so this clear should be unreachable.
-		# Keeping it for paranoia in case a future caller emits from a
-		# different board than the one currently active.
-		_row_upgrade_camera_active = false
+		# A non-active board grew (auto-buy fires on all six). Leave the flag
+		# alone: _on_row_upgrade_starting only ever sets it for the ACTIVE board,
+		# so clearing it here would release a suppression the active board's own
+		# in-flight sweep is still relying on, and the next board_rebuilt would
+		# yank the camera mid-sweep.
 		return
 	if _camera_tween and _camera_tween.is_valid():
 		_camera_tween.kill()
@@ -417,40 +449,41 @@ func _tween_camera_to_active_board() -> void:
 
 # --- Autodropper ---
 
-func _is_advanced_button(button_id: StringName) -> bool:
-	return (button_id as String).ends_with("_ADVANCED")
+func get_autodropper_pool() -> int:
+	return _autodropper_pool
 
 
-func get_normal_pool() -> int:
-	return _normal_pool
+func is_autodroppers_unlocked() -> bool:
+	return _autodroppers_unlocked
 
 
-func get_advanced_pool() -> int:
-	return _advanced_pool
-
-
-func is_normal_autodroppers_unlocked() -> bool:
-	return _normal_autodroppers_unlocked
-
-
-func is_advanced_autodroppers_unlocked() -> bool:
-	return _advanced_autodroppers_unlocked
-
-
-func _get_assigned_for_pool(advanced: bool) -> int:
+## Autodroppers assigned across every board. One pool since the advanced
+## autodropper was removed, so this is simply the sum of all assignments.
+func _total_assigned() -> int:
 	var total := 0
 	for bid in _assignments:
-		if _is_advanced_button(bid) == advanced:
-			total += _assignments[bid]
+		total += _assignments[bid]
 	return total
 
 
 func get_free_autodroppers() -> int:
-	return get_normal_pool() - _get_assigned_for_pool(false)
+	return get_autodropper_pool() - _total_assigned()
 
 
-func get_free_advanced_autodroppers() -> int:
-	return get_advanced_pool() - _get_assigned_for_pool(true)
+## Saved assignment keys, minus stale "<BOARD>_ADVANCED" entries left by saves
+## written before the advanced autodropper was removed. Those autodroppers are
+## unreclaimable — the button that would decrement them is gone — so keeping the
+## keys would permanently consume slots from the free pool with no way to get
+## them back. NOTE: this burns "_ADVANCED" as a button-id suffix forever; a
+## future button named that way would lose its assignments silently on load.
+## Pure + static so it is testable without spawning any boards.
+static func live_assignments(raw: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for key in raw:
+		if (key as String).ends_with("_ADVANCED"):
+			continue
+		out[StringName(key)] = raw[key]
+	return out
 
 
 func get_fill_progress() -> float:
@@ -460,9 +493,8 @@ func get_fill_progress() -> float:
 	return clampf(elapsed / _autodrop_timer.wait_time, 0.0, 1.0)
 
 
-func get_assigned_counts_for_board(bt: Enums.BoardType) -> Dictionary:
-	var normal := 0
-	var advanced := 0
+func get_assigned_count_for_board(bt: Enums.BoardType) -> int:
+	var total := 0
 	for bid in _assignments:
 		var count: int = _assignments[bid]
 		if count <= 0:
@@ -470,11 +502,8 @@ func get_assigned_counts_for_board(bt: Enums.BoardType) -> Dictionary:
 		var board := _find_board_for_button(bid)
 		if not board or board.board_type != bt:
 			continue
-		if _is_advanced_button(bid):
-			advanced += count
-		else:
-			normal += count
-	return { "normal": normal, "advanced": advanced }
+		total += count
+	return total
 
 
 func _on_autodropper_adjust(button_id: StringName, delta: int, from_player: bool = true) -> void:
@@ -495,9 +524,7 @@ func _on_autodropper_adjust(button_id: StringName, delta: int, from_player: bool
 	if new_count < 0:
 		return
 
-	var is_adv := _is_advanced_button(button_id)
-	var free: int = get_free_advanced_autodroppers() if is_adv else get_free_autodroppers()
-	if delta > 0 and free <= 0:
+	if delta > 0 and get_free_autodroppers() <= 0:
 		return
 
 	_assignments[button_id] = new_count
@@ -507,10 +534,10 @@ func _on_autodropper_adjust(button_id: StringName, delta: int, from_player: bool
 	if delta < 0:
 		var board: PlinkoBoard = _find_board_for_button(button_id)
 		if board and new_count <= 0:
-			board.coin_queue.remove_filling_coins_of_type(is_adv)
+			board.coin_queue.remove_filling_coins()
 
 	# Start or stop the timer based on whether any autodroppers are assigned
-	var total_assigned := _get_assigned_for_pool(false) + _get_assigned_for_pool(true)
+	var total_assigned := _total_assigned()
 	if total_assigned > 0 and _autodrop_timer.is_stopped():
 		_autodrop_timer.start()
 	elif total_assigned == 0 and not _autodrop_timer.is_stopped():
@@ -521,53 +548,33 @@ func _on_autodrop_tick() -> void:
 	_last_tick_msec = Time.get_ticks_msec()
 	AudioManager.notify_autodropper_beat(_autodrop_timer.wait_time)
 
-	# Track which boards have at least one normal / advanced autodropper
-	# assigned so we can fire one drum per board per kind (rather than one
-	# per assigned count — the drum beat is fixed regardless of pool size).
-	var boards_with_normal: Dictionary = {}
-	var boards_with_advanced: Dictionary = {}
+	# Track which boards have at least one autodropper assigned so we can fire
+	# one drum per board (rather than one per assigned count — the drum beat is
+	# fixed regardless of pool size).
+	var boards_with_autodroppers: Dictionary = {}
 
-	# Process advanced autodroppers FIRST so they claim queue slots before normal.
 	for button_id in _assignments:
 		var count: int = _assignments[button_id]
 		if count <= 0:
 			continue
-		if not (button_id as String).ends_with("_ADVANCED"):
-			continue
 		var board := _find_board_for_button(button_id)
 		if not board:
 			continue
-		boards_with_advanced[board.board_type] = true
+		boards_with_autodroppers[board.board_type] = true
 		for i in count:
-			board.try_autodrop(true)
+			board.try_autodrop()
 
-	# Then process normal autodroppers.
-	for button_id in _assignments:
-		var count: int = _assignments[button_id]
-		if count <= 0:
-			continue
-		if (button_id as String).ends_with("_ADVANCED"):
-			continue
-		var board := _find_board_for_button(button_id)
-		if not board:
-			continue
-		boards_with_normal[board.board_type] = true
-		for i in count:
-			board.try_autodrop(false)
-
-	# One drum hit per board per kind. AudioManager gates against the active
-	# board internally, so only the viewed board contributes to the groove.
-	for board_type in boards_with_normal:
-		AudioManager.play_autodropper_drum(board_type, false)
-	for board_type in boards_with_advanced:
-		AudioManager.play_autodropper_drum(board_type, true)
+	# One drum hit per board. AudioManager gates against the active board
+	# internally, so only the viewed board contributes to the groove.
+	for board_type in boards_with_autodroppers:
+		AudioManager.play_autodropper_drum(board_type)
 
 
 func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.BoardType, _new_level: int) -> void:
 	if upgrade_type == Enums.UpgradeType.AUTODROPPER:
-		_normal_pool += 1
-		if not _normal_autodroppers_unlocked:
-			_normal_autodroppers_unlocked = true
+		_autodropper_pool += 1
+		if not _autodroppers_unlocked:
+			_autodroppers_unlocked = true
 			# Skip the intro in challenge mode — the animator only lives in
 			# main scene setup, so the signal would fire into the void and
 			# the player would never see the animation.
@@ -580,18 +587,9 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 				_update_all_button_displays()
 				return
 			for board in _boards:
-				board.set_normal_autodroppers_visible(true)
+				board.set_autodroppers_visible(true)
 		# New autodroppers stay in the free pool; the player assigns them
 		# manually. They are never auto-assigned to gold.
-		_update_all_button_displays()
-	elif upgrade_type == Enums.UpgradeType.ADVANCED_AUTODROPPER:
-		_advanced_pool += 1
-		if not _advanced_autodroppers_unlocked:
-			_advanced_autodroppers_unlocked = true
-			for board in _boards:
-				board.set_advanced_autodroppers_visible(true)
-		# New advanced autodroppers stay in the free pool; the player assigns
-		# them manually. They are never auto-assigned to gold.
 		_update_all_button_displays()
 	elif upgrade_type == Enums.UpgradeType.PEG_DEFLECTOR:
 		# First-ever deflector: play the intro once. The animator only lives in
@@ -608,7 +606,7 @@ func _on_upgrade_purchased(upgrade_type: Enums.UpgradeType, board_type: Enums.Bo
 ## +/– controls on all boards and refreshes button state without auto-assigning.
 func reveal_autodropper_controls() -> void:
 	for board in _boards:
-		board.set_normal_autodroppers_visible(true)
+		board.set_autodroppers_visible(true)
 	_update_all_button_displays()
 
 
@@ -647,10 +645,9 @@ func _update_all_button_displays() -> void:
 	# Full +/- restyle across every drop bar — heavy (~656 stylebox mutations
 	# per call). Only invoke when assignments / autodropper pool actually
 	# change, NOT on queue-count tick. Subtext refresh is split out below.
-	var normal_free := get_free_autodroppers()
-	var advanced_free := get_free_advanced_autodroppers()
+	var free := get_free_autodroppers()
 	for board in _boards:
-		board.update_autodropper_buttons(_assignments, normal_free, advanced_free)
+		board.update_autodropper_buttons(_assignments, free)
 	_update_all_drop_labels()
 
 
@@ -661,18 +658,17 @@ func _update_all_drop_labels() -> void:
 	# PlinkoBoard) and is no longer part of the button label.
 	for board in _boards:
 		for bid in board.get_drop_button_ids():
-			var is_adv := _is_advanced_button(bid)
-			var autodrop_unlocked: bool = (_advanced_autodroppers_unlocked if is_adv else _normal_autodroppers_unlocked)
 			var assigned: int = _assignments.get(bid, 0)
-			board.set_drop_main_text(bid, assigned, autodrop_unlocked)
+			board.set_drop_main_text(bid, assigned, _autodroppers_unlocked)
 
 
 func serialize() -> Dictionary:
 	var data := {}
-	data["normal_autodroppers_unlocked"] = _normal_autodroppers_unlocked
-	data["advanced_autodroppers_unlocked"] = _advanced_autodroppers_unlocked
-	data["normal_pool"] = _normal_pool
-	data["advanced_pool"] = _advanced_pool
+	# These two keys keep their legacy "normal_" prefix (and the "<BOARD>_NORMAL"
+	# button ids below likewise) purely for save compatibility — there has been
+	# only one autodropper pool since the advanced one was removed.
+	data["normal_autodroppers_unlocked"] = _autodroppers_unlocked
+	data["normal_pool"] = _autodropper_pool
 
 	# Which boards are spawned
 	var board_types: Array[int] = []
@@ -693,6 +689,7 @@ func serialize() -> Dictionary:
 			"drop_delay": board.drop_delay,
 			"bucket_value_multiplier": board.bucket_value_multiplier,
 			"multi_drop_count": board.multi_drop_count,
+			"tilt_notch": board.get_tilt_notch(),
 			"deflectors": board.serialize_deflectors(),
 		}
 	data["board_state"] = board_state
@@ -722,38 +719,32 @@ func deserialize(data: Dictionary) -> void:
 		for upgrade_type in Enums.UpgradeType.values():
 			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
 			upgrade_state[upgrade_key] = UpgradeManager.get_level(board.board_type, upgrade_type)
+		# Old saves lack "tilt_notch" — 0 is the untilted default, so a pre-tilt
+		# save loads with every board neutral (graceful, no migration).
+		upgrade_state["tilt_notch"] = bs.get("tilt_notch", BoardTilt.NOTCH_DEFAULT)
 		# Old saves lack "deflectors" — defaults to none (graceful, no migration).
 		upgrade_state["deflectors"] = bs.get("deflectors", [])
 		board.apply_saved_state(upgrade_state)
 
 	# Restore autodropper state
-	_normal_autodroppers_unlocked = data.get("normal_autodroppers_unlocked",
+	_autodroppers_unlocked = data.get("normal_autodroppers_unlocked",
 		data.get("autodroppers_unlocked", false))  # backward compat
-	_advanced_autodroppers_unlocked = data.get("advanced_autodroppers_unlocked", false)
 
 	# Pool counters — backward compat: old saves derive from per-board upgrade levels.
 	if data.has("normal_pool"):
-		_normal_pool = data["normal_pool"]
-		_advanced_pool = data.get("advanced_pool", 0)
+		_autodropper_pool = data["normal_pool"]
 	else:
 		for board_type in Enums.BoardType.values():
-			_normal_pool += UpgradeManager.get_level(board_type, Enums.UpgradeType.AUTODROPPER)
-			_advanced_pool += UpgradeManager.get_level(board_type, Enums.UpgradeType.ADVANCED_AUTODROPPER)
-	if _normal_autodroppers_unlocked:
+			_autodropper_pool += UpgradeManager.get_level(board_type, Enums.UpgradeType.AUTODROPPER)
+	if _autodroppers_unlocked:
 		for board in _boards:
-			board.set_normal_autodroppers_visible(true)
-	if _advanced_autodroppers_unlocked:
-		for board in _boards:
-			board.set_advanced_autodroppers_visible(true)
+			board.set_autodroppers_visible(true)
 
-	var assignments_data: Dictionary = data.get("assignments", {})
-	for key in assignments_data:
-		_assignments[StringName(key)] = assignments_data[key]
+	_assignments = live_assignments(data.get("assignments", {}))
 
 	_apply_prestige_rewards()
 
-	var total_assigned := _get_assigned_for_pool(false) + _get_assigned_for_pool(true)
-	if total_assigned > 0:
+	if _total_assigned() > 0:
 		_autodrop_timer.start()
 	_update_all_button_displays()
 
@@ -768,12 +759,12 @@ func _apply_prestige_rewards() -> void:
 	# Gold prestige reward: guarantee 1 normal autodropper on gold board.
 	# Orange being unlocked permanently means the player completed gold prestige.
 	if PrestigeManager.is_board_unlocked_permanently(Enums.BoardType.ORANGE):
-		if not _normal_autodroppers_unlocked:
-			_normal_autodroppers_unlocked = true
+		if not _autodroppers_unlocked:
+			_autodroppers_unlocked = true
 			for board in _boards:
-				board.set_normal_autodroppers_visible(true)
-		if _normal_pool < 1:
-			_normal_pool = 1
+				board.set_autodroppers_visible(true)
+		if _autodropper_pool < 1:
+			_autodropper_pool = 1
 		if _assignments.get(StringName("GOLD_NORMAL"), 0) < 1:
 			_assignments[StringName("GOLD_NORMAL")] = 1
 

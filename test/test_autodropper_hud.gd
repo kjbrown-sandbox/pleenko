@@ -16,7 +16,7 @@ func _run_tests() -> void:
 	test_upgrade_row_created_for_autodropper()
 	test_get_upgrade_row_returns_null_when_missing()
 	test_rebuild_on_unlock()
-	test_advanced_autodropper_row()
+	test_retired_advanced_autodropper_has_no_row()
 
 
 # --- Helpers ---
@@ -171,8 +171,8 @@ func test_rebuild_on_unlock() -> void:
 	UpgradeManager.reset()
 
 
-func test_advanced_autodropper_row() -> void:
-	print("test_advanced_autodropper_row")
+func test_retired_advanced_autodropper_has_no_row() -> void:
+	print("test_retired_advanced_autodropper_has_no_row")
 	var bm := _make_board_manager()
 	# Add orange board for advanced autodropper
 	var orange_board := PlinkoBoard.new()
@@ -181,13 +181,15 @@ func test_advanced_autodropper_row() -> void:
 	bm._boards.append(orange_board)
 
 	UpgradeManager.unlock(Enums.BoardType.GOLD, Enums.UpgradeType.AUTODROPPER)
+	# Retired — unlock() refuses it, so no HUD row may ever be built for it.
 	UpgradeManager.unlock(Enums.BoardType.ORANGE, Enums.UpgradeType.ADVANCED_AUTODROPPER)
 
 	var cv := _make_coin_values(bm)
 
 	assert_true(cv._upgrade_rows.has(Enums.UpgradeType.AUTODROPPER), "normal autodropper row exists")
-	assert_true(cv._upgrade_rows.has(Enums.UpgradeType.ADVANCED_AUTODROPPER), "advanced autodropper row exists")
-	assert_equal(cv._upgrade_rows.size(), 2, "exactly two upgrade rows")
+	assert_false(cv._upgrade_rows.has(Enums.UpgradeType.ADVANCED_AUTODROPPER),
+		"retired advanced autodropper never gets a HUD row")
+	assert_equal(cv._upgrade_rows.size(), 1, "exactly one upgrade row")
 
 	cv.queue_free()
 	bm.queue_free()

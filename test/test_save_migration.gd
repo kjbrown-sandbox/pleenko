@@ -36,6 +36,8 @@ func _run_tests() -> void:
 	test_v7_tiers_cover_current_level()
 	test_v9_drops_raw_currency_balances()
 	test_v9_without_raw_keys_is_harmless()
+	test_v9_seeds_white_currency_entry()
+	test_v9_preserves_existing_white_balance()
 	test_migrating_current_version_is_identity()
 	test_migration_preserves_unrelated_blocks()
 	test_empty_save_survives_full_chain()
@@ -149,8 +151,8 @@ func test_v9_drops_raw_currency_balances() -> void:
 	assert_equal(out["version"], SaveManager.SAVE_VERSION, "bumped to current version")
 
 
-## A save with no raw keys at all must pass through the v9 step untouched — the
-## erase loop has to tolerate an already-clean currency block.
+## A save with no raw keys must survive the v9 erase loop untouched, and must
+## still gain the seeded WHITE entry.
 func test_v9_without_raw_keys_is_harmless() -> void:
 	print("test_v9_without_raw_keys_is_harmless")
 	var save := {
@@ -158,8 +160,32 @@ func test_v9_without_raw_keys_is_harmless() -> void:
 		"currency": {"GOLD_COIN": {"balance": 3, "cap": 500, "cap_raise_level": 0}},
 	}
 	var out := SaveManager._migrate(save, 8)
-	assert_equal(out["currency"].size(), 1, "no keys added or removed")
 	assert_equal(out["currency"]["GOLD_COIN"]["balance"], 3, "balance preserved")
+	assert_true(out["currency"].has("WHITE_COIN"), "white seeded even with no raws to erase")
+
+
+## OfflineCalculator._set_balance only writes keys already present, so a pre-v9
+## save without a WHITE entry would have its first batch of offline earring white
+## computed and then silently discarded. The migration seeds the key to stop that.
+func test_v9_seeds_white_currency_entry() -> void:
+	print("test_v9_seeds_white_currency_entry")
+	var out := SaveManager._migrate({"version": 8, "currency": {}}, 8)
+	assert_true(out["currency"].has("WHITE_COIN"), "white entry seeded")
+	assert_equal(out["currency"]["WHITE_COIN"]["balance"], 0, "seeded empty")
+	assert_equal(out["currency"]["WHITE_COIN"]["cap"], WhiteCurrency.STARTING_CAP,
+		"seeded at white's own starting cap")
+
+
+## An existing white balance must never be clobbered by the seeding.
+func test_v9_preserves_existing_white_balance() -> void:
+	print("test_v9_preserves_existing_white_balance")
+	var save := {
+		"version": 8,
+		"currency": {"WHITE_COIN": {"balance": 77, "cap": 2000, "cap_raise_level": 1}},
+	}
+	var out := SaveManager._migrate(save, 8)
+	assert_equal(out["currency"]["WHITE_COIN"]["balance"], 77, "existing balance kept")
+	assert_equal(out["currency"]["WHITE_COIN"]["cap"], 2000, "existing cap kept")
 
 
 func test_migrating_current_version_is_identity() -> void:

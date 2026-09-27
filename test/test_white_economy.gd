@@ -17,6 +17,9 @@ func _run_tests() -> void:
 	test_white_cap_raise_blocked_when_broke()
 	test_white_cap_raise_spends_white_and_raises_cap()
 	test_white_cap_raise_needs_no_board_unlock()
+	test_white_plus_button_is_actually_reachable()
+	test_white_cap_raise_is_not_free()
+	test_white_starting_cap_covers_the_priciest_drop()
 	test_other_currencies_still_use_next_tier()
 	test_last_tier_is_uncapped()
 	test_last_tier_add_row_still_bounded_by_geometry()
@@ -82,6 +85,78 @@ func test_white_cap_raise_needs_no_board_unlock() -> void:
 		CurrencyManager.get_cap_raise_cost(Enums.CurrencyType.WHITE_COIN))
 	assert_true(CurrencyManager.can_buy_cap_raise(Enums.CurrencyType.WHITE_COIN),
 		"buyable despite no board cap-raise unlock")
+
+
+## REGRESSION, and the one this suite originally missed. Every other test here
+## calls CurrencyManager directly, which passed happily while the "+" button that
+## reaches it was never shown — `_update_all_cap_buttons` gated on
+## `cap_raise_board != -1`, which is always -1 for tier-less white. The white cap
+## then stuck at STARTING_CAP forever and, since banking is capped, the priciest
+## board became permanently undroppable. Assert the BUTTON, not just the model.
+func test_white_plus_button_is_actually_reachable() -> void:
+	print("test_white_plus_button_is_actually_reachable")
+	UpgradeManager.reset()
+	CurrencyManager.reset()
+
+	# The white bar only exists once the first white-COSTING board is unlocked, so
+	# that board must be present or this test silently asserts nothing — which is
+	# precisely how the original bug survived its own test suite.
+	var bm := BoardManager.new()
+	var gated := TierRegistry.get_tier_by_index(WhiteCurrency.FIRST_GATED_TIER_INDEX)
+	for type: int in [Enums.BoardType.GOLD, Enums.BoardType.ORANGE, gated.board_type]:
+		var board := PlinkoBoard.new()
+		board.board_type = type as Enums.BoardType
+		board.coin_queue = CoinQueue.new()
+		bm._boards.append(board)
+
+	var cv := VBoxContainer.new()
+	cv.set_script(preload("res://entities/main/coin_values.gd"))
+	add_child(cv)
+	cv.setup(bm)
+
+	assert_true(cv._bars.has(Enums.CurrencyType.WHITE_COIN),
+		"the white bar exists once the first gated board is unlocked")
+	# Asserted on `mode`, which is what show_plus_button() actually sets — the
+	# derived plus_button.visible depends on the node's _ready having run, which
+	# a bare test instance cannot rely on.
+	var bar = cv._bars[Enums.CurrencyType.WHITE_COIN]
+	assert_equal(bar.mode, RefinedBaselineButton.Mode.WITH_PLUS,
+		"white's cap + button is enabled without any board cap-raise unlock")
+	assert_equal(CurrencyManager.cap_raise_board(Enums.CurrencyType.WHITE_COIN), -1,
+		"and it shows despite having no owning board — the trap this guards")
+
+	# Contrast: a tier currency's "+" stays hidden, so the carve-out is white-only.
+	var gold_bar = cv._bars[Enums.CurrencyType.GOLD_COIN]
+	assert_equal(gold_bar.mode, RefinedBaselineButton.Mode.NEITHER,
+		"gold's + stays hidden until its board unlocks cap raises")
+
+	cv.queue_free()
+	bm.queue_free()
+
+
+## The shared cap-raise curve starts at 1. For a currency that buys its own
+## raises that would mean the first +500 cap costs a single white — free, and
+## against the scarcity the drop costs are built around.
+func test_white_cap_raise_is_not_free() -> void:
+	print("test_white_cap_raise_is_not_free")
+	CurrencyManager.reset()
+	var first: int = CurrencyManager.get_cap_raise_cost(Enums.CurrencyType.WHITE_COIN)
+	assert_equal(first, WhiteCurrency.cap_raise_cost(0), "priced by WhiteCurrency, not the shared curve")
+	assert_true(first > 1, "the first white cap raise is not a token price")
+	# And it escalates, so storage keeps costing more.
+	assert_true(WhiteCurrency.cap_raise_cost(1) > WhiteCurrency.cap_raise_cost(0),
+		"each raise costs more than the last")
+
+
+## Banking is capped, so a drop priced above the starting cap could never become
+## affordable — the player could not even reach the first cap raise.
+func test_white_starting_cap_covers_the_priciest_drop() -> void:
+	print("test_white_starting_cap_covers_the_priciest_drop")
+	var priciest: int = 0
+	for cost: int in WhiteCurrency.DROP_COSTS:
+		priciest = maxi(priciest, cost)
+	assert_true(WhiteCurrency.STARTING_CAP > priciest,
+		"starting cap (%d) exceeds the priciest drop (%d)" % [WhiteCurrency.STARTING_CAP, priciest])
 
 
 ## Regression: the white special-case must not leak into the normal path. A tier
