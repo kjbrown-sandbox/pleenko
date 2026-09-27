@@ -6,4 +6,3 @@
 script = ExtResource("1")
 display_name = "Gold"
 previous_currency_cost = 0
-raw_cap = 0

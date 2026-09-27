@@ -254,10 +254,6 @@ func _on_rewards_claimed(_level: int, rewards: Array[RewardData]) -> void:
 	for reward in rewards:
 		if reward.type != RewardData.RewardType.DROP_COINS:
 			continue
-		# Don't yank the camera to a different board for advanced/raw coin drops —
-		# the player should stay on whatever they're looking at.
-		if TierRegistry.is_raw_currency(reward.coin_type):
-			continue
 		if reward.target_board != _boards[_active_index].board_type:
 			_switch_to_board_type(reward.target_board)
 			return
@@ -680,14 +676,6 @@ func serialize() -> Dictionary:
 		board_types.append(board.board_type)
 	data["board_types"] = board_types
 
-	# "Advanced buckets" are the legacy raw-currency edge buckets — a DIFFERENT
-	# system from the removed advanced autodropper, and still read by
-	# OfflineCalculator. Do not delete this alongside advanced-autodropper cleanup.
-	var advanced_buckets := {}
-	for board in _boards:
-		advanced_buckets[Enums.BoardType.keys()[board.board_type]] = board.should_show_advanced_buckets
-	data["advanced_buckets"] = advanced_buckets
-
 	# Per-board computed state (read by OfflineCalculator)
 	var board_state := {}
 	for board in _boards:
@@ -700,7 +688,6 @@ func serialize() -> Dictionary:
 			"earring_rows": board.get_earring_rows(),
 			"drop_delay": board.drop_delay,
 			"bucket_value_multiplier": board.bucket_value_multiplier,
-			"distance_for_advanced_buckets": board.distance_for_advanced_buckets,
 			"multi_drop_count": board.multi_drop_count,
 			"tilt_notch": board.get_tilt_notch(),
 			"deflectors": board.serialize_deflectors(),
@@ -724,7 +711,6 @@ func deserialize(data: Dictionary) -> void:
 		unlock_board(board_type)
 
 	# Build per-board upgrade state for apply_saved_state
-	var advanced_buckets: Dictionary = data.get("advanced_buckets", {})
 	var board_state: Dictionary = data.get("board_state", {})
 	for board in _boards:
 		var board_key: String = Enums.BoardType.keys()[board.board_type]
@@ -733,7 +719,6 @@ func deserialize(data: Dictionary) -> void:
 		for upgrade_type in Enums.UpgradeType.values():
 			var upgrade_key: String = Enums.UpgradeType.keys()[upgrade_type]
 			upgrade_state[upgrade_key] = UpgradeManager.get_level(board.board_type, upgrade_type)
-		upgrade_state["show_advanced_buckets"] = advanced_buckets.get(board_key, false)
 		# Old saves lack "tilt_notch" — 0 is the untilted default, so a pre-tilt
 		# save loads with every board neutral (graceful, no migration).
 		upgrade_state["tilt_notch"] = bs.get("tilt_notch", BoardTilt.NOTCH_DEFAULT)

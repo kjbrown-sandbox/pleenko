@@ -12,7 +12,7 @@ func _run_tests() -> void:
 	test_permanent_upgrade()
 	test_starting_coins()
 	test_multi_drop()
-	test_advanced_coin_multiplier()
+	test_advanced_coin_multiplier_text_names_no_dead_currency()
 	test_center_bucket_value()
 	test_drop_cost_reduction()
 	test_golden_bucket_multiplier()
@@ -69,12 +69,18 @@ func test_multi_drop() -> void:
 	assert_equal(r.display_text(), "+1 gold multi-drop", "MULTI_DROP gold")
 
 
-func test_advanced_coin_multiplier() -> void:
-	print("test_advanced_coin_multiplier")
+## Dormant modifier: the advanced buckets it scaled, and the raw currency they
+## paid, are both retired. The enum value is serialized by ordinal so it cannot be
+## removed, and display_text must stay non-empty — but it must no longer name a
+## currency that does not exist.
+func test_advanced_coin_multiplier_text_names_no_dead_currency() -> void:
+	print("test_advanced_coin_multiplier_text_names_no_dead_currency")
 	var r := _make_modifier(ChallengeRewardData.ModifierType.ADVANCED_COIN_MULTIPLIER)
 	r.board_type = Enums.BoardType.GOLD
 	r.modifier_amount = 0.5
-	assert_equal(r.display_text(), "+0.5 raw orange multiplier", "ADVANCED_COIN_MULTIPLIER gold → raw orange")
+	assert_equal(r.display_text(), "+0.5 advanced coin multiplier",
+		"dormant modifier reads neutrally")
+	assert_false(r.display_text().contains("raw"), "must not advertise a retired currency")
 
 
 ## New single-currency-redesign modifier rewards.

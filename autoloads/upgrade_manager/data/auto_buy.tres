@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="BaseUpgradeData" format=3 uid="uid://ctm9v4xz6pqwh"]
+[gd_resource type="Resource" script_class="BaseUpgradeData" format=3 uid="uid://ctnav4x06pqwh"]
 
 [ext_resource type="Script" uid="uid://c571lcduobww" path="res://autoloads/upgrade_manager/base_upgrade_data.gd" id="1"]
 

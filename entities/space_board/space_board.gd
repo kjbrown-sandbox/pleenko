@@ -18,10 +18,14 @@ extends Node3D
 ##
 ## A non-gold colour arrives by riding the DUD CHUTE down tier by tier — each hop
 ## keeps the coin's own currency — until it lands in gold's transporter still
-## carrying its colour. That is why green can be activated at all despite never
-## growing earrings (TierRegistry.cap_raise_currency returns -1 for the last
-## tier, so green never reaches the hard cap). It needs five chute hops at 2%
-## each: vanishingly rare, but reachable, and NOT a gap to paper over.
+## carrying its colour. Five chute hops at 2% each: vanishingly rare, but
+## reachable, and NOT a gap to paper over.
+##
+## Green no longer depends on that route alone. It used to be the ONLY way green
+## could ever be lit, because TierRegistry.cap_raise_currency returns -1 for the
+## last tier and green could therefore never raise a cap, never reach the hard
+## cap, and never grow earrings. UpgradeManager.get_max_level now treats "no
+## cap-raise currency" as uncapped, so green grows earrings like any other board.
 ##
 ## So: do NOT "fix" green by special-casing it or shrinking the bucket layout.
 ## The route exists; it is meant to be the hardest thing in the game.

@@ -122,6 +122,17 @@ func get_cost(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> i
 ## reads this one function so they cannot disagree.
 func get_max_level(board_type: Enums.BoardType, upgrade_type: Enums.UpgradeType) -> int:
 	var cap: int = _state[board_type][upgrade_type].current_cap
+	# The LAST tier has no next tier, so TierRegistry.cap_raise_currency returns -1
+	# for it and it can never buy a cap raise. Leaving its authored max_level in
+	# place would strand it below every ceiling the other boards climb past: green
+	# could never pass 9 buckets, so it could never grow earrings, never mint
+	# white, and never earn a transporter. Such a board is uncapped instead,
+	# leaving only the geometric hard cap below.
+	#
+	# Expressed as "no cap-raise currency" rather than "== GREEN" so it follows the
+	# tier chain automatically if a tier is ever appended.
+	if TierRegistry.cap_raise_currency(board_type) == -1:
+		cap = 0
 	var hard: int = _hard_cap(upgrade_type)
 	if hard < 0:
 		return cap

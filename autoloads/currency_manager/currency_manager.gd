@@ -13,19 +13,21 @@ func _ready() -> void:
 func reset() -> void:
    for currency_type in Enums.CurrencyType.values():
       balances[currency_type] = 0
-      var tier := TierRegistry.get_tier_for_currency(currency_type)
-      if tier:
-         if TierRegistry.is_raw_currency(currency_type):
-            caps[currency_type] = tier.raw_cap
-         else:
-            caps[currency_type] = tier.primary_cap
-      else:
-         caps[currency_type] = 500
+      caps[currency_type] = _starting_cap_for(currency_type)
       _cap_raise_levels[currency_type] = 0
    # Starting tier gets 1 coin
    var starting := TierRegistry.get_tier_by_index(0)
    if starting:
       balances[starting.primary_currency] = 1
+
+
+## WHITE_COIN is tier-less, so it brings its own starting cap instead of
+## borrowing one from a TierData.
+func _starting_cap_for(type: Enums.CurrencyType) -> int:
+   if type == Enums.CurrencyType.WHITE_COIN:
+      return WhiteCurrency.STARTING_CAP
+   var tier := TierRegistry.get_tier_for_currency(type)
+   return tier.primary_cap if tier else WhiteCurrency.STARTING_CAP
 
 func can_afford(type: Enums.CurrencyType, amount: int) -> bool:
    return amount <= balances[type]
@@ -51,7 +53,11 @@ func spend(type: Enums.CurrencyType, amount: int) -> bool:
 
 ## Returns the currency used to raise this currency's cap, or -1 if none.
 ## A tier's currencies' caps are raised using the next tier's primary currency.
+## WHITE_COIN is the exception: it has no next tier, so it pays for its own
+## raises — spend white to hold more white.
 func cap_raise_currency(type: Enums.CurrencyType) -> int:
+   if type == Enums.CurrencyType.WHITE_COIN:
+      return Enums.CurrencyType.WHITE_COIN
    var tier := TierRegistry.get_tier_for_currency(type)
    if not tier:
       return -1
@@ -60,16 +66,17 @@ func cap_raise_currency(type: Enums.CurrencyType) -> int:
 
 ## Returns how much the cap increases per raise.
 func cap_raise_amount(type: Enums.CurrencyType) -> int:
+   if type == Enums.CurrencyType.WHITE_COIN:
+      return WhiteCurrency.CAP_RAISE_AMOUNT
    var tier := TierRegistry.get_tier_for_currency(type)
    if not tier:
       return 500
-   if TierRegistry.is_raw_currency(type):
-      return tier.raw_cap  # raw currencies raise by their initial cap amount
    return tier.primary_cap  # primary currencies raise by their initial cap amount
 
 
 ## Returns the board type that gates this currency's cap raise.
 ## A currency's cap raise is gated by the tier that owns it having a next tier unlocked.
+## -1 for WHITE_COIN, which no board owns — can_buy_cap_raise gates it on itself.
 func cap_raise_board(type: Enums.CurrencyType) -> int:
    var tier := TierRegistry.get_tier_for_currency(type)
    if not tier:
@@ -82,6 +89,11 @@ func cap_raise_board(type: Enums.CurrencyType) -> int:
 
 
 func get_cap_raise_cost(type: Enums.CurrencyType) -> int:
+   # White is priced by its own module. The shared curve below starts at 1, which
+   # for a currency that pays for its OWN raises would mean the first +500 cap
+   # costs a single white — free, against the scarcity white exists to create.
+   if type == Enums.CurrencyType.WHITE_COIN:
+      return WhiteCurrency.cap_raise_cost(_cap_raise_levels[type])
    return 1 + 2 * _cap_raise_levels[type]
 
 
@@ -89,9 +101,13 @@ func can_buy_cap_raise(type: Enums.CurrencyType) -> bool:
    var cost_currency: int = cap_raise_currency(type)
    if cost_currency == -1:
       return false
-   var board: int = cap_raise_board(type)
-   if board == -1 or not UpgradeManager.is_cap_raise_available(board):
-      return false
+   # WHITE_COIN has no owning board to gate on, so it gates on itself: once a
+   # player has minted any white at all (i.e. grown earrings) they may spend it
+   # to hold more. Every other currency waits on its board's cap-raise unlock.
+   if type != Enums.CurrencyType.WHITE_COIN:
+      var board: int = cap_raise_board(type)
+      if board == -1 or not UpgradeManager.is_cap_raise_available(board):
+         return false
    return can_afford(cost_currency, get_cap_raise_cost(type))
 
 

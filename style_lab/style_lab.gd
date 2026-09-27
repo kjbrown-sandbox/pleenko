@@ -30,11 +30,10 @@ var _halo_shader: Shader
 
 # Currency type ints (mirrors Enums.CurrencyType values, used as @tool fallback)
 const GOLD_COIN := 0
-const ORANGE_COIN := 2
-const RED_COIN := 4
-const RAW_ORANGE := 1
-const RAW_RED := 3
-const COIN_TYPES := [0, 2, 4]  # GOLD_COIN, ORANGE_COIN, RED_COIN
+const ORANGE_COIN := 1
+const RED_COIN := 2
+const WHITE_COIN := 6
+const COIN_TYPES := [0, 1, 2]  # GOLD_COIN, ORANGE_COIN, RED_COIN
 
 func _get_primary_currencies() -> Array:
 	if not Engine.is_editor_hint() and is_instance_valid(TierRegistry) and TierRegistry._by_primary.size() > 0:
@@ -44,19 +43,6 @@ func _get_primary_currencies() -> Array:
 		return result
 	return COIN_TYPES
 
-func _get_advanced_bucket(currency_type: int) -> int:
-	if not Engine.is_editor_hint() and is_instance_valid(TierRegistry) and TierRegistry._by_primary.size() > 0:
-		var tier := TierRegistry.get_tier_for_currency(currency_type)
-		if tier:
-			return TierRegistry.advanced_bucket_currency(tier.board_type)
-		return -1
-	match currency_type:
-		GOLD_COIN: return RAW_ORANGE
-		ORANGE_COIN: return RAW_RED
-		_: return -1
-
-func _has_advanced_bucket(currency_type: int) -> bool:
-	return _get_advanced_bucket(currency_type) >= 0
 
 # ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -229,12 +215,13 @@ func _build_board_slice(offset: Vector3, currency_type: int) -> void:
 		var bucket := MeshInstance3D.new()
 		bucket.mesh = bucket_mesh
 
-		# Edge buckets use a different color (simulating advanced buckets)
+		# Outer buckets preview the earring colour: past 9 buckets these become
+		# gateways that drop coins into an earring, which pays in white.
 		var bucket_currency := currency_type
 		@warning_ignore("integer_division")
 		var dist_from_center: int = abs(i - num_buckets / 2)
-		if dist_from_center >= 3 and _has_advanced_bucket(currency_type):
-			bucket_currency = _get_advanced_bucket(currency_type)
+		if dist_from_center >= 3:
+			bucket_currency = WHITE_COIN
 
 		bucket.material_override = theme.make_bucket_material(bucket_currency)
 		bucket.position = Vector3(

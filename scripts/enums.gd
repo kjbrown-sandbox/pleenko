@@ -9,18 +9,28 @@ enum BoardType {
 	GREEN
 }
 
+## One entry per board colour, plus WHITE_COIN.
+##
+## Serialized by NAME in save files (CurrencyManager uses
+## Enums.CurrencyType.keys()), but by ORDINAL in data/tiers/*.tres
+## (`primary_currency = 1`) and mirrored as raw ints in visual_theme.gd /
+## style_lab.gd. Reordering means editing all three.
+##
+## The former RAW_* currencies (the "unrefined" half of each tier) were retired
+## along with the advanced-bucket system that paid them out; the enum was
+## renumbered at the same time, so a save predating SAVE_VERSION 9 has its
+## balances dropped rather than remapped.
 enum CurrencyType {
 	GOLD_COIN,
-	RAW_ORANGE,
 	ORANGE_COIN,
-	RAW_RED,
 	RED_COIN,
-	RAW_VIOLET,
 	VIOLET_COIN,
-	RAW_BLUE,
 	BLUE_COIN,
-	RAW_GREEN,
-	GREEN_COIN
+	GREEN_COIN,
+	## Minted ONLY by earring buckets, on every board. Deliberately tier-less:
+	## TierRegistry.get_tier_for_currency returns null for it, and its cap raises
+	## are priced in white rather than a next tier's currency.
+	WHITE_COIN,
 }
 
 enum UpgradeType {

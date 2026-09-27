@@ -11,7 +11,7 @@ func _run_tests() -> void:
 	print("\n=== Autodropper HUD Tests ===\n")
 
 	test_currencies_header_gated_until_orange_unlocked()
-	test_raw_currencies_never_shown()
+	test_white_hidden_until_first_gated_board()
 	test_headers_with_autodroppers()
 	test_upgrade_row_created_for_autodropper()
 	test_get_upgrade_row_returns_null_when_missing()
@@ -82,20 +82,20 @@ func test_currencies_header_gated_until_orange_unlocked() -> void:
 	bm_orange.queue_free()
 
 
-## Single-currency model: raw currencies are dormant and must NEVER appear in the
-## currency bar, even when their tier's board is unlocked (regression — they used
-## to show up as e.g. "Raw orange 0/100").
-func test_raw_currencies_never_shown() -> void:
-	print("test_raw_currencies_never_shown")
+## WHITE is tier-less, so it can't gate its bar on a board of its own. It stays
+## hidden until the first board whose drops COST white unlocks — showing it on the
+## gold board would be noise about a currency the player cannot yet earn or spend.
+func test_white_hidden_until_first_gated_board() -> void:
+	print("test_white_hidden_until_first_gated_board")
 	UpgradeManager.reset()
 	var bm := _make_board_manager()
-	_add_orange_board(bm)  # orange board unlocked
+	_add_orange_board(bm)  # orange unlocked; violet (the first gated board) is not
 	var cv := _make_coin_values(bm)
 
-	assert_false(cv._is_board_for_coin_type_unlocked(Enums.CurrencyType.RAW_ORANGE),
-		"raw currency is never considered visible")
-	assert_false(cv._visible_currencies.has(Enums.CurrencyType.RAW_ORANGE),
-		"raw orange is not listed in the currency bar")
+	assert_false(cv._is_board_for_coin_type_unlocked(Enums.CurrencyType.WHITE_COIN),
+		"white is not visible before the first white-gated board unlocks")
+	assert_false(cv._visible_currencies.has(Enums.CurrencyType.WHITE_COIN),
+		"white is not listed in the currency bar yet")
 	# Primary currencies still show.
 	assert_true(cv._visible_currencies.has(Enums.CurrencyType.GOLD_COIN),
 		"gold (starting currency) still shown")

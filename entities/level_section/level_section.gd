@@ -983,13 +983,13 @@ func _get_coin_drop_target(target_board_type: int) -> Vector2:
 	return Vector2(get_viewport().get_visible_rect().size.x * 0.5, 100)
 
 
+## The two edge buckets of a board, as a split swoop target. Still reachable only
+## through UNLOCK_ADVANCED_BUCKET, which LevelManager no longer grants — kept
+## because that reward type is also the tier's final-milestone marker for the bar
+## explosion, so the VFX machinery outlived the advanced buckets it was named for.
 func _get_advanced_bucket_targets(target_board_type: int) -> Array[Vector2]:
 	for board in _board_manager.get_boards():
 		if board.board_type == target_board_type:
-			var num_buckets: int = board.num_rows + 1
-			var half: int = num_buckets / 2
-			if half < board.distance_for_advanced_buckets:
-				return []
 			var buckets = board.buckets_container.get_children()
 			if buckets.size() < 2:
 				return []

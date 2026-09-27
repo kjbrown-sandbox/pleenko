@@ -26,9 +26,10 @@ const BucketScene: PackedScene = preload("res://entities/bucket/bucket.tscn")
 ## the coin keeps the same peg-to-coin gap across the handoff.
 const COIN_ROW_Y_OFFSET := 0.2
 
-## Label on an earring's own (non-transporter) bucket. Earring buckets are all
-## worth EARRING_BUCKET_VALUE for now — deliberately unbalanced first pass.
-const EARRING_BUCKET_VALUE := 1
+## Tier index of the parent board, for the white mint multiplier. Pushed down by
+## PlinkoBoard rather than looked up here, so a bare instance (unit tests) never
+## needs TierRegistry — the same reason `side` and `space` are parameters.
+var tier_index: int = 0
 
 @onready var peg_field: PegField = $Pegs
 @onready var buckets_container: Node3D = $Buckets
@@ -52,12 +53,17 @@ var _transporter_bucket: Bucket
 
 ## Builds (or rebuilds) this earring. Called DOWN by PlinkoBoard after its own
 ## build_board(). `space` comes from the parent so both lattices stay in step.
-func setup(rows: int, earring_side: int, space: float, parent_board_type: Enums.BoardType) -> void:
+## `parent_tier_index` is required, deliberately: defaulting it to 0 would mean
+## "gold", so a caller that forgot it would silently mint white at 1/243rd of the
+## green board's rate with no error anywhere.
+func setup(rows: int, earring_side: int, space: float, parent_board_type: Enums.BoardType,
+		parent_tier_index: int) -> void:
 	num_rows = maxi(rows, 1)
 	side = earring_side
 	space_between_pegs = space
 	vertical_spacing = Lattice.vertical_spacing(space)
 	board_type = parent_board_type
+	tier_index = parent_tier_index
 	_build()
 
 
@@ -98,8 +104,13 @@ func _build() -> void:
 		var bucket: Bucket = BucketScene.instantiate()
 		bucket.is_prestige_bucket = false
 		buckets_container.add_child(bucket)
-		bucket.setup(TierRegistry.primary_currency(board_type),
-			Vector3(i * space_between_pegs, 0, 0), EARRING_BUCKET_VALUE)
+		# Earrings mint WHITE, never the parent board's primary currency: they are
+		# the game's only white faucet. Value is the same linear V the main board
+		# uses — 1 at the centre, +1 per step outward, scaled by tier. See
+		# WhiteCurrency.bucket_value, which is the authority.
+		bucket.setup(Enums.CurrencyType.WHITE_COIN,
+			Vector3(i * space_between_pegs, 0, 0),
+			WhiteCurrency.bucket_value(num_rows, i, tier_index))
 		_buckets[i] = bucket
 
 

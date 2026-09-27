@@ -34,6 +34,10 @@ func _run_tests() -> void:
 	test_v6_leaves_autodropper_intro_unseen_when_locked()
 	test_v7_seeds_revealed_milestone_tiers()
 	test_v7_tiers_cover_current_level()
+	test_v9_drops_raw_currency_balances()
+	test_v9_without_raw_keys_is_harmless()
+	test_v9_seeds_white_currency_entry()
+	test_v9_preserves_existing_white_balance()
 	test_migrating_current_version_is_identity()
 	test_migration_preserves_unrelated_blocks()
 	test_empty_save_survives_full_chain()
@@ -118,6 +122,70 @@ func test_v7_tiers_cover_current_level() -> void:
 		expected_start += LevelManager.LEVELS_PER_TIER
 	for tier in tiers:
 		assert_true(int(tier) <= 12, "no tier beyond current_level seeded")
+
+
+## v9 retires the raw currencies. Their balances are DISCARDED rather than
+## converted, and the advanced-bucket reveal flag goes with them.
+func test_v9_drops_raw_currency_balances() -> void:
+	print("test_v9_drops_raw_currency_balances")
+	var save := {
+		"version": 8,
+		"currency": {
+			"GOLD_COIN": {"balance": 500, "cap": 500, "cap_raise_level": 0},
+			"RAW_ORANGE": {"balance": 40, "cap": 50, "cap_raise_level": 1},
+			"ORANGE_COIN": {"balance": 7, "cap": 500, "cap_raise_level": 0},
+			"RAW_RED": {"balance": 12, "cap": 50, "cap_raise_level": 0},
+		},
+		"boards": {
+			"board_types": [Enums.BoardType.GOLD],
+			"advanced_buckets": {"GOLD": true},
+		},
+	}
+	var out := SaveManager._migrate(save, 8)
+	assert_false(out["currency"].has("RAW_ORANGE"), "RAW_ORANGE dropped")
+	assert_false(out["currency"].has("RAW_RED"), "RAW_RED dropped")
+	assert_false(out["boards"].has("advanced_buckets"), "advanced_buckets flag dropped")
+	# Surviving currencies must be untouched, values included.
+	assert_equal(out["currency"]["GOLD_COIN"]["balance"], 500, "gold balance preserved")
+	assert_equal(out["currency"]["ORANGE_COIN"]["balance"], 7, "orange balance preserved")
+	assert_equal(out["version"], SaveManager.SAVE_VERSION, "bumped to current version")
+
+
+## A save with no raw keys must survive the v9 erase loop untouched, and must
+## still gain the seeded WHITE entry.
+func test_v9_without_raw_keys_is_harmless() -> void:
+	print("test_v9_without_raw_keys_is_harmless")
+	var save := {
+		"version": 8,
+		"currency": {"GOLD_COIN": {"balance": 3, "cap": 500, "cap_raise_level": 0}},
+	}
+	var out := SaveManager._migrate(save, 8)
+	assert_equal(out["currency"]["GOLD_COIN"]["balance"], 3, "balance preserved")
+	assert_true(out["currency"].has("WHITE_COIN"), "white seeded even with no raws to erase")
+
+
+## OfflineCalculator._set_balance only writes keys already present, so a pre-v9
+## save without a WHITE entry would have its first batch of offline earring white
+## computed and then silently discarded. The migration seeds the key to stop that.
+func test_v9_seeds_white_currency_entry() -> void:
+	print("test_v9_seeds_white_currency_entry")
+	var out := SaveManager._migrate({"version": 8, "currency": {}}, 8)
+	assert_true(out["currency"].has("WHITE_COIN"), "white entry seeded")
+	assert_equal(out["currency"]["WHITE_COIN"]["balance"], 0, "seeded empty")
+	assert_equal(out["currency"]["WHITE_COIN"]["cap"], WhiteCurrency.STARTING_CAP,
+		"seeded at white's own starting cap")
+
+
+## An existing white balance must never be clobbered by the seeding.
+func test_v9_preserves_existing_white_balance() -> void:
+	print("test_v9_preserves_existing_white_balance")
+	var save := {
+		"version": 8,
+		"currency": {"WHITE_COIN": {"balance": 77, "cap": 2000, "cap_raise_level": 1}},
+	}
+	var out := SaveManager._migrate(save, 8)
+	assert_equal(out["currency"]["WHITE_COIN"]["balance"], 77, "existing balance kept")
+	assert_equal(out["currency"]["WHITE_COIN"]["cap"], 2000, "existing cap kept")
 
 
 func test_migrating_current_version_is_identity() -> void:

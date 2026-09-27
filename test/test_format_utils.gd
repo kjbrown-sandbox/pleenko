@@ -8,7 +8,8 @@ extends "res://test/test_base.gd"
 func _run_tests() -> void:
 	print("\n=== FormatUtils Tests ===\n")
 	test_currency_name_single_word()
-	test_currency_name_multi_word_sentence_case()
+	test_currency_name_white()
+	test_multi_word_sentence_case()
 	test_currency_name_lowercase()
 	test_board_name_capitalization()
 	test_format_number_thresholds()
@@ -22,17 +23,28 @@ func test_currency_name_single_word() -> void:
 	assert_equal(FormatUtils.currency_name(Enums.CurrencyType.GOLD_COIN), "Gold", "GOLD_COIN → Gold")
 
 
-func test_currency_name_multi_word_sentence_case() -> void:
-	# Regression: previously used String.capitalize() which Title-Cases every
-	# word, producing "Raw Orange". The sentence-case helper preserves the
-	# lowercase second word: "Raw orange".
-	print("test_currency_name_multi_word_sentence_case")
-	assert_equal(FormatUtils.currency_name(Enums.CurrencyType.RAW_ORANGE), "Raw orange", "RAW_ORANGE → Raw orange (not Raw Orange)")
+func test_currency_name_white() -> void:
+	print("test_currency_name_white")
+	# WHITE_COIN must strip "_coin" like every other currency, not read as
+	# "White coin" — the player calls it white.
+	assert_equal(FormatUtils.currency_name(Enums.CurrencyType.WHITE_COIN), "White",
+		"WHITE_COIN → White")
+
+
+## Regression: this used String.capitalize(), which Title-Cases every word. No
+## currency name is multi-word any more (the RAW_* names were the only ones), so
+## the guard tests the shared helper directly rather than losing coverage.
+func test_multi_word_sentence_case() -> void:
+	print("test_multi_word_sentence_case")
+	assert_equal(FormatUtils._sentence_case("raw orange"), "Raw orange",
+		"only the first word is capitalized")
+	assert_equal(FormatUtils._sentence_case(""), "", "empty string is safe")
 
 
 func test_currency_name_lowercase() -> void:
 	print("test_currency_name_lowercase")
-	assert_equal(FormatUtils.currency_name(Enums.CurrencyType.RAW_ORANGE, false), "raw orange", "capital=false → all lower")
+	assert_equal(FormatUtils.currency_name(Enums.CurrencyType.ORANGE_COIN, false), "orange",
+		"capital=false → all lower")
 
 
 func test_board_name_capitalization() -> void:

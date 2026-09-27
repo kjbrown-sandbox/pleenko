@@ -12,7 +12,7 @@ func _run_tests() -> void:
 
 	test_rescue_grants_gold_when_both_zero()
 	test_no_rescue_when_gold_nonzero()
-	test_rescue_even_when_raw_orange_nonzero()
+	test_rescue_even_when_white_nonzero()
 	test_rescue_idempotent()
 	test_currency_changed_triggers_rescue()
 
@@ -59,15 +59,17 @@ func test_no_rescue_when_gold_nonzero() -> void:
 	bm.queue_free()
 
 
-func test_rescue_even_when_raw_orange_nonzero() -> void:
-	print("test_rescue_even_when_raw_orange_nonzero")
+## The rescue looks at GOLD only. Holding another currency — white, say, banked
+## from earrings — must not convince it the player has a way forward.
+func test_rescue_even_when_white_nonzero() -> void:
+	print("test_rescue_even_when_white_nonzero")
 	_reset_to_zero()
-	CurrencyManager.add(Enums.CurrencyType.RAW_ORANGE, 3)
+	CurrencyManager.add(Enums.CurrencyType.WHITE_COIN, 3)
 	var bm := _make_board_manager()
 	bm.check_and_rescue_gold_soft_lock()
 	assert_equal(
 		CurrencyManager.get_balance(Enums.CurrencyType.GOLD_COIN), 1,
-		"should grant 1 gold even when raw orange is nonzero")
+		"should grant 1 gold even when white is nonzero")
 	bm.queue_free()
 
 

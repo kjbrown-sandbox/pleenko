@@ -63,10 +63,16 @@ func _starting_modifier_text() -> String:
 		ModifierType.MULTI_DROP:
 			return "+%d %s multi-drop" % [int(modifier_amount), board]
 		ModifierType.ADVANCED_COIN_MULTIPLIER:
-			# board_type is intentionally ignored: this reward only ever applies
-			# to the gold board, whose advanced buckets pay out raw orange
-			# (gold-only by design, like GOLD_COIN_SPEED_BOOST).
-			return "+%.1f raw orange multiplier" % modifier_amount
+			# DORMANT, and the text can no longer name what it multiplied: this
+			# scaled the gold board's advanced buckets, which paid raw orange, and
+			# both the buckets and that currency are retired. The enum value must
+			# stay (it is serialized by ordinal), and display_text must stay
+			# non-empty, so this reads neutrally.
+			#
+			# No .tres in data/challenges/ authors this modifier, so nothing
+			# advertises it to a player — it is an orphaned ordinal held open
+			# purely so the values after it keep their meaning.
+			return "+%.1f advanced coin multiplier" % modifier_amount
 		ModifierType.BUCKET_VALUE_PERCENT:
 			return "+%d%% bucket value" % int(modifier_amount * 100)
 		ModifierType.CENTER_BUCKET_VALUE:

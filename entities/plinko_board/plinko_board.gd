@@ -6,7 +6,6 @@ extends CoinSurface
 var vertical_spacing: float
 @export var drop_delay: float = 2.0
 @export var drop_delay_reduction_factor: float = 0.82
-@export var distance_for_advanced_buckets: int = 3 # Before you modify this, know I've tested it and 4 feel awful
 
 ## Rate boost per queued coin past the free first slot. Additive in rate, not
 ## delay, so the curve is self-bounded — see get_effective_drop_delay.
@@ -68,10 +67,8 @@ const TRANSPORTER_BUCKET_SCALE := 1.3
 @onready var _drop_main = $DropSection/DropButtons/DropMainColumn/DropMain
 @onready var _drop_main_tooltip: Tooltip = $DropSection/DropMainTooltip
 
-var advanced_bucket_type: Enums.CurrencyType
 var is_waiting: bool = false
 var bucket_value_multiplier: int = 1
-var should_show_advanced_buckets: bool = false
 var _autodroppers_visible: bool = false
 var _drop_buttons: Dictionary = {}  # StringName -> node (for autodropper lookup)
 var _no_room_label: Label3D
@@ -361,9 +358,6 @@ func setup(type: Enums.BoardType) -> void:
 	_init_lucky_pegs()
 
 	drop_delay = TierRegistry.get_base_drop_delay(board_type)
-	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
-	if adv >= 0:
-		advanced_bucket_type = adv
 
 	# Apply permanent upgrade bonuses from challenge rewards
 	bucket_value_multiplier = 1 + ChallengeProgressManager.get_permanent_upgrade_level(board_type, Enums.UpgradeType.BUCKET_VALUE)
@@ -387,7 +381,6 @@ func setup(type: Enums.BoardType) -> void:
 	add_child(_drop_gate)
 	_drop_gate.position = Vector3(0, vertical_spacing + 0.2 - GATE_Y_BELOW_SPAWN, GATE_Z)
 	LevelManager.rewards_claimed.connect(_on_rewards_claimed)
-	LevelManager.reconcile_reward.connect(_on_reconcile_reward)
 	CurrencyManager.currency_changed.connect(_on_currency_changed)
 
 	# Deflector editor (pure view+input child; this board owns the model).
@@ -1387,12 +1380,16 @@ func finalize_coin_landing(coin: Coin, bucket: Bucket) -> void:
 	bucket.pulse()
 	var num_buckets: int = buckets_container.get_child_count()
 	var bucket_distance: int = absi(bucket_idx - center_bucket_index(num_buckets))
-	var is_advanced: bool = coin.coin_type == advanced_bucket_type
 	# The ripple owns the arpeggio, so bucket audio is suppressed while it runs.
 	# Visual singing is gated on the audio request being accepted — otherwise a
 	# silenced board marks buckets that resurface on switch-back.
+	#
+	# `is_advanced` is always false now: it distinguished advanced-bucket coins for
+	# AudioManager's per-coin-type drone voice caps, and there are no advanced
+	# coins. AudioManager keeps the parameter (its cap logic is co-tuned with the
+	# compressor), so the call site passes the constant rather than the concept.
 	if not _upgrade_animating:
-		var accepted: bool = AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, is_advanced, was_already_singing)
+		var accepted: bool = AudioManager.request_bucket_play(board_type, bucket_idx, bucket_distance, false, was_already_singing)
 		if accepted and not was_already_singing:
 			bucket.mark_singing()
 			_singing_positions[_bucket_position_key(bucket.position.x + buckets_container.position.x)] = true
@@ -1700,17 +1697,6 @@ func _on_rewards_claimed(level: int, rewards: Array[RewardData]) -> void:
 				# milestone still feels rewarding (scaling count + frenzy tint), the
 				# same as a DROP_COINS milestone.
 				_coin_frenzy_drop(TierRegistry.primary_currency(board_type), mini(level, FRENZY_MAX_COINS))
-		elif reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET and reward.target_board == board_type:
-			should_show_advanced_buckets = true
-			build_board()
-
-
-func _on_reconcile_reward(reward: RewardData) -> void:
-	if reward.type == RewardData.RewardType.UNLOCK_ADVANCED_BUCKET \
-			and reward.target_board == board_type \
-			and not should_show_advanced_buckets:
-		should_show_advanced_buckets = true
-		build_board()
 
 
 # ── Lattice geometry + deflector vocabulary ───────────────────────────────────
@@ -2737,7 +2723,8 @@ func _spawn_earring(side: int, apex_local: Vector3, transporter_col: int) -> Ear
 	earring.position = apex_local
 	if transporter_col >= 0 and _transporter_bucket:
 		earring.set_transporter(transporter_col, _transporter_bucket)
-	earring.setup(_earring_rows, side, space_between_pegs, board_type)
+	earring.setup(_earring_rows, side, space_between_pegs, board_type,
+		TierRegistry.get_tier_index(board_type))
 	# Seed the instance in hand, not _left_earring/_right_earring — the caller
 	# assigns those AFTER this returns, so pushing to the fields here would miss
 	# whichever earring is still null and leave the pair silently asymmetric.
@@ -2927,14 +2914,6 @@ func _shift_voided_columns(delta: int) -> void:
 		shifted.append(B + delta)
 	_voided_columns = shifted
 
-## Whether a bucket at this distance-from-center is an "advanced" bucket
-## (alternate currency). Single predicate so build_board, _bucket_value_for_distance,
-## the bucket-value ripple, and the add-rows glissando can't drift on the
-## condition.
-func _is_advanced_at_distance(_distance: int) -> bool:
-	# Single-currency model: advanced (raw-currency edge) buckets are removed.
-	# Kept as a stub so existing callers (bucket value, multimesh build) stay valid.
-	return false
 
 
 ## Computes the value for a bucket at a given distance from center.
@@ -2982,7 +2961,6 @@ func _play_bucket_value_upgrade_ripple() -> void:
 		if not distance_groups.has(distance):
 			distance_groups[distance] = []
 
-		var is_adv: bool = _is_advanced_at_distance(distance)
 		# Gateways stay at 0 — the ripple must not resurrect a value on a bucket
 		# that pays nothing (build_board zeroes them for the same reason).
 		var new_value: int = 0 if _is_gateway_bucket(i) else _bucket_value_for_distance(distance)
@@ -2993,7 +2971,6 @@ func _play_bucket_value_upgrade_ripple() -> void:
 			"distance": distance,
 			"old_value": bucket.value,
 			"new_value": new_value,
-			"is_advanced": is_adv,
 		})
 
 	var t: VisualTheme = ThemeProvider.theme
@@ -3044,12 +3021,11 @@ func _play_bucket_value_upgrade_ripple() -> void:
 				var new_val: int = entry["new_value"]
 				var idx: int = entry["index"]
 				var d: int = entry["distance"]
-				var is_adv: bool = entry["is_advanced"]
 
 				bucket.value = new_val
 				bucket.pulse_down()
 				bucket.animate_value_upgrade(old_val, new_val, label_duration)
-				AudioManager.force_play_bucket(board_type, idx, d, is_adv)
+				AudioManager.force_play_bucket(board_type, idx, d, false)
 				bucket.mark_singing()
 		)
 
@@ -3203,13 +3179,11 @@ func _play_row_upgrade_glissando(old_num_rows: int, old_container_y: float) -> v
 			var bucket: Bucket = get_bucket(i)
 			if not bucket:
 				return
-			var distance: int = absi(i - center)
-			var is_adv: bool = _is_advanced_at_distance(distance)
 			bucket.fall_to_rest(start_offset, overshoot, fall_duration)
 			if i == 0 or i == last_idx:
 				bucket.fade_in(fall_duration)
 			bucket.mark_singing()
-			AudioManager.force_play_bucket(board_type, i, entry["glissando_degree"], is_adv)
+			AudioManager.force_play_bucket(board_type, i, entry["glissando_degree"], false)
 			peg_field.reveal_pegs(entry["reveal_peg_indices"])
 		)
 		_upgrade_ripple_tween.tween_interval(glissando_interval)
@@ -3501,8 +3475,8 @@ func apply_saved_state(upgrade_state: Dictionary) -> void:
 	# clamped rather than trusted.
 	set_tilt_notch(upgrade_state.get("tilt_notch", BoardTilt.NOTCH_DEFAULT))
 
-	if upgrade_state.get("show_advanced_buckets", false):
-		should_show_advanced_buckets = true
+	# Old saves may still carry `show_advanced_buckets`. It is ignored: the
+	# advanced-bucket system it enabled no longer exists.
 
 	build_board()
 

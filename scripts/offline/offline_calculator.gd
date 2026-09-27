@@ -27,17 +27,11 @@ static func _currency_key(currency_type: Enums.CurrencyType) -> String:
 static func _primary_currency_key(board_type: Enums.BoardType) -> String:
 	return _currency_key(TierRegistry.primary_currency(board_type))
 
-static func _advanced_currency_key(board_type: Enums.BoardType) -> String:
-	var adv: int = TierRegistry.advanced_bucket_currency(board_type)
-	if adv < 0:
-		return ""
-	return _currency_key(adv)
-
-
 ## A currency is considered "ever earned" when its tier's board has been
 ## prestiged at least once, OR when it's the starting tier (always earnable).
-## Currencies with no associated tier (e.g. unrecognized keys) are treated
-## as always earnable to avoid hiding legitimate balances.
+## Currencies with no associated tier are treated as always earnable. That is
+## WHITE_COIN, which no board owns: reaching an earring at all is a far deeper
+## gate than a prestige, so there is no first-time beat left to protect.
 ## Used to suppress offline earnings for currencies the player has never
 ## organically earned — preserves the first-time prestige beat.
 static func _is_currency_ever_earned(currency_key: String, prestige_data: Dictionary) -> bool:
@@ -64,7 +58,6 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 	var assignments: Dictionary = boards_data.get("assignments", {})
 	var board_types: Array = boards_data.get("board_types", [0])
 	var board_state: Dictionary = boards_data.get("board_state", {})
-	var advanced_buckets: Dictionary = boards_data.get("advanced_buckets", {})
 	var prestige_data: Dictionary = result.get("prestige", {})
 
 	# Precompute per-assignment configuration
@@ -89,14 +82,11 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 		# pre-earrings saves, where 0 reproduces the old layout exactly.
 		var earring_rows: int = bs.get("earring_rows", 0)
 		var bucket_value_multiplier: int = bs.get("bucket_value_multiplier", 1)
-		var distance_for_advanced: int = bs.get("distance_for_advanced_buckets", 3)
 		var multi_drop: int = bs.get("multi_drop_count", 1)
-		var show_advanced: bool = advanced_buckets.get(board_str, false)
 
 		var probabilities: Array = _get_pascal_probabilities(num_rows)
 		var bucket_layout: Array = _get_bucket_layout(
-			num_rows, bucket_value_multiplier, distance_for_advanced,
-			show_advanced, board_type, earring_rows)
+			num_rows, bucket_value_multiplier, board_type, earring_rows)
 
 		# One autodropper pool since the advanced autodropper was removed, so
 		# "<BOARD>_NORMAL" is the only assignment key a board can carry.
@@ -111,7 +101,9 @@ static func calculate(state: Dictionary, elapsed_seconds: float) -> Dictionary:
 				var c_key: String = bucket["currency_key"]
 				if not _is_currency_ever_earned(c_key, prestige_data):
 					continue
-				var value: int = bucket["value"]
+				# Float, not int: a gateway's value is the earring's EXPECTED white
+				# (~2.09), and truncating it would quietly lose several percent.
+				var value: float = bucket["value"]
 				var earning: float = probabilities[i] * value * multi_drop
 				earnings_per_drop[c_key] = earnings_per_drop.get(c_key, 0.0) + earning
 
@@ -201,33 +193,40 @@ static func _get_pascal_probabilities(num_rows: int) -> Array:
 
 ## Per-bucket currency + value for the offline model.
 ##
-## `earring_rows` > 0 means the two edge buckets are gateways: they pay nothing
-## themselves, and the coin falls through into an earring where every bucket is
-## worth EarringBoard.EARRING_BUCKET_VALUE. Without this the edges would be
-## credited as the highest-value buckets on the board while awarding nothing in
-## live play. (The transporter, reachable on 1 in 2^earring_rows of those
-## landings once the earrings meet, pays 0; at the meeting size that is a 0.4%
-## over-credit and is deliberately not modelled.)
-static func _get_bucket_layout(num_rows: int, bucket_value_multiplier: int, distance_for_advanced: int, show_advanced: bool, board_type: Enums.BoardType, earring_rows: int = 0) -> Array:
+##
+## `earring_rows` > 0 means the two edge buckets are gateways: they pay no
+## primary currency themselves, and the coin falls through into an earring that
+## pays WHITE. Without this the edges would be credited as the highest-value
+## buckets on the board while awarding nothing in live play.
+##
+## A gateway is credited the earring's EXPECTED white (WhiteCurrency.expected_value)
+## rather than simulating the earring's own lattice. That is exact, not an
+## approximation — the expectation weights every earring bucket by its binomial
+## probability, which is the same distribution the simulation would sample. It is
+## kept as a float for that reason: rounding a ~2.09 expectation to an int would
+## quietly lose several percent of white per drop. (The transporter, reachable on
+## 1 in 2^earring_rows of those landings once the earrings meet, pays 0; at the
+## meeting size that is a ~0.9% over-credit and is deliberately not modelled. It
+## is larger than the 1-in-256 landing rate suggests because the transporter
+## replaces the earring's inner CORNER, which the linear V makes its top payer.)
+static func _get_bucket_layout(num_rows: int, bucket_value_multiplier: int, board_type: Enums.BoardType, earring_rows: int = 0) -> Array:
 	var num_buckets: int = num_rows + 1
 	var primary_currency: String = _primary_currency_key(board_type)
-	var advanced_currency: String = _advanced_currency_key(board_type)
+	var white_key: String = _currency_key(Enums.CurrencyType.WHITE_COIN)
+	var tier_index: int = TierRegistry.get_tier_index(board_type)
 	var layout: Array = []
 
 	for i in num_buckets:
 		@warning_ignore("integer_division")
 		var distance_from_center: int = int(abs(i - num_buckets / 2))
-		var value: int = 1
+		# Float, because a gateway's value is an expectation rather than a bucket
+		# label — rounding it here would lose a few percent of white per drop.
+		var value: float = float(1 + distance_from_center * bucket_value_multiplier)
 		var currency_key: String = primary_currency
 
-		if distance_from_center >= distance_for_advanced and show_advanced and advanced_currency != "":
-			currency_key = advanced_currency
-			distance_from_center -= distance_for_advanced
-
-		value += distance_from_center * bucket_value_multiplier
 		if EarringGeometry.is_gateway_bucket(i, num_buckets, earring_rows):
-			currency_key = primary_currency
-			value = EarringBoard.EARRING_BUCKET_VALUE
+			currency_key = white_key
+			value = WhiteCurrency.expected_value(earring_rows, tier_index)
 		layout.append({"currency_key": currency_key, "value": value})
 
 	return layout

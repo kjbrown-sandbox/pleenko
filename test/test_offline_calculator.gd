@@ -19,7 +19,8 @@ func _run_tests() -> void:
 	test_input_not_mutated()
 	test_multiple_autodroppers_scale_throughput()
 	test_stale_advanced_key_does_not_change_normal_earnings()
-	test_normal_drops_earn_advanced_currency()
+	test_earring_gateways_credit_white()
+	test_white_credited_without_any_prestige()
 	test_long_offline_capped_by_currency_cap()
 	test_zero_balance_cannot_afford_drops()
 	test_higher_bucket_value_multiplier()
@@ -27,16 +28,16 @@ func _run_tests() -> void:
 	test_missing_board_state_uses_defaults()
 	test_all_three_boards_interleaved()
 	test_gold_accumulates_then_orange_fires()
-	test_no_raw_orange_credited_before_orange_prestige()
-	test_raw_orange_credited_after_orange_prestige()
+	test_no_orange_credited_before_orange_prestige()
+	test_orange_credited_after_orange_prestige()
 	test_gold_always_credited_even_without_prestige()
-	test_no_raw_red_credited_before_red_prestige()
+	test_no_red_credited_before_red_prestige()
 
 
 # --- Test state builder ---
 
 ## Default board_state for a basic board: 2 rows, drop_delay=2.0 (gold default),
-## bucket_value_multiplier=1, distance_for_advanced=3, multi_drop=1.
+## bucket_value_multiplier=1, multi_drop=1.
 func _default_board_state(board_type: String, overrides: Dictionary = {}) -> Dictionary:
 	var base_delay := 2.0
 	match board_type:
@@ -46,7 +47,6 @@ func _default_board_state(board_type: String, overrides: Dictionary = {}) -> Dic
 		"num_rows": 2,
 		"drop_delay": base_delay,
 		"bucket_value_multiplier": 1,
-		"distance_for_advanced_buckets": 3,
 		"multi_drop_count": 1,
 	}
 	for key in overrides:
@@ -71,7 +71,6 @@ func _make_state(overrides: Dictionary = {}) -> Dictionary:
 		"boards": {
 			"board_types": [0],
 			"assignments": {},
-			"advanced_buckets": {"GOLD": false, "ORANGE": false, "RED": false},
 			"autodroppers_unlocked": false,
 			"board_state": {
 				"GOLD": _default_board_state("GOLD"),
@@ -104,10 +103,9 @@ func _make_state(overrides: Dictionary = {}) -> Dictionary:
 func _make_currency_data() -> Dictionary:
 	return {
 		"GOLD_COIN": {"balance": 100, "cap": 500, "cap_raise_level": 0},
-		"RAW_ORANGE": {"balance": 0, "cap": 50, "cap_raise_level": 0},
 		"ORANGE_COIN": {"balance": 0, "cap": 500, "cap_raise_level": 0},
-		"RAW_RED": {"balance": 0, "cap": 50, "cap_raise_level": 0},
 		"RED_COIN": {"balance": 0, "cap": 500, "cap_raise_level": 0},
+		"WHITE_COIN": {"balance": 0, "cap": 500, "cap_raise_level": 0},
 	}
 
 
@@ -191,13 +189,11 @@ func test_orange_board_depletes_gold() -> void:
 	# 2 rows -> 3 buckets. Pascal: [0.25, 0.5, 0.25]
 	# Bucket layout: [2 ORANGE, 1 ORANGE, 2 ORANGE]
 	# Per-bucket earnings: 0.25*2=0.5, 0.5*1=0.5, 0.25*2=0.5. Total per drop = 1.5 ORANGE
-	# Single-currency model: cost per drop is 100 GOLD only (no raw component).
+	# Cost per drop is 100 GOLD.
 	# Gold limits: floor(200/100) = 2. Actual = min(15, 2) = 2.
-	# RAW_ORANGE is no longer spent, so it stays at 20.
 	var state := _make_state({
 		"currency": {
 			"GOLD_COIN": {"balance": 200, "cap": 500, "cap_raise_level": 0},
-			"RAW_ORANGE": {"balance": 20, "cap": 50, "cap_raise_level": 0},
 		},
 		"boards": {
 			"board_types": [0, 1],
@@ -211,7 +207,6 @@ func test_orange_board_depletes_gold() -> void:
 	var result := OfflineCalculator.calculate(state, 60.0)
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 0, "gold depleted")
 	assert_equal(result["currency"]["ORANGE_COIN"]["balance"], 3, "orange earned")
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 20, "raw_orange untouched (no raw cost)")
 
 
 func test_cross_board_processing_order() -> void:
@@ -220,17 +215,14 @@ func test_cross_board_processing_order() -> void:
 	# Gold: 5 drops/batch, earn 1.5 GOLD/drop, cost 1 GOLD/drop
 	# Orange: ~2.5 drops/batch, earn 1.5 ORANGE/drop, cost 100 GOLD/drop (single-currency)
 	#
-	# The GOLD spend was always the binding limit on orange drops (RAW_ORANGE 20
-	# was never the bottleneck), so GOLD and ORANGE outcomes are unchanged. With
-	# the raw component removed, RAW_ORANGE is simply never spent (stays 20).
+	# GOLD is the binding limit on orange drops.
 	# Batch 1: Gold 5 drops (100→102). Orange 1 drop (102→2, ORANGE 0→1)
 	# Batch 2: Gold limited to 2 drops (2→3). Orange can't afford (3 < 100).
 	# Batches 3-6: Gold gradually recovers but never reaches 100 for another orange drop.
-	# Final: GOLD=12, ORANGE=1, RAW_ORANGE=20
+	# Final: GOLD=12, ORANGE=1
 	var state := _make_state({
 		"currency": {
 			"GOLD_COIN": {"balance": 100, "cap": 500, "cap_raise_level": 0},
-			"RAW_ORANGE": {"balance": 20, "cap": 50, "cap_raise_level": 0},
 		},
 		"boards": {
 			"board_types": [0, 1],
@@ -244,7 +236,6 @@ func test_cross_board_processing_order() -> void:
 	var result := OfflineCalculator.calculate(state, 60.0)
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 12, "gold after both boards")
 	assert_equal(result["currency"]["ORANGE_COIN"]["balance"], 1, "orange earned")
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 20, "raw_orange untouched (no raw cost)")
 
 
 func test_insufficient_currency_limits_drops() -> void:
@@ -252,13 +243,12 @@ func test_insufficient_currency_limits_drops() -> void:
 	# Orange board: 2 rows -> 3 buckets. Pascal: [0.25, 0.5, 0.25]
 	# Bucket layout: [2 ORANGE, 1 ORANGE, 2 ORANGE]
 	# Per-bucket earnings: 0.25*2=0.5, 0.5*1=0.5, 0.25*2=0.5. Total per drop = 1.5 ORANGE
-	# Single-currency model: the only fuel is GOLD (100/drop). GOLD=300 limits the
+	# The only fuel is GOLD (100/drop). GOLD=300 limits the
 	# board to 3 drops total even though 15 are otherwise available in 60s.
-	# 3 drops: GOLD 300→0, ORANGE 3*1.5 = 4.5 → 4. RAW_ORANGE is never spent.
+	# 3 drops: GOLD 300→0, ORANGE 3*1.5 = 4.5 → 4.
 	var state := _make_state({
 		"currency": {
 			"GOLD_COIN": {"balance": 300, "cap": 500, "cap_raise_level": 0},
-			"RAW_ORANGE": {"balance": 3, "cap": 50, "cap_raise_level": 0},
 		},
 		"boards": {
 			"board_types": [0, 1],
@@ -272,7 +262,6 @@ func test_insufficient_currency_limits_drops() -> void:
 	var result := OfflineCalculator.calculate(state, 60.0)
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 0, "gold exhausted after 3 drops")
 	assert_equal(result["currency"]["ORANGE_COIN"]["balance"], 4, "orange earned")
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 3, "raw_orange untouched (no raw cost)")
 
 
 ## The advanced autodropper is gone, so a "<BOARD>_ADVANCED" assignment key can
@@ -282,22 +271,14 @@ func test_insufficient_currency_limits_drops() -> void:
 func test_stale_advanced_assignment_earns_nothing_offline() -> void:
 	print("test_stale_advanced_assignment_earns_nothing_offline")
 	var state := _make_state({
-		"currency": {
-			"RAW_ORANGE": {"balance": 20, "cap": 50, "cap_raise_level": 0},
-		},
 		"boards": {
 			"assignments": {"GOLD_ADVANCED": 1},
-			"advanced_buckets": {"GOLD": true, "ORANGE": false, "RED": false},
-			"board_state": {
-				"GOLD": _default_board_state("GOLD", {"num_rows": 8}),
-			},
+			"board_state": {"GOLD": _default_board_state("GOLD", {"num_rows": 8})},
 		},
 		"prestige": {"ORANGE": 1},
 	})
 	var before_gold: int = state["currency"]["GOLD_COIN"]["balance"]
 	var result := OfflineCalculator.calculate(state, 60.0)
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 20,
-		"a stale advanced assignment spends nothing")
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], before_gold,
 		"a stale advanced assignment earns nothing")
 
@@ -332,18 +313,15 @@ func test_multiple_autodroppers_scale_throughput() -> void:
 func test_stale_advanced_key_does_not_change_normal_earnings() -> void:
 	print("test_stale_advanced_key_does_not_change_normal_earnings")
 	var boards := {
-		"advanced_buckets": {"GOLD": true, "ORANGE": false, "RED": false},
 		"board_state": {
 			"GOLD": _default_board_state("GOLD", {"num_rows": 8}),
 		},
 	}
 	var normal_only := _make_state({
-		"currency": {"RAW_ORANGE": {"balance": 0, "cap": 50, "cap_raise_level": 0}},
 		"boards": _with_assignments(boards, {"GOLD_NORMAL": 1}),
 		"prestige": {"ORANGE": 1},
 	})
 	var with_stale := _make_state({
-		"currency": {"RAW_ORANGE": {"balance": 0, "cap": 50, "cap_raise_level": 0}},
 		"boards": _with_assignments(boards, {"GOLD_NORMAL": 1, "GOLD_ADVANCED": 1}),
 		"prestige": {"ORANGE": 1},
 	})
@@ -354,35 +332,57 @@ func test_stale_advanced_key_does_not_change_normal_earnings() -> void:
 	assert_equal(actual["currency"]["GOLD_COIN"]["balance"],
 		expected["currency"]["GOLD_COIN"]["balance"],
 		"stale advanced key does not change gold earned")
-	assert_equal(actual["currency"]["RAW_ORANGE"]["balance"],
-		expected["currency"]["RAW_ORANGE"]["balance"],
-		"stale advanced key does not change raw orange earned")
 
 
-func test_normal_drops_earn_advanced_currency() -> void:
-	print("test_normal_drops_earn_advanced_currency")
-	# GOLD_NORMAL on gold board with 8 rows and advanced buckets visible
-	# Same bucket layout as test_normal_and_advanced_on_same_board
-	# coin_multiplier=1 (normal), so RAW_ORANGE earned at 1x not 2x
-	# 30 drops, cost 1 GOLD each
-	# GOLD per drop: 462/256 = 1.8047 (net positive, all affordable)
-	# RAW_ORANGE per drop: 20/256 = 0.078125
-	# GOLD: 100 - 30 + int(30*1.8047) = 124
-	# RAW_ORANGE: 0 + int(30*0.078125) = int(2.34375) = 2
+## A board with earrings credits WHITE from its two gateways, and nothing else on
+## the board changes. White is the only currency a gateway can pay.
+func test_earring_gateways_credit_white() -> void:
+	print("test_earring_gateways_credit_white")
+	var earring_rows: int = EarringGeometry.max_earring_rows()
 	var state := _make_state({
 		"boards": {
 			"assignments": {"GOLD_NORMAL": 1},
-			"advanced_buckets": {"GOLD": true, "ORANGE": false, "RED": false},
-			"board_state": {
-				"GOLD": _default_board_state("GOLD", {"num_rows": 8}),
-			},
+			"board_state": {"GOLD": _default_board_state("GOLD", {
+				"num_rows": EarringGeometry.MAIN_MAX_ROWS,
+				"earring_rows": earring_rows,
+			})},
 		},
-		# Advanced buckets on gold earn RAW_ORANGE — gated by orange prestige.
-		"prestige": {"ORANGE": 1},
 	})
-	var result := OfflineCalculator.calculate(state, 60.0)
-	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 124, "gold from normal on advanced board")
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 2, "raw_orange earned at 1x multiplier")
+	var result := OfflineCalculator.calculate(state, 600.0)
+	assert_true(result["currency"]["WHITE_COIN"]["balance"] > 0,
+		"a board with earrings accrues white offline")
+
+	# Without earrings the same board must accrue none.
+	var no_earrings := _make_state({
+		"boards": {
+			"assignments": {"GOLD_NORMAL": 1},
+			"board_state": {"GOLD": _default_board_state("GOLD", {
+				"num_rows": EarringGeometry.MAIN_MAX_ROWS,
+			})},
+		},
+	})
+	var bare := OfflineCalculator.calculate(no_earrings, 600.0)
+	assert_equal(bare["currency"]["WHITE_COIN"]["balance"], 0,
+		"a board with no earrings accrues no white")
+
+
+## White has no tier, so the prestige gate that suppresses never-earned
+## currencies must not apply to it — reaching an earring is a far deeper gate.
+func test_white_credited_without_any_prestige() -> void:
+	print("test_white_credited_without_any_prestige")
+	var state := _make_state({
+		"boards": {
+			"assignments": {"GOLD_NORMAL": 1},
+			"board_state": {"GOLD": _default_board_state("GOLD", {
+				"num_rows": EarringGeometry.MAIN_MAX_ROWS,
+				"earring_rows": EarringGeometry.max_earring_rows(),
+			})},
+		},
+		"prestige": {},
+	})
+	var result := OfflineCalculator.calculate(state, 600.0)
+	assert_true(result["currency"]["WHITE_COIN"]["balance"] > 0,
+		"white accrues with no prestige recorded")
 
 
 func test_long_offline_capped_by_currency_cap() -> void:
@@ -435,8 +435,7 @@ func test_red_board_basic() -> void:
 	# 1 RED_NORMAL autodropper, 2 rows, drop_delay=8.0, 60s
 	# drops = floor(1/8.0 * 60) = 7
 	# 3 buckets: [2 RED, 1 RED, 2 RED]. Per-drop = 1.5 RED_COIN
-	# Single-currency model: RED costs 100 ORANGE_COIN per drop (the previous
-	# tier's PRIMARY currency). No raw component.
+	# RED costs 100 ORANGE_COIN per drop (the previous tier's PRIMARY currency).
 	# ORANGE_COIN seeded high so affordability isn't the limit.
 	# 7 drops: ORANGE_COIN 1000 - 700 = 300.
 	# RED_COIN per drop = 0.25*2 + 0.5*1 + 0.25*2 = 1.5; floor(7 * 1.5) = 10
@@ -517,7 +516,6 @@ func test_gold_accumulates_then_orange_fires() -> void:
 	var state := _make_state({
 		"currency": {
 			"GOLD_COIN": {"balance": 60, "cap": 500, "cap_raise_level": 0},
-			"RAW_ORANGE": {"balance": 10, "cap": 50, "cap_raise_level": 0},
 		},
 		"boards": {
 			"board_types": [0, 1],
@@ -530,46 +528,48 @@ func test_gold_accumulates_then_orange_fires() -> void:
 	})
 	var result := OfflineCalculator.calculate(state, 80.0)
 	assert_equal(result["currency"]["GOLD_COIN"]["balance"], 20, "gold after orange spent 100")
-	# Single-currency model: orange drops cost GOLD only, RAW_ORANGE is untouched.
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 10, "raw_orange untouched (no raw cost)")
 
 
-func test_no_raw_orange_credited_before_orange_prestige() -> void:
-	print("test_no_raw_orange_credited_before_orange_prestige")
-	# Gold-only board, advanced buckets unlocked, GOLD_NORMAL autodropper assigned.
-	# Without an orange prestige, the player has never organically earned RAW_ORANGE,
-	# so offline must not credit any. GOLD should still accrue normally.
+## An orange board running offline without an orange prestige recorded must not
+## credit ORANGE_COIN — the player has never organically earned it, and the gate
+## exists to preserve that first-time prestige beat.
+##
+## `prestige` is seeded with an unrelated key rather than left empty: _make_state
+## auto-seeds prestige from board_types when the dict is empty, which would grant
+## the very ORANGE key this test needs absent.
+func test_no_orange_credited_before_orange_prestige() -> void:
+	print("test_no_orange_credited_before_orange_prestige")
 	var state := _make_state({
 		"boards": {
-			"assignments": {"GOLD_NORMAL": 1},
-			"advanced_buckets": {"GOLD": true, "ORANGE": false, "RED": false},
+			"board_types": [0, 1],
+			"assignments": {"ORANGE_NORMAL": 1},
 			"board_state": {
-				"GOLD": _default_board_state("GOLD", {"num_rows": 8}),
+				"GOLD": _default_board_state("GOLD"),
+				"ORANGE": _default_board_state("ORANGE", {"num_rows": 8}),
 			},
 		},
-		"prestige": {},
+		"prestige": {"GOLD": 0},
 	})
-	var result := OfflineCalculator.calculate(state, 60.0)
-	assert_equal(result["currency"]["RAW_ORANGE"]["balance"], 0, "no raw_orange before prestige")
-	assert_true(result["currency"]["GOLD_COIN"]["balance"] > 100, "gold still accrues")
+	var result := OfflineCalculator.calculate(state, 600.0)
+	assert_equal(result["currency"]["ORANGE_COIN"]["balance"], 0, "no orange before prestige")
 
 
-func test_raw_orange_credited_after_orange_prestige() -> void:
-	print("test_raw_orange_credited_after_orange_prestige")
-	# Same setup as the gate test but with orange prestige claimed —
-	# RAW_ORANGE earnings should now flow.
+func test_orange_credited_after_orange_prestige() -> void:
+	print("test_orange_credited_after_orange_prestige")
+	# Same setup with the orange prestige claimed — earnings should now flow.
 	var state := _make_state({
 		"boards": {
-			"assignments": {"GOLD_NORMAL": 1},
-			"advanced_buckets": {"GOLD": true, "ORANGE": false, "RED": false},
+			"board_types": [0, 1],
+			"assignments": {"ORANGE_NORMAL": 1},
 			"board_state": {
-				"GOLD": _default_board_state("GOLD", {"num_rows": 8}),
+				"GOLD": _default_board_state("GOLD"),
+				"ORANGE": _default_board_state("ORANGE", {"num_rows": 8}),
 			},
 		},
 		"prestige": {"ORANGE": 1},
 	})
-	var result := OfflineCalculator.calculate(state, 60.0)
-	assert_true(result["currency"]["RAW_ORANGE"]["balance"] > 0, "raw_orange earned post-prestige")
+	var result := OfflineCalculator.calculate(state, 600.0)
+	assert_true(result["currency"]["ORANGE_COIN"]["balance"] > 0, "orange earned post-prestige")
 
 
 func test_gold_always_credited_even_without_prestige() -> void:
@@ -583,29 +583,28 @@ func test_gold_always_credited_even_without_prestige() -> void:
 	assert_true(result["currency"]["GOLD_COIN"]["balance"] > 100, "gold accrues without prestige")
 
 
-func test_no_raw_red_credited_before_red_prestige() -> void:
-	print("test_no_raw_red_credited_before_red_prestige")
-	# Player has prestiged orange (gold board exists, orange board exists) but
-	# never red. Orange board with advanced buckets would otherwise credit RAW_RED;
-	# the gate must block that.
+## The gate is per-currency, not global: a player who has prestiged orange but
+## never red still accrues orange while red stays blocked.
+func test_no_red_credited_before_red_prestige() -> void:
+	print("test_no_red_credited_before_red_prestige")
 	var state := _make_state({
 		"currency": {
 			"GOLD_COIN": {"balance": 500, "cap": 500, "cap_raise_level": 0},
-			"RAW_ORANGE": {"balance": 50, "cap": 50, "cap_raise_level": 0},
+			"ORANGE_COIN": {"balance": 500, "cap": 500, "cap_raise_level": 0},
 		},
 		"boards": {
-			"board_types": [0, 1],
-			"assignments": {"ORANGE_NORMAL": 1},
-			"advanced_buckets": {"GOLD": false, "ORANGE": true, "RED": false},
+			"board_types": [0, 1, 2],
+			"assignments": {"ORANGE_NORMAL": 1, "RED_NORMAL": 1},
 			"board_state": {
 				"GOLD": _default_board_state("GOLD"),
 				"ORANGE": _default_board_state("ORANGE", {"num_rows": 8}),
+				"RED": _default_board_state("RED", {"num_rows": 8}),
 			},
 		},
 		"prestige": {"ORANGE": 1},
 	})
 	var result := OfflineCalculator.calculate(state, 600.0)
-	assert_equal(result["currency"]["RAW_RED"]["balance"], 0, "no raw_red before red prestige")
+	assert_equal(result["currency"]["RED_COIN"]["balance"], 0, "no red before red prestige")
 	# Liveness. Without this, the gate assertion above also passes when NO drops
 	# are simulated at all — which is exactly how this test silently stopped
 	# testing anything once its old "ORANGE_ADVANCED" key became inert.

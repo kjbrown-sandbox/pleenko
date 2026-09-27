@@ -1,6 +1,6 @@
 class_name FormatUtils
 
-## Human-readable name for a currency type (e.g. "Gold", "Raw orange").
+## Human-readable name for a currency type (e.g. "Gold", "White").
 ## Strips "_coin" suffix so GOLD_COIN → "gold", ORANGE_COIN → "orange".
 ## Capital uses sentence case (first letter only), not Title Case.
 static func currency_name(type: Enums.CurrencyType, capital: bool = true) -> String:

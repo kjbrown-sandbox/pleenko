@@ -104,9 +104,12 @@ func _currency_bars_revealed() -> bool:
 
 
 func _is_board_for_coin_type_unlocked(coin_type: Enums.CurrencyType) -> bool:
-	# Raw currencies are dormant in the single-currency model — never show them.
-	if TierRegistry.is_raw_currency(coin_type):
-		return false
+	# WHITE_COIN is tier-less, so it can't gate on a board of its own. Reveal it
+	# when the first board whose drops COST white unlocks — that is the moment it
+	# starts mattering, and showing it earlier is just noise on the gold board.
+	if coin_type == Enums.CurrencyType.WHITE_COIN:
+		var gated := TierRegistry.get_tier_by_index(WhiteCurrency.FIRST_GATED_TIER_INDEX)
+		return gated != null and _board_manager.is_board_unlocked(gated.board_type)
 	var tier := TierRegistry.get_tier_for_currency(coin_type)
 	if not tier:
 		return true
@@ -554,7 +557,16 @@ func _update_all_cap_buttons() -> void:
 	for currency_type in _bars:
 		var bar = _bars[currency_type]
 		var board: int = CurrencyManager.cap_raise_board(currency_type)
-		var show := board != -1 and UpgradeManager.is_cap_raise_available(board)
+		# WHITE is tier-less, so no board owns its cap raise and `board` is always
+		# -1. Gating on that would hide its "+" forever, freezing the white cap at
+		# STARTING_CAP — and since banking is capped, the most expensive board's
+		# drops could never become affordable. White gates on itself instead,
+		# mirroring CurrencyManager.can_buy_cap_raise.
+		var show: bool
+		if currency_type == Enums.CurrencyType.WHITE_COIN:
+			show = true
+		else:
+			show = board != -1 and UpgradeManager.is_cap_raise_available(board)
 		# Keep a not-yet-shown button hidden while its board's reveal runs; never
 		# hide one that is already visible.
 		if show and _is_cap_reveal_suppressed(board) and not bar.plus_button.visible:
