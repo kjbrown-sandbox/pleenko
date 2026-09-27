@@ -59,7 +59,7 @@ Coins should calculate their path **row by row**, not all at once. This way if t
 
 - `autoloads/` — singleton managers. One subdirectory per autoload.
 - `entities/` — scenes (`.tscn` + `.gd` pairs). Each is self-contained.
-- `scripts/` — shared data classes, utilities (enums, reward/tier data, format utils, offline earnings, `lattice.gd` Galton-lattice geometry, `multimesh_pool.gd` pooled-instance mechanic, `vfx_utils.gd` shockwave + burst-swoop particles, `universal_upgrades.gd` signature-upgrade table, `board_tilt.gd` centre-seeking bounce bias, `auto_buy_locks.gd` auto-buy slot rules).
+- `scripts/` — shared data classes, utilities (enums, reward/tier data, format utils, offline earnings, `lattice.gd` Galton-lattice geometry, `multimesh_pool.gd` pooled-instance mechanic, `vfx_utils.gd` shockwave + burst-swoop particles, `universal_upgrades.gd` signature-upgrade table, `board_tilt.gd` centre-seeking bounce bias, `auto_buy_locks.gd` auto-buy slot rules, `white_currency.gd` white mint curve + drop-cost gate).
 - `style_lab/` — `VisualTheme` resource, presets under `style_lab/presets/*.tres`, plus the in-editor style lab scene.
 - `assets/` — icons, sounds, fonts.
 
@@ -129,7 +129,7 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
 
 **SaveManager** — `autoloads/save_manager/save_manager.gd`
 
-- Orchestrates save/load to `user://save.json`. No signals. `SAVE_VERSION = 6`.
+- Orchestrates save/load to `user://save.json`. No signals. `SAVE_VERSION = 9`.
 - Deserialization order (strict): `PrestigeManager → ChallengeProgressManager → OnboardingProgress → LevelManager → CurrencyManager → UpgradeManager → BoardManager`. Order matters so signals fire against fully-initialized state.
 - `_migrate(data, version)` runs sequential version upgrades. v4→v5 seeds `OnboardingProgress` peeked-boards from the existing `boards.board_types` so existing players don't see peeks for things they already unlocked. v5→v6 seeds `OnboardingProgress.autodropper_intro_seen = true` for any save with `boards.normal_autodroppers_unlocked = true`, so existing players don't see the first-time autodropper animation replay on load.
 - All reset variants funnel through `_wipe_save(extra_blocks)`: delete the save, rewrite a minimal save (`version` + `_device_prefs()`) merged with `extra_blocks`, then `reset_state()`. `_device_prefs()` is the single source of truth for the surviving device preferences — audio (`audio_muted`, `master_volume`, `vfx_settings`) and `max_fps` + `window_mode` (`PerformanceSettings`).
@@ -289,6 +289,24 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
   invoked out of order and spawn a coin WITHOUT consuming a peg, which is the single way the
   lucky peg's split-rate bound could be broken.
 
+**WhiteCurrency** — `scripts/white_currency.gd` (`class_name WhiteCurrency`, pure static)
+
+- All rules for `WHITE_COIN`, the one **tier-less** currency: minted ONLY by earring buckets
+  (every board's earrings mint it), spent ONLY on late-board drops and its own cap raises.
+- **`TierRegistry.get_tier_for_currency(WHITE_COIN)` is null**, deliberately. Anything that
+  reaches for a tier to derive a cap or a cap-raise price must special-case white —
+  `CurrencyManager` (pricing) and `CoinValues._update_all_cap_buttons` (the "+" button) both do.
+  Gating white's "+" on `cap_raise_board != -1` freezes its cap forever and makes the priciest
+  board permanently undroppable; `test_white_economy` guards the button, not just the model.
+- Mint curve is the **same linear V the main board uses** (1 at centre, +1 per step out), scaled
+  `3^tier` — NOT the binomial reciprocal of the first pass. `BUCKET_VALUE` upgrades never apply:
+  keeping earring payouts outside the per-board upgrade tree is why white is a separate currency.
+- `DROP_COSTS` is authored, not derived. Every gated board runs at a white deficit by design, so
+  white is the one resource the endgame cannot farm locally. `STARTING_CAP` must stay above the
+  priciest entry — banking is capped, so an unaffordable first drop can never become affordable.
+- `expected_value` is probability-weighted (the buckets are not EV-equal under the linear V).
+  `OfflineCalculator` credits a gateway that expectation rather than simulating the earring.
+
 **EarringGeometry** — `scripts/earring_geometry.gd` (`class_name EarringGeometry`, pure static)
 
 - Single source of truth for board sizing and earring placement, all derived from `Lattice`.
@@ -298,14 +316,17 @@ Autoload init order is set in `project.godot` and matters: `TierRegistry → Cur
   earrings by 2 rows until they meet at dead centre (level 7). `add_row.tres` `max_level` is 2,
   so the base game stops at 7 buckets and everything beyond needs cap raises.
 - **`earrings_meet` tests the geometry (`is_zero_approx`), never `rows == 8`.**
-- **Known gap:** `TierRegistry.cap_raise_currency` returns -1 for the last tier, so the GREEN
-  board can never reach the hard cap, never grows earrings, and never gets a transporter. This
-  no longer blocks the space-board win — only gold transports anyway, and green reaches it via
-  the dud chute.
+- **Last tier is uncapped.** `TierRegistry.cap_raise_currency` returns -1 for the last tier, so
+  it can never buy a cap raise. `UpgradeManager.get_max_level` therefore treats "no cap-raise
+  currency" as uncapped — keyed on the tier chain, never on `== GREEN`, so an appended tier
+  follows automatically. Without it green was stranded below 9 buckets and could never grow
+  earrings, mint white, or earn a transporter. `ADD_ROW` is unaffected: its ceiling is the
+  geometric `_hard_cap`, not the raisable `current_cap`.
 
 > **Earrings (on `PlinkoBoard`).** Past 9 buckets, `ADD_ROW` grows two `EarringBoard`
 > children instead of the main triangle. The two edge buckets become **gateways**: they stop
-> paying currency entirely and coins fall through them into the earring below. When the
+> paying the board's own currency entirely and coins fall through them into the earring below,
+> which pays **WHITE** — earrings are the game's only white faucet (see `WhiteCurrency`). When the
 > earrings meet, a single shared **transporter** bucket appears at board-local x=0 — it pays
 > nothing, and emits `coin_transported` **only on gold** (`SPACE_TRANSPORT_BOARD`); on every
 > other board it is a deliberate dead end, so the dud chute is the one route to the space
@@ -524,7 +545,7 @@ grants it on, or the HUD row and the gameplay lookup read different state.
 
 **DropSection** — `entities/drop_section/drop_section.gd` + `.tscn`
 
-- Contains `DropButton` instances (normal + advanced). Each emits `drop_pressed` (wired to `PlinkoBoard.request_drop()`) and `autodropper_adjust_requested` (wired to `BoardManager` via the board's matching signal).
+- Contains a single `DropButton` (the advanced drop bar and its currency are retired). It emits `drop_pressed` (wired to `PlinkoBoard.request_drop()`) and `autodropper_adjust_requested` (wired to `BoardManager` via the board's matching signal).
 - Owns the `QueueBonusLabel` (top-left-anchored 2D `Label`). `set_queue_bonus(queued_count, bonus_per_coin)` updates the two-line text and visibility; `set_queue_bonus_position(viewport_pos)` writes `global_position` directly so the label anchors in screen space regardless of `DropSection`'s parent layout (it sits under a `Node3D`).
 - Listens: `ThemeProvider.theme_changed` to re-apply font/color overrides on the bonus label so it survives theme swaps (e.g. challenge mode).
 
@@ -554,7 +575,7 @@ grants it on, or the HUD row and the gameplay lookup read different state.
 **ChallengeRewardData** — `autoloads/challenge_manager/challenge_reward_data.gd`
 
 - Structured challenge reward (`type`, `modifier_type`, `modifier_amount`, board/currency/upgrade refs). No hand-written `description` — removed.
-- `display_text()` is the **single source of truth** for reward text: both the pre-challenge info panel (`ChallengeInfoPanel`) and the post-challenge modal (`Main`) call it, so they can't drift. Generated from the structured fields; `GOLD_COIN_SPEED_BOOST`/`QUEUE_RATE_BONUS` pull their magnitude live from `Coin.COIN_SPEED_BOOST_PER_UNLOCK` / `PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK` (those constants are canonical — no `.tres` edits needed when they change). `ADVANCED_COIN_MULTIPLIER` is gold-only by design (text hardcodes "raw orange"). Every `RewardType`/`ModifierType` must map to non-empty text — `test_challenge_reward_data` guards this for the append-only enum.
+- `display_text()` is the **single source of truth** for reward text: both the pre-challenge info panel (`ChallengeInfoPanel`) and the post-challenge modal (`Main`) call it, so they can't drift. Generated from the structured fields; `GOLD_COIN_SPEED_BOOST`/`QUEUE_RATE_BONUS` pull their magnitude live from `Coin.COIN_SPEED_BOOST_PER_UNLOCK` / `PlinkoBoard.QUEUE_RATE_BONUS_PER_UNLOCK` (those constants are canonical — no `.tres` edits needed when they change). `ADVANCED_COIN_MULTIPLIER` is DORMANT and authored by no `.tres` — its ordinal is held open only so the values after it keep their meaning. Every `RewardType`/`ModifierType` must map to non-empty text — `test_challenge_reward_data` guards this for the append-only enum.
 - Board/upgrade/currency naming and the prestige multi-drop/board-access phrasing all route through shared `FormatUtils` helpers (`board_name`, `upgrade_name`, `currency_name`, `lower_tier_names_phrase`, `multi_drop_phrase`, `access_board_phrase`); the prestige screen + dialog reuse the same helpers so wording stays identical everywhere.
 
 **Objective types** (`autoloads/challenge_manager/objectives/`): `Survive`, `LandInEveryBucket`, `HitBucketsInOrder`, `HitXBucketYTimes`, `GetSameBucketXTimes`, `EarnWithinXDrops`, `BoardGoal`, `CoinGoal`. Evaluated by `ChallengeTracker`.
@@ -571,12 +592,13 @@ grants it on, or the HUD row and the gameplay lookup read different state.
 
 **TierData** — `scripts/tier_data.gd`, presets in `autoloads/tier_registry/data/*.tres`
 
-- Per-tier config: `board_type`, `display_name`, `primary_currency`, `raw_currency`, economy caps, drop costs.
+- Per-tier config: `board_type`, `display_name`, `primary_currency`, economy caps, drop costs. (`raw_currency` / `raw_cap` were removed with the raw currencies.)
 
 #### Cross-cutting data flows
 
 - **Currency → Progression:** `currency_changed` → `LevelManager` (threshold crossings) → `rewards_claimed` → `UpgradeManager.unlock` / reward dispatch.
-- **Cap raises:** `currency_changed` on a tier's raw currency → `UpgradeManager.cap_raise_unlocked(board_type)`.
+- **Cap raises:** a coin completing the board a second time → `PlinkoBoard._will_reveal_cap_raise_completion` → `UpgradeManager.enable_cap_raise(board_type)`. (Not `currency_changed` on a raw currency — raw currencies are gone.)
+- **White:** earring bucket → `PlinkoBoard.finalize_earring_landing` → `CurrencyManager.add(WHITE_COIN, …)`; spent as the second component of `TierRegistry.get_drop_costs` on the gated boards, and on its own cap raises.
 - **Challenge pulse:** `ChallengeTracker._process` → `ChallengeManager.tick` → `AudioManager` (arcade kick + beat grid) + `ChallengeClock` (pie slice).
 - **Theme/Challenge → Audio:** `theme_changed` or `challenge_state_changed` → `AudioManager._reselect_audio_style`. Any style transition fades all drones over 1s.
 - **Autodropper → Audio beat:** `BoardManager._on_autodrop_tick` → `AudioManager.notify_autodropper_beat` syncs the harp beat grid.
@@ -589,10 +611,11 @@ grants it on, or the HUD row and the gameplay lookup read different state.
 
 ### Three-Currency Economy
 
-> **STALE.** The single-currency model removed advanced/raw edge buckets —
-> `PlinkoBoard._is_advanced_at_distance` always returns `false` and every bucket pays
-> `TierRegistry.primary_currency(board_type)`. The table below describes the old economy and
-> is kept only as history.
+> **STALE — the RAW_\* currencies no longer exist.** They were deleted from
+> `Enums.CurrencyType` (which was renumbered to one entry per board colour plus `WHITE_COIN`)
+> along with the advanced-bucket system that paid them out. Every main-board bucket pays
+> `TierRegistry.primary_currency(board_type)`; earring buckets pay `WHITE_COIN`. Save v9
+> discards any banked raw balances. The table below is kept only as history.
 
 | Currency         | Earned On                       | Used For                                          |
 | ---------------- | ------------------------------- | ------------------------------------------------- |
