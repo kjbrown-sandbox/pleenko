@@ -35,6 +35,11 @@ title_text = "Play"
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 
+[node name="WishlistButton" parent="CanvasLayer/ButtonColumn" unique_id=1739265048 instance=ExtResource("3_mbtn")]
+custom_minimum_size = Vector2(272, 64)
+layout_mode = 2
+title_text = "Wishlist on Steam"
+
 [node name="SettingsButton" parent="CanvasLayer/ButtonColumn" unique_id=2106973345 instance=ExtResource("3_mbtn")]
 custom_minimum_size = Vector2(272, 64)
 layout_mode = 2

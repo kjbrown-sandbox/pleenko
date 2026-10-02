@@ -14,12 +14,15 @@ func _run_tests() -> void:
 	print("\n=== MainMenu Wiring Tests ===\n")
 	test_url_constants_well_formed()
 	await test_external_links_route_to_shell_open()
+	await test_wishlist_routes_to_store_link()
+	await test_wishlist_hidden_outside_demo()
 	await test_quit_routes_to_quit_seam()
 	await test_reset_path_reachable_via_settings()
 
 
-func _make_menu() -> MainMenu:
+func _make_menu(demo_mode: bool = true) -> MainMenu:
 	var menu: MainMenu = MainMenuScene.instantiate()
+	menu.demo_mode = demo_mode
 	# Deferred: the test scene's own _ready is still on the stack, so the tree
 	# root is busy setting up children.
 	get_tree().root.add_child.call_deferred(menu)
@@ -53,6 +56,27 @@ func test_external_links_route_to_shell_open() -> void:
 	assert_equal(opened.size(), 2, "two links opened")
 	assert_equal(opened[0], MainMenu.DISCORD_URL, "discord → DISCORD_URL")
 	assert_equal(opened[1], MainMenu.FEEDBACK_URL, "feedback → FEEDBACK_URL")
+	menu.free()
+
+
+func test_wishlist_routes_to_store_link() -> void:
+	print("test_wishlist_routes_to_store_link")
+	var menu := await _make_menu()
+	var opened: Array = []
+	menu._shell_open_fn = func(u: String) -> void: opened.append(u)
+
+	assert_true(menu.wishlist_button.visible, "wishlist button shown in demo mode")
+	menu._on_wishlist_pressed()
+
+	assert_equal(opened, [DemoBuild.store_link()], "wishlist → DemoBuild.store_link()")
+	menu.free()
+
+
+# Editor-binary run, so the Inspector toggle decides (see test_demo_build).
+func test_wishlist_hidden_outside_demo() -> void:
+	print("test_wishlist_hidden_outside_demo")
+	var menu := await _make_menu(false)
+	assert_false(menu.wishlist_button.visible, "wishlist button hidden outside demo mode")
 	menu.free()
 
 

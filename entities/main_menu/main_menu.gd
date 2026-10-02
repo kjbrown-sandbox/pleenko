@@ -8,8 +8,13 @@ const VignetteScript := preload("res://entities/vignette/vignette.gd")
 const DISCORD_URL := "https://discord.gg/uadVU3K63y"
 const FEEDBACK_URL := "https://docs.google.com/forms/d/e/1FAIpQLSdRHDVqaQzeNyE8e4Wtf-kIO_pXKOPUvtnAt3X3wrnBU2Xk5g/viewform?usp=publish-editor"
 
+## Shows the "Wishlist on Steam" button. Same contract as Main.demo_mode:
+## editor-toggleable for local testing, always `true` in exported builds.
+@export var demo_mode: bool = true
+
 @onready var menu_board: MenuBoard = $MenuBoard
 @onready var play_button: MainMenuButton = $CanvasLayer/ButtonColumn/PlayButton
+@onready var wishlist_button: MainMenuButton = $CanvasLayer/ButtonColumn/WishlistButton
 @onready var settings_button: MainMenuButton = $CanvasLayer/ButtonColumn/SettingsButton
 @onready var discord_button: MainMenuButton = $CanvasLayer/ButtonColumn/DiscordButton
 @onready var feedback_button: MainMenuButton = $CanvasLayer/ButtonColumn/FeedbackButton
@@ -70,7 +75,10 @@ func _ready() -> void:
 	_setup_options_dialog()
 	_setup_vignette()
 
+	wishlist_button.visible = DemoBuild.is_active(demo_mode)
+
 	play_button.pressed.connect(_on_play_pressed)
+	wishlist_button.pressed.connect(_on_wishlist_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	discord_button.pressed.connect(_on_discord_pressed)
 	feedback_button.pressed.connect(_on_feedback_pressed)
@@ -79,7 +87,7 @@ func _ready() -> void:
 	confirm_reset_button.main_pressed.connect(_on_confirm_reset_pressed)
 	RefinedBaselineButton.equalize_widths([cancel_button, confirm_reset_button])
 
-	_menu_buttons = [play_button, settings_button, discord_button, feedback_button, quit_button]
+	_menu_buttons = [play_button, wishlist_button, settings_button, discord_button, feedback_button, quit_button]
 	for btn in _menu_buttons:
 		btn.hover_started.connect(_on_menu_button_hover)
 		btn.hover_ended.connect(_on_menu_button_hover_ended)
@@ -130,6 +138,10 @@ func _setup_vignette() -> void:
 
 func _on_play_pressed() -> void:
 	SceneManager.set_new_scene(MainScene)
+
+
+func _on_wishlist_pressed() -> void:
+	_open_url(DemoBuild.store_link())
 
 
 func _on_settings_pressed() -> void:
